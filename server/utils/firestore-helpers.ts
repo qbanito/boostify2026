@@ -98,3 +98,49 @@ export async function findUserByStripeCustomerId(stripeCustomerId: string) {
     ...doc.data()
   };
 }
+
+/**
+ * Paginated, bounded collection read using cursor pagination.
+ *
+ * ALWAYS prefer this over `collection.get()` for list endpoints: a bare `.get()`
+ * scans (and bills) the entire collection and grows unbounded as data grows.
+ * This caps each page and returns an opaque cursor (the last doc id) for the
+ * next page.
+ *
+ * @param collectionName Collection to read.
+ * @param opts.orderField Field to order by (must have an index for composite filters). Default 'createdAt'.
+ * @param opts.direction  'asc' | 'desc'. Default 'desc'.
+ * @param opts.pageSize   Max docs per page (hard-capped at 200). Default 25.
+ * @param opts.cursor     Last doc id from the previous page (start after it).
+ * @param opts.where      Optional equality filters [field, value][] applied with '=='.
+ */
+export async function paginateCollection<T = any>(
+  collectionName: string,
+  opts: {
+    orderField?: string;
+    direction?: 'asc' | 'desc';
+    pageSize?: number;
+    cursor?: string | null;
+    where?: [string, any][];
+  } = {},
+): Promise<{ items: (T & { id: string })[]; nextCursor: string | null }> {
+  const orderField = opts.orderField || 'createdAt';
+  const direction = opts.direction || 'desc';
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 25, 1), 200);
+
+  let q: Query<DocumentData> = getCollection(collectionName);
+  for (const [field, value] of opts.where || []) {
+    q = q.where(field, '==', value);
+  }
+  q = q.orderBy(orderField, direction).limit(pageSize);
+
+  if (opts.cursor) {
+    const cursorDoc = await getDocRef(collectionName, opts.cursor).get();
+    if (cursorDoc.exists) q = q.startAfter(cursorDoc);
+  }
+
+  const snapshot = await q.get();
+  const items = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as T) }));
+  const nextCursor = snapshot.size === pageSize ? snapshot.docs[snapshot.size - 1].id : null;
+  return { items, nextCursor };
+}

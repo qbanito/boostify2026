@@ -21,6 +21,7 @@ import { db as pgDb } from '../../db';
 import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth';
+import { cached } from '../utils/cache';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import {
   FAL_MODELS,
@@ -3718,14 +3719,18 @@ router.post('/:artistId/generate-mood-preview', authenticate, async (req: Reques
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/previews/styles', authenticate, async (req: Request, res: Response) => {
   try {
-    const snapshot = await db.collection('promoStylePreviews').get();
-    const previews: Record<string, string> = {};
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      // Only include global (non-artist-specific) previews
-      if (data.artistId === 'global' || !data.artistId) {
-        previews[data.styleId] = data.imageUrl;
-      }
+    // Global (same for every user) → cache 5 min + bound the read.
+    const previews = await cached('promo:previews:styles', 300, async () => {
+      const snapshot = await db.collection('promoStylePreviews').limit(500).get();
+      const out: Record<string, string> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Only include global (non-artist-specific) previews
+        if (data.artistId === 'global' || !data.artistId) {
+          out[data.styleId] = data.imageUrl;
+        }
+      });
+      return out;
     });
     return res.json({ success: true, previews });
   } catch (err: any) {
@@ -3739,11 +3744,15 @@ router.get('/previews/styles', authenticate, async (req: Request, res: Response)
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/previews/moods', authenticate, async (req: Request, res: Response) => {
   try {
-    const snapshot = await db.collection('promoMoodPreviews').get();
-    const previews: Record<string, string> = {};
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      previews[data.moodId] = data.imageUrl;
+    // Global (same for every user) → cache 5 min + bound the read.
+    const previews = await cached('promo:previews:moods', 300, async () => {
+      const snapshot = await db.collection('promoMoodPreviews').limit(500).get();
+      const out: Record<string, string> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        out[data.moodId] = data.imageUrl;
+      });
+      return out;
     });
     return res.json({ success: true, previews });
   } catch (err: any) {

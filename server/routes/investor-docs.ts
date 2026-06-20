@@ -62,8 +62,8 @@ const requireAdmin = async (req: Request, res: Response, next: Function) => {
 
 router.get('/demo/all', async (req: Request, res: Response) => {
   try {
-    // Fetch ALL documents using firebase-admin API
-    const snapshot = await db.collection('investor_documents').get();
+    // Bounded read using firebase-admin API (cap so this never full-scans).
+    const snapshot = await db.collection('investor_documents').limit(200).get();
     
     const documents: InvestorDocument[] = [];
     snapshot.forEach(docSnap => {

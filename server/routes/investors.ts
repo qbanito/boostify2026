@@ -279,8 +279,9 @@ router.get('/stats', async (req, res) => {
       return sum + (data.totalReturns || 0);
     }, 0);
 
-    const investorsSnapshot = await db.collection('investors').get();
-    const totalInvestors = investorsSnapshot.size;
+    // Count aggregation: 1 read instead of one-read-per-investor (avoids full scan).
+    const investorsCount = await db.collection('investors').count().get();
+    const totalInvestors = investorsCount.data().count;
 
     return res.status(200).json({
       success: true,

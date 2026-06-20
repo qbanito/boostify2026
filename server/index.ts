@@ -343,7 +343,8 @@ app.use((req, res, next) => {
       const { db } = await import('./firebase');
       app.get('/api/investor-docs/demo/all', async (req, res) => {
         try {
-          const snapshot = await db.collection('investor_documents').get();
+          // Bounded read: cap the page so this never becomes a full-collection scan.
+          const snapshot = await db.collection('investor_documents').limit(200).get();
           const documents: any[] = [];
           snapshot.forEach(docSnap => {
             documents.push({ id: docSnap.id, ...docSnap.data() });
