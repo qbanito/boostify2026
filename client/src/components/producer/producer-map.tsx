@@ -15,7 +15,9 @@ import {
   Crosshair, Users, Zap, Radio, Clock, DollarSign, Star, TrendingUp,
   Eye, EyeOff, Volume2, Layers, RefreshCw, Send, CheckCircle2, Briefcase, Coins,
   Sparkles, TrendingDown, Flame, Target, ChevronRight, Brain, ChevronDown, ChevronUp,
+  Maximize2, Minimize2, Database, Plus, Trash2, X, ShieldCheck, Link2, Power, ScrollText,
 } from "lucide-react";
+import { Link } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import GigCreditsDashboard from "./gig-credits-dashboard";
@@ -68,20 +70,27 @@ const INSTRUMENT_SVGS: Record<string, { svg: string; gradient: string; emoji: st
 const getInstrumentIcon = (instrument: string) => INSTRUMENT_SVGS[instrument] || INSTRUMENT_SVGS.Production;
 
 // ── Create Leaflet divIcon per instrument ──
-function makeInstrumentMarker(instrument: string, isRequest: boolean) {
+function makeInstrumentMarker(instrument: string, isRequest: boolean, sizeFactor = 1) {
   const info = getInstrumentIcon(instrument);
-  const size = isRequest ? 42 : 34;
+  const size = Math.round((isRequest ? 46 : 38) * sizeFactor);
   const border = isRequest ? 3 : 2;
   const pulse = isRequest ? "animation:boostify-pulse 2s ease-in-out infinite;" : "";
+  const emojiSize = Math.round((isRequest ? 22 : 17) * sizeFactor);
   return L.divIcon({
     className: "boostify-marker",
-    html: `<div style="width:${size}px;height:${size}px;background:${info.gradient};border-radius:50%;border:${border}px solid rgba(255,255,255,0.9);box-shadow:0 4px 14px rgba(0,0,0,0.45),0 0 20px rgba(249,115,22,0.15);display:flex;align-items:center;justify-content:center;${pulse}cursor:pointer;transition:transform .2s;">
-      <span style="font-size:${isRequest ? 20 : 16}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">${info.emoji}</span>
+    html: `<div style="width:${size}px;height:${size}px;background:${info.gradient};border-radius:50%;border:${border}px solid rgba(255,255,255,0.92);box-shadow:0 4px 14px rgba(0,0,0,0.5),0 0 22px rgba(249,115,22,0.18);display:flex;align-items:center;justify-content:center;${pulse}cursor:pointer;transition:transform .2s;">
+      <span style="font-size:${emojiSize}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));">${info.emoji}</span>
     </div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -(size / 2 + 4)],
   });
+}
+
+// ── Zoom → marker scale factor (bigger icons that adapt to the map) ──
+function zoomSizeFactor(zoom: number) {
+  // zoom 2 (world) → 1.0, zoom 12+ (city) → ~1.9
+  return Math.max(1, Math.min(1.9, 1 + (zoom - 2) * 0.09));
 }
 
 // ── Simulated live orders ──
@@ -139,19 +148,90 @@ const URGENCY_CONFIG = {
   normal: { label: "📋 Open", color: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)", glow: "none" },
 };
 
+// ── External data-source integration ──
+interface ExternalSource {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+}
+
+const INSTRUMENT_KEYS = ["Guitar", "Drums", "Piano", "Bass", "Vocals", "Production", "Mixing", "Violin"];
+function normalizeInstrument(v: any): string {
+  if (!v) return "Production";
+  const s = String(v);
+  const hit = INSTRUMENT_KEYS.find((k) => k.toLowerCase() === s.toLowerCase());
+  return hit || "Production";
+}
+function num(v: any): number | null {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Map an arbitrary external record into a SimOrder, or null if it lacks coordinates.
+function toExternalOrder(rec: any, idx: number): SimOrder | null {
+  const lat = num(rec.lat ?? rec.latitude ?? rec.Lat);
+  const lng = num(rec.lng ?? rec.lon ?? rec.longitude ?? rec.Lng);
+  if (lat == null || lng == null) return null;
+  return {
+    id: 900000 + idx,
+    title: String(rec.title ?? rec.name ?? rec.service ?? "External order"),
+    instrument: normalizeInstrument(rec.instrument ?? rec.instrumentNeeded ?? rec.category),
+    budget: num(rec.budget ?? rec.budgetMax ?? rec.price) ?? 0,
+    city: String(rec.city ?? rec.location ?? "Remote"),
+    lat, lng,
+    bids: Number(rec.bids ?? rec.totalBids ?? 0),
+    urgency: (["flash", "urgent", "normal"].includes(rec.urgency) ? rec.urgency : "normal") as SimOrder["urgency"],
+    timeAgo: String(rec.timeAgo ?? "live"),
+    genre: String(rec.genre ?? "—"),
+    userName: String(rec.userName ?? rec.client ?? "External"),
+  };
+}
+function toExternalMusician(rec: any, idx: number) {
+  const lat = num(rec.lat ?? rec.latitude);
+  const lng = num(rec.lng ?? rec.lon ?? rec.longitude);
+  if (lat == null || lng == null) return null;
+  return {
+    id: 950000 + idx,
+    name: String(rec.name ?? rec.userName ?? "External musician"),
+    instrument: normalizeInstrument(rec.instrument ?? rec.category),
+    rating: num(rec.rating) ?? 5,
+    price: num(rec.price ?? rec.rate) ?? 0,
+    lat, lng,
+    verified: Boolean(rec.verified),
+    jobs: Number(rec.jobs ?? 0),
+    genre: String(rec.genre ?? "—"),
+  };
+}
+
 export function ProducerMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const musicianLayerRef = useRef<L.LayerGroup | null>(null);
+  const fullscreenRef = useRef<HTMLDivElement>(null);
   const [instrumentFilter, setInstrumentFilter] = useState("all");
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [showMusicians, setShowMusicians] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<SimOrder | null>(null);
   const [liveCount, setLiveCount] = useState(SIMULATED_ORDERS.length);
+  const [mapZoom, setMapZoom] = useState(3);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const { toast } = useToast();
+
+  // ── External database / data-source integrations ──
+  const SOURCES_KEY = "boostify_producer_map_sources";
+  const [showDataSources, setShowDataSources] = useState(false);
+  const [dataSources, setDataSources] = useState<ExternalSource[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(SOURCES_KEY) || "[]"); } catch { return []; }
+  });
+  const [sourceForm, setSourceForm] = useState({ name: "", url: "" });
+  const [externalOrders, setExternalOrders] = useState<SimOrder[]>([]);
+  const [externalMusicians, setExternalMusicians] = useState<typeof SIMULATED_MUSICIANS>([]);
+  const [sourceStatus, setSourceStatus] = useState<Record<string, "ok" | "error" | "loading">>({});
 
   // Apply dialog state
   const [applyOrder, setApplyOrder] = useState<SimOrder | null>(null);
@@ -231,8 +311,8 @@ export function ProducerMap() {
       worldCopyJump: true,
     });
 
-    // Modern dark styled tile layer — NOT pure black
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png", {
+    // Modern dark GRAY styled tile layer (gray + orange palette)
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: "abcd",
       maxZoom: 19,
@@ -244,11 +324,13 @@ export function ProducerMap() {
     markersRef.current = L.layerGroup().addTo(map);
     musicianLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    setMapZoom(map.getZoom());
 
     // Track viewport for Smart Proposals
     const updateBounds = () => {
       const b = map.getBounds();
       const c = map.getCenter();
+      setMapZoom(map.getZoom());
       setViewportBounds({
         north: b.getNorth(),
         south: b.getSouth(),
@@ -275,18 +357,21 @@ export function ProducerMap() {
         50% { box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 0 18px rgba(239,68,68,0); transform: scale(1.12); }
       }
       .boostify-marker { background: none !important; border: none !important; }
-      .boostify-marker div:hover { transform: scale(1.2) !important; z-index: 9999 !important; }
+      .boostify-marker div:hover { transform: scale(1.22) !important; z-index: 9999 !important; }
+      .leaflet-container { background: #16181d !important; }
       .leaflet-popup-content-wrapper {
-        background: rgba(15,23,42,0.95) !important;
-        border: 1px solid rgba(148,163,184,0.2) !important;
+        background: rgba(23,23,26,0.96) !important;
+        border: 1px solid rgba(249,115,22,0.25) !important;
         border-radius: 16px !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6) !important;
         backdrop-filter: blur(12px) !important;
       }
-      .leaflet-popup-tip { background: rgba(15,23,42,0.95) !important; }
-      .leaflet-popup-close-button { color: #94a3b8 !important; font-size: 20px !important; top: 8px !important; right: 10px !important; }
-      .leaflet-control-zoom a { background: rgba(15,23,42,0.9) !important; color: #e2e8f0 !important; border-color: rgba(148,163,184,0.2) !important; }
-      .leaflet-control-zoom a:hover { background: rgba(30,41,59,0.95) !important; }
+      .leaflet-popup-tip { background: rgba(23,23,26,0.96) !important; }
+      .leaflet-popup-close-button { color: #a1a1aa !important; font-size: 20px !important; top: 8px !important; right: 10px !important; }
+      .leaflet-control-zoom a { background: rgba(23,23,26,0.92) !important; color: #f97316 !important; border-color: rgba(249,115,22,0.25) !important; }
+      .leaflet-control-zoom a:hover { background: rgba(249,115,22,0.15) !important; color: #fb923c !important; }
+      .boostify-map-fs:fullscreen { background: #0c0d10; padding: 0; border-radius: 0; }
+      .boostify-map-fs:fullscreen .boostify-map-canvas { height: 100vh !important; }
     `;
     document.head.appendChild(style);
     styleRef.current = style;
@@ -551,25 +636,31 @@ export function ProducerMap() {
     markersRef.current.clearLayers();
     musicianLayerRef.current.clearLayers();
 
+    const sf = zoomSizeFactor(mapZoom);
+    const orderSize = Math.round(44 * sf);
+    const orderEmoji = Math.round(22 * sf);
+    const musicianSize = Math.round(36 * sf);
+    const musicianEmoji = Math.round(16 * sf);
+
     // Merge real data with simulated
     const realRequests = mapData?.data?.requests || [];
     const realMusicians = mapData?.data?.musicians || [];
 
-    // Place simulated order markers
+    // Place simulated + external order markers
     if (showOrders) {
-      SIMULATED_ORDERS.forEach((order) => {
+      [...SIMULATED_ORDERS, ...externalOrders].forEach((order) => {
         if (instrumentFilter !== "all" && order.instrument !== instrumentFilter) return;
 
         const uCfg = URGENCY_CONFIG[order.urgency];
         const inst = getInstrumentIcon(order.instrument);
         const markerIcon = L.divIcon({
           className: "boostify-marker",
-          html: `<div style="width:44px;height:44px;background:${inst.gradient};border-radius:50%;border:3px solid rgba(255,255,255,0.9);box-shadow:0 4px 14px rgba(0,0,0,0.45),${uCfg.glow};display:flex;align-items:center;justify-content:center;animation:${order.urgency === "flash" ? "boostify-flash" : "boostify-pulse"} ${order.urgency === "flash" ? "1.2s" : "2.5s"} ease-in-out infinite;cursor:pointer;transition:transform .15s;">
-            <span style="font-size:22px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.3));">${inst.emoji}</span>
+          html: `<div style="width:${orderSize}px;height:${orderSize}px;background:${inst.gradient};border-radius:50%;border:3px solid rgba(255,255,255,0.92);box-shadow:0 4px 14px rgba(0,0,0,0.5),${uCfg.glow};display:flex;align-items:center;justify-content:center;animation:${order.urgency === "flash" ? "boostify-flash" : "boostify-pulse"} ${order.urgency === "flash" ? "1.2s" : "2.5s"} ease-in-out infinite;cursor:pointer;transition:transform .15s;">
+            <span style="font-size:${orderEmoji}px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35));">${inst.emoji}</span>
           </div>`,
-          iconSize: [44, 44],
-          iconAnchor: [22, 22],
-          popupAnchor: [0, -26],
+          iconSize: [orderSize, orderSize],
+          iconAnchor: [orderSize / 2, orderSize / 2],
+          popupAnchor: [0, -(orderSize / 2 + 4)],
         });
 
         const marker = L.marker([order.lat, order.lng], { icon: markerIcon });
@@ -608,7 +699,7 @@ export function ProducerMap() {
       realRequests.forEach((r: any) => {
         if (!r.latitude || !r.longitude) return;
         if (instrumentFilter !== "all" && r.instrumentNeeded !== instrumentFilter) return;
-        const marker = L.marker([parseFloat(r.latitude), parseFloat(r.longitude)], { icon: makeInstrumentMarker(r.instrumentNeeded || "Production", true) });
+        const marker = L.marker([parseFloat(r.latitude), parseFloat(r.longitude)], { icon: makeInstrumentMarker(r.instrumentNeeded || "Production", true, sf) });
         marker.bindPopup(`
           <div style="min-width:220px;font-family:'Inter',system-ui,sans-serif;padding:4px;">
             <div style="font-weight:700;font-size:14px;color:#f97316;margin-bottom:6px;">⚡ ${r.title}</div>
@@ -625,17 +716,17 @@ export function ProducerMap() {
 
     // Place musician markers
     if (showMusicians) {
-      SIMULATED_MUSICIANS.forEach((m) => {
+      [...SIMULATED_MUSICIANS, ...externalMusicians].forEach((m) => {
         if (instrumentFilter !== "all" && m.instrument !== instrumentFilter) return;
         const inst = getInstrumentIcon(m.instrument);
         const musicianIcon = L.divIcon({
           className: "boostify-marker",
-          html: `<div style="width:36px;height:36px;background:linear-gradient(135deg,#1e293b,#334155);border-radius:50%;border:2px solid rgba(148,163,184,0.4);box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s,border-color .2s;" onmouseover="this.style.borderColor='${inst.gradient.match(/#[a-f0-9]+/i)?.[0] || "#3b82f6"}'" onmouseout="this.style.borderColor='rgba(148,163,184,0.4)'">
-            <span style="font-size:16px;">${inst.emoji}</span>
+          html: `<div style="width:${musicianSize}px;height:${musicianSize}px;background:linear-gradient(135deg,#27272a,#3f3f46);border-radius:50%;border:2px solid rgba(249,115,22,0.35);box-shadow:0 3px 10px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s,border-color .2s;" onmouseover="this.style.borderColor='${inst.gradient.match(/#[a-f0-9]+/i)?.[0] || "#f97316"}'" onmouseout="this.style.borderColor='rgba(249,115,22,0.35)'">
+            <span style="font-size:${musicianEmoji}px;">${inst.emoji}</span>
           </div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
-          popupAnchor: [0, -22],
+          iconSize: [musicianSize, musicianSize],
+          iconAnchor: [musicianSize / 2, musicianSize / 2],
+          popupAnchor: [0, -(musicianSize / 2 + 4)],
         });
 
         const marker = L.marker([m.lat, m.lng], { icon: musicianIcon });
@@ -661,7 +752,7 @@ export function ProducerMap() {
       realMusicians.forEach((m: any) => {
         if (!m.latitude || !m.longitude) return;
         if (instrumentFilter !== "all" && m.category !== instrumentFilter) return;
-        const marker = L.marker([parseFloat(m.latitude), parseFloat(m.longitude)], { icon: makeInstrumentMarker(m.instrument || "Production", false) });
+        const marker = L.marker([parseFloat(m.latitude), parseFloat(m.longitude)], { icon: makeInstrumentMarker(m.instrument || "Production", false, sf) });
         marker.bindPopup(`
           <div style="min-width:200px;font-family:'Inter',system-ui,sans-serif;padding:4px;">
             <div style="font-weight:700;font-size:13px;color:#3b82f6;">${m.name}</div>
@@ -671,7 +762,7 @@ export function ProducerMap() {
         musicianLayerRef.current!.addLayer(marker);
       });
     }
-  }, [mapData, instrumentFilter, showOrders, showMusicians]);
+  }, [mapData, instrumentFilter, showOrders, showMusicians, mapZoom, externalOrders, externalMusicians]);
 
   useEffect(() => { placeMarkers(); }, [placeMarkers]);
 
@@ -692,9 +783,92 @@ export function ProducerMap() {
     );
   };
 
-  const totalOrders = liveCount;
-  const totalMusicians = SIMULATED_MUSICIANS.length + (mapData?.data?.musicians?.length || 0);
+  // ── Fullscreen toggle ──
+  const toggleFullscreen = useCallback(() => {
+    const el = fullscreenRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFsChange = () => {
+      const active = !!document.fullscreenElement;
+      setIsFullscreen(active);
+      // Leaflet needs a size recalculation after the container resizes
+      setTimeout(() => mapRef.current?.invalidateSize(), 120);
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // ── External data-source integration: fetch + normalize ──
+  const refreshSources = useCallback(async () => {
+    const active = dataSources.filter((s) => s.enabled);
+    if (active.length === 0) {
+      setExternalOrders([]);
+      setExternalMusicians([]);
+      return;
+    }
+    const orders: SimOrder[] = [];
+    const musicians: typeof SIMULATED_MUSICIANS = [];
+    await Promise.all(
+      active.map(async (src) => {
+        setSourceStatus((p) => ({ ...p, [src.id]: "loading" }));
+        try {
+          const res = await fetch(src.url, { headers: { Accept: "application/json" } });
+          if (!res.ok) throw new Error(String(res.status));
+          const json = await res.json();
+          const rawOrders: any[] = Array.isArray(json)
+            ? json
+            : json.orders || json.requests || json.data?.orders || json.data?.requests || [];
+          const rawMusicians: any[] = json.musicians || json.data?.musicians || [];
+          rawOrders.forEach((r, i) => {
+            const o = toExternalOrder(r, orders.length + i);
+            if (o) orders.push(o);
+          });
+          rawMusicians.forEach((r, i) => {
+            const m = toExternalMusician(r, musicians.length + i);
+            if (m) musicians.push(m as any);
+          });
+          setSourceStatus((p) => ({ ...p, [src.id]: "ok" }));
+        } catch {
+          setSourceStatus((p) => ({ ...p, [src.id]: "error" }));
+        }
+      })
+    );
+    setExternalOrders(orders);
+    setExternalMusicians(musicians);
+  }, [dataSources]);
+
+  // Persist + refetch whenever sources change
+  useEffect(() => {
+    try { localStorage.setItem(SOURCES_KEY, JSON.stringify(dataSources)); } catch {}
+    refreshSources();
+  }, [dataSources, refreshSources]);
+
+  const addDataSource = () => {
+    const name = sourceForm.name.trim();
+    const url = sourceForm.url.trim();
+    if (!name || !/^https?:\/\//i.test(url)) {
+      toast({ title: "Invalid source", description: "Enter a name and a valid http(s) JSON endpoint.", variant: "destructive" });
+      return;
+    }
+    setDataSources((prev) => [...prev, { id: `src_${Date.now()}`, name, url, enabled: true }]);
+    setSourceForm({ name: "", url: "" });
+    toast({ title: "🔌 Data source connected", description: `${name} added. Markers will sync automatically.` });
+  };
+  const removeDataSource = (id: string) => setDataSources((prev) => prev.filter((s) => s.id !== id));
+  const toggleDataSource = (id: string) =>
+    setDataSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
+
+  const totalOrders = liveCount + externalOrders.length;
+  const totalMusicians = SIMULATED_MUSICIANS.length + (mapData?.data?.musicians?.length || 0) + externalMusicians.length;
   const flashCount = SIMULATED_ORDERS.filter((o) => o.urgency === "flash").length;
+  const activeSourceCount = dataSources.filter((s) => s.enabled).length;
 
   const instrumentList = ["Guitar", "Drums", "Piano", "Bass", "Vocals", "Production", "Mixing", "Violin"];
 
@@ -776,11 +950,26 @@ export function ProducerMap() {
           </Button>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowDataSources(true)}
+            size="sm"
+            variant="outline"
+            className={`h-8 text-xs border-slate-600/50 rounded-lg ${activeSourceCount > 0 ? "bg-orange-500/15 text-orange-400 border-orange-500/30" : "text-slate-300 hover:bg-slate-700/50"}`}
+          >
+            <Database className="h-3 w-3 mr-1" /> Databases
+            {activeSourceCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/25 text-orange-300">{activeSourceCount}</span>
+            )}
+          </Button>
           <Button onClick={handleLocate} size="sm" variant="outline" className="border-slate-600/50 h-8 text-xs text-slate-300 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/30">
             <Crosshair className="h-3 w-3 mr-1" /> Locate Me
           </Button>
           <Button onClick={placeMarkers} size="sm" variant="outline" className="border-slate-600/50 h-8 text-xs text-slate-300 rounded-lg hover:bg-slate-700/50">
             <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+          </Button>
+          <Button onClick={toggleFullscreen} size="sm" variant="outline" className="border-slate-600/50 h-8 text-xs text-slate-300 rounded-lg hover:bg-orange-500/10 hover:text-orange-400 hover:border-orange-500/30">
+            {isFullscreen ? <Minimize2 className="h-3 w-3 mr-1" /> : <Maximize2 className="h-3 w-3 mr-1" />}
+            {isFullscreen ? "Exit" : "Fullscreen"}
           </Button>
         </div>
       </div>
@@ -814,7 +1003,7 @@ export function ProducerMap() {
       </div>
 
       {/* ── Map + Sidebar ── */}
-      <div className="flex flex-col lg:flex-row gap-3">
+      <div ref={fullscreenRef} className="boostify-map-fs flex flex-col lg:flex-row gap-3 bg-[#0c0d10]">
         {/* Map */}
         <div className="relative rounded-2xl overflow-hidden border border-slate-700/40 shadow-2xl flex-1" style={{ minHeight: 420 }}>
           {isLoading && (
@@ -930,7 +1119,16 @@ export function ProducerMap() {
             </div>
           </div>
 
-          <div ref={mapContainerRef} className="h-[420px] sm:h-[500px] lg:h-[560px] w-full" />
+          <div ref={mapContainerRef} className="boostify-map-canvas h-[420px] sm:h-[500px] lg:h-[560px] w-full" />
+
+          {/* Floating fullscreen toggle (bottom-left of the map) */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="absolute bottom-3 left-3 z-[400] w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur-md border border-orange-500/30 text-orange-400 hover:bg-orange-500/15 hover:text-orange-300 flex items-center justify-center transition-colors shadow-lg"
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
         </div>
 
         {/* Live Feed Sidebar */}
@@ -1135,6 +1333,123 @@ export function ProducerMap() {
             >
               <Send className="h-4 w-4 mr-2" />
               Submit Application
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Legal protection / disclaimer ── */}
+      <Card className="bg-slate-900/60 border-slate-700/50 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 border border-orange-500/30 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="h-5 w-5 text-orange-400" />
+          </div>
+          <div className="space-y-2 min-w-0">
+            <h4 className="text-sm font-bold text-white">Legally protected marketplace</h4>
+            <p className="text-xs leading-relaxed text-slate-400">
+              Boostify is a neutral technology platform that connects independent clients and musicians. We are not a
+              party to any service agreement, do not employ the professionals listed, and do not guarantee outcomes,
+              quality, or availability. Payments are held in escrow and released per our marketplace rules. Map markers
+              labeled as samples or sourced from external databases are for demonstration and discovery only and may not
+              represent real, currently available offers. Users are solely responsible for the content they post,
+              applicable taxes, licensing, and compliance with local laws. All transactions are subject to our Terms,
+              the Gig Marketplace Rules, and our copyright/DMCA protections.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs pt-1">
+              <Link href="/gig-rules" className="text-orange-300 hover:text-orange-200 hover:underline flex items-center gap-1"><ScrollText className="h-3 w-3" /> Marketplace Rules</Link>
+              <span className="text-slate-600">•</span>
+              <Link href="/terms" className="text-orange-300 hover:text-orange-200 hover:underline">Terms</Link>
+              <span className="text-slate-600">•</span>
+              <Link href="/privacy" className="text-orange-300 hover:text-orange-200 hover:underline">Privacy</Link>
+              <span className="text-slate-600">•</span>
+              <Link href="/legal" className="text-orange-300 hover:text-orange-200 hover:underline">Legal Center</Link>
+              <span className="text-slate-600">•</span>
+              <Link href="/legal/dmca" className="text-orange-300 hover:text-orange-200 hover:underline">DMCA</Link>
+              <span className="text-slate-600">•</span>
+              <Link href="/legal/prohibited" className="text-orange-300 hover:text-orange-200 hover:underline">Prohibited Content</Link>
+            </div>
+            <p className="text-[11px] text-slate-500 pt-0.5">
+              Not financial or legal advice. Escrow and credit features carry no guarantee of work being awarded.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── Database integration dialog ── */}
+      <Dialog open={showDataSources} onOpenChange={setShowDataSources}>
+        <DialogContent className="max-w-[92vw] sm:max-w-lg bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center">
+                <Database className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-bold">Connect databases</div>
+                <div className="text-[11px] text-slate-400 font-normal">Stream live orders & musicians from your own JSON endpoints</div>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            {/* Add form */}
+            <div className="bg-slate-800/50 rounded-xl p-3 space-y-2">
+              <Input
+                placeholder="Source name (e.g. My Studio API)"
+                value={sourceForm.name}
+                onChange={(e) => setSourceForm((p) => ({ ...p, name: e.target.value }))}
+                className="bg-slate-800 border-slate-600 text-white h-9 text-sm"
+              />
+              <div className="relative">
+                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="https://api.example.com/orders.json"
+                  value={sourceForm.url}
+                  onChange={(e) => setSourceForm((p) => ({ ...p, url: e.target.value }))}
+                  className="pl-9 bg-slate-800 border-slate-600 text-white h-9 text-sm"
+                />
+              </div>
+              <Button onClick={addDataSource} className="w-full bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white h-9 text-sm font-bold">
+                <Plus className="h-4 w-4 mr-1" /> Connect source
+              </Button>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Endpoint must return JSON: an array, or <code className="text-slate-400">{"{ orders: [], musicians: [] }"}</code>.
+                Each record needs <code className="text-slate-400">lat</code> &amp; <code className="text-slate-400">lng</code>
+                (plus optional title, instrument, budget, city, price, rating). CORS must be enabled on your endpoint.
+              </p>
+            </div>
+
+            {/* Connected sources */}
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+              {dataSources.length === 0 && (
+                <div className="text-center py-6 text-slate-500 text-xs">No databases connected yet.</div>
+              )}
+              {dataSources.map((s) => {
+                const st = sourceStatus[s.id];
+                return (
+                  <div key={s.id} className="flex items-center gap-2 bg-slate-800/40 border border-slate-700/40 rounded-lg p-2.5">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st === "ok" ? "bg-emerald-500" : st === "error" ? "bg-rose-500" : st === "loading" ? "bg-amber-500 animate-pulse" : "bg-slate-500"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">{s.name}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{s.url}</div>
+                    </div>
+                    <button onClick={() => toggleDataSource(s.id)} title={s.enabled ? "Disable" : "Enable"} className={`p-1.5 rounded-md transition-colors ${s.enabled ? "text-emerald-400 hover:bg-emerald-500/10" : "text-slate-500 hover:bg-slate-700/50"}`}>
+                      <Power className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => removeDataSource(s.id)} title="Remove" className="p-1.5 rounded-md text-rose-400 hover:bg-rose-500/10 transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+            <Button variant="outline" onClick={() => refreshSources()} className="border-slate-600 text-slate-300 w-full sm:w-auto">
+              <RefreshCw className="h-4 w-4 mr-2" /> Sync now
+            </Button>
+            <Button onClick={() => setShowDataSources(false)} className="bg-slate-700 hover:bg-slate-600 text-white w-full sm:w-auto">
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>
