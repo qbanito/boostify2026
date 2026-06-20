@@ -100,6 +100,7 @@ export default function PricingPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
+  const [processingToolId, setProcessingToolId] = useState<string | null>(null);
   const [isYearly, setIsYearly] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
@@ -140,6 +141,39 @@ export default function PricingPage() {
         variant: "destructive"
       });
       setProcessingPlanId(null);
+    }
+  };
+
+  const handleBuyTool = async (tool: typeof INDIVIDUAL_TOOL_PLANS[number]) => {
+    try {
+      setProcessingToolId(tool.id);
+
+      toast({
+        title: "🚀 Redirecting to checkout",
+        description: `Setting up ${tool.name}...`
+      });
+
+      const response = await fetch('/api/stripe/create-tool-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ toolId: tool.id, interval: isYearly ? 'yearly' : 'monthly' })
+      });
+
+      const data = await response.json();
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.message || 'Could not create checkout session');
+      }
+    } catch (error) {
+      logger.error('Error buying tool:', error);
+      toast({
+        title: "Error",
+        description: "Could not process your request. Please try again.",
+        variant: "destructive"
+      });
+      setProcessingToolId(null);
     }
   };
 
@@ -369,13 +403,15 @@ export default function PricingPage() {
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Individual <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Tool Access</span>
             </h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">Pick only what you need. Free tools are available to everyone — premium tools are included with plan subscriptions.</p>
+            <p className="text-slate-400 max-w-2xl mx-auto">Pick only what you need. Buy any tool standalone, or unlock it (plus much more) with a plan subscription.</p>
           </motion.div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {INDIVIDUAL_TOOL_PLANS.map((tool, index) => {
-              const isFree = tool.minPlan === 'free';
+              const isFree = tool.monthlyPrice === 0;
               const requiredPlan = plans.find(p => p.id === tool.minPlan);
+              const isProcessingTool = processingToolId === tool.id;
+              const toolPrice = isYearly ? (tool.monthlyPrice * 10) : tool.monthlyPrice;
 
               const categoryStyles: Record<string, { accent: string; iconBg: string; badgeClass: string }> = {
                 growth: { accent: 'from-green-500 to-emerald-500', iconBg: 'from-green-500/20 to-emerald-500/20', badgeClass: 'border-green-500/30 text-green-400' },
@@ -435,8 +471,8 @@ export default function PricingPage() {
                           </div>
                         ) : (
                           <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-black">${tool.monthlyPrice}</span>
-                            <span className="text-slate-500 text-xs">/month standalone</span>
+                            <span className="text-2xl font-black">${toolPrice.toFixed(2)}</span>
+                            <span className="text-slate-500 text-xs">{isYearly ? '/year standalone' : '/month standalone'}</span>
                           </div>
                         )}
                       </div>
@@ -445,7 +481,7 @@ export default function PricingPage() {
                       <p className="text-[10px] text-slate-500 mb-4">
                         {isFree
                           ? 'Available on all accounts'
-                          : `Included in ${requiredPlan?.name || 'Elevate'} plan ($${requiredPlan?.monthlyPrice || '49.99'}/mo) & above`}
+                          : `Or unlock it with the ${requiredPlan?.name || 'Elevate'} plan ($${requiredPlan?.monthlyPrice || '49.99'}/mo) & above`}
                       </p>
 
                       {/* CTA Button */}
@@ -456,17 +492,33 @@ export default function PricingPage() {
                           </Button>
                         </Link>
                       ) : (
-                        <Button
-                          size="sm"
-                          className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs shadow-lg shadow-purple-500/20 transition-all"
-                          onClick={() => {
-                            if (requiredPlan) {
-                              handleSelectPlan(requiredPlan);
-                            }
-                          }}
-                        >
-                          Get {requiredPlan?.name || 'Plan'} <ArrowRight className="w-3 h-3 ml-1" />
-                        </Button>
+                        <div className="space-y-2">
+                          <Button
+                            size="sm"
+                            disabled={isProcessingTool}
+                            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-60"
+                            onClick={() => handleBuyTool(tool)}
+                          >
+                            {isProcessingTool ? (
+                              <>
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Processing...
+                              </>
+                            ) : (
+                              <>
+                                Get Tool — ${toolPrice.toFixed(2)} <ArrowRight className="w-3 h-3 ml-1" />
+                              </>
+                            )}
+                          </Button>
+                          {requiredPlan && (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectPlan(requiredPlan)}
+                              className="w-full text-[10px] text-slate-400 hover:text-purple-300 transition-colors underline-offset-2 hover:underline"
+                            >
+                              or get the {requiredPlan.name} plan instead
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </Card>

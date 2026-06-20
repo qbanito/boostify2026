@@ -595,7 +595,7 @@ export const INDIVIDUAL_TOOL_PLANS: IndividualToolPlan[] = [
     category: 'growth',
     routes: ['/spotify'],
     stripePriceId: null,
-    minPlan: 'free',
+    minPlan: 'artist',
   },
   {
     id: 'tool_youtube',
@@ -605,7 +605,7 @@ export const INDIVIDUAL_TOOL_PLANS: IndividualToolPlan[] = [
     category: 'growth',
     routes: ['/youtube-views'],
     stripePriceId: null,
-    minPlan: 'free',
+    minPlan: 'artist',
   },
   {
     id: 'tool_instagram',
@@ -615,7 +615,7 @@ export const INDIVIDUAL_TOOL_PLANS: IndividualToolPlan[] = [
     category: 'growth',
     routes: ['/instagram-boost'],
     stripePriceId: null,
-    minPlan: 'free',
+    minPlan: 'artist',
   },
   {
     id: 'tool_video_creator',

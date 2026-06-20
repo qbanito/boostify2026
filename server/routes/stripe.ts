@@ -15,6 +15,7 @@ import {
   normalizePlanName,
   IG_BOOST_PRICE_ID_TO_PLAN
 } from '../../shared/constants';
+import { INDIVIDUAL_TOOL_PLANS } from '../../shared/plan-config';
 import { sendNotificationEmail } from '../services/brevo-email-service';
 
 const router = Router();
@@ -453,6 +454,86 @@ router.post('/create-subscription', async (req: Request, res: Response) => {
 });
 
 /**
+ * Create a checkout session for an INDIVIDUAL TOOL (à la carte standalone subscription).
+ * Uses dynamic price_data so it works without pre-created Stripe price IDs.
+ * PUBLIC ENDPOINT - no authentication required
+ */
+router.post('/create-tool-checkout', async (req: Request, res: Response) => {
+  try {
+    const { toolId, interval } = req.body;
+
+    if (!toolId) {
+      return res.status(400).json({ success: false, message: 'Tool not specified' });
+    }
+
+    const tool = INDIVIDUAL_TOOL_PLANS.find((t) => t.id === toolId);
+    if (!tool) {
+      return res.status(404).json({ success: false, message: 'Tool not found' });
+    }
+
+    if (!tool.monthlyPrice || tool.monthlyPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'This tool is free and does not require payment' });
+    }
+
+    const isYearly = interval === 'yearly' || interval === 'year';
+    // Yearly = ~10 months (2 months free), rounded to cents
+    const unitAmount = isYearly
+      ? Math.round(tool.monthlyPrice * 10 * 100)
+      : Math.round(tool.monthlyPrice * 100);
+    const toolRoute = tool.routes?.[0] || '/dashboard';
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${tool.name} — Standalone`,
+              description: tool.description,
+            },
+            unit_amount: unitAmount,
+            recurring: {
+              interval: isYearly ? 'year' : 'month',
+              interval_count: 1,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: `${BASE_URL}${toolRoute}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/pricing?payment=cancelled`,
+      allow_promotion_codes: true,
+      metadata: {
+        product: 'individual_tool',
+        toolId: tool.id,
+        toolName: tool.name,
+        planId: tool.id,
+        billingInterval: isYearly ? 'annual' : 'monthly',
+      },
+      subscription_data: {
+        metadata: {
+          product: 'individual_tool',
+          toolId: tool.id,
+          toolName: tool.name,
+          planId: tool.id,
+          billingInterval: isYearly ? 'annual' : 'monthly',
+        },
+      },
+    });
+
+    return res.json({ success: true, url: session.url });
+  } catch (error: any) {
+    console.error('Error creating tool checkout session:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error creating tool checkout session',
+    });
+  }
+});
+
+/**
  * Create a one-time checkout session for the AI Video Course
  * PUBLIC ENDPOINT - no authentication required
  */
@@ -655,6 +736,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleIgBoostCheckout(session);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostCheckout(session);
+        } else if (product === 'individual_tool') {
+          await handleIndividualToolCheckout(session);
         }
         break;
       }
@@ -696,6 +779,83 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
 
   res.json({ received: true });
 });
+
+// ─── Individual Tool (à la carte) Webhook Handler ──────────────
+
+async function handleIndividualToolCheckout(session: Stripe.Checkout.Session): Promise<void> {
+  const customerEmail = session.customer_details?.email || session.customer_email;
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+  const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+  const toolId = session.metadata?.toolId || '';
+  const toolName = session.metadata?.toolName || toolId;
+
+  if (!subscriptionId) {
+    console.error('❌ [individual_tool] Missing subscription ID in checkout session');
+    return;
+  }
+
+  console.log(`🛠️  [individual_tool] Processing checkout: tool=${toolId}, customer=${customerId}, sub=${subscriptionId}`);
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const priceId = subscription.items.data[0]?.price?.id || '';
+  const interval = subscription.items.data[0]?.price?.recurring?.interval || 'month';
+  const amount = subscription.items.data[0]?.price?.unit_amount || 0;
+
+  const now = new Date();
+  const periodStart = new Date(subscription.current_period_start * 1000);
+  const periodEnd = new Date(subscription.current_period_end * 1000);
+
+  // 1. Write subscription record to Firestore
+  const subscriptionDoc = {
+    stripeSubscriptionId: subscriptionId,
+    stripeCustomerId: customerId || '',
+    customerEmail: customerEmail || '',
+    product: 'individual_tool',
+    plan: toolId,
+    toolId,
+    toolName,
+    status: 'active',
+    priceId,
+    interval: interval === 'year' ? 'annual' : 'monthly',
+    amount: amount / 100,
+    currency: subscription.currency || 'usd',
+    currentPeriodStart: periodStart,
+    currentPeriodEnd: periodEnd,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const docRef = await firebaseDb.collection('subscriptions').add(subscriptionDoc);
+  console.log(`✅ [individual_tool] Subscription record created: ${docRef.id}`);
+
+  // 2. Grant the tool entitlement on the user (keyed by email)
+  if (customerEmail) {
+    const usersSnap = await firebaseDb.collection('users')
+      .where('email', '==', customerEmail)
+      .limit(1)
+      .get();
+
+    if (!usersSnap.empty) {
+      const userDoc = usersSnap.docs[0];
+      await userDoc.ref.set({
+        toolEntitlements: {
+          [toolId]: {
+            active: true,
+            subscriptionId,
+            periodEnd,
+            updatedAt: now,
+          },
+        },
+        stripeCustomerId: customerId || userDoc.data()?.stripeCustomerId || '',
+        updatedAt: now,
+      }, { merge: true });
+      console.log(`✅ [individual_tool] Entitlement granted to user ${userDoc.id} for ${toolId}`);
+    } else {
+      console.warn(`⚠️  [individual_tool] No user found for email ${customerEmail}; entitlement stored only in subscriptions collection`);
+    }
+  }
+}
 
 // ─── IG Boost Pro Webhook Handlers ─────────────────────────────
 
