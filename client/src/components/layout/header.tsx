@@ -92,6 +92,13 @@ export function Header() {
             >
               Affiliates
             </Link>
+            <Link 
+              href="/legal" 
+              className={`text-sm font-medium transition-colors ${isActive("/legal") ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid="nav-legal"
+            >
+              Legal
+            </Link>
           </nav>
 
           {/* User actions - Desktop */}
@@ -267,6 +274,18 @@ export function Header() {
                 data-testid="mobile-nav-affiliates"
               >
                 Affiliates
+              </Link>
+              <Link 
+                href="/legal" 
+                className={`py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                  isActive("/legal") 
+                    ? "bg-primary/10 text-primary" 
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+                onClick={closeMenu}
+                data-testid="mobile-nav-legal"
+              >
+                🛡️ Centro Legal
               </Link>
             </nav>
 

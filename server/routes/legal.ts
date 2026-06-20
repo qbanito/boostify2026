@@ -325,6 +325,28 @@ router.get('/my/claims', authenticate, async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// PUBLIC: Verification level of any artist (for badges on public profiles)
+// ---------------------------------------------------------------------------
+router.get('/verification/:userId', async (req: Request, res: Response) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isFinite(userId)) return res.json({ success: true, level: 'none', status: 'none' });
+    const rows = await db
+      .select({ level: artistVerifications.level, status: artistVerifications.status })
+      .from(artistVerifications)
+      .where(eq(artistVerifications.userId, userId))
+      .limit(1);
+    const v = rows[0];
+    // Only expose an active level when the request was approved.
+    const level = v && v.status === 'approved' ? v.level : 'none';
+    return res.json({ success: true, level, status: v?.status || 'none' });
+  } catch (err) {
+    console.error('[legal] public verification error:', err);
+    return res.json({ success: true, level: 'none', status: 'none' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // AUTH: Verification status + request
 // ---------------------------------------------------------------------------
 router.get('/my/verification', authenticate, async (req: Request, res: Response) => {

@@ -2734,6 +2734,55 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Copyright / Legal protection trust band */}
+      <section className="py-16 bg-gradient-to-b from-zinc-950 to-black relative overflow-hidden border-t border-white/5">
+        <div className="container mx-auto px-4">
+          <div className="max-w-5xl mx-auto rounded-3xl border border-orange-500/20 bg-gradient-to-br from-zinc-900 to-zinc-950 p-8 md:p-10">
+            <div className="flex flex-col md:flex-row md:items-center gap-8">
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300 mb-4">
+                  <Shield className="h-4 w-4" /> Plataforma blindada legalmente
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+                  Tu música y tu contenido, protegidos
+                </h2>
+                <p className="text-white/70 text-sm md:text-base leading-relaxed mb-5">
+                  Cada archivo que subes se registra con una huella digital (SHA-256) y queda protegido bajo nuestro
+                  sistema de copyright conforme a la DMCA. Verificación de artistas, escaneo automático de contenido y
+                  un equipo legal que responde a cualquier reclamación.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/legal">
+                    <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" data-testid="home-legal-center">
+                      <Scale className="h-4 w-4" /> Centro Legal
+                    </Button>
+                  </Link>
+                  <Link href="/legal/dmca">
+                    <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 gap-2">
+                      Política DMCA
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 md:w-80">
+                {[
+                  { emoji: "🔒", title: "Huella SHA-256", desc: "En cada subida" },
+                  { emoji: "⚖️", title: "Cumplimiento DMCA", desc: "Notice & Takedown" },
+                  { emoji: "🛡️", title: "Escaneo automático", desc: "Antes de publicar" },
+                  { emoji: "🟢", title: "Artistas verificados", desc: "5 niveles de sello" },
+                ].map((it) => (
+                  <div key={it.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-2xl mb-1">{it.emoji}</div>
+                    <div className="text-sm font-semibold text-white">{it.title}</div>
+                    <div className="text-xs text-white/50">{it.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <Footer />
 
       {/* Founder Modal */}
