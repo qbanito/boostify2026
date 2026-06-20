@@ -34,6 +34,9 @@ import {
 } from '../db/schema';
 import { isAuthenticated, getUserId, isAdmin } from '../middleware/clerk-auth';
 import { signPass, generatePassCode } from '../services/concert-tickets';
+import {
+  applySeatDelta, getSeatAvailability, reconcileSeatCounters,
+} from '../services/seat-counters';
 
 const router = Router();
 
@@ -88,14 +91,19 @@ async function ownsArtist(req: Request, artistId: number): Promise<boolean> {
 /** Release any holds on this event whose 10-minute timer has expired. */
 async function releaseExpiredHolds(concertId: number): Promise<void> {
   try {
-    await db
+    const released = await db
       .update(concertEventSeats)
       .set({ status: 'available', holdToken: null, heldByEmail: null, holdExpiresAt: null, updatedAt: new Date() })
       .where(and(
         eq(concertEventSeats.concertId, concertId),
         eq(concertEventSeats.status, 'held'),
         sql`${concertEventSeats.holdExpiresAt} < NOW()`,
-      ));
+      ))
+      .returning({ id: concertEventSeats.id });
+    if (released.length) {
+      // Advisory sharded counter — best-effort, never blocks.
+      void applySeatDelta(concertId, { held: -released.length });
+    }
   } catch (e: any) {
     console.warn('[seat-map] releaseExpiredHolds failed:', e?.message);
   }
@@ -390,6 +398,8 @@ router.post('/:artistId/events/:eventId/attach-venue', isAuthenticated, async (r
     });
 
     const total = await db.select({ n: sql<number>`COUNT(*)::int` }).from(concertEventSeats).where(eq(concertEventSeats.concertId, eventId));
+    // Seed the sharded availability counters from the freshly-built seat set.
+    void reconcileSeatCounters(eventId);
     res.json({ success: true, seatsInitialized: Number(total[0]?.n || 0) });
   } catch (err: any) {
     console.error('[seat-map] attach venue failed:', err?.message);
@@ -416,6 +426,8 @@ router.post('/:artistId/events/:eventId/detach-venue', isAuthenticated, async (r
       await tx.delete(concertEventSeats).where(eq(concertEventSeats.concertId, eventId));
       await tx.update(concertEvents).set({ venueId: null, seatingMode: 'general', updatedAt: new Date() }).where(eq(concertEvents.id, eventId));
     });
+    // Clear the sharded counters for this event (back to general admission).
+    void reconcileSeatCounters(eventId);
     res.json({ success: true });
   } catch (err: any) {
     console.error('[seat-map] detach venue failed:', err?.message);
@@ -501,11 +513,29 @@ router.post('/events/:eventId/hold', async (req: Request, res: Response) => {
     const token = randomBytes(16).toString('hex');
     const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
 
-    // Atomic conditional hold: only flip rows that are currently AVAILABLE. If
-    // any requested seat was grabbed by someone else, the row count won't match
-    // and we roll back so the buyer holds nothing (no partial holds).
+    // Anti double-sell under high concurrency:
+    //   1. SELECT … FOR UPDATE SKIP LOCKED locks ONLY the requested seats that
+    //      are currently `available` AND not already row-locked by another
+    //      in-flight hold. Competing buyers skip locked rows instead of piling
+    //      up on the same locks (no lock-wait storms during an on-sale spike).
+    //   2. If we couldn't lock every requested seat, someone else holds/took
+    //      one → roll back so the buyer gets nothing (no partial holds).
+    //   3. Flip the locked rows to `held` inside the same transaction.
     let held: { id: number; seatId: number; price: string }[] = [];
     await db.transaction(async (tx) => {
+      const lockRes: any = await tx.execute(sql`
+        SELECT seat_id FROM concert_event_seats
+         WHERE concert_id = ${eventId}
+           AND seat_id = ANY(${seatIds})
+           AND status = 'available'
+         ORDER BY seat_id
+         FOR UPDATE SKIP LOCKED
+      `);
+      const lockedRows: any[] = lockRes?.rows ?? lockRes ?? [];
+      if (lockedRows.length !== seatIds.length) {
+        throw new Error('SEATS_UNAVAILABLE');
+      }
+
       const updated = await tx
         .update(concertEventSeats)
         .set({ status: 'held', holdToken: token, heldByEmail: email, holdExpiresAt: expiresAt, updatedAt: new Date() })
@@ -520,6 +550,9 @@ router.post('/events/:eventId/hold', async (req: Request, res: Response) => {
       }
       held = updated;
     });
+
+    // Advisory sharded counter — best-effort, never blocks the response.
+    void applySeatDelta(eventId, { held: held.length });
 
     // Decorate with seat labels for the cart UI.
     const seatRows = await db.select().from(concertSeats).where(inArray(concertSeats.id, held.map((h) => h.seatId)));
@@ -543,14 +576,40 @@ router.post('/events/:eventId/release', async (req: Request, res: Response) => {
   const holdToken = clampStr(req.body?.holdToken, 64);
   if (!eventId || !holdToken) return res.status(400).json({ success: false, error: 'Missing hold token' });
   try {
-    await db
+    const released = await db
       .update(concertEventSeats)
       .set({ status: 'available', holdToken: null, heldByEmail: null, holdExpiresAt: null, updatedAt: new Date() })
-      .where(and(eq(concertEventSeats.concertId, eventId), eq(concertEventSeats.holdToken, holdToken), eq(concertEventSeats.status, 'held')));
+      .where(and(eq(concertEventSeats.concertId, eventId), eq(concertEventSeats.holdToken, holdToken), eq(concertEventSeats.status, 'held')))
+      .returning({ id: concertEventSeats.id });
+    if (released.length) void applySeatDelta(eventId, { held: -released.length });
     res.json({ success: true });
   } catch (err: any) {
     console.error('[seat-map] release failed:', err?.message);
     res.status(500).json({ success: false, error: 'Failed to release seats' });
+  }
+});
+
+// Fast live availability for an on-sale event (sharded counter, no seat scan).
+// Falls back to a one-off reconcile when the counters were never initialised.
+router.get('/events/:eventId/availability', async (req: Request, res: Response) => {
+  const eventId = parseId(req.params.eventId);
+  if (!eventId) return res.status(400).json({ success: false, error: 'Invalid event id' });
+  try {
+    let stats = await getSeatAvailability(eventId);
+    if (!stats || stats.total === 0) {
+      stats = await reconcileSeatCounters(eventId);
+    }
+    if (!stats) return res.json({ success: true, available: null });
+    res.json({
+      success: true,
+      total: stats.total,
+      held: stats.held,
+      sold: stats.sold,
+      available: stats.available,
+    });
+  } catch (err: any) {
+    console.error('[seat-map] availability failed:', err?.message);
+    res.status(500).json({ success: false, error: 'Failed to load availability' });
   }
 });
 
@@ -677,6 +736,8 @@ export async function mintReservedSeatPasses(order: {
       .where(and(eq(concertEventSeats.concertId, order.concertId), eq(concertEventSeats.seatId, seat.seatId)));
     minted++;
   }
+  // Advisory sharded counter: these seats moved held → sold.
+  if (minted) void applySeatDelta(order.concertId, { held: -minted, sold: minted });
   return minted;
 }
 

@@ -1016,6 +1016,15 @@ app.use((req, res, next) => {
       console.warn('⚠️ [SocialWorker] Could not start:', workerErr);
     }
 
+    // Aggregated stats cron — keeps artist_stats / event_stats fresh (drift +
+    // high-churn counters like song plays that are kept off the trigger path).
+    try {
+      const { startStatsCron } = await import('./services/stats-aggregates');
+      startStatsCron();
+    } catch (statsErr) {
+      console.warn('⚠️ [StatsCron] Could not start:', statsErr);
+    }
+
     server.on('error', (error: any) => {
       // Ignore EPIPE — broken pipe on stdout/stderr (harmless in PowerShell terminals)
       if (error.code === 'EPIPE') return;

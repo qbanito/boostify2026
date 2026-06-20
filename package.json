@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
     "start": "node dist/server/index.js",
+    "start:worker": "node dist/server/worker.js",
+    "worker:dev": "npx tsx watch server/worker.ts",
     "build": "node build-for-deploy.js",
     "server:dev": "npx tsx watch --clear-screen=false --ignore=\"uploads/**\" --ignore=\"attached_assets/**\" --ignore=\"dist/**\" --ignore=\"client/**\" --ignore=\".venv/**\" --ignore=\"logs/**\" --ignore=\"**/*.log\" --ignore=\"**/*.json\" --ignore=\"node_modules/**\" server/index.ts",
     "client:dev": "vite --config vite.config.ts",
@@ -129,6 +131,7 @@
     "apify-client": "^2.12.0",
     "autoprefixer": "^10.4.22",
     "axios": "^1.7.9",
+    "bullmq": "^5.79.0",
     "ccxt": "^4.5.54",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

@@ -29,6 +29,7 @@ import { separateStems } from '../services/voice-ai-service';
 import { sendCopyrightCertificate } from '../services/copyright-email';
 import { neon } from '@neondatabase/serverless';
 import { log } from '../vite';
+import { runOrEnqueue } from '../queue';
 
 const router = Router();
 const sql = neon(process.env.DATABASE_URL!);
@@ -101,8 +102,9 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
     // Return immediately — processing is async
     res.json({ ok: true, projectId, status: 'generating' });
 
-    // 2. Generate music (background)
-    setImmediate(async () => {
+    // 2. Generate music (background) — durable via the media queue when Redis is
+    //    configured (survives web redeploys), inline fire-and-forget otherwise.
+    void runOrEnqueue('original-song:generate', { projectId, userId, title, genre, mood, language, isInstrumental }, async () => {
       try {
         log(`[MusicOriginal] Generating song for project ${projectId}`, 'music-original');
 

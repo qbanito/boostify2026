@@ -82,6 +82,14 @@ async function build() {
     if (serverOutput) console.log(serverOutput);
     if (serverError) console.error(serverError);
 
+    // Build the BullMQ worker entrypoint (dedicated Render `worker` service)
+    console.log('🔨 Building worker with esbuild...');
+    const { stdout: workerOutput, stderr: workerError } = await execPromise(
+      'npx esbuild server/worker.ts --bundle --platform=node --packages=external --outfile=dist/server/worker.js --format=esm --sourcemap --define:process.env.NODE_ENV=\\"production\\"'
+    );
+    if (workerOutput) console.log(workerOutput);
+    if (workerError) console.error(workerError);
+
     // Copy server/vite.ts separately (not bundled)
     console.log('📋 Copying additional server files...');
     try {
