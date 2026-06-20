@@ -2,7 +2,7 @@ import { Header } from "../components/layout/header";
 import { Link } from "wouter";
 
 const COMPANY = "Boostify Music, Inc.";
-const EMAIL_DMCA = "convoycubano@gmail.com";
+const EMAIL_DMCA = "copywrite@boostifymusic.com";
 const DMCA_AGENT_NAME = "Neiver A. Alvarez";
 const DMCA_AGENT_ADDRESS = "9860 N Kendall Dr, Apt E201, Miami, FL 33176, USA";
 const DMCA_REGISTRATION = "DMCA-1074443";
