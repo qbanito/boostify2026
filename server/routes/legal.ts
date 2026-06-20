@@ -157,6 +157,11 @@ router.post('/dmca', async (req: Request, res: Response) => {
     }).catch((e) => console.error('[legal] dmca notify failed:', e?.message));
 
     return res.json({
+      success: true,
+      caseNumber: row.uuid,
+      id: row.id,
+      message: 'Su notificación DMCA ha sido recibida y registrada. Recibirá una respuesta del equipo legal.',
+    });
   } catch (err) {
     console.error('[legal] dmca submit error:', err);
     return res.status(500).json({ success: false, error: 'No se pudo registrar la notificación.' });
