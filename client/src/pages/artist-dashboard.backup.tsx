@@ -51,7 +51,8 @@ import { DistributionCard } from "../components/distribution/distribution-card";
 import { useAuth } from "../hooks/use-auth";
 
 // Import video as module for proper bundling
-import heroVideo from "../images/videos/Standard_Mode_Generated_Video.mp4";
+// Backup file — video reference disabled (Standard_Mode_Generated_Video.mp4 not bundled)
+const heroVideo = "/assets/Standard_Mode_Generated_Video.mp4";
 
 // ============================================================================
 // Types

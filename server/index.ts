@@ -463,6 +463,13 @@ app.use((req, res, next) => {
       app.use('/api/admin/openclaw', fallbackRouter);
     }
     
+    // CDN redirect middleware: serves /assets/*.mp4 etc. from Firebase Storage
+    // in production when local files are excluded from git/build.
+    // No-op in dev when files exist locally (Vite serves them first).
+    const { assetCdnMiddleware } = await import('./middleware/asset-cdn');
+    app.use(assetCdnMiddleware);
+    log('📡 Asset CDN middleware registered');
+
     // Serve uploaded files statically
     const uploadsPath = path.join(process.cwd(), 'uploads');
     app.use('/uploads', express.static(uploadsPath));

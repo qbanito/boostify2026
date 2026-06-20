@@ -39,7 +39,10 @@ import { LogisticsSection } from "../components/manager/logistics";
 import { HiringSection } from "../components/manager/hiring";
 import { AIToolsSection } from "../components/manager/ai-tools";
 import { CalendarSection } from "../components/manager/calendar";
-import concertVideo from "../assets/concert-video.mp4";
+
+// Served from client/public/assets/videos/ in dev,
+// redirected to Firebase Storage CDN in production (see server/middleware/asset-cdn.ts)
+const concertVideo = "/assets/videos/concert-video.mp4";
 
 export default function ManagerToolsPage() {
   const { isSignedIn, isLoaded } = useUser();
