@@ -166,10 +166,27 @@ export default function AffiliatesPage() {
                     Join our community of high-performing affiliates and earn generous commissions promoting premium music education products.
                   </p>
                   <div className="flex flex-wrap gap-6 pt-6">
-                    <Button className="gap-2 text-base py-6" size="lg">
+                    <Button
+                      className="gap-2 text-base py-6"
+                      size="lg"
+                      onClick={() =>
+                        document
+                          .getElementById("affiliate-registration")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                    >
                       <Sparkles className="h-5 w-5" /> Join Now
                     </Button>
-                    <Button variant="outline" className="text-base py-6" size="lg">
+                    <Button
+                      variant="outline"
+                      className="text-base py-6"
+                      size="lg"
+                      onClick={() =>
+                        document
+                          .getElementById("affiliate-benefits")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                    >
                       Learn More
                     </Button>
                   </div>
@@ -186,7 +203,7 @@ export default function AffiliatesPage() {
               </div>
             </div>
 
-            <div className="mb-12 text-center">
+            <div className="mb-12 text-center" id="affiliate-benefits">
               <h2 className="text-3xl font-bold mb-6">Why Become a Boostify Affiliate?</h2>
               <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4 mt-8">
                 <div className="flex flex-col items-center p-6 rounded-xl bg-gradient-to-b from-primary/5 to-transparent border border-primary/10">
@@ -259,7 +276,9 @@ export default function AffiliatesPage() {
             </div>
           ) : !isAffiliate ? (
             // If not an affiliate, show registration form
-            <AffiliateRegistration />
+            <div id="affiliate-registration">
+              <AffiliateRegistration />
+            </div>
           ) : (
             // If already an affiliate, show full dashboard
             <div>
@@ -307,7 +326,7 @@ export default function AffiliatesPage() {
                 </div>
               </div>
 
-              <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-8">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
                 {/* Sistema de pestañas mejorado con nuevas funcionalidades */}
                 {/* Tabs para móvil: vista en forma de grid */}
                 <div className="md:hidden space-y-3">
@@ -506,7 +525,13 @@ export default function AffiliatesPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Premium level affiliates have access to additional content types and advanced customization.
-                        <Button variant="link" className="p-0 h-auto text-sm text-primary ml-1">Learn more</Button>
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto text-sm text-primary ml-1"
+                          onClick={() => setActiveTab("resources")}
+                        >
+                          Learn more
+                        </Button>
                       </p>
                     </div>
                   </div>

@@ -66,9 +66,12 @@ import { ProgressCircular } from "../ui/progress-circular";
 
 interface AffiliateLink {
   id: string;
-  userId: string;
+  userId?: string;
   name: string;
+  title?: string;
   slug?: string;
+  uniqueCode?: string;
+  customPath?: string;
   productId: string;
   productName: string;
   productUrl: string;
@@ -110,6 +113,22 @@ interface AffiliateLinksProps {
   affiliateData: AffiliateData;
 }
 
+// Etiqueta legible para un tipo de producto cuando no hay nombre disponible
+function labelForType(type?: string): string {
+  switch (type) {
+    case "subscription":
+      return "Boostify Subscription";
+    case "bundle":
+      return "Music Video Bundle";
+    case "course":
+      return "Boostify Academy Course";
+    case "merchandise":
+      return "Boostify Merchandise";
+    default:
+      return "Boostify";
+  }
+}
+
 /**
  * Componente para gestionar enlaces de afiliado
  */
@@ -145,14 +164,16 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
   // Mutación para crear un nuevo enlace
   const createLinkMutation = useMutation({
     mutationFn: async (linkData: typeof newLinkData) => {
+      const selectedProduct = products?.find((p) => p.id === linkData.productId);
       const result = await apiRequest({
         url: "/api/affiliate/links",
         method: "POST",
         data: {
-          title: linkData.name,
-          productType: linkData.productId ? 'general' : 'general',
+          title: linkData.name || selectedProduct?.name || "Affiliate link",
+          productType: selectedProduct?.type || "general",
           productId: linkData.productId || null,
-          customPath: linkData.slug || null,
+          // Send the real destination of the chosen product so /ref/:code lands there
+          customPath: selectedProduct?.url || null,
         },
       });
       return result;
@@ -186,13 +207,41 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
     },
   });
 
+  // Normalizar los enlaces que vienen de la base de datos al formato que usa la UI
+  const normalizedLinks: AffiliateLink[] = (affiliateData?.links || []).map((raw: any) => {
+    const product = products?.find((p) => p.id === raw.productId);
+    const clicks = Number(raw.clicks || 0);
+    const conversions = Number(raw.conversions || 0);
+    return {
+      id: String(raw.id),
+      name: raw.title || raw.name || "Affiliate link",
+      title: raw.title,
+      slug: raw.customPath || raw.slug,
+      uniqueCode: raw.uniqueCode,
+      customPath: raw.customPath,
+      productId: raw.productId || "",
+      productName: product?.name || raw.productName || labelForType(raw.productType),
+      productUrl: product?.url || raw.customPath || "/",
+      productImageUrl: product?.imageUrl || raw.productImageUrl,
+      productType: raw.productType || "general",
+      productPrice: product?.price,
+      createdAt: raw.createdAt,
+      clicks,
+      conversions,
+      conversionRate: clicks > 0 ? conversions / clicks : 0,
+      revenue: Number(raw.revenue || 0),
+      commission: Number(raw.earnings || raw.commission || 0),
+    };
+  });
+
   // Filtrar enlaces basados en el término de búsqueda
-  const filteredLinks = (affiliateData?.links || []).filter((link) => {
+  const filteredLinks = normalizedLinks.filter((link) => {
     const searchLower = searchTerm.toLowerCase();
     return (
-      link.name.toLowerCase().includes(searchLower) ||
-      link.productName.toLowerCase().includes(searchLower) ||
-      (link.slug && link.slug.toLowerCase().includes(searchLower))
+      (link.name || "").toLowerCase().includes(searchLower) ||
+      (link.productName || "").toLowerCase().includes(searchLower) ||
+      (link.uniqueCode || "").toLowerCase().includes(searchLower) ||
+      (link.slug ? link.slug.toLowerCase().includes(searchLower) : false)
     );
   });
 
@@ -203,13 +252,11 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
     });
   };
 
-  // Generar URL completa para un enlace
+  // Generar URL completa para un enlace (apunta al endpoint de tracking /ref/:code)
   const getFullAffiliateUrl = (link: AffiliateLink) => {
     const baseUrl = window.location.origin;
-    const path = link.slug
-      ? `/aff/${link.slug}`
-      : `/aff/${link.id}`;
-    return `${baseUrl}${path}`;
+    const code = (link.uniqueCode || link.id || "").toString();
+    return `${baseUrl}/ref/${code}`;
   };
 
   // Manejar envío del formulario de nuevo enlace
@@ -312,7 +359,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
                       <Label htmlFor="custom-slug">URL personalizada (opcional)</Label>
                       <div className="flex">
                         <span className="inline-flex items-center px-3 bg-muted border border-r-0 border-input rounded-l-md text-sm text-muted-foreground">
-                          {window.location.origin}/aff/
+                          {window.location.origin}/ref/
                         </span>
                         <Input
                           id="custom-slug"
@@ -482,7 +529,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
                           <div className="flex flex-col">
                             <span>{link.name}</span>
                             <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                              {link.slug ? `/aff/${link.slug}` : `/aff/${link.id}`}
+                              {`/ref/${link.uniqueCode || link.id}`}
                             </span>
                           </div>
                         </TableCell>
@@ -652,7 +699,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
                     )}
                     <div className="mt-3 flex items-center justify-between">
                       <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                        {(product?.commissionRate || 0) * 100}% comisión
+                        {(product?.commissionRate || 0)}% comisión
                       </Badge>
                       <Dialog>
                         <DialogTrigger asChild>
@@ -677,7 +724,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
                               <Label htmlFor="quick-slug">URL personalizada (opcional)</Label>
                               <div className="flex">
                                 <span className="inline-flex items-center px-3 bg-muted border border-r-0 border-input rounded-l-md text-sm text-muted-foreground">
-                                  {window.location.origin}/aff/
+                                  {window.location.origin}/ref/
                                 </span>
                                 <Input
                                   id="quick-slug"

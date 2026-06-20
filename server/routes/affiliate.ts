@@ -1264,6 +1264,43 @@ router.get('/products', authenticate, async (_req: Request, res: Response) => {
       commissionRate: 12,
       description: 'Paquete completo de producción y distribución de videoclips musicales.'
     },
+    // ─── Boostify Music Academy courses (education) ───
+    {
+      id: 'course-ai-music-production',
+      name: 'AI Music Production Masterclass',
+      url: '/course/ai-music-production',
+      type: 'course',
+      price: 199,
+      commissionRate: 25,
+      description: 'Professional AI music production from concept to master.'
+    },
+    {
+      id: 'course-ai-music-videos',
+      name: 'AI Music Video Creation',
+      url: '/course/ai-music-videos',
+      type: 'course',
+      price: 249,
+      commissionRate: 25,
+      description: 'Create stunning music videos with AI — no studio needed.'
+    },
+    {
+      id: 'course-music-marketing-mastery',
+      name: 'Music Marketing Mastery',
+      url: '/course/music-marketing-mastery',
+      type: 'course',
+      price: 179,
+      commissionRate: 25,
+      description: 'Promote your music like a pro in the digital age.'
+    },
+    {
+      id: 'education-academy',
+      name: 'Boostify Music Academy',
+      url: '/education',
+      type: 'course',
+      price: 0,
+      commissionRate: 25,
+      description: 'Enlace general a todos los cursos de la academia (incluye cursos premium y gratis).'
+    },
     {
       id: 'general',
       name: 'General Boostify Link',

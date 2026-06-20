@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { logger } from "@/lib/logger";
+import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "../../hooks/use-auth";
 import { db } from "../../lib/firebase";
 import { collection, addDoc, getDocs, query, where, orderBy, limit, serverTimestamp } from "firebase/firestore";
@@ -129,17 +130,12 @@ export function AffiliateContentGenerator({ affiliateData }: AffiliateContentGen
     },
   });
 
-  // Consulta para obtener los productos disponibles para afiliados
+  // Consulta para obtener los productos disponibles para afiliados (misma fuente que la pestaña de enlaces)
   const { data: products, isLoading: isLoadingProducts } = useQuery({
-    queryKey: ["affiliate-products"],
+    queryKey: ["/api/affiliate/products"],
     queryFn: async () => {
-      const productsRef = collection(db, "affiliateProducts");
-      const querySnapshot = await getDocs(productsRef);
-      
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as AffiliateProduct[];
+      const result = await apiRequest({ url: "/api/affiliate/products", method: "GET" });
+      return (result?.products ?? []) as AffiliateProduct[];
     },
   });
 

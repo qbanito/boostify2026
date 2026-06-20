@@ -83,23 +83,28 @@ router.get('/ref/:code', async (req: Request, res: Response) => {
 
     // Determine redirect URL based on product type
     let redirectUrl = '/';
-    
-    switch (link.productType) {
-      case 'subscription':
-        redirectUrl = '/pricing';
-        break;
-      case 'bundle':
-        redirectUrl = '/music-video-pricing';
-        break;
-      case 'course':
-        redirectUrl = '/education';
-        break;
-      case 'merchandise':
-        redirectUrl = '/store';
-        break;
-      default:
-        // Use custom path if provided
-        redirectUrl = link.customPath || '/';
+
+    // A specific destination set on the link always wins (exact product/course page)
+    if (link.customPath && link.customPath.startsWith('/')) {
+      redirectUrl = link.customPath;
+    } else {
+      switch (link.productType) {
+        case 'subscription':
+          redirectUrl = '/pricing';
+          break;
+        case 'bundle':
+          redirectUrl = '/music-video-pricing';
+          break;
+        case 'course':
+          redirectUrl = '/education';
+          break;
+        case 'merchandise':
+          redirectUrl = '/store';
+          break;
+        default:
+          // Use custom path if provided
+          redirectUrl = link.customPath || '/';
+      }
     }
 
     // Add UTM parameters to track the source
