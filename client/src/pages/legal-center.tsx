@@ -4,7 +4,6 @@ import { Link } from "wouter";
 const COMPANY = "Boostify Music, Inc.";
 const EMAIL_DMCA = "copywrite@boostifymusic.com";
 const DMCA_AGENT_NAME = "Neiver A. Alvarez";
-const DMCA_AGENT_ADDRESS = "9860 N Kendall Dr, Apt E201, Miami, FL 33176, USA";
 const DMCA_REGISTRATION = "DMCA-1074443";
 
 interface DocCard {
@@ -84,9 +83,11 @@ export default function LegalCenterPage() {
             <ul className="mt-3 space-y-1 text-sm text-slate-400">
               <li><span className="text-slate-500">Empresa:</span> {COMPANY}</li>
               <li><span className="text-slate-500">Agente:</span> {DMCA_AGENT_NAME}</li>
-              <li><span className="text-slate-500">Dirección:</span> {DMCA_AGENT_ADDRESS}</li>
               <li><span className="text-slate-500">Email DMCA:</span> <a className="text-orange-400 hover:underline" href={`mailto:${EMAIL_DMCA}`}>{EMAIL_DMCA}</a></li>
             </ul>
+            <p className="mt-2 text-xs text-slate-500">
+              Dirección postal del agente disponible en el directorio oficial de la U.S. Copyright Office.
+            </p>
             <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs text-green-300">
               <span>🛡️ U.S. Copyright Office Reg. No.</span>
               <span className="font-mono text-green-200">{DMCA_REGISTRATION}</span>

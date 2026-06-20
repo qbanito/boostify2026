@@ -5,7 +5,8 @@ import { apiRequest } from "../lib/queryClient";
 const COMPANY = "Boostify Music, Inc.";
 const EMAIL_DMCA = "copywrite@boostifymusic.com";
 const DMCA_AGENT_NAME = "Neiver A. Alvarez";
-const DMCA_AGENT_ADDRESS = "9860 N Kendall Dr, Apt E201, Miami, FL 33176, USA";
+// Dirección postal NO se muestra públicamente en la web por privacidad: está
+// disponible en el directorio oficial de la U.S. Copyright Office (dmca.copyright.gov).
 const DMCA_REGISTRATION = "DMCA-1074443";
 const DMCA_EFFECTIVE = "20 de junio de 2026";
 const EFFECTIVE_DATE = "Junio 2026";
@@ -232,7 +233,6 @@ export default function DmcaPolicyPage() {
           <div className="rounded-lg border border-orange-500/30 bg-slate-800/40 p-4 text-sm">
             <p className="font-semibold text-white">DMCA Designated Agent — {COMPANY}</p>
             <p>{DMCA_AGENT_NAME}</p>
-            <p>{DMCA_AGENT_ADDRESS}</p>
             <p>Email: <a className="text-orange-400 hover:underline" href={`mailto:${EMAIL_DMCA}`}>{EMAIL_DMCA}</a></p>
             <p className="mt-2 text-xs text-slate-400">
               U.S. Copyright Office Registration No.{" "}
@@ -240,8 +240,9 @@ export default function DmcaPolicyPage() {
             </p>
           </div>
           <p className="text-xs text-slate-500">
-            Este agente está inscrito y verificable públicamente en el directorio oficial de la U.S. Copyright Office
-            (<a className="text-orange-400 hover:underline" href="https://dmca.copyright.gov" target="_blank" rel="noopener noreferrer">dmca.copyright.gov</a>).
+            La dirección postal completa del agente designado está registrada y es verificable públicamente en el
+            directorio oficial de la U.S. Copyright Office
+            (<a className="text-orange-400 hover:underline" href="https://dmca.copyright.gov" target="_blank" rel="noopener noreferrer">dmca.copyright.gov</a>), bajo el número de registro {DMCA_REGISTRATION}.
           </p>
         </Section>
 
