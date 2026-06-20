@@ -30,14 +30,14 @@ export function QuizDialog({ lessonId, courseId, onClose }: QuizDialogProps) {
   const [score, setScore] = useState(0);
 
   const { data: quiz, isLoading } = useQuery({
-    queryKey: ["/api/education/quizzes", lessonId],
+    queryKey: [`/api/education/quizzes/${lessonId}`],
     enabled: !!lessonId
   });
 
   const quizData: any = quiz || {};
 
   const { data: questions = [] } = useQuery({
-    queryKey: ["/api/education/quiz-questions", quizData.id],
+    queryKey: [`/api/education/quiz-questions/${quizData.id}`],
     enabled: !!quizData.id
   });
 

@@ -145,7 +145,7 @@ const musicians: MusicianService[] = [
     id: "6",
     userId: "user-6",
     title: "David Wilson",
-    photo: "https://images.unsplash.com/photo-1571327073757-71d13c38eb89?w=400&h=400&fit=crop&crop=face",
+    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
     instrument: "Drums",
     category: "Drums",
     description: "Expert in jazz and electronic music. Producer and composer.",
@@ -159,7 +159,7 @@ const musicians: MusicianService[] = [
     id: "7",
     userId: "user-7",
     title: "Emma Watson",
-    photo: "https://images.unsplash.com/photo-1520523839897-bd37cb15740f?w=400&h=400&fit=crop&crop=face",
+    photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&crop=face",
     instrument: "Piano",
     category: "Piano",
     description: "Classical pianist with Conservatory training. Specialized in baroque music.",
@@ -893,22 +893,26 @@ export default function ProducerToolsPage() {
                     <Card className="overflow-hidden bg-neutral-900/60 border border-white/5 hover:border-orange-500/30 shadow-md hover:shadow-orange-500/10 transition-all duration-300 group max-w-[320px] min-[380px]:max-w-none mx-auto w-full">
                       {/* Image Container — portrait 3:4 on all sizes for clean artist display */}
                       <div className="relative aspect-[3/4] bg-neutral-800 overflow-hidden">
-                        <img
-                          src={musician.photo || ""}
-                          alt={musician.title}
-                          width={400}
-                          height={400}
-                          className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
-                        />
-                        {/* Fallback with initials */}
-                        <div className="absolute inset-0 items-center justify-center bg-gradient-to-br from-orange-600/30 to-orange-900/40 hidden">
+                        {musician.photo && /^(https?:|data:|blob:)/.test(musician.photo) && (
+                          <img
+                            src={musician.photo}
+                            alt={musician.title}
+                            width={400}
+                            height={400}
+                            className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const fallback = target.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        )}
+                        {/* Fallback with initials — visible when no valid photo or image fails to load */}
+                        <div
+                          className={`absolute inset-0 items-center justify-center bg-gradient-to-br from-orange-600/30 to-orange-900/40 ${musician.photo && /^(https?:|data:|blob:)/.test(musician.photo) ? 'hidden' : 'flex'}`}
+                        >
                           <span className="text-2xl sm:text-4xl font-bold text-white/70">
                             {musician.title.split(' ').map(n => n[0]).join('')}
                           </span>

@@ -17,16 +17,23 @@ import {
   type CustomBlock,
 } from "./custom-blocks";
 import { formatLocation } from "../../lib/formatLocation";
-import { InfluencerModule } from "../artist-profile/influencer-module";
-import { TalkToMeModule } from "../artist-profile/talk-to-me-module";
-import { AmazonCuratedPicksModule } from "../artist-profile/amazon-curated-picks-module";
-import { FashionVirtualStore } from "../fashion-store/FashionVirtualStore";
-import { ArtistCareerSuite } from "../artist/career-suite/ArtistCareerSuite";
-import { EpkSection } from "./profile-modules/epk-section";
-import { ArtistNewsGenerator } from "../artist-profile/artist-news-generator";
-import { AvatarTalkModule } from "./avatar-talk-module";
 import { ArtistDownloads } from "./artist-downloads";
-import { EarningsChart } from "../wallet/earnings-chart";
+// Heavy Artist Profile modules are code-split via React.lazy in ./lazy-modules.
+// They keep the same names + props API but download their JS chunk on demand,
+// only when their section becomes visible. See ./lazy-modules for details.
+import {
+  InfluencerModule, TalkToMeModule, AmazonCuratedPicksModule, FashionVirtualStore,
+  ArtistCareerSuite, EpkSection, ArtistNewsGenerator, AvatarTalkModule, EarningsChart,
+  MyUniverseModule, SponsorPanel, VenueBookingPanel, ExplicitContentSection, AASEnginePanel,
+  AudienceCaptureDashboard, ViralProductGenerator, BrandCollabPanel, ArtistBusinessPlan,
+  ArtistBusinessPlanV2, TokenizationPanel, EconomicEngineDashboard, CryptoCommunityDashboard,
+  TokenizedMusicView, VinylPreorderModule, VinylEditionModule, VinylRecordsHub, ArtGalleryModule,
+  SmartMerchModule, OfficialStoreSection, FanClubPanel, ArtistBlueprintPanel, ArtistDomainManager,
+  HermesAgentPanel, AgentGatewayPanel, AgentConsole, HologramProjectPanel, RenaissanceStudioSection,
+  ObservationEnginePanel, DeepBriefPanel, EmotionalStudioPanel, ArtistPromoClipsModule, AIVideoStudio,
+  AdsCampaignManager, GammaPresentationsModule, KaraokeModule, KaraokePlayer, LyricsVideoModule,
+  ConcertCommandCenter, BoostifyLiveStage,
+} from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
 import { PremiumGate, UploadLimitBanner, ModuleGuide } from "../ui/premium-gate";
@@ -123,6 +130,7 @@ import {
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCachedQuery, CACHE_TTL } from "../../hooks/use-cached-query";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { db, storage } from "../../firebase";
 import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -145,31 +153,10 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, R
 import { CrowdfundingButton } from "../crowdfunding/crowdfunding-button";
 import { CrowdfundingPanel } from "../crowdfunding/crowdfunding-panel";
 import { HowBoostifyWorks } from "../modals/how-boostify-works";
-import { Layers, Wand2, Antenna, Radar, Network, Brain, Activity, Package, Clapperboard, Images, Send, MessageCircle, Heart, Monitor, ScrollText, BookOpen, Palette } from "lucide-react";
-import { MyUniverseModule } from "./my-universe-module";
-import { SponsorPanel } from "../sponsor/sponsor-panel";
-import { VenueBookingPanel } from "./venue-booking-panel";
-import { ExplicitContentSection } from "../explicit/explicit-content-section";
-import { AASEnginePanel } from "../aas/aas-engine-panel";
-import { AudienceCaptureDashboard } from "../audience-capture";
-import { ViralProductGenerator } from "./viral-product-generator";
-import BrandCollabPanel from "./brand-collab-panel";
-import { ArtistBusinessPlan } from "../business-plan/artist-business-plan";
-import { ArtistBusinessPlanV2 } from "../business-plan/artist-business-plan-v2";
-import { TokenizationPanel } from "../tokenization/tokenization-panel";
-import { EconomicEngineDashboard } from "../economic-engine/economic-engine-dashboard";
-import { CryptoCommunityDashboard } from "../crypto-community/crypto-community-dashboard";
-import { TokenizedMusicView } from "../tokenization/tokenized-music-view";
+import { Layers, Wand2, Antenna, Radar, Radio, Network, Brain, Activity, Package, Clapperboard, Images, Send, MessageCircle, Heart, Monitor, ScrollText, BookOpen, Palette } from "lucide-react";
 import { MerchCollaborationContract } from "../merch/merch-collaboration-contract";
-import { VinylPreorderModule } from "../vinyl/vinyl-preorder-module";
-import { VinylEditionModule } from "../vinyl/VinylEditionModule";
-import { VinylRecordsHub } from "../vinyl/VinylRecordsHub";
-import ArtGalleryModule from "../art-gallery/ArtGalleryModule";
-import SmartMerchModule from "../smart-merch/SmartMerchModule";
 import { SocialPostsDisplay } from "./social-posts-display";
 import { PromoteSongModal } from "../admin/promote-song-modal";
-import { OfficialStoreSection } from "./official-store-section";
-import { FanClubPanel } from "./FanClubPanel";
 import { VideoPlayerWithNotes } from "../video/video-player-with-notes";
 import { NewsArticleModal } from "./news-article-modal";
 import { PromoteModal } from "./promote-modal";
@@ -178,31 +165,10 @@ import { HitScoreBar, calculateHitScore } from "../ui/hit-score-bar";
 import { getPageModeConfig, getSectionLabel, getWidgetLabel, getDefaultVisibility, type PageMode } from "../../config/page-modes";
 import { useAudioPlayer, type AudioTrack, getAutoplayPreference } from "../../contexts/audio-player-context";
 import { SongCoverGenerateDialog } from "./SongCoverGenerateDialog";
-import ArtistBlueprintPanel from "./artist-blueprint-panel";
-import ArtistDomainManager from "./artist-domain-manager";
-import { HermesAgentPanel } from "./hermes-agent-panel";
-import { AgentGatewayPanel } from "../agent-gateway/gateway-panel";
-import { AgentConsole } from "../agent-gateway/agent-console";
-import { HologramProjectPanel } from "./hologram-project-panel";
-import { RenaissanceStudioSection } from "./renaissance-studio-section";
-import { ObservationEnginePanel } from "./observation-engine-panel";
-import { DeepBriefPanel } from "./deep-brief-panel";
-import { EmotionalStudioPanel } from "./emotional-studio-panel";
 import { ProfileSectionErrorBoundary } from "./profile-section-error-boundary";
 import LanguageSwitcher from "./LanguageSwitcher";
-import ArtistPromoClipsModule from "./promo-clips/ArtistPromoClipsModule";
-import AIVideoStudio from "./ai-video-studio/AIVideoStudio";
-import { AdsCampaignManager } from "./ads-campaign-manager/AdsCampaignManager";
-import { GammaPresentationsModule } from "./gamma-presentations/GammaPresentationsModule";
-import { KaraokeModule } from "./karaoke-module";
-import { KaraokePlayer } from "./KaraokePlayer";
-import { LyricsVideoModule } from "../lyrics-video/LyricsVideoModule";
 import useModuleAccess from "../../hooks/use-module-access";
 import { getModule } from "../../../../shared/module-catalog";
-// Concert Command Center = the higher-level CONNECTOR that monetizes a full
-// event (links ticket sales + merch + streaming + fan club). Rendered by the
-// `concert-hub` widget below.
-import { ConcertCommandCenter } from './ConcertCommandCenter';
 // TicketCheckoutModal = the SEPARATE, standalone ticketing/shows module that
 // powers the public "Upcoming Shows" buy flow (entradas only, no merch upsell).
 import { TicketCheckoutModal, type ShowEvent } from './TicketCheckoutModal';
@@ -2676,6 +2642,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   const allSections = {
     'songs': { name: getSectionLabel(pageMode, 'songs', 'Music'), icon: Music, isOwnerOnly: false },
     'fanclub': { name: 'Fan Club', icon: Heart, isOwnerOnly: false },
+    'live-stage': { name: 'Boostify Live Stage', icon: Radio, isOwnerOnly: false },
     'videos': { name: getSectionLabel(pageMode, 'videos', 'Videos'), icon: VideoIcon, isOwnerOnly: false },
     'news': { name: getSectionLabel(pageMode, 'news', 'News'), icon: Newspaper, isOwnerOnly: false },
     'social-posts': { name: getSectionLabel(pageMode, 'social-posts', 'Social Posts'), icon: Share2, isOwnerOnly: false },
@@ -2760,7 +2727,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2820,6 +2787,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     // Default ON for new profiles: Music, Videos, Galleries, Karaoke
     'songs': true,
     'fanclub': true,
+    'live-stage': true,
     'videos': true,
     'galleries': true,
     'karaoke': true,
@@ -2873,6 +2841,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   const defaultExpanded: Record<string, boolean> = {
     'songs': false,
     'fanclub': true,
+    'live-stage': false,
     'videos': false,
     'news': false,
     'social-posts': false,
@@ -3586,8 +3555,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
 
   // Query para obtener perfil (combinado de Firestore + PostgreSQL)
-  const { data: userProfile, refetch: refetchProfile } = useQuery({
+  const { data: userProfile, refetch: refetchProfile } = useCachedQuery({
     queryKey: ["userProfile", artistId],
+    ttl: CACHE_TTL.default, // persiste 5 min en localStorage → pintado instantáneo en recargas
     queryFn: async () => {
       try {
         // SIEMPRE hacer fetch fresco desde PostgreSQL (fuente de verdad)
@@ -3667,13 +3637,12 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     },
     enabled: !!artistId,
     // Optimizaci�n memoria/red Render: refresca m�x cada 60s y retiene 5 min
-    staleTime: 60_000,
-    gcTime: 5 * 60_000
   });
 
   // Query para canciones
-  const { data: songs = [] as Song[], refetch: refetchSongs } = useQuery<Song[]>({
+  const { data: songs = [] as Song[], refetch: refetchSongs } = useCachedQuery<Song[]>({
     queryKey: ["songs", userProfile?.firestoreId || artistId],
+    ttl: CACHE_TTL.media, // persiste 10 min → evita re-leer Firestore en cada visita
     queryFn: async () => {
       try {
         // Buscar canciones por artistId (Firestore ID del artista)
@@ -3819,7 +3788,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   })();
 
   const analyticsArtistKey = userProfile?.pgId || userProfile?.slug || artistId;
-  const { data: analyticsSummary } = useQuery<{
+  const { data: analyticsSummary } = useCachedQuery<{
     songCount: number;
     totalPlays: number;
     videoCount: number;
@@ -3832,13 +3801,13 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     smartMerchProductCount: number;
   } | null>({
     queryKey: ["artist-analytics-summary", analyticsArtistKey],
+    ttl: CACHE_TTL.stats, // stats agregadas: cache corto (2 min) + pintado instantáneo
     queryFn: async () => {
       const res = await fetch(`/api/profile/${analyticsArtistKey}/analytics-summary`, { credentials: 'include' });
       if (!res.ok) return null;
       return res.json();
     },
     enabled: !!analyticsArtistKey,
-    staleTime: 30_000,
   });
 
   const fanEmailStorageKey = artistPgIdForAccess > 0
@@ -4154,8 +4123,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   }, [songs?.length]);
 
   // Query para videos
-  const { data: videos = [] as Video[], refetch: refetchVideos } = useQuery<Video[]>({
+  const { data: videos = [] as Video[], refetch: refetchVideos } = useCachedQuery<Video[]>({
     queryKey: ["videos", userProfile?.pgId || userProfile?.uid || userProfile?.clerkId || artistId],
+    ttl: CACHE_TTL.media, // persiste 10 min → evita re-leer Firestore en cada visita
     queryFn: async () => {
       try {
         const pgId = userProfile?.pgId || artistId;
@@ -8207,6 +8177,26 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                         );
                       }
 
+                      if (sectionId === 'live-stage') {
+                        sectionElement = (
+                          <div className={cardStyles} style={cardStyleInline}>
+                            {renderSectionHeader(sectionId, Radio, 'Boostify Live Stage')}
+                            {sectionExpanded[sectionId] && (
+                              <div className="mt-3">
+                                <BoostifyLiveStage
+                                  artistId={artist.pgId || artistId}
+                                  artistName={artist.name}
+                                  artistSlug={((artist as any) || {})['slug'] as string | undefined}
+                                  artistAvatar={artist.profileImage}
+                                  colors={{ primary: colors.hexPrimary, secondary: colors.hexAccent, accent: colors.hexAccent }}
+                                  isOwner={!!isOwnProfile}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
                       if (sectionId === 'songs' && (songs.length > 0 || isOwnProfile)) {
                         sectionElement = (
             <div id="music" className={cardStyles} style={cardStyleInline}>
@@ -8289,6 +8279,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                         <img
                                           src={item.coverArtPreview}
                                           alt="cover"
+                                          loading="lazy"
+                                          decoding="async"
                                           className="w-full h-full object-cover"
                                         />
                                       ) : (
@@ -8685,6 +8677,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                             <img
                                               src={item.coverArt}
                                               alt=""
+                                              loading="lazy"
+                                              decoding="async"
                                               className="w-9 h-9 rounded-md object-cover flex-shrink-0"
                                             />
                                           ) : (
@@ -8900,6 +8894,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                   <img
                                     src={heroSong.coverArt}
                                     alt={heroSong.title || heroSong.name}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover"
                                     data-testid={`img-song-cover-${heroSong.id}`}
                                   />
@@ -9599,17 +9595,26 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             className="w-full h-36 sm:h-40 md:h-44 object-cover bg-black"
                             muted
                             loop
-                            autoPlay
                             playsInline
-                            preload="metadata"
-                            onLoadedData={() => {
-                              logger.info('? Video preview loaded for:', video.title);
+                            preload="none"
+                            onMouseEnter={(e) => {
+                              // Lazy preview: only start downloading + playing on hover,
+                              // so the first paint never loads every gallery video at once.
+                              const el = e.currentTarget;
+                              el.play().catch(() => {});
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget;
+                              el.pause();
+                              try { el.currentTime = 0; } catch {}
                             }}
                           />
                         ) : video.thumbnailUrl ? (
                           <img
                             src={video.thumbnailUrl}
                             alt={video.title}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-36 sm:h-40 md:h-44 object-cover"
                           />
                         ) : (
@@ -9765,14 +9770,21 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 className="w-full h-36 sm:h-40 md:h-44 object-cover bg-black"
                                 muted
                                 loop
-                                autoPlay
                                 playsInline
-                                preload="metadata"
+                                preload="none"
+                                onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}); }}
+                                onMouseLeave={(e) => {
+                                  const el = e.currentTarget;
+                                  el.pause();
+                                  try { el.currentTime = 0; } catch {}
+                                }}
                               />
                             ) : project.thumbnail ? (
                               <img
                                 src={project.thumbnail}
                                 alt={project.songName}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-full h-36 sm:h-40 md:h-44 object-cover"
                               />
                             ) : (

@@ -123,6 +123,15 @@ export default defineConfig({
             '@radix-ui/react-select',
           ],
           'utils-vendor': ['axios', 'zustand', '@tanstack/react-query'],
+          // Heavy vendors split into their own cacheable chunks so they are
+          // only fetched alongside the (lazily-loaded) modules that use them,
+          // instead of bloating the initial Artist Profile bundle.
+          'charts-vendor': ['recharts'],
+          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
+          'motion-vendor': ['framer-motion'],
+          'dnd-vendor': ['@hello-pangea/dnd'],
+          'firebase-vendor': ['firebase'],
+          'web3-vendor': ['wagmi', 'viem'],
         },
       },
     },

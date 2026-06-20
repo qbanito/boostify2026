@@ -17,6 +17,7 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { QuizDialog } from "../components/education/quiz-dialog";
+import { CertificateDialog } from "../components/education/certificate-dialog";
 import { getCourseBySlug, getTotalDuration, LEARNING_PATHS, type AcademyCourse } from "@/lib/academy-courses";
 
 // ─── Minimal markdown → HTML (lesson content rendering) ────
@@ -166,7 +167,7 @@ function LessonTypeIcon({ type }: { type: string }) {
 // ─── Sidebar Stats Card ────────────────────────────────────
 function CourseStatsCard({ 
   course, enrollment, progressPercentage, completedLessons, totalLessons,
-  onEnroll, enrolling
+  onEnroll, enrolling, onViewCertificate
 }: { 
   course: AcademyCourse | any;
   enrollment: any;
@@ -175,6 +176,7 @@ function CourseStatsCard({
   totalLessons: number;
   onEnroll: () => void;
   enrolling: boolean;
+  onViewCertificate: () => void;
 }) {
   const isAcademy = 'slug' in course;
   const price = isAcademy ? course.price : parseFloat(course.price || '0');
@@ -216,10 +218,17 @@ function CourseStatsCard({
             </p>
           </div>
           {progressPercentage === 100 && (
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center">
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center space-y-2">
               <Trophy className="w-6 h-6 text-yellow-500 mx-auto mb-1" />
               <p className="text-sm font-semibold text-green-400">Course Completed!</p>
-              <p className="text-xs text-muted-foreground">Certificate available</p>
+              <Button
+                size="sm"
+                className="w-full gap-2 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-black"
+                onClick={onViewCertificate}
+              >
+                <Award className="w-4 h-4" />
+                View Certificate
+              </Button>
             </div>
           )}
         </div>
@@ -299,6 +308,7 @@ export default function CourseDetailPage() {
   const [lessonContents, setLessonContents] = useState<Record<number, any>>({});
   const [generatingLessonId, setGeneratingLessonId] = useState<number | null>(null);
   const [lessonErrors, setLessonErrors] = useState<Record<number, string>>({});
+  const [showCertificate, setShowCertificate] = useState(false);
 
   // Check if this is an academy slug or a DB id
   const academyCourse = useMemo(() => getCourseBySlug(courseId || ''), [courseId]);
@@ -575,6 +585,7 @@ export default function CourseDetailPage() {
               totalLessons={totalLessons}
               onEnroll={() => enrollMutation.mutate()}
               enrolling={enrollMutation.isPending}
+              onViewCertificate={() => setShowCertificate(true)}
             />
           </div>
         </div>
@@ -934,6 +945,14 @@ export default function CourseDetailPage() {
           lessonId={selectedLessonId}
           courseId={courseId!}
           onClose={() => setSelectedLessonId(null)}
+        />
+      )}
+
+      {/* Certificate / Diploma Dialog */}
+      {showCertificate && (
+        <CertificateDialog
+          courseIdentifier={courseId!}
+          onClose={() => setShowCertificate(false)}
         />
       )}
     </div>

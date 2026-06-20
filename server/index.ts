@@ -15,6 +15,13 @@ import fs from 'fs';
 import fileUpload from 'express-fileupload';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import {
+  publicFormLimiter,
+  authSlowDown,
+  sanitizeInput,
+  hppProtection,
+  blockSuspiciousPaths,
+} from './middleware/security-hardening';
 import { audit, auditFromReq } from './utils/audit-logger';
 import { isAdminEmail } from '../shared/constants';
 import { db as pgDb } from './db';
@@ -63,6 +70,9 @@ log(`🚀 Running in ${process.env.NODE_ENV} mode`);
 const app = express();
 
 app.set('trust proxy', 1);
+
+// ═══ Block vulnerability-scanner probes (.env, .git, wp-admin…) early ═══
+app.use(blockSuspiciousPaths);
 
 function isLocalOrPrivateHost(hostname: string): boolean {
   const host = hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase();
@@ -136,7 +146,13 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // Required for external images/media
   crossOriginOpenerPolicy: false, // Base/Coinbase wallet SDK requires COOP not to be same-origin
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Required for CDN assets
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }, // Don't leak full URLs cross-site
+  frameguard: { action: 'sameorigin' }, // Clickjacking protection (X-Frame-Options)
+  hsts: { maxAge: 63072000, includeSubDomains: true, preload: true }, // 2yr HTTPS-only
 }));
+
+// Hide the framework fingerprint so scanners can't trivially target Express.
+app.disable('x-powered-by');
 
 // ═══ RATE LIMITING ═══
 const isDev = process.env.NODE_ENV !== 'production';
@@ -202,6 +218,15 @@ const aiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 app.use('/api/login', authLimiter);
+// Progressive brute-force slow-down on auth surfaces (layered on top of the
+// hard authLimiter above — slows credential stuffing without blocking users).
+app.use('/api/auth/', authSlowDown);
+app.use('/api/login', authSlowDown);
+// Strict per-IP throttle on public, unauthenticated submission forms (anti-spam).
+app.use('/api/choreography/apply', publicFormLimiter);
+app.use('/api/vr-studio/leads', publicFormLimiter);
+app.use('/api/videoservice/lead', publicFormLimiter);
+app.use('/api/crowdsync-dj/waitlist', publicFormLimiter);
 app.use('/api/music/generate', aiLimiter);
 app.use('/api/video/generate', aiLimiter);
 app.use('/api/kits-ai/', aiLimiter);
@@ -224,8 +249,15 @@ app.use('/api/vinyl-editions/webhook', express.raw({ type: 'application/json' })
 app.use('/api/art-gallery/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/smart-merch/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/crowdsync-dj/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/live-stage/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// ═══ INPUT HARDENING — runs after body parsing, before any route ═══
+// Strip NoSQL-operator / prototype-pollution keys ($…, __proto__, …) and
+// collapse polluted (duplicated) parameters.
+app.use(sanitizeInput);
+app.use(hppProtection);
 
 // Gestión de errores para express.json
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

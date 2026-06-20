@@ -20,20 +20,84 @@ import * as courseMedia from '../services/course-media.service';
 const router = Router();
 
 // ─── Auth helper — resolves Clerk/Firebase string ID to PG integer ───
+// Auto-provisions a `users` row when an authenticated identity (Clerk/Firebase)
+// has no DB record yet, so enrolling always resolves to a real integer id
+// instead of returning null and 401-ing the request.
 async function getUserPgId(req: Request): Promise<number | null> {
-  const clerkId = (req as any).auth?.userId;
-  if (clerkId) {
-    const [u] = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, clerkId)).limit(1);
-    if (u) return u.id;
-  }
-  const rawId = (req as any).user?.id;
-  if (!rawId) return null;
+  const u: any = (req as any).user || {};
+  const clerkId: string | undefined = (req as any).auth?.userId || u.uid;
+  const rawId = u.id;
+  const email: string | null = u.email ?? null;
+
+  // 1. Already a numeric PG id on the request → use it directly.
   const numId = Number(rawId);
   if (!isNaN(numId) && numId > 0) return numId;
-  const [u] = await db.select({ id: users.id }).from(users)
-    .where(or(eq(users.clerkId, String(rawId)), eq(users.firestoreId, String(rawId))))
-    .limit(1);
-  return u?.id || null;
+
+  // 2. Look up by Clerk id / Firebase id / username.
+  const candidates = [clerkId, rawId].filter(Boolean).map(String);
+  for (const cand of candidates) {
+    const [row] = await db.select({ id: users.id }).from(users)
+      .where(or(eq(users.clerkId, cand), eq(users.firestoreId, cand), eq(users.username, cand)))
+      .limit(1);
+    if (row) return row.id;
+  }
+
+  // 3. No DB row but we have an authenticated identity → create one.
+  const provisionId = clerkId || (rawId ? String(rawId) : null);
+  if (!provisionId) return null;
+  try {
+    const isClerk = provisionId.startsWith('user_');
+    const artistName = email?.split('@')[0] || 'Artist';
+    const [created] = await db.insert(users).values({
+      clerkId: isClerk ? provisionId : undefined,
+      firestoreId: !isClerk ? provisionId : undefined,
+      username: provisionId,
+      email,
+      artistName,
+      role: u.role === 'admin' ? 'admin' : 'artist',
+    }).returning({ id: users.id });
+    return created.id;
+  } catch (err: any) {
+    // Race / unique conflict — re-read.
+    const [row] = await db.select({ id: users.id }).from(users)
+      .where(or(eq(users.clerkId, provisionId), eq(users.firestoreId, provisionId), eq(users.username, provisionId)))
+      .limit(1);
+    if (row) return row.id;
+    console.error('[education] getUserPgId provisioning failed:', err.message);
+    return null;
+  }
+}
+
+// Resolve a numeric course id OR a title-slug to the integer course id.
+async function resolveCourseId(identifier: string): Promise<number | null> {
+  const numericId = parseInt(identifier);
+  if (!isNaN(numericId)) return numericId;
+  const allCourses = await db.select().from(courses);
+  const match = allCourses.find(c => {
+    const titleSlug = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return titleSlug === identifier || c.title.toLowerCase().includes(identifier.replace(/-/g, ' '));
+  });
+  return match?.id ?? null;
+}
+
+// Robustly decide whether the selected option index matches the stored correct
+// answer. The generator may store the answer as the option text, a letter
+// (A–D), or an index string, so we accept all three encodings.
+function isCorrectAnswer(
+  correctAnswer: string,
+  selectedIdx: number | undefined,
+  selectedText: string | undefined,
+  options: string[]
+): boolean {
+  if (selectedIdx === undefined || selectedIdx === null) return false;
+  const ca = String(correctAnswer ?? '').trim();
+  if (!ca) return false;
+  if (selectedText !== undefined && selectedText.trim().toLowerCase() === ca.toLowerCase()) return true;
+  if (/^\d+$/.test(ca) && parseInt(ca, 10) === selectedIdx) return true;
+  if (/^[a-zA-Z]$/.test(ca) && ca.toUpperCase().charCodeAt(0) - 65 === selectedIdx) return true;
+  const caIdx = options.findIndex(o => String(o).trim().toLowerCase() === ca.toLowerCase());
+  if (caIdx >= 0 && caIdx === selectedIdx) return true;
+  return false;
 }
 
 router.get('/api/education/courses', async (req, res) => {
@@ -804,6 +868,181 @@ router.get('/api/education/academy-hero', async (req, res) => {
   } catch (error: any) {
     console.error('Error fetching academy hero:', error);
     res.json({ url: null });
+  }
+});
+
+// ─── QUIZ: the quiz for a lesson (generates lesson + quiz on demand) ───────
+router.get('/api/education/quizzes/:lessonId', authenticate, async (req, res) => {
+  try {
+    const userId = await getUserPgId(req);
+    if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const lessonId = parseInt(req.params.lessonId);
+    if (isNaN(lessonId)) return res.status(400).json({ error: 'Invalid lesson id' });
+
+    let [quiz] = await db.select().from(courseQuizzes)
+      .where(eq(courseQuizzes.lessonId, lessonId)).limit(1);
+
+    // No quiz yet → make sure the lesson (and therefore its quiz) is generated.
+    if (!quiz) {
+      const [lesson] = await db.select().from(courseLessons)
+        .where(eq(courseLessons.id, lessonId));
+      if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+      if (!lesson.isGenerated) {
+        try {
+          await courseGenService.generateLessonOnDemand(lessonId, userId);
+        } catch (e: any) {
+          console.warn('Quiz on-demand lesson generation failed:', e?.message);
+        }
+        [quiz] = await db.select().from(courseQuizzes)
+          .where(eq(courseQuizzes.lessonId, lessonId)).limit(1);
+      }
+    }
+
+    res.json(quiz || {});
+  } catch (error: any) {
+    console.error('Error fetching quiz:', error);
+    res.status(500).json({ error: 'Failed to fetch quiz' });
+  }
+});
+
+// ─── QUIZ: questions for a quiz (correct answers stripped for fairness) ────
+router.get('/api/education/quiz-questions/:quizId', authenticate, async (req, res) => {
+  try {
+    const quizId = parseInt(req.params.quizId);
+    if (isNaN(quizId)) return res.status(400).json({ error: 'Invalid quiz id' });
+
+    const questions = await db.select().from(quizQuestions)
+      .where(eq(quizQuestions.quizId, quizId))
+      .orderBy(quizQuestions.orderIndex);
+
+    res.json(questions.map(q => ({
+      id: q.id,
+      quizId: q.quizId,
+      question: q.question,
+      questionText: q.question, // UI expects `questionText`
+      questionType: q.questionType,
+      options: (q.options as string[]) || [],
+      points: q.points,
+      orderIndex: q.orderIndex,
+    })));
+  } catch (error: any) {
+    console.error('Error fetching quiz questions:', error);
+    res.status(500).json({ error: 'Failed to fetch quiz questions' });
+  }
+});
+
+// ─── QUIZ: submit answers, grade server-side, record the attempt ──────────
+router.post('/api/education/submit-quiz', authenticate, async (req, res) => {
+  try {
+    const userId = await getUserPgId(req);
+    if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const { quizId, answers } = req.body as { quizId: number; answers: Record<string, number> };
+    if (!quizId) return res.status(400).json({ error: 'quizId is required' });
+
+    const [quiz] = await db.select().from(courseQuizzes)
+      .where(eq(courseQuizzes.id, quizId)).limit(1);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const questions = await db.select().from(quizQuestions)
+      .where(eq(quizQuestions.quizId, quizId))
+      .orderBy(quizQuestions.orderIndex);
+    if (questions.length === 0) return res.status(400).json({ error: 'Quiz has no questions' });
+
+    let earned = 0;
+    let totalPoints = 0;
+    const review = questions.map(q => {
+      const pts = q.points || 1;
+      totalPoints += pts;
+      const options = (q.options as string[]) || [];
+      const selectedIdx = answers?.[String(q.id)];
+      const selectedText = typeof selectedIdx === 'number' ? options[selectedIdx] : undefined;
+      const correct = isCorrectAnswer(q.correctAnswer, selectedIdx, selectedText, options);
+      if (correct) earned += pts;
+      return { questionId: q.id, correct, correctAnswer: q.correctAnswer, explanation: q.explanation };
+    });
+
+    const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
+    const passingScore = quiz.passingScore || 70;
+    const passed = score >= passingScore;
+
+    await db.insert(quizAttempts).values({
+      userId,
+      quizId,
+      score,
+      totalPoints,
+      passed,
+      answers: (answers || {}) as any,
+    });
+
+    res.json({ score, passed, earned, totalPoints, passingScore, review });
+  } catch (error: any) {
+    console.error('Error submitting quiz:', error);
+    res.status(500).json({ error: 'Failed to submit quiz' });
+  }
+});
+
+// ─── DIPLOMA / CERTIFICATE — issued when every lesson is completed ─────────
+router.get('/api/education/certificate/:identifier', authenticate, async (req, res) => {
+  try {
+    const userId = await getUserPgId(req);
+    if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+    const courseId = await resolveCourseId(req.params.identifier);
+    if (!courseId) return res.status(404).json({ error: 'Course not found' });
+
+    const [course] = await db.select().from(courses).where(eq(courses.id, courseId));
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const lessons = await db.select().from(courseLessons)
+      .where(eq(courseLessons.courseId, courseId));
+    const totalLessons = lessons.length;
+
+    let completed = 0;
+    let lastCompletedAt: Date | null = null;
+    for (const l of lessons) {
+      const [p] = await db.select().from(lessonProgress)
+        .where(and(eq(lessonProgress.userId, userId), eq(lessonProgress.lessonId, l.id)));
+      if (p?.completed) {
+        completed++;
+        if (p.completedAt && (!lastCompletedAt || p.completedAt > lastCompletedAt)) {
+          lastCompletedAt = p.completedAt;
+        }
+      }
+    }
+
+    const eligible = totalLessons > 0 && completed >= totalLessons;
+
+    const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const recipientName =
+      u?.artistName || u?.username || (u?.email ? u.email.split('@')[0] : 'Boostify Artist');
+
+    // Mark the enrollment completed the moment all lessons are done.
+    if (eligible) {
+      await db.update(courseEnrollments)
+        .set({ status: 'completed', progress: 100, completedAt: lastCompletedAt || new Date() })
+        .where(and(
+          eq(courseEnrollments.userId, userId),
+          eq(courseEnrollments.courseId, courseId)
+        ));
+    }
+
+    res.json({
+      eligible,
+      certificateId: `BST-${course.id}-${userId}`,
+      courseTitle: course.title,
+      recipientName,
+      totalLessons,
+      lessonsCompleted: completed,
+      progressPct: totalLessons > 0 ? Math.round((completed / totalLessons) * 100) : 0,
+      completedAt: lastCompletedAt,
+      issuedAt: eligible ? new Date() : null,
+      issuer: 'Boostify Academy',
+    });
+  } catch (error: any) {
+    console.error('Error generating certificate:', error);
+    res.status(500).json({ error: 'Failed to generate certificate' });
   }
 });
 

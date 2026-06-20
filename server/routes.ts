@@ -227,6 +227,7 @@ import artistShareRouter from './routes/artist-share'; // Artist profile social 
 import stageSyncRouter from './routes/stage-sync'; // Boostify StageSync AI — live show production module
 import hologramShowRouter from './routes/hologram-show'; // Boostify Hologram Live Show Engine — lead capture + FAL asset generation
 import crowdSyncDjRouter from './routes/crowdsync-dj'; // Boostify CrowdSync DJ — live crowd intelligence module
+import liveStageRouter from './routes/live-stage'; // Boostify Live Stage — live video monetization module
 import concertsRouter from './routes/concerts'; // Concert Command Center — events, tickets, messaging
 import seatMapRouter from './routes/seat-map'; // Live Ticketing & Seat Map Engine — venues, seats, holds
 import adminConcertsRouter from './routes/admin-concerts'; // Admin — concert commission settings + reports
@@ -881,6 +882,10 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Boostify CrowdSync DJ — live crowd intelligence, AI music actions, DJ network reports
   app.use('/api/crowdsync-dj', crowdSyncDjRouter);
   console.log('🎧 Boostify CrowdSync DJ registered at /api/crowdsync-dj');
+
+  // Boostify Live Stage — live video, gifts, credits economy, StageRank, payouts
+  app.use('/api/live-stage', liveStageRouter);
+  console.log('🎤 Boostify Live Stage registered at /api/live-stage');
 
   // Concert Command Center — events, ticketing, buyer messaging, admin commission
   app.use('/api/concerts', concertsRouter);
