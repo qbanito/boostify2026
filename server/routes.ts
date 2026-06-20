@@ -244,6 +244,7 @@ import { startAutoMusicScheduler } from './services/auto-music-scheduler'; // Mu
 import influencerContentRouter from './routes/influencer-content'; // Influencer Module — content pipeline, voice, avatar, scheduling
 import { startInfluencerContentScheduler } from './services/influencer-content-scheduler'; // Influencer auto-generation scheduler
 import promoClipsRouter from './routes/promo-clips'; // Promo Clips — Song-to-Visual Lipsync Engine (FAL OmniHuman + Sync-3)
+import artistCommandRouter from './routes/artist-command'; // Artist Command Engine — voice/text commands → AI module orchestration
 import adsCampaignsRouter from './routes/ads-campaigns'; // Ads Campaign Manager — Facebook, Instagram, TikTok paid ads
 import contentEngineRouter from './routes/content-engine'; // Artist Content Engine - unified assets + orchestration plans
 import gammaPresentationsRouter from './routes/gamma-presentations'; // Gamma AI Presentations — slide decks from artist context
@@ -796,6 +797,10 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Promo Clips — Song-to-Visual Lipsync Engine (FAL OmniHuman v1.5 + Sync Labs Sync-3)
   app.use('/api/promo-clips', promoClipsRouter);
   console.log('🎬 Promo Clips Lipsync Engine registered at /api/promo-clips');
+
+  // Artist Command Engine — "Hey <artist>, crea una canción…" → intent router + module orchestrator
+  app.use('/api/artist-command', artistCommandRouter);
+  console.log('🎙️ Artist Command Engine registered at /api/artist-command');
 
   // Ads Campaign Manager — Multi-platform paid ads (Facebook, Instagram, TikTok)
   app.use('/api/ads-campaigns', adsCampaignsRouter);

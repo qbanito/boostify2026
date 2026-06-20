@@ -4,6 +4,7 @@ import { useParams } from "wouter";
 import { ArtistProfileCard } from "../components/artist/artist-profile-card";
 import { CrowdfundingButton } from "../components/crowdfunding/crowdfunding-button";
 import { MyUniverseModule } from "../components/artist/my-universe-module";
+import { ArtistCommandEngine } from "../components/artist/command-engine/ArtistCommandEngine";
 import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
 import { Head } from "../components/ui/head";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -347,6 +348,18 @@ export default function ArtistProfilePage() {
           {isOwnProfile && postgresId && (
             <div className="max-w-2xl mx-auto px-4 pb-8 -mt-2">
               <MyUniverseModule ownerPgId={postgresId} />
+            </div>
+          )}
+
+          {/* Artist Command Engine — owner-only voice/text command surface */}
+          {isOwnProfile && artistId && (
+            <div className="max-w-2xl mx-auto px-4 pb-8">
+              <ArtistCommandEngine
+                artistId={artistId}
+                artistName={artistName}
+                artistImageUrl={artistData?.profileImage || artistData?.photoURL}
+                genre={genre}
+              />
             </div>
           )}
 
