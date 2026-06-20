@@ -59,7 +59,7 @@ on:
 
 jobs:
   send-news-blast:
-    name: '📰 News Blast — ${{ github.event.inputs.email_type || "auto" }} → ${{ github.event.inputs.audience || "auto" }}'
+    name: "📰 News Blast — ${{ github.event.inputs.email_type || 'auto' }} → ${{ github.event.inputs.audience || 'auto' }}"
     runs-on: ubuntu-latest
     environment: production
 

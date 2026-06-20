@@ -55,7 +55,7 @@ on:
 
 jobs:
   send-promo:
-    name: '🚀 Boostify Promo — ${{ github.event.inputs.template_id || "auto" }}'
+    name: "🚀 Boostify Promo — ${{ github.event.inputs.template_id || 'auto' }}"
     runs-on: ubuntu-latest
     environment: production
 
