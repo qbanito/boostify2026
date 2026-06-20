@@ -3,7 +3,11 @@ import { Header } from "../components/layout/header";
 import { apiRequest } from "../lib/queryClient";
 
 const COMPANY = "Boostify Music, Inc.";
-const EMAIL_DMCA = "dmca@boostify.music";
+const EMAIL_DMCA = "convoycubano@gmail.com";
+const DMCA_AGENT_NAME = "Neiver A. Alvarez";
+const DMCA_AGENT_ADDRESS = "9860 N Kendall Dr, Apt E201, Miami, FL 33176, USA";
+const DMCA_REGISTRATION = "DMCA-1074443";
+const DMCA_EFFECTIVE = "20 de junio de 2026";
 const EFFECTIVE_DATE = "Junio 2026";
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -221,14 +225,23 @@ export default function DmcaPolicyPage() {
         </Section>
 
         <Section id="agent" title="2. Agente de copyright designado">
-          <p>Las notificaciones de infracción deben enviarse a nuestro agente designado:</p>
-          <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm">
-            <p>{COMPANY} — Copyright Agent</p>
+          <p>
+            {COMPANY} ha registrado formalmente un Agente Designado ante la U.S. Copyright Office (DMCA Designated Agent
+            Directory). Todas las notificaciones de presunta infracción de copyright deben enviarse a:
+          </p>
+          <div className="rounded-lg border border-orange-500/30 bg-slate-800/40 p-4 text-sm">
+            <p className="font-semibold text-white">DMCA Designated Agent — {COMPANY}</p>
+            <p>{DMCA_AGENT_NAME}</p>
+            <p>{DMCA_AGENT_ADDRESS}</p>
             <p>Email: <a className="text-orange-400 hover:underline" href={`mailto:${EMAIL_DMCA}`}>{EMAIL_DMCA}</a></p>
+            <p className="mt-2 text-xs text-slate-400">
+              U.S. Copyright Office Registration No.{" "}
+              <span className="font-mono text-orange-300">{DMCA_REGISTRATION}</span> · Status: <span className="text-green-400">Active</span> · Effective: {DMCA_EFFECTIVE}
+            </p>
           </div>
           <p className="text-xs text-slate-500">
-            Nota: para mayor protección, recomendamos registrar formalmente al agente DMCA ante la U.S. Copyright Office
-            (Designated Agent Directory).
+            Este agente está inscrito y verificable públicamente en el directorio oficial de la U.S. Copyright Office
+            (<a className="text-orange-400 hover:underline" href="https://dmca.copyright.gov" target="_blank" rel="noopener noreferrer">dmca.copyright.gov</a>).
           </p>
         </Section>
 
