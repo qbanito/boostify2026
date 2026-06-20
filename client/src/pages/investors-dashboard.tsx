@@ -73,6 +73,8 @@ import { useToast } from "../hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { apiRequest } from "@/lib/queryClient";
+import { DynamicOfferTerms } from "../components/investors/dynamic-offer-terms";
+import { getLiveOfferTerms, snapshotOfferTerms, fmtUsdMillions } from "../lib/investor-offer";
 
 // ─── Professional images generated with fal.ai flux-pro/kontext ────────────
 const INVESTOR_IMAGES = {
@@ -747,6 +749,10 @@ function PitchDeck({ setSelectedTab }: { setSelectedTab: (tab: string) => void }
   const [activeSlide, setActiveSlide] = useState(0);
   const { toast } = useToast();
 
+  // Current (stepped) offer terms — used in static prose & summary. The animated
+  // ticking cards are isolated in <DynamicOfferTerms /> so the whole deck doesn't
+  // re-render every frame.
+  const offer = getLiveOfferTerms();
   // Function to generate and download PDF
   const handleDownloadPDF = async () => {
     toast({
@@ -755,6 +761,7 @@ function PitchDeck({ setSelectedTab }: { setSelectedTab: (tab: string) => void }
     });
 
     // Create a comprehensive pitch deck content
+    const snap = snapshotOfferTerms();
     const pitchDeckContent = `
 BOOSTIFY MUSIC - INVESTOR PITCH DECK
 =====================================
@@ -769,9 +776,9 @@ promotion, and monetization.
 =====================================
 
 • Current Round: Seed (Post-Money SAFE)
-• Minimum Ticket: $1,500,000 per investor
-• Post-Money Valuation: ~$42.9M
-• Equity Dilution: 3.5% of total platform
+• Minimum Ticket: ${snap.minTicketUsd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} per investor
+• Post-Money Valuation: ~${fmtUsdMillions(snap.postMoneyUsd)}
+• Equity Dilution: ${snap.equityPct}% of total platform
 • Platform: Direct / Strategic Investors Only
 
 =====================================
@@ -1023,7 +1030,7 @@ with financial advisors before investing.
               <div className="text-[10px] sm:text-xs text-gray-400 mt-1">Already Invested (R&D)</div>
             </div>
             <div className="text-center p-2 sm:p-4 bg-white/5 rounded-xl border border-white/10 backdrop-blur-sm">
-              <div className="text-xl sm:text-2xl md:text-4xl font-bold text-yellow-400">$42.9M</div>
+              <div className="text-xl sm:text-2xl md:text-4xl font-bold text-yellow-400">{fmtUsdMillions(offer.postMoneyUsd)}</div>
               <div className="text-[10px] sm:text-xs text-gray-400 mt-1">Post-Money Valuation</div>
             </div>
             <div className="text-center p-2 sm:p-4 bg-white/5 rounded-xl border border-white/10 backdrop-blur-sm">
@@ -1835,27 +1842,11 @@ with financial advisors before investing.
           </h3>
 
           <p className="text-gray-300 max-w-2xl mx-auto mb-8">
-            Be part of the future of music technology. We're raising this Seed Round via a <strong className="text-orange-400">Post-Money SAFE</strong> with a minimum ticket of <strong className="text-orange-400">$1.5M per investor</strong> — offering only <strong className="text-orange-400">3.5% of the total platform equity</strong>, implying a <strong className="text-yellow-400">~$42.9M post-money valuation</strong>. This sits on top of <strong className="text-orange-400">$1.8M already invested by Omnia Strategic Holding Corporation</strong> over 3 years of development. Early strategic investors receive priority access to future rounds and board observer seats.
+            Be part of the future of music technology. We're raising this Seed Round via a <strong className="text-orange-400">Post-Money SAFE</strong> with a minimum ticket of <strong className="text-orange-400">{fmtUsdMillions(offer.minTicketUsd)} per investor</strong> — offering only <strong className="text-orange-400">{offer.equityPct.toFixed(1)}% of the total platform equity</strong>, implying a <strong className="text-yellow-400">~{fmtUsdMillions(offer.postMoneyUsd)} post-money valuation</strong>. This sits on top of <strong className="text-orange-400">$1.8M already invested by Omnia Strategic Holding Corporation</strong> over 3 years of development. Early strategic investors receive priority access to future rounds and board observer seats.
           </p>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto mb-6 sm:mb-8">
-            <div className="p-3 sm:p-4 bg-black/40 rounded-xl border border-orange-500/30">
-              <div className="text-xl sm:text-2xl font-bold text-orange-400">$1.5M</div>
-              <div className="text-xs text-gray-400">Min Ticket / Investor</div>
-            </div>
-            <div className="p-3 sm:p-4 bg-black/40 rounded-xl border border-orange-500/30">
-              <div className="text-xl sm:text-2xl font-bold text-yellow-400">$42.9M</div>
-              <div className="text-xs text-gray-400">Post-Money Valuation</div>
-            </div>
-            <div className="p-3 sm:p-4 bg-black/40 rounded-xl border border-orange-500/30">
-              <div className="text-xl sm:text-2xl font-bold text-green-400">3.5%</div>
-              <div className="text-xs text-gray-400">Total Equity Dilution</div>
-            </div>
-            <div className="p-3 sm:p-4 bg-black/40 rounded-xl border border-orange-500/30">
-              <div className="text-xl sm:text-2xl font-bold text-cyan-400">SAFE</div>
-              <div className="text-xs text-gray-400">Instrument Type</div>
-            </div>
-          </div>
+          <DynamicOfferTerms />
+
 
           <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4">
             <Button 
