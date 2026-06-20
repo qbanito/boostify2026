@@ -10,9 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Sparkles, Video, Users, Zap, TrendingUp, CheckCircle2, Database, Cpu, Activity, Network, Brain, Play, X } from "lucide-react";
-import aiMotionVizImage from "../../../../attached_assets/generated_images/AI_motion_capture_visualization_c0ac82f5.png";
-import aiTrainingImage from "../../../../attached_assets/generated_images/AI_training_process_diagram_b2342b3f.png";
-import danceAnalysisImage from "../../../../attached_assets/generated_images/Dance_movement_analysis_visualization_ea1514ba.png";
+
+// Served from client/public/motion-dna/ (originals live in attached_assets/, gitignored)
+const aiMotionVizImage = "/motion-dna/ai-motion-viz.png";
+const aiTrainingImage = "/motion-dna/ai-training.png";
+const danceAnalysisImage = "/motion-dna/dance-analysis.png";
 
 export function MotionDNASection() {
   const [formData, setFormData] = useState({
