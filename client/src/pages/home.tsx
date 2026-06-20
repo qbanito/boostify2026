@@ -2741,35 +2741,35 @@ export default function HomePage() {
             <div className="flex flex-col md:flex-row md:items-center gap-8">
               <div className="flex-1">
                 <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300 mb-4">
-                  <Shield className="h-4 w-4" /> Plataforma blindada legalmente
+                  <Shield className="h-4 w-4" /> Legally protected platform
                 </div>
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-                  Tu música y tu contenido, protegidos
+                  Your music and content, protected
                 </h2>
                 <p className="text-white/70 text-sm md:text-base leading-relaxed mb-5">
-                  Cada archivo que subes se registra con una huella digital (SHA-256) y queda protegido bajo nuestro
-                  sistema de copyright conforme a la DMCA. Verificación de artistas, escaneo automático de contenido y
-                  un equipo legal que responde a cualquier reclamación.
+                  Every file you upload is registered with a digital fingerprint (SHA-256) and protected under our
+                  DMCA-compliant copyright system. Artist verification, automatic content scanning and a legal team
+                  that responds to any claim.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link href="/legal">
                     <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" data-testid="home-legal-center">
-                      <Scale className="h-4 w-4" /> Centro Legal
+                      <Scale className="h-4 w-4" /> Legal Center
                     </Button>
                   </Link>
                   <Link href="/legal/dmca">
                     <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 gap-2">
-                      Política DMCA
+                      DMCA Policy
                     </Button>
                   </Link>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 md:w-80">
                 {[
-                  { emoji: "🔒", title: "Huella SHA-256", desc: "En cada subida" },
-                  { emoji: "⚖️", title: "Cumplimiento DMCA", desc: "Notice & Takedown" },
-                  { emoji: "🛡️", title: "Escaneo automático", desc: "Antes de publicar" },
-                  { emoji: "🟢", title: "Artistas verificados", desc: "5 niveles de sello" },
+                  { emoji: "🔒", title: "SHA-256 fingerprint", desc: "On every upload" },
+                  { emoji: "⚖️", title: "DMCA compliance", desc: "Notice & Takedown" },
+                  { emoji: "🛡️", title: "Automatic scanning", desc: "Before publishing" },
+                  { emoji: "🟢", title: "Verified artists", desc: "5 badge levels" },
                 ].map((it) => (
                   <div key={it.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div className="text-2xl mb-1">{it.emoji}</div>
