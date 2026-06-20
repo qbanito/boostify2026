@@ -192,7 +192,7 @@ export function ManageArtist({ userId }: ManageArtistProps) {
           <h3 className="text-sm font-bold text-white">Manager Mode</h3>
           {(decisions?.length || 0) > 0 && (
             <Badge className="bg-red-500/20 text-red-300 text-[10px] border-red-500/30 animate-pulse">
-              {decisions?.length} pendientes
+              {decisions?.length} pending
             </Badge>
           )}
         </div>
@@ -204,7 +204,7 @@ export function ManageArtist({ userId }: ManageArtistProps) {
           disabled={(managedArtists?.length || 0) >= 2}
         >
           <PlusCircle className="h-3 w-3 mr-1" />
-          Adoptar
+          Adopt
         </Button>
       </div>
 
@@ -226,19 +226,19 @@ export function ManageArtist({ userId }: ManageArtistProps) {
                       <span className="text-sm font-bold text-white">{artist.artistName || artist.username}</span>
                       {pendingDecisions > 0 && (
                         <Badge className="bg-red-500/20 text-red-300 text-[9px] animate-pulse">
-                          {pendingDecisions} decisiones
+                          {pendingDecisions} decisions
                         </Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-[10px] text-white/40">
                       <span>{artist.genre}</span>
                       <span>•</span>
-                      <span>{management.totalDecisions} decisiones tomadas</span>
+                      <span>{management.totalDecisions} decisions made</span>
                       {management.totalDecisions > 0 && (
                         <>
                           <span>•</span>
                           <span className="text-green-400">
-                            {Math.round((management.successfulDecisions / management.totalDecisions) * 100)}% éxito
+                            {Math.round((management.successfulDecisions / management.totalDecisions) * 100)}% success
                           </span>
                         </>
                       )}
@@ -264,15 +264,15 @@ export function ManageArtist({ userId }: ManageArtistProps) {
         <Card className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20">
           <CardContent className="p-6 text-center">
             <Target className="h-8 w-8 text-cyan-400 mx-auto mb-2" />
-            <p className="text-white/70 text-sm">¡Conviértete en manager!</p>
-            <p className="text-[11px] text-white/40 mt-1">Adopta un artista IA y toma decisiones que afectan su carrera</p>
+            <p className="text-white/70 text-sm">Become a manager!</p>
+            <p className="text-[11px] text-white/40 mt-1">Adopt an AI artist and make decisions that affect their career</p>
             <Button
               size="sm"
               className="mt-3 bg-cyan-600 hover:bg-cyan-700"
               onClick={() => setShowAvailable(true)}
             >
               <Users className="h-3 w-3 mr-1" />
-              Ver artistas disponibles
+              View available artists
             </Button>
           </CardContent>
         </Card>
@@ -288,7 +288,7 @@ export function ManageArtist({ userId }: ManageArtistProps) {
           >
             <Card className="bg-white/5 border-white/10">
               <CardContent className="p-3">
-                <h4 className="text-xs font-bold text-white mb-2">Artistas disponibles</h4>
+                <h4 className="text-xs font-bold text-white mb-2">Available Artists</h4>
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {availableArtists?.filter(a => !a.isManaged).map(artist => (
                     <div key={artist.id} className="flex items-center gap-2 bg-white/5 rounded-lg p-2">
@@ -308,12 +308,12 @@ export function ManageArtist({ userId }: ManageArtistProps) {
                         onClick={() => adoptMutation.mutate(artist.id)}
                         disabled={adoptMutation.isPending}
                       >
-                        Adoptar
+                        Adopt
                       </Button>
                     </div>
                   ))}
                   {(!availableArtists || availableArtists.filter(a => !a.isManaged).length === 0) && (
-                    <p className="text-[10px] text-white/30 text-center py-2">No hay artistas disponibles</p>
+                    <p className="text-[10px] text-white/30 text-center py-2">No artists available</p>
                   )}
                 </div>
               </CardContent>
@@ -327,7 +327,7 @@ export function ManageArtist({ userId }: ManageArtistProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-1">
             <Brain className="h-3.5 w-3.5 text-yellow-400" />
-            <span className="text-xs font-bold text-white">Decisiones pendientes</span>
+            <span className="text-xs font-bold text-white">Pending Decisions</span>
           </div>
 
           {decisions.map((decision) => {
@@ -376,7 +376,7 @@ export function ManageArtist({ userId }: ManageArtistProps) {
                             <div className="flex items-center gap-1 mb-1">
                               <Brain className="h-3 w-3 text-purple-400" />
                               <span className="text-[9px] text-purple-300 font-medium uppercase tracking-wider">
-                                Recomendación IA
+                                AI Recommendation
                               </span>
                             </div>
                             <p className="text-[10px] text-purple-200/70">{decision.aiRecommendation}</p>
@@ -429,10 +429,10 @@ export function ManageArtist({ userId }: ManageArtistProps) {
                             }
                           }}
                         >
-                          {decideMutation.isPending ? 'Ejecutando...' : (
+                          {decideMutation.isPending ? 'Executing...' : (
                             <>
                               <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Confirmar decisión
+                              Confirm Decision
                             </>
                           )}
                         </Button>

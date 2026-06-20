@@ -80,13 +80,13 @@ const KIND_COLOR: Record<string, string> = {
 
 function relTime(ts: number, nowMs: number): string {
   const s = Math.max(0, Math.floor((nowMs - ts) / 1000));
-  if (s < 5) return 'ahora';
-  if (s < 60) return `hace ${s}s`;
+  if (s < 5) return 'now';
+  if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `hace ${m}m`;
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `hace ${h}h`;
-  return `hace ${Math.floor(h / 24)}d`;
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 const itemKey = (p: PulseItem) => `${p.kind}:${p.artistId}:${p.text}:${p.ts}`;
 
@@ -122,11 +122,11 @@ function NowPlayingStrip({ track, listeners }: { track: NowPlaying | null; liste
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium text-white/80">Boostify Radio</p>
-          <p className="text-xs text-white/40">Preparando la próxima pista en vivo…</p>
+          <p className="text-xs text-white/40">Preparing the next live track…</p>
         </div>
         <Link href="/streaming">
           <button className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs text-orange-300 hover:bg-orange-500/10">
-            Abrir streaming
+            Open streaming
           </button>
         </Link>
       </div>
@@ -160,7 +160,7 @@ function NowPlayingStrip({ track, listeners }: { track: NowPlaying | null; liste
         <div className="min-w-0 flex-1">
           <div className="mb-0.5 flex items-center gap-2">
             <span className="flex items-center gap-1 rounded-full bg-orange-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-300">
-              <Radio className="h-3 w-3" /> En vivo
+              <Radio className="h-3 w-3" /> Live
             </span>
             {/* animated equalizer */}
             <span className="flex items-end gap-0.5 h-3">
@@ -181,11 +181,11 @@ function NowPlayingStrip({ track, listeners }: { track: NowPlaying | null; liste
         <div className="hidden sm:flex flex-col items-end gap-1 pr-1">
           <span className="flex items-center gap-1 text-xs text-white/70">
             <Volume2 className="h-3.5 w-3.5 text-orange-400" />
-            {listeners.toLocaleString()} oyendo
+            {listeners.toLocaleString()} listening
           </span>
           <Link href="/streaming">
             <span className="flex items-center gap-0.5 text-[11px] text-orange-300/80 hover:text-orange-200">
-              Abrir radio <ChevronRight className="h-3 w-3" />
+              Open radio <ChevronRight className="h-3 w-3" />
             </span>
           </Link>
         </div>
@@ -319,12 +319,12 @@ export function LivePulse() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
           </span>
-          <h3 className="text-sm font-bold text-white">Pulso en vivo</h3>
+          <h3 className="text-sm font-bold text-white">Live Pulse</h3>
         </div>
         {stats && (
           <div className="flex items-center gap-3 text-[11px] text-white/50">
-            <span className="flex items-center gap-1"><Users className="h-3 w-3 text-green-400" />{stats.online.toLocaleString()} en línea</span>
-            <span className="hidden sm:flex items-center gap-1"><Sparkles className="h-3 w-3 text-purple-400" />{stats.postsToday} hoy</span>
+            <span className="flex items-center gap-1"><Users className="h-3 w-3 text-green-400" />{stats.online.toLocaleString()} online</span>
+            <span className="hidden sm:flex items-center gap-1"><Sparkles className="h-3 w-3 text-purple-400" />{stats.postsToday} today</span>
           </div>
         )}
       </div>
@@ -345,7 +345,7 @@ export function LivePulse() {
         {visible.length === 0 && (
           <div className="py-8 text-center text-sm text-white/40">
             <Activity className="mx-auto mb-2 h-6 w-6 animate-pulse text-purple-400" />
-            Sintonizando la red…
+            Tuning into the network…
           </div>
         )}
       </div>

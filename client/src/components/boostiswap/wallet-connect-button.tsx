@@ -50,16 +50,16 @@ function WalletConnectButtonInner() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="text-xs">🔗 Wallet Conectada</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs">🔗 Wallet Connected</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => {
           navigator.clipboard.writeText(address || "");
           toast({
-            title: "📋 Dirección copiada",
+            title: "📋 Address copied",
             description: truncatedAddress,
           });
         }}>
-          📋 Copiar Dirección
+          📋 Copy Address
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -67,13 +67,13 @@ function WalletConnectButtonInner() {
             disconnect();
             setIsOpen(false);
             toast({
-              title: "🔌 Wallet desconectada",
-              description: "Tu billetera ha sido desconectada correctamente.",
+              title: "🔌 Wallet disconnected",
+              description: "Your wallet has been disconnected successfully.",
             });
           }}
           className="text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
         >
-          🔌 Desconectar
+          🔌 Disconnect
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -92,14 +92,14 @@ export function WalletConnectButton() {
         variant="outline"
         onClick={() => {
           toast({
-            title: "⏳ Inicializando Web3...",
-            description: "Por favor espera un momento mientras se conecta a la blockchain.",
+            title: "⏳ Initializing Web3...",
+            description: "Please wait a moment while it connects to the blockchain.",
           });
         }}
         className="gap-2 bg-gradient-to-r from-orange-500/20 to-orange-600/20 border-orange-500/50 hover:border-orange-400 hover:bg-orange-500/30 cursor-pointer"
       >
         <Wallet className="h-4 w-4 text-orange-400" />
-        <span className="text-orange-400">Conectar Wallet</span>
+        <span className="text-orange-400">Connect Wallet</span>
       </Button>
     );
   }

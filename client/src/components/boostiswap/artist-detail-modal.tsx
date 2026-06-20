@@ -130,7 +130,7 @@ function ArtistDetailModalContent({
 
   const handleBuyWithCard = async () => {
     if (!address) {
-      toast({ title: "Wallet requerida", description: "Conecta tu wallet para recibir los tokens", variant: "destructive" });
+      toast({ title: "Wallet required", description: "Connect your wallet to receive the tokens", variant: "destructive" });
       return;
     }
     if (tokenAmount <= 0) return;
@@ -146,7 +146,7 @@ function ArtistDetailModalContent({
         body: JSON.stringify({ usdAmount, walletAddress: address }),
       });
       const data = await resp.json();
-      if (!data.success) throw new Error(data.error || 'Error creando pago');
+      if (!data.success) throw new Error(data.error || 'Error creating payment');
 
       // Step 2: Open Stripe Checkout in new window
       const { loadStripe } = await import('@stripe/stripe-js');
@@ -157,10 +157,10 @@ function ArtistDetailModalContent({
         const keyData = await keyResp.json();
         publishableKey = keyData.publishableKey;
       }
-      if (!publishableKey) throw new Error('Stripe no configurado');
+      if (!publishableKey) throw new Error('Stripe not configured');
 
       const stripe = await loadStripe(publishableKey);
-      if (!stripe) throw new Error('Error cargando Stripe');
+      if (!stripe) throw new Error('Error loading Stripe');
 
       const { error, paymentIntent } = await stripe.confirmPayment({
         clientSecret: data.clientSecret,
@@ -168,7 +168,7 @@ function ArtistDetailModalContent({
         redirect: 'if_required',
       });
 
-      if (error) throw new Error(error.message || 'Pago fallido');
+      if (error) throw new Error(error.message || 'Payment failed');
 
       if (paymentIntent?.status === 'succeeded') {
         // Step 3: Verify and get BTF transfer
@@ -181,9 +181,9 @@ function ArtistDetailModalContent({
         if (verifyData.success && verifyData.txHash) {
           setCardTxHash(verifyData.txHash);
           setCardSuccess(true);
-          toast({ title: '✅ Compra exitosa!', description: `${data.btfAmount} BTF enviados a tu wallet` });
+          toast({ title: '✅ Purchase successful!', description: `${data.btfAmount} BTF sent to your wallet` });
         } else {
-          throw new Error(verifyData.error || 'Error en transferencia');
+          throw new Error(verifyData.error || 'Transfer error');
         }
       }
     } catch (err: any) {
@@ -197,8 +197,8 @@ function ArtistDetailModalContent({
   const handleBuyTokens = async (selectedArtist: ArtistProfile) => {
     if (!isConnected) {
       toast({
-        title: "Wallet no conectada",
-        description: "Por favor conecta tu MetaMask para comprar tokens",
+        title: "Wallet not connected",
+        description: "Please connect your MetaMask to buy tokens",
         variant: "destructive",
       });
       return;
@@ -207,7 +207,7 @@ function ArtistDetailModalContent({
     if (!address) {
       toast({
         title: "Error",
-        description: "No se pudo obtener tu dirección de wallet",
+        description: "Could not get your wallet address",
         variant: "destructive",
       });
       return;
@@ -230,8 +230,8 @@ function ArtistDetailModalContent({
     } catch (error: any) {
       console.error("❌ Error:", error);
       toast({
-        title: "Error en la compra",
-        description: error.message || "No se pudo procesar la compra",
+        title: "Purchase error",
+        description: error.message || "Could not process the purchase",
         variant: "destructive",
       });
     }
@@ -241,8 +241,8 @@ function ArtistDetailModalContent({
   useEffect(() => {
     if (isSuccess && btf2300.txHash) {
       toast({
-        title: "✅ Compra exitosa!",
-        description: `Transacción confirmada en Polygon`,
+        title: "✅ Purchase successful!",
+        description: `Transaction confirmed on Polygon`,
       });
     }
   }, [isSuccess, btf2300.txHash, toast]);
@@ -491,7 +491,7 @@ function ArtistDetailModalContent({
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-3 flex items-center gap-2">
                 <Coins className="h-4 w-4 text-green-400" />
                 <p className="text-sm text-green-300">
-                  Tu balance: <span className="font-bold">{userBalance} tokens</span>
+                  Your balance: <span className="font-bold">{userBalance} tokens</span>
                 </p>
               </div>
             )}
@@ -501,10 +501,10 @@ function ArtistDetailModalContent({
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
                 <div className="flex items-center gap-2 mb-1">
                   <CheckCircle2 className="h-4 w-4 text-blue-400" />
-                  <p className="text-xs text-blue-300 font-semibold">Artista verificado en Polygon</p>
+                  <p className="text-xs text-blue-300 font-semibold">Artist verified on Polygon</p>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Token ID: {songTokenId} • {artistOnChain.isVerified ? '✓ Verificado' : 'Pendiente'}
+                  Token ID: {songTokenId} • {artistOnChain.isVerified ? '✓ Verified' : 'Pending'}
                 </p>
               </div>
             )}
@@ -531,7 +531,7 @@ function ArtistDetailModalContent({
                 }`}
               >
                 <CreditCard className="h-3.5 w-3.5" />
-                Tarjeta (USD)
+                Card (USD)
               </button>
             </div>
             
@@ -539,7 +539,7 @@ function ArtistDetailModalContent({
               {!isConnected && (
                 <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
-                  <p className="text-xs text-red-300">Conecta tu wallet para comprar tokens</p>
+                  <p className="text-xs text-red-300">Connect your wallet to buy tokens</p>
                 </div>
               )}
 
@@ -547,7 +547,7 @@ function ArtistDetailModalContent({
               {isConnected && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Cantidad de tokens</label>
+                    <label className="text-xs text-slate-400 mb-1 block">Token amount</label>
                     <Input
                       type="number"
                       value={tokenAmount}
@@ -559,7 +559,7 @@ function ArtistDetailModalContent({
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">
-                      {payMethod === 'matic' ? 'Precio por token' : 'Precio USD'}
+                      {payMethod === 'matic' ? 'Price per token' : 'USD price'}
                     </label>
                     <div className="bg-slate-800/50 border border-slate-600 rounded-md px-3 py-2 text-sm font-semibold">
                       {payMethod === 'matic' ? (
@@ -590,7 +590,7 @@ function ArtistDetailModalContent({
                       showBalance={false}
                       chainStatus="icon"
                       accountStatus="address"
-                      label="🔗 Conectar Wallet para Comprar"
+                      label="🔗 Connect Wallet to Buy"
                     />
                   </div>
                 ) : (
@@ -598,14 +598,14 @@ function ArtistDetailModalContent({
                     className="w-full font-semibold text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                     onClick={() => {
                       toast({
-                        title: "⏳ Inicializando Web3...",
-                        description: "Espera 2 segundos mientras se conecta a la blockchain. Intenta de nuevo.",
+                        title: "⏳ Initializing Web3...",
+                        description: "Wait 2 seconds while it connects to the blockchain. Try again.",
                       });
                     }}
                     data-testid="button-connect-wallet"
                   >
                     <Wallet className="mr-2 h-4 w-4" />
-                    Conectar Wallet
+                    Connect Wallet
                   </Button>
                 )
               ) : payMethod === 'matic' ? (
@@ -620,17 +620,17 @@ function ArtistDetailModalContent({
                     {btf2300.isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Procesando en Polygon...
+                        Processing on Polygon...
                       </>
                     ) : isSuccess ? (
                       <>
                         <CheckCircle2 className="mr-2 h-4 w-4" />
-                        ¡Compra exitosa!
+                        Purchase successful!
                       </>
                     ) : (
                       <>
                         <ShoppingCart className="mr-2 h-4 w-4" />
-                        Comprar {tokenAmount} Tokens - {totalCostMatic} MATIC
+                        Buy {tokenAmount} Tokens - {totalCostMatic} MATIC
                       </>
                     )}
                   </Button>
@@ -661,29 +661,29 @@ function ArtistDetailModalContent({
                     {cardLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Procesando pago...
+                        Processing payment...
                       </>
                     ) : cardSuccess ? (
                       <>
                         <CheckCircle2 className="mr-2 h-4 w-4" />
-                        ¡Compra exitosa!
+                        Purchase successful!
                       </>
                     ) : parseFloat(totalCostUSD) < 5 ? (
                       <>
                         <CreditCard className="mr-2 h-4 w-4" />
-                        Mínimo $5.00 USD ({Math.ceil(5 / USD_PER_TOKEN).toLocaleString()} tokens)
+                        Minimum $5.00 USD ({Math.ceil(5 / USD_PER_TOKEN).toLocaleString()} tokens)
                       </>
                     ) : (
                       <>
                         <CreditCard className="mr-2 h-4 w-4" />
-                        Pagar ${totalCostUSD} USD → {tokenAmount.toLocaleString()} Tokens
+                        Pay ${totalCostUSD} USD → {tokenAmount.toLocaleString()} Tokens
                       </>
                     )}
                   </Button>
 
                   {parseFloat(totalCostUSD) < 5 && tokenAmount > 0 && (
                     <p className="text-[10px] text-amber-400 text-center">
-                      💡 Mínimo $5 USD para pago con tarjeta. Incrementa la cantidad a {Math.ceil(5 / USD_PER_TOKEN).toLocaleString()} tokens o más.
+                      💡 Minimum $5 USD for card payment. Increase the amount to {Math.ceil(5 / USD_PER_TOKEN).toLocaleString()} tokens or more.
                     </p>
                   )}
 
@@ -705,7 +705,7 @@ function ArtistDetailModalContent({
                     <>💳 {tokenAmount} tokens @ ${USD_PER_TOKEN} USD cada uno • Total: ${totalCostUSD} USD</>
                   )
                 ) : (
-                  <>Conecta tu wallet para comprar tokens</>
+                  <>Connect your wallet to buy tokens</>
                 )}
               </p>
               
@@ -718,7 +718,7 @@ function ArtistDetailModalContent({
                     className="flex items-center justify-center gap-2 text-xs text-blue-400 hover:text-blue-300"
                   >
                     <ExternalLink className="h-3 w-3" />
-                    Ver transacción en PolygonScan
+                    View transaction on PolygonScan
                   </a>
                   <Button
                     onClick={() => {
@@ -729,7 +729,7 @@ function ArtistDetailModalContent({
                     }}
                     className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold text-sm py-2"
                   >
-                    <Wallet className="h-4 w-4 mr-2" /> Agregar a Wallet & Ver Factura
+                    <Wallet className="h-4 w-4 mr-2" /> Add to Wallet & View Invoice
                   </Button>
                 </>
               )}

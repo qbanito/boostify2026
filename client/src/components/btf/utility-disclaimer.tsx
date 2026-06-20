@@ -19,7 +19,7 @@ const DISCLAIMERS = {
   long:
     "BTF and Boostify digital access tokens are designed solely for utility within the Boostify ecosystem. They allow users to access, activate, and consume digital services such as AI music generation, video creation, artwork generation, artist access packs, campaign tools, and other platform services. They do not represent equity, debt, securities, dividends, royalties, revenue share, ownership, investment returns, or profit rights. Users should not purchase BTF or any Boostify digital token with an expectation of financial return.",
   es:
-    "BTF y los tokens digitales de acceso de Boostify están diseñados únicamente para uso dentro del ecosistema Boostify. Permiten acceder, activar y consumir servicios digitales como generación musical con IA, creación de videos, generación de portadas, paquetes de acceso de artistas, herramientas de campaña y otros servicios de la plataforma. No representan acciones, deuda, valores, dividendos, regalías, participación en ingresos, propiedad, retornos de inversión ni derechos de ganancia. Los usuarios no deben comprar BTF ni ningún token digital de Boostify con expectativa de retorno financiero.",
+    "BTF and Boostify's digital access tokens are designed solely for use within the Boostify ecosystem. They let you access, activate, and consume digital services such as AI music generation, video creation, cover art generation, artist access packages, campaign tools, and other platform services. They do not represent shares, debt, securities, dividends, royalties, revenue sharing, ownership, investment returns, or any right to profit. Users should not purchase BTF or any Boostify digital token with the expectation of financial return.",
 };
 
 const sizeClasses = {

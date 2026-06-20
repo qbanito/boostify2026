@@ -52,9 +52,9 @@ const BAR_COLORS = [
 
 function PollTypeLabel({ type }: { type: string }) {
   const labels: Record<string, { text: string; color: string }> = {
-    opinion: { text: 'Opinión', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+    opinion: { text: 'Opinion', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
     vs_battle: { text: 'VS Battle', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-    prediction: { text: 'Predicción', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+    prediction: { text: 'Prediction', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
     fun: { text: 'Fun', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
     music_taste: { text: 'Music Taste', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
     collab_choice: { text: 'Collab', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
@@ -95,13 +95,13 @@ export function PollPost({ postId, pollDataProp }: { postId: number; pollDataPro
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-orange-400" />
-          <span className="text-xs font-medium text-gray-300">Encuesta</span>
+          <span className="text-xs font-medium text-gray-300">Poll</span>
           <PollTypeLabel type={poll.pollType} />
         </div>
         {isClosed ? (
           <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30 text-[10px]">
             <CheckCircle2 className="h-3 w-3 mr-1" />
-            Cerrada
+            Closed
           </Badge>
         ) : (
           <div className={cn(
@@ -111,7 +111,7 @@ export function PollPost({ postId, pollDataProp }: { postId: number; pollDataPro
             <Clock className="h-3 w-3" />
             {timeLeft > 0 
               ? formatDistanceToNow(new Date(poll.closesAt), { locale: es })
-              : 'Cerrada'
+              : 'Closed'
             }
           </div>
         )}
@@ -170,7 +170,7 @@ export function PollPost({ postId, pollDataProp }: { postId: number; pollDataPro
                   </div>
                   {showResults && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{option.votes} votos</span>
+                      <span className="text-xs text-gray-400">{option.votes} votes</span>
                       <span className={cn(
                         "text-xs font-bold min-w-[36px] text-right",
                         isWinner && isClosed ? "text-orange-400" : "text-gray-300"
@@ -190,7 +190,7 @@ export function PollPost({ postId, pollDataProp }: { postId: number; pollDataPro
       <div className="px-4 pb-3 flex items-center justify-between">
         <div className="flex items-center gap-1 text-[11px] text-gray-500">
           <Users className="h-3 w-3" />
-          {poll.totalVotes} votos totales
+          {poll.totalVotes} total votes
         </div>
         {!showResults && !isClosed && (
           <Button 
@@ -199,7 +199,7 @@ export function PollPost({ postId, pollDataProp }: { postId: number; pollDataPro
             className="text-xs text-orange-400 hover:text-orange-300 h-7"
             onClick={() => setShowResults(true)}
           >
-            Ver resultados
+            View Results
           </Button>
         )}
       </div>

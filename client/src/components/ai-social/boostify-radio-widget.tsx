@@ -116,8 +116,8 @@ export function BoostifyRadioWidget({ onAudioRef }: BoostifyRadioWidgetProps = {
       queryClient.invalidateQueries({ queryKey: ['radio-status'] });
       queryClient.invalidateQueries({ queryKey: ['radio-queue'] });
       toast({
-        title: '⏭️ Siguiente canción',
-        description: 'Cargando siguiente track...',
+        title: '⏭️ Next Song',
+        description: 'Loading next track...',
       });
     },
   });
@@ -135,8 +135,8 @@ export function BoostifyRadioWidget({ onAudioRef }: BoostifyRadioWidgetProps = {
       queryClient.invalidateQueries({ queryKey: ['radio-queue'] });
       queryClient.invalidateQueries({ queryKey: ['ai-social-feed'] });
       toast({
-        title: '📻 Radio actualizada',
-        description: 'Nueva canción en el aire!',
+        title: '📻 Radio updated',
+        description: 'New song on the air!',
       });
     },
   });
@@ -194,7 +194,7 @@ export function BoostifyRadioWidget({ onAudioRef }: BoostifyRadioWidgetProps = {
         audioRef.current.play().catch(() => {
           toast({
             title: 'Error',
-            description: 'No se pudo reproducir el audio',
+            description: 'Could not play audio',
             variant: 'destructive',
           });
         });
@@ -358,8 +358,8 @@ export function BoostifyRadioWidget({ onAudioRef }: BoostifyRadioWidgetProps = {
               </>
             ) : (
               <div>
-                <p className="text-gray-400">No hay música en cola</p>
-                <p className="text-xs text-gray-500">Haz clic en play para cargar</p>
+                <p className="text-gray-400">No music in queue</p>
+                <p className="text-xs text-gray-500">Click play to load</p>
               </div>
             )}
           </div>
@@ -451,7 +451,7 @@ export function BoostifyRadioWidget({ onAudioRef }: BoostifyRadioWidgetProps = {
               <div className="pt-2 border-t border-white/10 space-y-2">
                 <p className="text-xs text-gray-400 flex items-center gap-1">
                   <ListMusic className="h-3 w-3" />
-                  Próximas canciones
+                  Up Next
                 </p>
                 {queue.slice(0, 3).map((track, index) => (
                   <div 

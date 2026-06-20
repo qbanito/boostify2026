@@ -46,13 +46,13 @@ export function ChallengesSection() {
       setShowCreateForm(false);
       queryClient.invalidateQueries({ queryKey: ["/api/social/challenges"] });
       toast({
-        description: "Desafío creado exitosamente",
+        description: "Challenge created successfully",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo crear el desafío",
+        description: "Could not create challenge",
         variant: "destructive",
       });
     },
@@ -63,7 +63,7 @@ export function ChallengesSection() {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold flex items-center gap-2">
           <Flame className="h-5 w-5 text-orange-400" />
-          Desafíos en Vivo
+          Live Challenges
         </h3>
         {user && (
           <Button
@@ -72,7 +72,7 @@ export function ChallengesSection() {
             className="gap-2 bg-orange-500 hover:bg-orange-600"
           >
             <Plus className="h-4 w-4" />
-            Crear Desafío
+            Create Challenge
           </Button>
         )}
       </div>
@@ -80,22 +80,22 @@ export function ChallengesSection() {
       {showCreateForm && (
         <Card className="bg-gradient-to-br from-orange-900/20 to-red-900/20 border-orange-500/30">
           <CardHeader>
-            <CardTitle className="text-base">Nuevo Desafío Musical</CardTitle>
+            <CardTitle className="text-base">New Music Challenge</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
-              placeholder="Título del desafío (ej: Canta este beat)"
+              placeholder="Challenge title (e.g., Sing this beat)"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <Textarea
-              placeholder="Descripción"
+              placeholder="Description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
             />
             <Input
-              placeholder="Hashtag (ej: BoostifyBeat)"
+              placeholder="Hashtag (e.g., BoostifyBeat)"
               value={hashtag}
               onChange={(e) =>
                 setHashtag(e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`)
@@ -107,10 +107,10 @@ export function ChallengesSection() {
                 disabled={!title || createChallengeMutation.isPending}
                 className="flex-1 bg-orange-500 hover:bg-orange-600"
               >
-                {createChallengeMutation.isPending ? "Creando..." : "Crear"}
+                {createChallengeMutation.isPending ? "Creating..." : "Create"}
               </Button>
               <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                Cancelar
+                Cancel
               </Button>
             </div>
           </CardContent>
@@ -142,7 +142,7 @@ export function ChallengesSection() {
               )}
               <Button size="sm" className="w-full mt-3 gap-2">
                 <Flame className="h-3 w-3" />
-                Participar
+                Participate
               </Button>
             </CardContent>
           </Card>

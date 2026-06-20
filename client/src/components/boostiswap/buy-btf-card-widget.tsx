@@ -190,11 +190,11 @@ function StripeCheckoutInner({
       {/* Amount summary */}
       <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/30 space-y-1">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Pagas</span>
+          <span className="text-gray-400">You pay</span>
           <span className="text-white font-semibold">${usdAmount.toFixed(2)} USD</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Recibes</span>
+          <span className="text-gray-400">You receive</span>
           <span className="text-orange-400 font-semibold">{btfAmount.toLocaleString()} BTF</span>
         </div>
       </div>
@@ -215,21 +215,21 @@ function StripeCheckoutInner({
       >
         {verifying ? (
           <span className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Transfiriendo BTF...
+            <Loader2 className="h-4 w-4 animate-spin" /> Transferring BTF...
           </span>
         ) : processing ? (
           <span className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Procesando pago...
+            <Loader2 className="h-4 w-4 animate-spin" /> Processing payment...
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" /> Pagar ${usdAmount.toFixed(2)} y recibir {btfAmount.toLocaleString()} BTF
+            <ShieldCheck className="h-4 w-4" /> Pay ${usdAmount.toFixed(2)} and receive {btfAmount.toLocaleString()} BTF
           </span>
         )}
       </Button>
 
       <p className="text-[9px] text-gray-600 text-center">
-        🔒 Pago seguro via Stripe • Los BTF se envían a tu wallet en Polygon
+        🔒 Secure payment via Stripe • BTF sent to your Polygon wallet
       </p>
     </form>
   );
@@ -327,9 +327,9 @@ export function BuyBTFCardWidget() {
             <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto" />
           </motion.div>
           <div>
-            <h3 className="text-xl font-bold text-white">¡Compra Exitosa!</h3>
+            <h3 className="text-xl font-bold text-white">Purchase Successful!</h3>
             <p className="text-gray-400 text-sm mt-1">
-              Recibiste <span className="text-orange-400 font-semibold">{btfAmount.toLocaleString()} BTF</span> en tu wallet
+              You received <span className="text-orange-400 font-semibold">{btfAmount.toLocaleString()} BTF</span> in your wallet
             </p>
           </div>
           <a
@@ -338,7 +338,7 @@ export function BuyBTFCardWidget() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-green-400 text-sm hover:text-green-300"
           >
-            Ver en PolygonScan <ExternalLink className="h-3.5 w-3.5" />
+            View on PolygonScan <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <Button
             onClick={() => {
@@ -346,7 +346,7 @@ export function BuyBTFCardWidget() {
             }}
             className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold"
           >
-            <Wallet className="h-4 w-4 mr-2" /> Agregar a Wallet & Ver Factura
+            <Wallet className="h-4 w-4 mr-2" /> Add to Wallet & View Invoice
           </Button>
           <Button
             onClick={() => {
@@ -358,7 +358,7 @@ export function BuyBTFCardWidget() {
             variant="ghost"
             className="w-full text-green-400/70 hover:text-green-400 text-sm"
           >
-            Comprar más BTF
+            Buy More BTF
           </Button>
         </CardContent>
       </Card>
@@ -372,7 +372,7 @@ export function BuyBTFCardWidget() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-blue-400" />
-            <span className="text-blue-400 font-bold">Pago con Tarjeta</span>
+            <span className="text-blue-400 font-bold">Card Payment</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -384,7 +384,7 @@ export function BuyBTFCardWidget() {
               onSuccess={(hash) => {
                 setTxHash(hash);
                 setStep('success');
-                toast({ title: '✅ BTF recibidos', description: `${btfAmount.toLocaleString()} BTF enviados a tu wallet` });
+                toast({ title: '✅ BTF received', description: `${btfAmount.toLocaleString()} BTF sent to your wallet` });
               }}
               onError={(msg) => {
                 setError(msg);
@@ -400,7 +400,7 @@ export function BuyBTFCardWidget() {
             onClick={() => { setStep('input'); setClientSecret(''); }}
             className="w-full mt-2 text-gray-500 hover:text-white text-xs"
           >
-            ← Volver
+            ← Back
           </Button>
         </CardContent>
       </Card>
@@ -420,11 +420,11 @@ export function BuyBTFCardWidget() {
         <CardTitle className="flex items-center gap-2">
           <CreditCard className="h-5 w-5 text-blue-400" />
           <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent text-lg font-bold">
-            Agregar BTF Credits con Tarjeta
+            Add BTF Credits with Card
           </span>
         </CardTitle>
         <p className="text-gray-500 text-xs">
-          Paga con tarjeta de crédito/débito • BTF Credits a tu cuenta Boostify
+          Pay with credit/debit card • BTF Credits to your Boostify account
         </p>
       </CardHeader>
 
@@ -449,7 +449,7 @@ export function BuyBTFCardWidget() {
         {/* USD Input */}
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/30 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Monto en USD</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">USD Amount</p>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -498,7 +498,7 @@ export function BuyBTFCardWidget() {
         {/* BTF Output Preview */}
         <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/30">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Recibes</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">You receive</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="flex-1 text-2xl font-bold text-orange-400">
@@ -532,13 +532,13 @@ export function BuyBTFCardWidget() {
                   onClick={openConnectModal}
                   className="w-full h-12 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-semibold"
                 >
-                  <Wallet className="h-4 w-4 mr-2" /> Conectar Wallet
+                  <Wallet className="h-4 w-4 mr-2" /> Connect Wallet
                 </Button>
               )}
             </ConnectButton.Custom>
           ) : (
             <Button className="w-full h-12 opacity-70" disabled>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cargando Web3...
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading Web3...
             </Button>
           )
         ) : (
@@ -549,16 +549,16 @@ export function BuyBTFCardWidget() {
           >
             {loading ? (
               <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Preparando pago...
+                <Loader2 className="h-4 w-4 animate-spin" /> Preparing payment...
               </span>
             ) : (
               <span className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
                 {isValidAmount
-                  ? `Pagar $${parseFloat(usdAmount).toFixed(2)} → ${calcBTF.toLocaleString()} BTF`
+                  ? `Pay $${parseFloat(usdAmount).toFixed(2)} → ${calcBTF.toLocaleString()} BTF`
                   : quote
-                    ? `Mínimo $${quote.minPurchaseUSD} USD`
-                    : 'Ingresa un monto'}
+                    ? `Minimum $${quote.minPurchaseUSD} USD`
+                    : 'Enter an amount'}
               </span>
             )}
           </Button>

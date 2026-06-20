@@ -293,13 +293,13 @@ export function ArtistMintWidget() {
             >
               <Sparkles className="h-5 w-5 mx-auto text-green-400 mb-1" />
               <p className="text-sm font-semibold text-green-400">
-                {lastMintResult?.artistName ? `¡${lastMintResult.artistName} Minteado!` : 'Artist Minted!'}
+                {lastMintResult?.artistName ? `${lastMintResult.artistName} Minted!` : 'Artist Minted!'}
               </p>
-              <p className="text-[10px] text-gray-400">On-chain on Polygon + AI activo</p>
+              <p className="text-[10px] text-gray-400">On-chain on Polygon + AI active</p>
               {lastMintResult?.slug && (
                 <Link href={`/artist/${lastMintResult.slug}`}>
                   <span className="inline-flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 cursor-pointer mt-1">
-                    🌐 Ver Landing Page →
+                    🌐 View Landing Page →
                   </span>
                 </Link>
               )}

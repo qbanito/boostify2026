@@ -134,7 +134,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Wand2 className="h-5 w-5 text-purple-400" />
-          <h3 className="text-sm font-bold text-white">Tus Artistas IA</h3>
+          <h3 className="text-sm font-bold text-white">Your AI Artists</h3>
           <Badge className="bg-purple-500/20 text-purple-300 text-[10px] border-purple-500/30">
             {myArtists?.length || 0}/3
           </Badge>
@@ -146,7 +146,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
             onClick={() => setShowWizard(true)}
           >
             <Plus className="h-3 w-3 mr-1" />
-            Crear Artista
+            Create Artist
           </Button>
         )}
       </div>
@@ -202,15 +202,15 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
         <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
           <CardContent className="p-6 text-center">
             <Sparkles className="h-8 w-8 text-purple-400 mx-auto mb-2" />
-            <p className="text-white/70 text-sm">¡Crea tu propio artista IA!</p>
-            <p className="text-[11px] text-white/40 mt-1">Dale un nombre, estilo y personalidad única</p>
+            <p className="text-white/70 text-sm">Create your own AI artist!</p>
+            <p className="text-[11px] text-white/40 mt-1">Give it a name, style, and unique personality</p>
             <Button
               size="sm"
               className="mt-3 bg-purple-600 hover:bg-purple-700"
               onClick={() => setShowWizard(true)}
             >
               <Wand2 className="h-3 w-3 mr-1" />
-              Crear mi primer artista
+              Create My First Artist
             </Button>
           </CardContent>
         </Card>
@@ -228,7 +228,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-sm font-bold text-white">
-                    {step === 1 ? '🎵 Nombre & Género' : step === 2 ? '🧠 Personalidad' : '✨ Confirmar'}
+                    {step === 1 ? '🎵 Name & Genre' : step === 2 ? '🧠 Personality' : '✨ Confirm'}
                   </h4>
                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={resetWizard}>
                     <X className="h-4 w-4 text-white/50" />
@@ -239,7 +239,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                 {step === 1 && (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] text-white/50 uppercase tracking-wider">Nombre artístico</label>
+                      <label className="text-[10px] text-white/50 uppercase tracking-wider">Artist Name</label>
                       <Input
                         placeholder="e.g. Luna Beats, MC Quantum..."
                         value={artistName}
@@ -249,7 +249,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-white/50 uppercase tracking-wider">Género musical</label>
+                      <label className="text-[10px] text-white/50 uppercase tracking-wider">Music Genre</label>
                       <div className="grid grid-cols-3 gap-1.5 mt-1">
                         {genreOptions.map(g => (
                           <button
@@ -273,7 +273,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                       disabled={!artistName.trim() || !genre}
                       onClick={() => setStep(2)}
                     >
-                      Siguiente <ChevronRight className="h-3 w-3 ml-1" />
+                      Next <ChevronRight className="h-3 w-3 ml-1" />
                     </Button>
                   </div>
                 )}
@@ -308,7 +308,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                         className="flex-1 text-xs border-white/20"
                         onClick={() => setStep(1)}
                       >
-                        Atrás
+                        Back
                       </Button>
                       <Button
                         size="sm"
@@ -316,7 +316,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                         disabled={!selectedPreset}
                         onClick={() => setStep(3)}
                       >
-                        Siguiente <ChevronRight className="h-3 w-3 ml-1" />
+                        Next <ChevronRight className="h-3 w-3 ml-1" />
                       </Button>
                     </div>
                   </div>
@@ -351,7 +351,7 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                         className="flex-1 text-xs border-white/20"
                         onClick={() => setStep(2)}
                       >
-                        Atrás
+                        Back
                       </Button>
                       <Button
                         size="sm"
@@ -360,11 +360,11 @@ export function CreateAiArtist({ userId }: CreateAiArtistProps) {
                         disabled={createMutation.isPending}
                       >
                         <Check className="h-3 w-3 mr-1" />
-                        {createMutation.isPending ? 'Creando...' : '¡Crear Artista!'}
+                        {createMutation.isPending ? 'Creating...' : 'Create Artist!'}
                       </Button>
                     </div>
                     {createMutation.isError && (
-                      <p className="text-[10px] text-red-400 text-center">Error al crear artista. Intenta de nuevo.</p>
+                      <p className="text-[10px] text-red-400 text-center">Error creating artist. Please try again.</p>
                     )}
                   </div>
                 )}

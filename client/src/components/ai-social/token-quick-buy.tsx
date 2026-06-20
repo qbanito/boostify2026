@@ -69,8 +69,8 @@ export function TokenQuickBuy({ artistId, artistName, artistSlug, compact = fals
 
     // Simular proceso de compra (en producción conectaría con wallet)
     toast({
-      title: "🔗 Conectando Wallet...",
-      description: "Abre tu wallet para confirmar la transacción",
+      title: "🔗 Connecting Wallet...",
+      description: "Open your wallet to confirm the transaction",
     });
 
     // Redirigir a BoostiSwap con el token preseleccionado
@@ -79,8 +79,8 @@ export function TokenQuickBuy({ artistId, artistName, artistSlug, compact = fals
       setSelectedAmount(null);
       // En producción: window.location.href = `/boostiswap?buy=${tokenData?.tokenSymbol}&amount=${amount}`;
       toast({
-        title: "🚀 Compra Iniciada",
-        description: `Redirigiendo a BoostiSwap para comprar ${amount} $${tokenData?.tokenSymbol}...`,
+        title: "🚀 Purchase Started",
+        description: `Redirecting to BoostiSwap to buy ${amount} $${tokenData?.tokenSymbol}...`,
       });
     }, 1500);
   };
@@ -89,7 +89,7 @@ export function TokenQuickBuy({ artistId, artistName, artistSlug, compact = fals
     return (
       <div className="flex items-center gap-2 py-2 px-3 bg-slate-800/30 rounded-lg animate-pulse">
         <Coins className="h-4 w-4 text-orange-400" />
-        <span className="text-xs text-gray-400">Cargando token...</span>
+        <span className="text-xs text-gray-400">Loading token...</span>
       </div>
     );
   }

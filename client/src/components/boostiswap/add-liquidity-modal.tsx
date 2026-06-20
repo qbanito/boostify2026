@@ -56,7 +56,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
     if (!selectedToken || !tokenAmount || !maticAmount) {
       toast({
         title: "Error",
-        description: "Completa todos los campos",
+        description: "Fill in all fields",
         variant: "destructive",
       });
       return;
@@ -64,8 +64,8 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
 
     if (!isConnected) {
       toast({
-        title: "Wallet no conectada",
-        description: "Conecta tu wallet primero",
+        title: "Wallet not connected",
+        description: "Connect your wallet first",
         variant: "destructive",
       });
       return;
@@ -104,9 +104,9 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
       </DialogTrigger>
       <DialogContent className="bg-slate-800 border-slate-700">
         <DialogHeader>
-          <DialogTitle>Añadir Liquidez al DEX</DialogTitle>
+          <DialogTitle>Add Liquidity to DEX</DialogTitle>
           <DialogDescription>
-            Provee liquidez para ganar fees de trading en Polygon
+            Provide liquidity to earn trading fees on Polygon
           </DialogDescription>
         </DialogHeader>
 
@@ -115,21 +115,21 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
             <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-3 flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-amber-400" />
-                <p className="text-amber-400 text-sm">Conecta tu wallet primero</p>
+                <p className="text-amber-400 text-sm">Connect your wallet first</p>
               </div>
               {isWeb3Ready ? (
                 <ConnectButton 
                   showBalance={false}
                   chainStatus="icon"
                   accountStatus="address"
-                  label="🔗 Conectar Wallet"
+                  label="🔗 Connect Wallet"
                 />
               ) : (
                 <Button 
-                  onClick={() => toast({ title: "⏳ Inicializando Web3...", description: "Por favor espera un momento" })}
+                  onClick={() => toast({ title: "⏳ Initializing Web3...", description: "Please wait a moment" })}
                   className="bg-purple-500 hover:bg-purple-600"
                 >
-                  Conectar Wallet
+                  Connect Wallet
                 </Button>
               )}
             </div>
@@ -137,10 +137,10 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
 
           {/* Token Selection */}
           <div className="space-y-2">
-            <Label>Token de Artista</Label>
+            <Label>Artist Token</Label>
             <Select value={selectedToken} onValueChange={setSelectedToken}>
               <SelectTrigger className="bg-slate-900/50 border-slate-700">
-                <SelectValue placeholder="Selecciona un artista" />
+                <SelectValue placeholder="Select an artist" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-700">
                 {artistTokens.map((t) => (
@@ -154,7 +154,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
 
           {/* Token Amount */}
           <div className="space-y-2">
-            <Label>Cantidad de Tokens</Label>
+            <Label>Token Amount</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -171,7 +171,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
 
           {/* MATIC Amount */}
           <div className="space-y-2">
-            <Label>Cantidad de MATIC</Label>
+            <Label>MATIC Amount</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -190,14 +190,14 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
           {/* Pool Info */}
           {poolInfo && poolInfo.isActive && (
             <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground mb-2">Pool existente:</p>
+              <p className="text-xs text-muted-foreground mb-2">Existing pool:</p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Reserva Tokens</p>
+                  <p className="text-muted-foreground">Token Reserve</p>
                   <p className="font-semibold text-white">{poolInfo.tokenReserve.toString()}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Reserva MATIC</p>
+                  <p className="text-muted-foreground">MATIC Reserve</p>
                   <p className="font-semibold text-white">{formatEther(poolInfo.ethReserve)}</p>
                 </div>
                 <div>
@@ -205,7 +205,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
                   <p className="font-semibold text-orange-400">{poolInfo.totalLPTokens.toString()}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Fees acumulados</p>
+                  <p className="text-muted-foreground">Accumulated Fees</p>
                   <p className="font-semibold text-green-400">{formatEther(poolInfo.feeAccumulated)}</p>
                 </div>
               </div>
@@ -217,7 +217,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
             <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-blue-400 text-sm">
-                Este token no tiene pool aún. Al añadir liquidez crearás un nuevo pool.
+                This token has no pool yet. Adding liquidity will create a new pool.
               </p>
             </div>
           )}
@@ -230,15 +230,15 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
             {btf2300.isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Procesando en Polygon...
+                Processing on Polygon...
               </>
             ) : isSuccess ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                ¡Liquidez Añadida!
+                Liquidity Added!
               </>
             ) : (
-              "Añadir Liquidez"
+              "Add Liquidity"
             )}
           </Button>
 
@@ -251,7 +251,7 @@ export function AddLiquidityModal({ triggerLabel = "Add Liquidity", poolId }: Ad
               className="flex items-center justify-center gap-2 text-sm text-blue-400 hover:text-blue-300"
             >
               <ExternalLink className="h-4 w-4" />
-              Ver transacción en PolygonScan
+              View transaction on PolygonScan
             </a>
           )}
         </div>

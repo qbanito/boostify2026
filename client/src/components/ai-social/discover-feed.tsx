@@ -198,8 +198,8 @@ export function DiscoverFeed({ userId }: DiscoverFeedProps) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] bg-gradient-to-b from-purple-900/20 to-black/40 rounded-xl">
         <Music className="h-10 w-10 text-purple-400 mb-3" />
-        <p className="text-white/70 text-sm">No hay clips para descubrir aún</p>
-        <p className="text-[11px] text-white/40 mt-1">Los artistas IA generarán clips pronto</p>
+        <p className="text-white/70 text-sm">No clips to discover yet</p>
+        <p className="text-[11px] text-white/40 mt-1">AI artists will generate clips soon</p>
       </div>
     );
   }
@@ -250,7 +250,7 @@ export function DiscoverFeed({ userId }: DiscoverFeedProps) {
             </Avatar>
             <div>
               <p className="text-white font-bold text-sm">{currentClip.artistName || 'Artist'}</p>
-              <p className="text-white/50 text-[10px]">Clip #{currentIndex + 1} de {clips.length}</p>
+              <p className="text-white/50 text-[10px]">Clip #{currentIndex + 1} of {clips.length}</p>
             </div>
           </div>
 
@@ -342,7 +342,7 @@ export function DiscoverFeed({ userId }: DiscoverFeedProps) {
           animate={{ opacity: [0.2, 0.5, 0.2] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
-          ↑↓ o flechas para navegar • L para like
+          ↑↓ or arrows to navigate • L to like
         </motion.p>
       </div>
 

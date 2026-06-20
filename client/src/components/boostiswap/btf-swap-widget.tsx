@@ -69,7 +69,7 @@ export function BTFSwapWidget({ compact = false }: { compact?: boolean }) {
           }`}
         >
           <CreditCard className="h-4 w-4" />
-          Tarjeta (USD)
+          Card (USD)
         </button>
       </div>
 
@@ -187,18 +187,18 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
       } else if (dex.poolInfo?.hasLiquidity) {
         await dex.buyBTF(inputValue);
       } else {
-        const msg = 'Compra no disponible — el contrato de venta aún no está desplegado y no hay pool de liquidez en QuickSwap.';
+        const msg = 'Purchase unavailable — the sale contract is not deployed yet and there is no liquidity pool on QuickSwap.';
         setLocalError(msg);
-        toast({ title: 'No disponible', description: msg, variant: 'destructive' });
+        toast({ title: 'Unavailable', description: msg, variant: 'destructive' });
       }
     } else {
       setLocalError(null);
       if (dex.poolInfo?.hasLiquidity) {
         await dex.sellBTF(inputValue);
       } else {
-        const msg = 'Venta no disponible — no hay pool de liquidez WMATIC/BTF en QuickSwap.';
+        const msg = 'Sale unavailable — there is no WMATIC/BTF liquidity pool on QuickSwap.';
         setLocalError(msg);
-        toast({ title: 'No disponible', description: msg, variant: 'destructive' });
+        toast({ title: 'Unavailable', description: msg, variant: 'destructive' });
       }
     }
   }, [mode, inputValue, sale.isActive, sale.isDeployed, dex.poolInfo?.hasLiquidity]);
@@ -233,12 +233,12 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
           </motion.div>
           <div>
             <h3 className="text-xl font-bold text-white">
-              {mode === 'buy' ? '¡Swap Exitoso!' : '¡Venta Exitosa!'}
+              {mode === 'buy' ? 'Swap Successful!' : 'Sale Successful!'}
             </h3>
             <p className="text-gray-400 text-sm mt-1">
               {mode === 'buy'
-                ? `Compraste ~${formatNum(quote?.outputAmount || '0', 2)} BTF`
-                : `Recibiste ~${formatNum(quote?.outputAmount || '0', 4)} MATIC`}
+                ? `You bought ~${formatNum(quote?.outputAmount || '0', 2)} BTF`
+                : `You received ~${formatNum(quote?.outputAmount || '0', 4)} MATIC`}
             </p>
           </div>
           <a
@@ -247,7 +247,7 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-green-400 text-sm hover:text-green-300 transition-colors"
           >
-            Ver en PolygonScan <ExternalLink className="h-3.5 w-3.5" />
+            View on PolygonScan <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <Button
             onClick={() => {
@@ -256,14 +256,14 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
             }}
             className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold"
           >
-            <Wallet className="h-4 w-4 mr-2" /> Agregar a Wallet & Ver Factura
+            <Wallet className="h-4 w-4 mr-2" /> Add to Wallet & View Invoice
           </Button>
           <Button
             onClick={() => { dex.reset(); sale.reset(); setInputValue(''); }}
             variant="ghost"
             className="w-full text-green-400/70 hover:text-green-400 text-sm"
           >
-            <RefreshCw className="h-4 w-4 mr-2" /> Nuevo Swap
+            <RefreshCw className="h-4 w-4 mr-2" /> New Swap
           </Button>
         </CardContent>
       </Card>
@@ -318,7 +318,7 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
         <CardDescription className="text-gray-500 text-xs">
-          Swap MATIC ↔ BTF directamente en Polygon
+          Swap MATIC ↔ BTF directly on Polygon
         </CardDescription>
       </CardHeader>
 
@@ -390,9 +390,9 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
             <div className="flex items-start gap-2">
               <ShieldCheck className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-green-400">Compra Directa Activa</p>
+                <p className="text-sm font-semibold text-green-400">Direct Purchase Active</p>
                 <p className="text-[10px] text-gray-400 mt-1">
-                  1 MATIC = {formatNum(sale.saleInfo.rate, 0)} BTF • {formatNum(sale.saleInfo.btfAvailable, 0)} BTF disponibles
+                  1 MATIC = {formatNum(sale.saleInfo.rate, 0)} BTF • {formatNum(sale.saleInfo.btfAvailable, 0)} BTF available
                 </p>
               </div>
             </div>
@@ -409,9 +409,9 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
             <div className="flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-amber-400">Pool de Liquidez no Disponible</p>
+                <p className="text-sm font-semibold text-amber-400">Liquidity Pool Unavailable</p>
                 <p className="text-[10px] text-gray-400 mt-1">
-                  No hay pool WMATIC/BTF para vender. Puedes vender cuando se cree liquidez en QuickSwap.
+                  There is no WMATIC/BTF pool to sell. You can sell once liquidity is created on QuickSwap.
                 </p>
               </div>
             </div>
@@ -428,10 +428,10 @@ function BTFCryptoSwapWidget({ compact = false }: { compact?: boolean }) {
             <div className="flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-red-400">Compra No Disponible</p>
+                <p className="text-sm font-semibold text-red-400">Purchase Unavailable</p>
                 <p className="text-[10px] text-gray-400 mt-1">
-                  El contrato de venta directa aún no está desplegado y no hay pool de liquidez en QuickSwap. 
-                  Despliega el contrato con: <code className="text-orange-400 bg-slate-800/50 px-1 rounded">npx hardhat run scripts/deploy-btf-sale.cjs --network polygon</code>
+                  The direct sale contract is not deployed yet and there is no liquidity pool on QuickSwap. 
+                  Deploy the contract with: <code className="text-orange-400 bg-slate-800/50 px-1 rounded">npx hardhat run scripts/deploy-btf-sale.cjs --network polygon</code>
                 </p>
               </div>
             </div>
@@ -746,14 +746,14 @@ export function BTFSwapCard() {
       <Card className="bg-gradient-to-br from-green-950/40 to-slate-900/80 border-green-500/20">
         <CardContent className="py-4 text-center space-y-2">
           <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
-          <p className="text-sm font-semibold text-green-400">¡Compra Exitosa!</p>
+          <p className="text-sm font-semibold text-green-400">Purchase Successful!</p>
           <a
             href={`${POLYGONSCAN_TX}${txHash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[10px] text-green-400/70 hover:text-green-300 flex items-center justify-center gap-1"
           >
-            Ver TX <ExternalLink className="h-2.5 w-2.5" />
+            View TX <ExternalLink className="h-2.5 w-2.5" />
           </a>
           <Button
             onClick={() => {
@@ -762,7 +762,7 @@ export function BTFSwapCard() {
             size="sm"
             className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold text-xs py-1.5"
           >
-            <Wallet className="h-3 w-3 mr-1.5" /> Agregar a Wallet
+            <Wallet className="h-3 w-3 mr-1.5" /> Add to Wallet
           </Button>
         </CardContent>
       </Card>
@@ -853,7 +853,7 @@ export function BTFSwapCard() {
             className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold disabled:opacity-50"
           >
             {status === 'swapping' || status === 'buying' ? (
-              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Comprando...</>
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Buying...</>
             ) : status === 'quoting' ? (
               <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Quoting...</>
             ) : (
@@ -863,7 +863,7 @@ export function BTFSwapCard() {
         )}
 
         <p className="text-[8px] text-gray-600 text-center">
-          {useSaleHere ? 'Compra Directa' : 'Via QuickSwap Router'} • Polygon
+          {useSaleHere ? 'Direct Purchase' : 'Via QuickSwap Router'} • Polygon
         </p>
       </CardContent>
     </Card>

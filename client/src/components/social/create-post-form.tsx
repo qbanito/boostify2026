@@ -64,15 +64,15 @@ export function CreatePostForm({
       setRecordingTime(0);
       queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
       toast({
-        title: "Publicación creada",
-        description: "Tu contenido se ha compartido con la comunidad",
+        title: "Post created",
+        description: "Your content has been shared with the community",
       });
       onPostCreated?.();
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: "No se pudo crear la publicación",
+        description: "Could not create post",
         variant: "destructive",
       });
       logger.error(error);
@@ -133,7 +133,7 @@ export function CreatePostForm({
     } catch (error) {
       toast({
         title: "Error",
-        description: "No se pudo acceder al micrófono",
+        description: "Could not access the microphone",
         variant: "destructive",
       });
       logger.error(error);
@@ -158,7 +158,7 @@ export function CreatePostForm({
     if (!content.trim() && !mediaPreview) {
       toast({
         title: "Error",
-        description: "Escribe algo o selecciona un archivo multimedia",
+        description: "Write something or select a media file",
         variant: "destructive",
       });
       return;
@@ -167,7 +167,7 @@ export function CreatePostForm({
     if (!userId) {
       toast({
         title: "Error",
-        description: "Debes estar autenticado",
+        description: "You must be logged in",
         variant: "destructive",
       });
       return;
@@ -194,7 +194,7 @@ export function CreatePostForm({
     <Card className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 border-orange-500/20">
       <CardHeader className="pb-3">
         <h3 className="text-lg font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-          ✨ Compartir con Boostify
+          ✨ Share with Boostify
         </h3>
       </CardHeader>
       <CardContent>
@@ -218,7 +218,7 @@ export function CreatePostForm({
                 </p>
               )}
               <Textarea
-                placeholder="¿Qué estás pensando? / What's on your mind? 🎵"
+                placeholder="What's on your mind? 🎵"
                 className="resize-none bg-slate-800/50 border-slate-700 focus:border-orange-500/50"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -270,11 +270,11 @@ export function CreatePostForm({
             <TabsList className="grid grid-cols-4 bg-slate-800/50">
               <TabsTrigger value="media" className="gap-1">
                 <Image className="h-4 w-4" />
-                <span className="hidden sm:inline">Medios</span>
+                <span className="hidden sm:inline">Media</span>
               </TabsTrigger>
               <TabsTrigger value="voice" className="gap-1">
                 <Mic className="h-4 w-4" />
-                <span className="hidden sm:inline">Voz</span>
+                <span className="hidden sm:inline">Voice</span>
               </TabsTrigger>
               <TabsTrigger value="whatsapp" className="gap-1">
                 <MessageCircle className="h-4 w-4" />
@@ -282,7 +282,7 @@ export function CreatePostForm({
               </TabsTrigger>
               <TabsTrigger value="help" className="gap-1">
                 <Send className="h-4 w-4" />
-                <span className="hidden sm:inline">Ayuda</span>
+                <span className="hidden sm:inline">Help</span>
               </TabsTrigger>
             </TabsList>
 
@@ -314,7 +314,7 @@ export function CreatePostForm({
                   }}
                 >
                   <Image className="h-4 w-4 mr-2" />
-                  Imagen
+                  Image
                 </Button>
 
                 <input
@@ -366,7 +366,7 @@ export function CreatePostForm({
                   className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600"
                 >
                   <Mic className="h-4 w-4 mr-2" />
-                  Grabar nota de voz
+                  Record voice note
                 </Button>
               ) : (
                 <div className="space-y-3">
@@ -376,7 +376,7 @@ export function CreatePostForm({
                       {String(recordingTime % 60).padStart(2, "0")}
                     </div>
                     <p className="text-sm text-red-300 mt-2">
-                      Grabando en vivo...
+                      Recording live...
                     </p>
                   </div>
                   <Button
@@ -384,7 +384,7 @@ export function CreatePostForm({
                     onClick={stopRecording}
                     className="w-full bg-red-600 hover:bg-red-700"
                   >
-                    Detener grabación
+                    Stop recording
                   </Button>
                 </div>
               )}
@@ -393,7 +393,7 @@ export function CreatePostForm({
             {/* WhatsApp Tab */}
             <TabsContent value="whatsapp" className="mt-3 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Agrega tu número para que puedan contactarte por WhatsApp
+                Add your number so people can reach you on WhatsApp
               </p>
               <input
                 type="tel"
@@ -404,7 +404,7 @@ export function CreatePostForm({
               />
               {whatsappPhone && (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-xs text-green-300">
-                  ✓ Número listo para compartir
+                  ✓ Number ready to share
                 </div>
               )}
             </TabsContent>
@@ -413,28 +413,28 @@ export function CreatePostForm({
             <TabsContent value="help" className="mt-3">
               <div className="space-y-2 text-xs text-muted-foreground">
                 <p>
-                  <strong className="text-orange-400">📝 Texto:</strong> Escribe
-                  tu mensaje
+                  <strong className="text-orange-400">📝 Text:</strong> Write
+                  your message
                 </p>
                 <p>
-                  <strong className="text-orange-400">🖼️ Imágenes:</strong>{" "}
-                  Sube fotos de tus proyectos
+                  <strong className="text-orange-400">🖼️ Images:</strong>{" "}
+                  Upload photos of your projects
                 </p>
                 <p>
-                  <strong className="text-orange-400">🎵 Audio:</strong> Comparte
-                  canciones o beats
+                  <strong className="text-orange-400">🎵 Audio:</strong> Share
+                  songs or beats
                 </p>
                 <p>
                   <strong className="text-orange-400">📹 Video:</strong> Clips,
                   tutorials, behind-the-scenes
                 </p>
                 <p>
-                  <strong className="text-orange-400">🎙️ Voz:</strong> Notas de
-                  voz en directo
+                  <strong className="text-orange-400">🎙️ Voice:</strong> Live
+                  voice notes
                 </p>
                 <p>
                   <strong className="text-orange-400">💬 WhatsApp:</strong>{" "}
-                  Conecta con tu audiencia
+                  Connect with your audience
                 </p>
               </div>
             </TabsContent>
@@ -454,12 +454,12 @@ export function CreatePostForm({
               {createPostMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Publicando...
+                  Posting...
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Publicar
+                  Post
                 </>
               )}
             </Button>

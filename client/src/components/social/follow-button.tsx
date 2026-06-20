@@ -40,7 +40,7 @@ export function FollowButton({ targetSocialUserId, currentSocialUserId, follower
     onSuccess: () => {
       setLocalCount((c) => c + 1);
       qc.invalidateQueries({ queryKey: [`/api/social-integration/followers/${targetSocialUserId}`] });
-      toast({ title: "✅ Siguiendo" });
+      toast({ title: "✅ Following" });
     },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
@@ -53,7 +53,7 @@ export function FollowButton({ targetSocialUserId, currentSocialUserId, follower
     onSuccess: () => {
       setLocalCount((c) => Math.max(0, c - 1));
       qc.invalidateQueries({ queryKey: [`/api/social-integration/followers/${targetSocialUserId}`] });
-      toast({ title: "Dejaste de seguir" });
+      toast({ title: "Unfollowed" });
     },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
@@ -76,9 +76,9 @@ export function FollowButton({ targetSocialUserId, currentSocialUserId, follower
       )}
     >
       {isFollowing ? (
-        <><UserCheck className="h-3.5 w-3.5" /> Siguiendo</>
+        <><UserCheck className="h-3.5 w-3.5" /> Following</>
       ) : (
-        <><UserPlus className="h-3.5 w-3.5" /> Seguir</>
+        <><UserPlus className="h-3.5 w-3.5" /> Follow</>
       )}
       {localCount > 0 && (
         <span className="ml-1 text-[10px] opacity-70">{localCount}</span>

@@ -114,13 +114,13 @@ export function PostCard({ post }: PostCardProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
       toast({
-        description: "Te gusta esta publicación",
+        description: "You liked this post",
       });
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: "No se pudo dar like a la publicación",
+        description: "Could not like the post",
         variant: "destructive",
       });
       logger.error(error);
@@ -141,13 +141,13 @@ export function PostCard({ post }: PostCardProps) {
       setIsCommenting(false);
       queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
       toast({
-        description: "Comentario publicado",
+        description: "Comment posted",
       });
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: "No se pudo publicar el comentario",
+        description: "Could not post comment",
         variant: "destructive",
       });
       logger.error(error);
@@ -170,13 +170,13 @@ export function PostCard({ post }: PostCardProps) {
       setIsEditMode(false);
       queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
       toast({
-        description: "Post actualizado",
+        description: "Post updated",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo editar el post",
+        description: "Could not edit post",
         variant: "destructive",
       });
     },
@@ -194,13 +194,13 @@ export function PostCard({ post }: PostCardProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] });
       toast({
-        description: "Post eliminado",
+        description: "Post deleted",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo eliminar el post",
+        description: "Could not delete post",
         variant: "destructive",
       });
     },
@@ -219,7 +219,7 @@ export function PostCard({ post }: PostCardProps) {
   };
 
   // Obtener iniciales para el avatar
-  const getUserInitials = (name: string = "Usuario") => {
+  const getUserInitials = (name: string = "User") => {
     return name
       .split(" ")
       .map((n) => n[0])
@@ -238,12 +238,12 @@ export function PostCard({ post }: PostCardProps) {
     <Card className="overflow-hidden">
       <CardHeader className="pb-3 flex space-x-4">
         <Avatar className="h-10 w-10">
-          <AvatarImage src={post.user?.avatar || undefined} alt={post.user?.displayName || "Usuario"} />
+          <AvatarImage src={post.user?.avatar || undefined} alt={post.user?.displayName || "User"} />
           <AvatarFallback>{getUserInitials(post.user?.displayName)}</AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center">
-            <span className="font-medium">{post.user?.displayName || "Usuario"}</span>
+            <span className="font-medium">{post.user?.displayName || "User"}</span>
             {getBotBadge()}
             {getLanguageBadge()}
           </div>
@@ -296,7 +296,7 @@ export function PostCard({ post }: PostCardProps) {
                 disabled={editMutation.isPending || editContent === post.content}
                 className="bg-orange-500 hover:bg-orange-600"
               >
-                Guardar
+                Save
               </Button>
               <Button
                 size="sm"
@@ -306,7 +306,7 @@ export function PostCard({ post }: PostCardProps) {
                   setEditContent(post.content);
                 }}
               >
-                Cancelar
+                Cancel
               </Button>
             </div>
           </div>
@@ -355,7 +355,7 @@ export function PostCard({ post }: PostCardProps) {
             className="inline-flex items-center gap-2 bg-green-500/20 border border-green-500/50 text-green-400 px-4 py-2 rounded-lg hover:bg-green-500/30 transition-colors"
           >
             <span>💬</span>
-            <span className="text-sm font-medium">Contactar por WhatsApp</span>
+            <span className="text-sm font-medium">Contact on WhatsApp</span>
           </a>
         )}
       </CardContent>
@@ -400,7 +400,7 @@ export function PostCard({ post }: PostCardProps) {
                 </AvatarFallback>
               </Avatar>
               <Textarea
-                placeholder="Escribe un comentario..."
+                placeholder="Write a comment..."
                 className="flex-1 resize-none text-sm min-h-[80px]"
                 value={commentContent}
                 onChange={(e) => setCommentContent(e.target.value)}
@@ -412,7 +412,7 @@ export function PostCard({ post }: PostCardProps) {
                 type="submit" 
                 disabled={!commentContent.trim() || commentMutation.isPending}
               >
-                {commentMutation.isPending ? "Publicando..." : "Comentar"}
+                {commentMutation.isPending ? "Posting..." : "Comment"}
               </Button>
             </div>
           </form>
@@ -424,12 +424,12 @@ export function PostCard({ post }: PostCardProps) {
             {visibleComments.map((comment: Comment) => (
               <div key={comment.id} className="flex space-x-3 text-sm">
                 <Avatar className="h-7 w-7">
-                  <AvatarImage src={comment.user?.avatar || undefined} alt={comment.user?.displayName || "Usuario"} />
+                  <AvatarImage src={comment.user?.avatar || undefined} alt={comment.user?.displayName || "User"} />
                   <AvatarFallback>{getUserInitials(comment.user?.displayName)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center">
-                    <span className="font-medium">{comment.user?.displayName || "Usuario"}</span>
+                    <span className="font-medium">{comment.user?.displayName || "User"}</span>
                     {comment.user?.isBot && (
                       <span className="ml-1 text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100">
                         AI
@@ -440,7 +440,7 @@ export function PostCard({ post }: PostCardProps) {
                   <div className="flex space-x-2 text-xs text-muted-foreground">
                     <span>{getRelativeDate(comment.createdAt || new Date().toISOString())}</span>
                     <Button variant="link" size="sm" className="h-auto p-0 text-xs">
-                      Responder
+                      Reply
                     </Button>
                     {comment.likes > 0 && (
                       <span className="flex items-center space-x-1">
@@ -463,12 +463,12 @@ export function PostCard({ post }: PostCardProps) {
                 {showAllComments ? (
                   <span className="flex items-center">
                     <ChevronUp className="h-4 w-4 mr-1" />
-                    Mostrar menos
+                    Show less
                   </span>
                 ) : (
                   <span className="flex items-center">
                     <ChevronDown className="h-4 w-4 mr-1" />
-                    Ver {post.comments?.length && post.comments.length > 2 ? post.comments.length - 2 : ''} comentarios más
+                    View {post.comments?.length && post.comments.length > 2 ? post.comments.length - 2 : ''} more comments
                   </span>
                 )}
               </Button>
@@ -481,19 +481,19 @@ export function PostCard({ post }: PostCardProps) {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar publicación</AlertDialogTitle>
+            <AlertDialogTitle>Delete post</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar esta publicación? Esta acción no se puede deshacer.
+              Are you sure you want to delete this post? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-2 justify-end">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>

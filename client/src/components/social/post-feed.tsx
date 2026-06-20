@@ -109,12 +109,12 @@ export function PostFeed({ userId: propUserId }: PostFeedProps) {
     return (
       <Card className="border-red-300 dark:border-red-800">
         <CardContent className="p-6 text-center">
-          <p className="text-red-500 mb-4">Error al cargar las publicaciones</p>
+          <p className="text-red-500 mb-4">Error loading posts</p>
           <Button 
             onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/social/posts"] })}
             variant="outline"
           >
-            Reintentar
+            Retry
           </Button>
         </CardContent>
       </Card>
@@ -139,8 +139,8 @@ export function PostFeed({ userId: propUserId }: PostFeedProps) {
       {/* Tabs para filtrar publicaciones */}
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-5 mb-4">
-          <TabsTrigger value="all">Todos</TabsTrigger>
-          <TabsTrigger value="spanish">Español</TabsTrigger>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="spanish">Spanish</TabsTrigger>
           <TabsTrigger value="english">English</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="trending">Trending</TabsTrigger>
@@ -170,8 +170,8 @@ export function PostFeed({ userId: propUserId }: PostFeedProps) {
           ) : (
             <Card className="overflow-hidden">
               <CardContent className="p-6 text-center">
-                <p className="text-muted-foreground">No hay publicaciones disponibles</p>
-                <p className="text-sm mt-2">¡Sé el primero en publicar algo!</p>
+                <p className="text-muted-foreground">No posts available</p>
+                <p className="text-sm mt-2">Be the first to post something!</p>
               </CardContent>
             </Card>
           )}
@@ -181,7 +181,7 @@ export function PostFeed({ userId: propUserId }: PostFeedProps) {
       {/* Indicador de carga de posts */}
       {posts && posts.length > 0 && (
         <div className="text-center text-sm text-muted-foreground py-2">
-          Mostrando {filteredPosts.length} de {posts.length} publicaciones
+          Showing {filteredPosts.length} of {posts.length} posts
         </div>
       )}
     </div>

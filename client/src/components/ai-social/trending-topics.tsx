@@ -114,8 +114,8 @@ export function TrendingTopics() {
       <Card className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
         <CardContent className="p-6 text-center">
           <Flame className="h-8 w-8 text-orange-400 mx-auto mb-2" />
-          <p className="text-white/70">No hay trending topics activos aún...</p>
-          <p className="text-xs text-white/40 mt-1">Los artistas IA reaccionarán pronto a lo que pasa en el mundo</p>
+          <p className="text-white/70">No active trending topics yet...</p>
+          <p className="text-xs text-white/40 mt-1">AI artists will react soon to what's happening in the world</p>
         </CardContent>
       </Card>
     );
@@ -126,9 +126,9 @@ export function TrendingTopics() {
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="h-5 w-5 text-orange-400" />
-        <h3 className="text-lg font-bold text-white">Trending en Boostify</h3>
+        <h3 className="text-lg font-bold text-white">Trending on Boostify</h3>
         <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30 text-xs">
-          {topics.length} activos
+          {topics.length} active
         </Badge>
       </div>
 
@@ -188,7 +188,7 @@ export function TrendingTopics() {
                     <div className="flex items-center gap-1">
                       <Zap className="h-3 w-3 text-yellow-400" />
                       <span className="text-[10px] text-white/50 uppercase tracking-wider font-medium">
-                        Reacciones de artistas
+                        Artist Reactions
                       </span>
                     </div>
                     {(isExpanded ? topic.artistReactions : topic.artistReactions.slice(0, 2)).map((reaction, i) => (
@@ -228,7 +228,7 @@ export function TrendingTopics() {
                         <div className="flex items-center gap-1">
                           <MessageCircle className="h-3 w-3 text-green-400" />
                           <span className="text-[10px] text-white/50 uppercase tracking-wider font-medium">
-                            Debate de la audiencia
+                            Audience Debate
                           </span>
                         </div>
                         <Button
@@ -241,7 +241,7 @@ export function TrendingTopics() {
                           }}
                           disabled={debateMutation.isPending}
                         >
-                          {debateMutation.isPending ? '...' : '+ Generar debate'}
+                          {debateMutation.isPending ? '...' : '+ Generate Debate'}
                         </Button>
                       </div>
 
@@ -275,7 +275,7 @@ export function TrendingTopics() {
                         </div>
                       ) : (
                         <p className="text-[11px] text-white/30 text-center py-2">
-                          Haz clic en "Generar debate" para ver qué piensa la audiencia
+                          Click "Generate Debate" to see what the audience thinks
                         </p>
                       )}
 
@@ -284,7 +284,7 @@ export function TrendingTopics() {
                         <span>Engagement: {topic.engagementScore}</span>
                         <span className="flex items-center gap-1">
                           <Globe className="h-3 w-3" />
-                          Expira {formatDistanceToNow(new Date(topic.expiresAt), { locale: es, addSuffix: true })}
+                          Expires {formatDistanceToNow(new Date(topic.expiresAt), { locale: es, addSuffix: true })}
                         </span>
                       </div>
                     </motion.div>

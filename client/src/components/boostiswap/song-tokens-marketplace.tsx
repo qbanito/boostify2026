@@ -25,8 +25,8 @@ export function SongTokensMarketplace() {
   const handleBuySongToken = async (song: any) => {
     if (!isConnected) {
       toast({
-        title: "Wallet no conectada",
-        description: "Conecta tu MetaMask para comprar tokens",
+        title: "Wallet not connected",
+        description: "Connect your MetaMask to buy tokens",
         variant: "destructive",
       });
       return;
@@ -42,14 +42,14 @@ export function SongTokensMarketplace() {
       
       if (result.success) {
         toast({
-          title: "✅ Compra exitosa!",
-          description: `Has comprado ${tokenAmount} tokens de ${song.songName}`,
+          title: "✅ Purchase successful!",
+          description: `You purchased ${tokenAmount} tokens of ${song.songName}`,
         });
       }
     } catch (error: any) {
       toast({
-        title: "Error en la compra",
-        description: error.message || "No se pudo completar la transacción",
+        title: "Purchase error",
+        description: error.message || "Could not complete the transaction",
         variant: "destructive",
       });
     } finally {
@@ -143,18 +143,18 @@ export function SongTokensMarketplace() {
                       showBalance={false}
                       chainStatus="none"
                       accountStatus="avatar"
-                      label="🔗 Conectar Wallet"
+                      label="🔗 Connect Wallet"
                     />
                   </div>
                 )}
                 
                 {!isWeb3Ready && (
                   <Button 
-                    onClick={() => toast({ title: "⏳ Inicializando Web3...", description: "Por favor espera un momento" })}
+                    onClick={() => toast({ title: "⏳ Initializing Web3...", description: "Please wait a moment" })}
                     className="w-full gap-2 bg-purple-500 hover:bg-purple-600 text-xs sm:text-sm py-2 h-auto"
                   >
                     <Wallet className="h-3 w-3 sm:h-4 sm:w-4" />
-                    Conectar Wallet
+                    Connect Wallet
                   </Button>
                 )}
                 
@@ -167,7 +167,7 @@ export function SongTokensMarketplace() {
                     {buyingSongId === song.id ? (
                       <>
                         <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                        Comprando...
+                        Buying...
                       </>
                     ) : (
                       <>

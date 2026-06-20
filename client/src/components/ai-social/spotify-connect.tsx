@@ -121,8 +121,8 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
               <Music className="h-5 w-5 text-green-400" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-sm">Conecta Spotify</h4>
-              <p className="text-[11px] text-white/50">Descubre qué artistas IA encajan con tu gusto</p>
+              <h4 className="font-bold text-white text-sm">Connect Spotify</h4>
+              <p className="text-[11px] text-white/50">Discover which AI artists match your taste</p>
             </div>
           </div>
 
@@ -134,11 +134,11 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
               disabled={connectDemoMutation.isPending}
             >
               <Headphones className="h-3 w-3 mr-1" />
-              {connectDemoMutation.isPending ? 'Conectando...' : 'Demo Connect'}
+              {connectDemoMutation.isPending ? 'Connecting...' : 'Demo Connect'}
             </Button>
           </div>
           <p className="text-[9px] text-white/30 mt-2 text-center">
-            Demo mode: simula una conexión con gustos musicales populares
+            Demo mode: simulates a connection with popular music tastes
           </p>
         </CardContent>
       </Card>
@@ -157,7 +157,7 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
             </div>
             <div>
               <div className="flex items-center gap-1">
-                <span className="text-xs font-bold text-white">Spotify Conectado</span>
+                <span className="text-xs font-bold text-white">Spotify Connected</span>
                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               </div>
               <p className="text-[10px] text-white/40">
@@ -178,7 +178,7 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
         {/* Taste Analysis */}
         {connection.topGenres?.length > 0 && (
           <div className="mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-wider">Tus géneros</span>
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">Your Genres</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {connection.topGenres.slice(0, 6).map((genre, i) => (
                 <Badge key={i} className="bg-green-500/15 text-green-300 border-green-500/20 text-[10px]">
@@ -191,7 +191,7 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
 
         {connection.topArtists?.length > 0 && (
           <div className="mb-3">
-            <span className="text-[10px] text-white/40 uppercase tracking-wider">Tus artistas</span>
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">Your Artists</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {connection.topArtists.slice(0, 6).map((artist, i) => (
                 <Badge key={i} className="bg-purple-500/15 text-purple-300 border-purple-500/20 text-[10px]">
@@ -237,7 +237,7 @@ export function SpotifyConnect({ userId }: SpotifyConnectProps) {
                 <div className="flex items-center gap-1 mb-2">
                   <Sparkles className="h-3 w-3 text-purple-400" />
                   <span className="text-[10px] text-white/50 uppercase tracking-wider font-medium">
-                    Artistas IA para ti
+                    AI Artists For You
                   </span>
                 </div>
                 <div className="space-y-2">

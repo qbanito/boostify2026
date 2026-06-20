@@ -153,7 +153,7 @@ export function BuyBTFWidget() {
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
             <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto" />
           </motion.div>
-          <p className="text-base font-bold text-white">¡Compra Exitosa!</p>
+          <p className="text-base font-bold text-white">Purchase Successful!</p>
           <p className="text-sm text-gray-400">~{formatNum(quote?.outputAmount || '0')} BTF</p>
           <a
             href={`${POLYGONSCAN_TX}${txHash}`}
@@ -161,10 +161,10 @@ export function BuyBTFWidget() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-green-400/80 text-xs hover:text-green-300"
           >
-            Ver en PolygonScan <ExternalLink className="h-2.5 w-2.5" />
+            View on PolygonScan <ExternalLink className="h-2.5 w-2.5" />
           </a>
           <Button onClick={() => { dex.reset(); sale.reset(); setInputVal(''); }} size="sm" className="w-full bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30">
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Nuevo Swap
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> New Swap
           </Button>
         </CardContent>
       </Card>
@@ -331,9 +331,9 @@ export function BuyBTFWidget() {
               className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-4 py-3 rounded-xl text-sm font-semibold shadow-lg shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {status === 'swapping' || status === 'buying' ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Comprando...</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> Buying...</>
               ) : status === 'quoting' ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Cotizando...</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> Quoting...</>
               ) : (
                 <><Zap className="h-4 w-4" /> Add BTF Credits</>
               )}

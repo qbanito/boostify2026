@@ -98,8 +98,8 @@ export function XPProfileWidget({ userId }: XPProfileProps) {
       <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
         <CardContent className="p-4 text-center">
           <Star className="h-6 w-6 text-blue-400 mx-auto mb-2" />
-          <p className="text-white/70 text-sm">¡Empieza a ganar XP!</p>
-          <p className="text-[10px] text-white/40 mt-1">Comenta, vota, descubre música - cada acción suma</p>
+          <p className="text-white/70 text-sm">Start earning XP!</p>
+          <p className="text-[10px] text-white/40 mt-1">Comment, vote, discover music — every action counts</p>
         </CardContent>
       </Card>
     );
@@ -163,7 +163,7 @@ export function XPProfileWidget({ userId }: XPProfileProps) {
               />
             </div>
             <p className="text-[9px] text-white/30 text-center mt-1">
-              {Math.round(profile.progress)}% hacia el siguiente nivel
+              {Math.round(profile.progress)}% to the next level
             </p>
           </div>
 
@@ -174,7 +174,7 @@ export function XPProfileWidget({ userId }: XPProfileProps) {
                 <div className="flex items-center gap-1">
                   <Flame className={cn("h-4 w-4", profile.currentStreak >= 7 ? "text-orange-400" : "text-orange-300/60")} />
                   <span className="text-xs font-bold text-white">{profile.currentStreak}</span>
-                  <span className="text-[9px] text-white/30">días</span>
+                  <span className="text-[9px] text-white/30">days</span>
                 </div>
               )}
               {profile.canInfluenceBudgets && (
@@ -233,7 +233,7 @@ export function XPProfileWidget({ userId }: XPProfileProps) {
                         <span className="text-sm">{levelEmojis[entry.level] || '🎧'}</span>
                         <span className={cn("flex-1 truncate", isMe ? "text-purple-300 font-bold" : "text-white/70")}>
                           {entry.username || `User ${entry.userId}`}
-                          {isMe && ' (tú)'}
+                          {isMe && ' (you)'}
                         </span>
                         <span className="text-[10px] text-white/40">{entry.totalXP.toLocaleString()} XP</span>
                         {entry.currentStreak > 0 && (
@@ -245,7 +245,7 @@ export function XPProfileWidget({ userId }: XPProfileProps) {
                     );
                   })}
                   {(!leaderboard || leaderboard.length === 0) && (
-                    <p className="text-[10px] text-white/30 text-center py-2">Aún no hay datos</p>
+                    <p className="text-[10px] text-white/30 text-center py-2">No data yet</p>
                   )}
                 </div>
               </CardContent>

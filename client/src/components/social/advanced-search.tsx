@@ -54,7 +54,7 @@ export function AdvancedSearch({ onResults }: AdvancedSearchProps) {
     <div className="space-y-4">
       <div className="flex gap-2">
         <Input
-          placeholder="Buscar artista..."
+          placeholder="Search artist..."
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           className="flex-1"
@@ -66,7 +66,7 @@ export function AdvancedSearch({ onResults }: AdvancedSearchProps) {
           className="gap-2"
         >
           <Search className="h-4 w-4" />
-          Filtros
+          Filters
         </Button>
       </div>
 
@@ -74,7 +74,7 @@ export function AdvancedSearch({ onResults }: AdvancedSearchProps) {
         <div className="grid grid-cols-2 gap-3 p-4 bg-slate-800/30 rounded-lg border border-slate-700">
           <Select value={genre} onValueChange={setGenre}>
             <SelectTrigger>
-              <SelectValue placeholder="Género" />
+              <SelectValue placeholder="Genre" />
             </SelectTrigger>
             <SelectContent>
               {GENRES.map((g) => (
@@ -86,7 +86,7 @@ export function AdvancedSearch({ onResults }: AdvancedSearchProps) {
           </Select>
 
           <Input
-            placeholder="Ubicación"
+            placeholder="Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />
@@ -99,13 +99,13 @@ export function AdvancedSearch({ onResults }: AdvancedSearchProps) {
               className="col-span-2 gap-2"
             >
               <X className="h-4 w-4" />
-              Limpiar filtros
+              Clear filters
             </Button>
           )}
         </div>
       )}
 
-      {isLoading && <p className="text-sm text-muted-foreground">Buscando...</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Searching...</p>}
     </div>
   );
 }

@@ -67,14 +67,14 @@ export function ArtistProfileEmbed({ artist }: ArtistProfileEmbedProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Biografía */}
+        {/* Biography */}
         {artist.biography && (
           <p className="text-sm text-gray-300 line-clamp-2">
             {artist.biography}
           </p>
         )}
 
-        {/* Ubicación */}
+        {/* Location */}
         {formatLocation(artist.location) && (
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <MapPin className="h-4 w-4 flex-shrink-0" />
@@ -132,7 +132,7 @@ export function ArtistProfileEmbed({ artist }: ArtistProfileEmbedProps) {
             <Link href={`/artist/${slug}`} asChild>
               <Button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
                 <Music className="h-4 w-4 mr-2" />
-                Ver Perfil
+                View Profile
               </Button>
             </Link>
           )}

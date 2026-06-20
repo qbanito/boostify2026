@@ -241,7 +241,7 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
         await navigator.share({ title: 'Boostify', text: shareText, url });
       } else {
         await navigator.clipboard.writeText(`${shareText}\n${url}`);
-        toast({ title: '✓ Enlace copiado', description: 'Compártelo donde quieras.' });
+        toast({ title: '✓ Link copied', description: 'Share it wherever you want.' });
       }
     } catch {
       /* user cancelled share — no-op */

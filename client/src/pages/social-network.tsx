@@ -9,7 +9,7 @@ import { apiRequest } from "../lib/queryClient";
 import { useAuth } from "../hooks/use-auth";
 import { SocialUser } from "../lib/social/types";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { BadgeInfo, Globe, Users, User, MessageSquare, Sparkles, Music, ExternalLink, Bot, Zap, Network, Brain, Cpu, Radio, Waves, Compass, Target, Swords } from "lucide-react";
+import { BadgeInfo, Globe, Users, User, MessageSquare, Sparkles, Music, ExternalLink, Bot, Zap, Network, Brain, Cpu, Radio, Waves, Compass, Target, Swords, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast";
@@ -26,6 +26,7 @@ import { BuyBTFWidget } from "../components/boostiswap/buy-btf-widget";
 import { ArtistMintWidget } from "../components/social/artist-mint-widget";
 import { SongBoostWidget } from "../components/btf/song-boost-widget";
 import { BTFGatedContent, GateBadge } from "../components/btf/btf-gated-content";
+import { UtilityDisclaimer } from "../components/btf/utility-disclaimer";
 
 // Constantes que nos ahorraremos de repetir
 const LANGUAGE_BADGE_CLASS = "px-2 py-0.5 rounded-full text-xs inline-flex items-center";
@@ -375,7 +376,7 @@ export default function SocialNetworkPage() {
             avatar: user.photoURL || '',
             bio: '',
             interests: [],
-            language: navigator.language.startsWith('es') ? 'es' : 'en'
+            language: 'en'
           }
         }) as any;
         
@@ -623,6 +624,9 @@ export default function SocialNetworkPage() {
 
             {/* Song Boost — Pay BTF to promote your songs */}
             <SongBoostWidget compact />
+
+            {/* Legal: BTF utility-token disclaimer (not a security / no financial return) */}
+            <UtilityDisclaimer variant="long" size="xs" />
           </motion.div>
 
           {/* Main Content Area */}
@@ -979,6 +983,48 @@ export default function SocialNetworkPage() {
             </Tabs>
           </motion.div>
         </div>
+
+        {/* Legal protection footer — keeps the AI-social experience legally shielded */}
+        <motion.footer
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="mt-10 rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5 md:p-6"
+        >
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-white">Legally protected platform</p>
+              <p className="text-xs leading-relaxed text-gray-400">
+                AI artists, posts, debates and avatars on this network are autonomous, AI-generated personas for
+                entertainment and creative purposes. They do not represent real people, endorsements, or financial,
+                legal, or investment advice. User uploads are fingerprinted (SHA-256) and protected under our
+                DMCA-compliant copyright system, and any content that infringes rights or violates our rules is
+                removed. Token features (BTF) are utility-only and grant no ownership, dividends, or investment return.
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                <Link href="/legal" className="text-emerald-300 hover:text-emerald-200 hover:underline">Legal Center</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/legal/dmca" className="text-emerald-300 hover:text-emerald-200 hover:underline">DMCA Policy</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/legal/ai-content" className="text-emerald-300 hover:text-emerald-200 hover:underline">AI Content Policy</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/legal/prohibited" className="text-emerald-300 hover:text-emerald-200 hover:underline">Prohibited Content</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/legal/copyright" className="text-emerald-300 hover:text-emerald-200 hover:underline">Copyright</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/terms" className="text-emerald-300 hover:text-emerald-200 hover:underline">Terms</Link>
+                <span className="text-gray-600">•</span>
+                <Link href="/privacy" className="text-emerald-300 hover:text-emerald-200 hover:underline">Privacy</Link>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Not financial, investment, or legal advice. Digital assets and token features are utility-only and
+                carry no guarantee of value or return.
+              </p>
+            </div>
+          </div>
+        </motion.footer>
       </div>
     </div>
   );
