@@ -169,9 +169,11 @@ async function falImage(prompt: string): Promise<{ buffer: Buffer; mimeType: str
  * @returns permanent image URL, or null if every provider failed.
  */
 async function generateImageToFirebase(prompt: string, folder: string): Promise<string | null> {
+  // OpenAI gpt-image-1 is the primary provider (best quality / most coherent
+  // course art). HF FLUX.1-schnell (free) and FAL are resilient fallbacks.
   const providers: Array<{ name: string; fn: () => Promise<{ buffer: Buffer; mimeType: string } | null> }> = [
-    { name: 'hf-flux-schnell', fn: () => hfFluxImage(prompt) },
     { name: 'openai-gpt-image-1', fn: () => openaiImage(prompt) },
+    { name: 'hf-flux-schnell', fn: () => hfFluxImage(prompt) },
     { name: 'fal-nano-banana-2', fn: () => falImage(prompt) },
   ];
   for (const p of providers) {
@@ -476,11 +478,14 @@ export async function getOrCreateAcademyThumbnail(
   slug: string,
   title: string,
   category: string,
-  description?: string
+  description?: string,
+  force = false
 ): Promise<string | null> {
-  // 1) Serve from Firestore cache if present
-  const cache = await getCachedAcademyThumbnails();
-  if (cache[slug]) return cache[slug];
+  // 1) Serve from Firestore cache if present (unless a forced refresh is requested)
+  if (!force) {
+    const cache = await getCachedAcademyThumbnails();
+    if (cache[slug]) return cache[slug];
+  }
 
   // 2) Generate with the resilient provider chain
   const url = await generateCourseThumbnail(title, category, { slug, description });
@@ -496,6 +501,55 @@ export async function getOrCreateAcademyThumbnail(
     }
   } catch (e: any) {
     logger.error('[CourseMedia] persist thumbnail cache failed:', e.message);
+  }
+  return url;
+}
+
+// ─── ACADEMY HERO IMAGE (cinematic banner — generate once, reuse) ─────────
+
+const ACADEMY_HERO_DOC = 'academyAssets/heroImage';
+
+const ACADEMY_HERO_PROMPT =
+  'Epic cinematic hero banner for an online music academy: a diverse group of music creators in a futuristic studio, ' +
+  'glowing holographic audio waveforms and equalizer bars floating in the air, mixing console, studio monitors, ' +
+  'a producer wearing headphones, neon purple and cyan and warm orange lighting, dramatic atmosphere, depth of field, ' +
+  'ultra detailed, 4K, photorealistic, cinematic wide composition, no text, no letters, no words, no logos';
+
+/** Read the cached academy hero image URL from Firestore (or null). */
+export async function getCachedAcademyHero(): Promise<string | null> {
+  try {
+    if (!firestore) return null;
+    const snap = await firestore.doc(ACADEMY_HERO_DOC).get();
+    return snap.exists ? ((snap.data()?.url as string) || null) : null;
+  } catch (e: any) {
+    logger.error('[CourseMedia] read hero cache failed:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Return the cached academy hero image, generating + persisting it once if it
+ * does not exist yet (OpenAI-first provider chain). Reused for every visitor.
+ */
+export async function getOrCreateAcademyHero(force = false): Promise<string | null> {
+  if (!force) {
+    const cached = await getCachedAcademyHero();
+    if (cached) return cached;
+  }
+
+  logger.log('[CourseMedia] 🎨 Generating academy hero image…');
+  const url = await generateImageToFirebase(ACADEMY_HERO_PROMPT, 'academy-hero');
+  if (!url) return null;
+
+  try {
+    if (firestore) {
+      await firestore.doc(ACADEMY_HERO_DOC).set(
+        { url, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+    }
+  } catch (e: any) {
+    logger.error('[CourseMedia] persist hero cache failed:', e.message);
   }
   return url;
 }

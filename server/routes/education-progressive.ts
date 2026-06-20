@@ -761,7 +761,7 @@ router.get('/api/education/course-lessons/:identifier', authenticate, async (req
 // Generate a single course thumbnail (cached in DB → generated once for all clients)
 router.post('/api/education/generate-thumbnail', async (req, res) => {
   try {
-    const { title, category, slug, description } = req.body;
+    const { title, category, slug, description, force } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'title required' });
     }
@@ -769,7 +769,7 @@ router.post('/api/education/generate-thumbnail', async (req, res) => {
     // Academy courses (with a slug) are cached in Firestore so the image is
     // generated a single time and reused for every future visitor.
     const url = slug
-      ? await courseMedia.getOrCreateAcademyThumbnail(slug, title, category || 'Music', description)
+      ? await courseMedia.getOrCreateAcademyThumbnail(slug, title, category || 'Music', description, !!force)
       : await courseMedia.generateCourseThumbnail(title, category || 'Music', { slug, description });
 
     if (!url) {
@@ -792,6 +792,18 @@ router.get('/api/education/academy-thumbnails', async (_req, res) => {
   } catch (error: any) {
     console.error('Error fetching academy thumbnails:', error);
     res.json({ thumbnails: {} });
+  }
+});
+
+// Academy hero banner — generated once (OpenAI-first) and cached for all clients.
+router.get('/api/education/academy-hero', async (req, res) => {
+  try {
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const url = await courseMedia.getOrCreateAcademyHero(force);
+    res.json({ url: url || null });
+  } catch (error: any) {
+    console.error('Error fetching academy hero:', error);
+    res.json({ url: null });
   }
 });
 

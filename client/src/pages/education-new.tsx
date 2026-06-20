@@ -423,6 +423,24 @@ export default function EducationPage() {
   // Generate and cache course thumbnails
   const { thumbnails, generating: thumbnailsGenerating } = useThumbnails();
 
+  // Academy hero banner — generated once (OpenAI) and cached server-side.
+  const [heroImage, setHeroImage] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/education/academy-hero');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data?.url) setHeroImage(data.url);
+        }
+      } catch {
+        // ignore — hero is decorative
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Fetch DB courses (AI-generated)
   const { data: dbCourses, isLoading } = useQuery({
     queryKey: ["/api/education/courses"],
@@ -469,7 +487,14 @@ export default function EducationPage() {
 
       {/* ─── HERO ────────────────────────────────────────── */}
       <div className="relative overflow-hidden border-b">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-background to-orange-500/10" />
+        {/* AI-generated cinematic hero banner */}
+        {heroImage && (
+          <div className="absolute inset-0">
+            <img src={heroImage} alt="" className="w-full h-full object-cover opacity-40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-background/60" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-background/60 to-orange-500/10" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
         <div className="container mx-auto px-4 py-16 md:py-20 relative">
           <div className="max-w-4xl mx-auto text-center space-y-6">
