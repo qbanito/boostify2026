@@ -4,7 +4,8 @@
  * "La primera red social IA-nativa de música"
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardFooter, CardHeader } from '../ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
@@ -175,7 +176,15 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
   const [showComments, setShowComments] = useState(audienceComments.length > 0 || comments.length > 0);
   const [likeCount, setLikeCount] = useState(post.likes || 0);
   const [publishedToIg, setPublishedToIg] = useState(false);
+  const [burstId, setBurstId] = useState(0);
+  const [, setClockTick] = useState(0);
   const { toast } = useToast();
+
+  // Keep the relative timestamp fresh ("hace 12s" → "hace 1m") without a full refetch
+  useEffect(() => {
+    const t = setInterval(() => setClockTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   // Check if current user has IG extension active
   const { data: extStatus } = useQuery({
@@ -215,6 +224,27 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
       setLiked(true);
       setLikeCount(prev => prev + 1);
       onLike?.(post.id);
+    }
+    setBurstId((n) => n + 1);
+  };
+
+  // Double-tap / double-click the post body to like it (with a heart burst)
+  const handleDoubleTap = () => {
+    handleLike();
+  };
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/social-network`;
+    const shareText = `${artistName} on Boostify: “${post.content.slice(0, 120)}”`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Boostify', text: shareText, url });
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n${url}`);
+        toast({ title: '✓ Enlace copiado', description: 'Compártelo donde quieras.' });
+      }
+    } catch {
+      /* user cancelled share — no-op */
     }
   };
 
@@ -265,7 +295,22 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
         </div>
       </CardHeader>
 
-      <CardContent className="pb-4">
+      <CardContent className="pb-4 relative" onDoubleClick={handleDoubleTap}>
+        {/* Heart burst on like / double-tap */}
+        <AnimatePresence>
+          {burstId > 0 && (
+            <motion.div
+              key={burstId}
+              initial={{ opacity: 0, scale: 0.3 }}
+              animate={{ opacity: [0, 1, 1, 0], scale: [0.3, 1.25, 1.1, 1.4] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.9, times: [0, 0.2, 0.6, 1] }}
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            >
+              <Heart className="h-20 w-20 fill-red-500 text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.7)]" />
+            </motion.div>
+          )}
+        </AnimatePresence>
         {/* Trading Activity Badge - Para posts de trading */}
         {post.tradingData && (
           <div className="mb-3">
@@ -380,7 +425,9 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
                 liked ? "text-red-400 hover:text-red-300" : "text-gray-400 hover:text-red-400"
               )}
             >
-              <Heart className={cn("h-5 w-5 mr-1", liked && "fill-current")} />
+              <motion.span key={burstId} animate={{ scale: burstId > 0 ? [1, 1.4, 1] : 1 }} transition={{ duration: 0.35 }} className="mr-1 inline-flex">
+                <Heart className={cn("h-5 w-5", liked && "fill-current")} />
+              </motion.span>
               {likeCount}
             </Button>
 
@@ -397,6 +444,7 @@ export function AIArtistPost({ post, artist, comments = [], audienceComments = [
             <Button 
               variant="ghost" 
               size="sm"
+              onClick={handleShare}
               className="text-gray-400 hover:text-green-400"
             >
               <Share2 className="h-5 w-5" />

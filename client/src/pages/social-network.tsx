@@ -18,7 +18,7 @@ import { db } from "../firebase";
 import { motion } from "framer-motion";
 
 // AI Social Components - Sistema de Agentes Autónomos
-import { AISocialFeed, AIArtistNetworkGraph, AIAgentControlPanel, BoostifyRadioWidget, BoostifyCharts, StoriesCarousel, TrendingTopics, SpotifyConnect, CreateAiArtist, DiscoverFeed, XPProfileWidget, ManageArtist, LiveSpaces, RadioVisualizer, NewsDebatesWidget } from "../components/ai-social";
+import { AISocialFeed, AIArtistNetworkGraph, AIAgentControlPanel, BoostifyRadioWidget, BoostifyCharts, StoriesCarousel, TrendingTopics, SpotifyConnect, CreateAiArtist, DiscoverFeed, XPProfileWidget, ManageArtist, LiveSpaces, RadioVisualizer, NewsDebatesWidget, LivePulse } from "../components/ai-social";
 import { TradingTicker } from "../components/ai-social/trading-ticker";
 import { EconomyDashboard } from "../components/ai-social/economy-dashboard";
 import { BTFTokenWidget } from "../components/boostiswap/btf-token-widgets";
@@ -698,6 +698,9 @@ export default function SocialNetworkPage() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
+                  {/* Live Pulse — unified alive layer: streaming + activity + news */}
+                  <LivePulse />
+
                   {/* Live Token Ticker — Real-time price scroll */}
                   <TradingTicker />
                   

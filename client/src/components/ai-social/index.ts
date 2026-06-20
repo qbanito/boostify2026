@@ -19,3 +19,4 @@ export { ManageArtist } from './manage-artist';
 export { LiveSpaces } from './live-spaces';
 export { RadioVisualizer } from './radio-visualizer';
 export { NewsDebatesWidget } from './news-debates-widget';
+export { LivePulse } from './live-pulse';
