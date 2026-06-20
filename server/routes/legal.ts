@@ -30,6 +30,7 @@ import {
 } from '../../db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { legalAudit } from '../services/file-fingerprint';
+import { notifyDmcaTakedown, notifyCounterNotice, notifyVerificationRequest } from '../services/legal-notify';
 
 const router = Router();
 
@@ -143,12 +144,19 @@ router.post('/dmca', async (req: Request, res: Response) => {
 
     if (targetUserId) await recomputeStrikes(targetUserId);
 
+    // Forward an internal alert to the designated agent (Resend → Brevo, non-blocking)
+    notifyDmcaTakedown({
+      caseUuid: row.uuid,
+      claimantName: row.claimantName,
+      claimantEmail: row.claimantEmail,
+      claimantOrg: row.claimantOrg,
+      targetUrl: row.targetUrl,
+      targetUserId,
+      workDescription: row.workDescription,
+      infringementDescription: row.infringementDescription,
+    }).catch((e) => console.error('[legal] dmca notify failed:', e?.message));
+
     return res.json({
-      success: true,
-      caseNumber: row.uuid,
-      id: row.id,
-      message: 'Su notificación DMCA ha sido recibida y registrada. Recibirá una respuesta del equipo legal.',
-    });
   } catch (err) {
     console.error('[legal] dmca submit error:', err);
     return res.status(500).json({ success: false, error: 'No se pudo registrar la notificación.' });
@@ -206,6 +214,15 @@ router.post('/counter-notice', async (req: Request, res: Response) => {
     });
 
     if (tk[0].targetUserId) await recomputeStrikes(tk[0].targetUserId);
+
+    // Forward an internal alert to the designated agent (Resend → Brevo, non-blocking)
+    notifyCounterNotice({
+      caseUuid: row.uuid,
+      takedownId: row.takedownId,
+      fullName: row.fullName,
+      email: row.email,
+      explanation: row.explanation,
+    }).catch((e) => console.error('[legal] counter notify failed:', e?.message));
 
     return res.json({ success: true, id: row.id, caseNumber: row.uuid, message: 'Contranotificación recibida. Será reenviada al reclamante.' });
   } catch (err) {
@@ -392,6 +409,16 @@ router.post('/verification/request', authenticate, async (req: Request, res: Res
       entityId: row.id,
       detail: { level },
     });
+
+    // Forward an internal alert to the designated agent (Resend → Brevo, non-blocking)
+    notifyVerificationRequest({
+      userId,
+      level,
+      legalName: row.legalName,
+      organization: row.organization,
+      email: req.user!.email || null,
+    }).catch((e) => console.error('[legal] verification notify failed:', e?.message));
+
     return res.json({ success: true, verification: row });
   } catch (err) {
     console.error('[legal] verification request error:', err);
