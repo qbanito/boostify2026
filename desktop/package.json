@@ -1,0 +1,33 @@
+{
+  "name": "boostify-music-desktop",
+  "version": "1.0.0",
+  "description": "Boostify Music — Desktop Timeline Editor",
+  "author": "Boostify Music <team@boostify.app>",
+  "license": "MIT",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run electron:dev\" \"npm run vite:dev\"",
+    "vite:dev": "cd .. && npx vite --config vite.config.desktop.ts",
+    "electron:dev": "node scripts/wait-then-launch.js",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:renderer": "cd .. && npx vite build --config vite.config.desktop.ts",
+    "build:electron": "node scripts/build-electron.js",
+    "pack": "npm run build && npx electron-builder --dir",
+    "dist": "npm run build && npx electron-builder",
+    "dist:win": "npm run build && npx electron-builder --win",
+    "dist:mac": "npm run build && npx electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5"
+  }
+}

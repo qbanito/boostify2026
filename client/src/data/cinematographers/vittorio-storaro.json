@@ -1,0 +1,132 @@
+{
+  "id": "vittorio-storaro",
+  "name": "Vittorio Storaro",
+  "title": "Director of Photography",
+  "bio": "3-time Oscar winner. Living legend of cinematography. Pioneer of color theory in cinema. Worked with Coppola, Bertolucci, and countless masters. Defined modern color grading language.",
+  "famous_directors_worked_with": ["Francis Ford Coppola", "Bernardo Bertolucci", "Dario Argento", "Carlos Saura"],
+  
+  "iconic_films": [
+    {
+      "title": "Apocalypse Now",
+      "director": "Francis Ford Coppola",
+      "year": 1979,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "The Last Emperor",
+      "director": "Bernardo Bertolucci",
+      "year": 1987,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "Reds",
+      "director": "Warren Beatty",
+      "year": 1981,
+      "awards": ["Academy Award for Best Cinematography"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Revolutionary use of color as narrative language. Warm golden ambers, rich jewel tones, and carefully orchestrated color palettes. Colors that tell story. Romantic yet operatic cinematography.",
+    "key_characteristic": "Color is meaning. Every hue serves the emotional narrative. Master of color theory applied to cinema.",
+    "legendary_technique": "Pioneered color grading language still used today; developed comprehensive color theory for emotional storytelling"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Panavision System 65",
+        "format": "VistaVision 65mm",
+        "sensor": "Epic scope for epic stories",
+        "use_case": "Large-scale narrative, operatic storytelling"
+      },
+      {
+        "name": "Panavision Millennium",
+        "format": "35mm anamorphic",
+        "sensor": "Romantic anamorphic aspect",
+        "use_case": "Character-driven moments, intimate spaces"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "Panavision Lenses",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "75mm", "100mm"],
+        "characteristics": ["Warm coating", "Romantic bokeh", "Anamorphic character"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Cooke",
+        "series": "Anamorphic/i",
+        "focal_lengths": ["32mm", "40mm", "50mm", "65mm", "100mm"],
+        "characteristics": ["Legendary Cooke warmth", "Painterly bokeh", "Color rendering"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 500T - Warm Grading",
+        "iso": 500,
+        "characteristics": "Warm color bias, golden grain, operatic warmth",
+        "mood": "Romantic, passionate, operatic, dramatic"
+      },
+      {
+        "name": "Kodak Vision3 50D - Color Rich",
+        "iso": 50,
+        "characteristics": "Color saturated, jewel tones, pristine quality",
+        "mood": "Rich, vibrant, romantic, luminous"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Operatic, theatrical lighting. Uses color gels extensively. Creates color contrast through lighting. Every light placement is meaningful.",
+    "color_science": "Revolutionary color theory. Warm/cool contrast as emotional language. Color palettes that evolve through scenes. Gold as redemption, blue as melancholy.",
+    "exposure_philosophy": "Expose for color precision. Maintain tone gradation. Color is primary, not secondary.",
+    "dynamic_range_preference": "Full dynamic range, color nuance preserved",
+    "frame_rate_preference": ["24fps for narrative weight", "Pause frames for color impact"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Poetic, philosophical collaboration. Speaks about color and meaning simultaneously. Visual poet.",
+    "strengths_with_narrative": "Translates emotional and thematic depth into color language. Makes audiences feel color itself. Creates color as character.",
+    "best_for_genres": ["Epic drama", "Romantic narratives", "Operatic pieces", "Period pieces", "Philosophical narratives"],
+    "complements_directors": ["Coppola (perfect match)", "Bertolucci (romantic epic)", "Visionary narrative directors"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Warm golden tones as primary color",
+      "Jewel tone color palette",
+      "Sophisticated color contrast",
+      "Operatic, romantic cinematography",
+      "Color as narrative language",
+      "Anamorphic aesthetics"
+    ],
+    "technical_mandates": [
+      "65mm or 35mm anamorphic format",
+      "Panavision or Cooke lenses",
+      "Warm color temperature dominance",
+      "Color-graded with warm/cool contrast",
+      "Theatrical, operatic lighting",
+      "Kodak film stock emulation with color emphasis"
+    ],
+    "avoid": [
+      "Cool or desaturated color palettes",
+      "Flat lighting without color support",
+      "Digital coldness",
+      "Undercooked color grading",
+      "Muted aesthetic"
+    ],
+    "emphasis_on": [
+      "Color as primary narrative tool",
+      "Warm romantic aesthetic",
+      "Operatic emotional scale",
+      "Color theory application",
+      "Anamorphic romanticism",
+      "Color psychology in service of story"
+    ]
+  }
+}

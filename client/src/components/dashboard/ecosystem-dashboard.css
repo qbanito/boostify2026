@@ -1,0 +1,883 @@
+/* Estilos para el Dashboard de Ecosistema - Versión con Órbitas Animadas */
+
+.ecosystem-container {
+  position: relative;
+  width: 100%;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: visible;
+  background-color: var(--background);
+  padding: 2rem 0 3rem 0;
+}
+
+@media (min-width: 768px) {
+  .ecosystem-container {
+    min-height: 75vh;
+    padding: 3rem 0 4rem 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ecosystem-container {
+    min-height: 80vh;
+    padding: 3rem 0 5rem 0;
+  }
+}
+
+.ecosystem-bg-gradient {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(249, 115, 22, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+  z-index: 1;
+}
+
+.ecosystem-bg-texture {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0.3; /* Aumentamos la opacidad para mejor visibilidad */
+  mix-blend-mode: overlay;
+  z-index: 2;
+  background-repeat: repeat;
+  animation: breatheBackground 8s infinite ease-in-out;
+}
+
+/* Líneas de fondo con efecto de ondas sonoras - versión mejorada */
+.ecosystem-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  opacity: 0.15; /* Opacidad reducida para un efecto más sutil */
+  background-image: 
+    /* Líneas horizontales más finas y espaciadas */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 60px,
+      rgba(249, 115, 22, 0.7) 60px,
+      rgba(249, 115, 22, 0.7) 61px
+    ),
+    /* Líneas verticales más finas y espaciadas */
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 60px,
+      rgba(249, 115, 22, 0.5) 60px,
+      rgba(249, 115, 22, 0.5) 61px
+    );
+  background-size: 100% 200%, 200% 100%;
+  animation: breatheLines 12s ease-in-out infinite; /* Animación más lenta para un efecto más natural */
+  pointer-events: none;
+  filter: blur(0.5px); /* Ligero desenfoque para suavizar las líneas */
+}
+
+/* Animación para que las líneas "respiren" como ondas sonoras - versión mejorada */
+@keyframes breatheLines {
+  0% {
+    background-position: 0 0, 0 0;
+    opacity: 0.12;
+  }
+  50% {
+    background-position: 0 15px, 15px 0; /* Mayor movimiento para un efecto más visible */
+    opacity: 0.2;
+  }
+  100% {
+    background-position: 0 0, 0 0;
+    opacity: 0.12;
+  }
+}
+
+@keyframes breatheBackground {
+  0% { transform: scale(1); opacity: 0.25; }
+  50% { transform: scale(1.03); opacity: 0.35; }
+  100% { transform: scale(1); opacity: 0.25; }
+}
+
+.ecosystem-orbit {
+  position: absolute;
+  border: 1px dashed rgba(249, 115, 22, 0.15);
+  border-radius: 50%;
+  z-index: 3;
+}
+
+.ecosystem-avatar {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background-color: rgba(249, 115, 22, 0.1);
+  border: 2px solid rgba(249, 115, 22, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  z-index: 30;
+  box-shadow: 0 0 30px rgba(249, 115, 22, 0.3);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.ecosystem-avatar video {
+  width: 140%;
+  height: 140%;
+  object-fit: cover;
+  opacity: 0.85;
+  filter: blur(1px) saturate(1.2);
+  transform: scale(1.1);
+}
+
+/* Estilos para el nuevo sistema de órbitas */
+.orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.inner-orbit {
+  width: 200px;
+  height: 200px;
+}
+
+.middle-orbit {
+  width: 320px;
+  height: 320px;
+}
+
+.outer-orbit {
+  width: 440px;
+  height: 440px;
+}
+
+.orbit-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  pointer-events: auto;
+  z-index: 50;
+}
+
+.ecosystem-tool-icon {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 50;
+  transform-origin: center;
+}
+
+.ecosystem-tool-icon a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  position: relative;
+  z-index: 51;
+}
+
+.ecosystem-tool-label {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  white-space: nowrap;
+  font-size: 0.7rem;
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  opacity: 0;
+  z-index: 1000;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Estilos para el modal de explicación */
+.tool-tooltip {
+  position: absolute;
+  width: 220px;
+  background-color: rgba(17, 17, 17, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(249, 115, 22, 0.5);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 20px rgba(249, 115, 22, 0.2);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  top: -130px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  overflow: hidden;
+}
+
+/* Efecto de resplandor en el borde del tooltip */
+.tool-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  z-index: -1;
+  background: linear-gradient(45deg, 
+    rgba(249, 115, 22, 0.6), 
+    rgba(249, 115, 22, 0.1), 
+    rgba(249, 115, 22, 0.6));
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* Añadimos un indicador triangular (flecha) al tooltip */
+.tool-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid rgba(249, 115, 22, 0.5);
+}
+
+.tool-tooltip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: white;
+}
+
+.tool-tooltip-description {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.tool-tooltip-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.tool-tooltip-stats-value {
+  font-weight: 600;
+  font-size: 1rem;
+  color: rgba(249, 115, 22, 0.9);
+}
+
+.tool-tooltip-stats-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.tool-tooltip-action {
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: rgba(249, 115, 22, 0.7);
+  font-style: italic;
+  text-align: right;
+}
+
+.orbit-item:hover .tool-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 0.2s;
+}
+
+.tool-icon-wrapper:hover .tool-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 0.2s;
+}
+
+/* Efecto de brillo al hacer hover sobre los tooltips */
+.tool-tooltip:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 25px rgba(249, 115, 22, 0.4);
+  border-color: rgba(249, 115, 22, 0.7);
+}
+
+/* Activar el resplandor del borde al hacer hover */
+.tool-tooltip:hover::before {
+  opacity: 0.7;
+  animation: rotateBorderGradient 2s linear infinite;
+}
+
+@keyframes rotateBorderGradient {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.ecosystem-info-panel {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 60px);
+  max-width: 800px;
+  background-color: var(--background);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  z-index: 100;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 0 0 20px rgba(249, 115, 22, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.ecosystem-add-button {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: rgba(249, 115, 22, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.3);
+}
+
+/* Efectos visuales para las herramientas */
+.ecosystem-tool-icon > div {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              border-color 0.3s ease;
+}
+
+.ecosystem-tool-icon > div:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+  border-color: rgba(249, 115, 22, 0.5);
+}
+
+/* Clase para la variación de tamaño basada en posición */
+.tool-size-variation {
+  transition: transform 0.5s ease;
+}
+
+/* Mostrar etiqueta solo al hacer hover */
+.tool-icon-wrapper:hover .ecosystem-tool-label {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* Mejorar el efecto hover del icono */
+.tool-icon-wrapper:hover {
+  border-color: rgba(249, 115, 22, 0.6) !important;
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.4) !important;
+  background-color: rgba(249, 115, 22, 0.1) !important;
+  transform: scale(1.1) !important;
+}
+
+/* Transiciones suaves para los elementos interactivos */
+.tool-icon-wrapper {
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 50;
+}
+
+.orbit-item.approaching-center .tool-icon-wrapper {
+  transform: scale(1.15);
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+  border-color: rgba(249, 115, 22, 0.6);
+  animation: glowPulse 2s infinite ease-in-out;
+}
+
+@keyframes glowPulse {
+  0% { box-shadow: 0 0 15px rgba(249, 115, 22, 0.3); }
+  50% { box-shadow: 0 0 25px rgba(249, 115, 22, 0.5); }
+  100% { box-shadow: 0 0 15px rgba(249, 115, 22, 0.3); }
+}
+
+/* Animación para el brillo de las órbitas */
+@keyframes pulseOrbit {
+  0% { 
+    border-color: rgba(249, 115, 22, 0.1); 
+    box-shadow: 0 0 5px rgba(249, 115, 22, 0.1);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% { 
+    border-color: rgba(249, 115, 22, 0.4); 
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.2);
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+  100% { 
+    border-color: rgba(249, 115, 22, 0.1); 
+    box-shadow: 0 0 5px rgba(249, 115, 22, 0.1);
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.orbit {
+  animation: pulseOrbit 8s infinite ease-in-out;
+}
+
+/* Diferentes tiempos para cada órbita para un efecto más natural */
+.inner-orbit {
+  animation-duration: 6s;
+  border: 1.5px dashed rgba(249, 115, 22, 0.3);
+}
+
+.middle-orbit {
+  animation-duration: 9s;
+  border: 1.5px dashed rgba(249, 115, 22, 0.25);
+}
+
+.outer-orbit {
+  animation-duration: 12s;
+  border: 1.5px dashed rgba(249, 115, 22, 0.2);
+}
+
+/* Animación de respiración para los elementos orbitales */
+@keyframes breatheSize {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* Aplicar respiración suave a los iconos de herramientas */
+.tool-icon-wrapper {
+  animation: breatheSize 6s infinite ease-in-out;
+  will-change: transform;
+}
+
+/* Estilos para los textos motivacionales */
+.motivational-text-container {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.boostify-brand {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 10px rgba(249, 115, 22, 0.5);
+  letter-spacing: 1px;
+}
+
+.motivational-text {
+  font-size: 1.25rem;
+  font-weight: 500;
+  text-align: center;
+  background: linear-gradient(90deg, 
+    rgba(249, 115, 22, 0.9), 
+    rgba(236, 72, 153, 0.7), 
+    rgba(249, 115, 22, 0.9));
+  background-size: 200% auto;
+  animation: textGradient 6s linear infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 10px rgba(249, 115, 22, 0.1);
+  max-width: 80%;
+  padding: 0.5rem;
+  letter-spacing: 0.5px;
+}
+
+/* Animación para el gradiente del texto */
+@keyframes textGradient {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Ajustes para tooltips en órbitas diferentes */
+.outer-orbit .tool-tooltip {
+  top: -140px; /* Un poco más alejado para la órbita exterior */
+}
+
+.middle-orbit .tool-tooltip {
+  top: -135px; /* Ajuste para la órbita media */
+}
+
+/* Media queries para hacer el dashboard responsive */
+
+/* Tablets y pantallas medianas (hasta 1024px) */
+@media (max-width: 1024px) {
+  .ecosystem-container {
+    min-height: 80vh;
+    padding: 1.5rem 0;
+  }
+
+  .inner-orbit {
+    width: 180px;
+    height: 180px;
+  }
+  
+  .middle-orbit {
+    width: 300px;
+    height: 300px;
+  }
+  
+  .outer-orbit {
+    width: 420px;
+    height: 420px;
+  }
+  
+  .ecosystem-tool-label {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+  }
+
+  .ecosystem-avatar {
+    width: 180px;
+    height: 180px;
+  }
+
+  .boostify-brand {
+    font-size: 2rem;
+  }
+
+  .motivational-text {
+    font-size: 1.1rem;
+  }
+
+  .ecosystem-info-panel {
+    width: calc(100% - 40px);
+    padding: 14px;
+  }
+}
+
+/* Tablets y móviles grandes (hasta 768px) */
+@media (max-width: 768px) {
+  .ecosystem-container {
+    min-height: 75vh;
+    padding: 1rem 0;
+  }
+
+  .inner-orbit {
+    width: 160px;
+    height: 160px;
+  }
+  
+  .middle-orbit {
+    width: 270px;
+    height: 270px;
+  }
+  
+  .outer-orbit {
+    width: 380px;
+    height: 380px;
+  }
+  
+  .ecosystem-avatar {
+    width: 160px;
+    height: 160px;
+  }
+
+  .ecosystem-tool-icon > div {
+    height: 48px !important;
+    width: 48px !important;
+  }
+
+  .ecosystem-tool-icon > div svg {
+    height: 20px !important;
+    width: 20px !important;
+  }
+  
+  .ecosystem-tool-label {
+    font-size: 0.6rem;
+    padding: 1px 6px;
+    top: calc(100% + 1px);
+  }
+
+  .boostify-brand {
+    font-size: 1.75rem;
+  }
+
+  .motivational-text {
+    font-size: 1rem;
+    max-width: 90%;
+  }
+
+  .motivational-text-container {
+    top: 20px;
+  }
+  
+  /* Ajustes de tooltips para dispositivos medianos */
+  .tool-tooltip {
+    width: 180px;
+    font-size: 0.85rem;
+    top: -120px;
+    padding: 12px;
+  }
+  
+  .outer-orbit .tool-tooltip {
+    top: -130px;
+  }
+
+  .ecosystem-info-panel {
+    width: calc(100% - 30px);
+    padding: 12px;
+    bottom: 20px;
+  }
+
+  .ecosystem-add-button {
+    width: 45px;
+    height: 45px;
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .ecosystem-add-button svg {
+    height: 20px;
+    width: 20px;
+  }
+}
+
+/* Móviles (hasta 640px) */
+@media (max-width: 640px) {
+  .ecosystem-container {
+    min-height: 70vh;
+    padding: 0.75rem 0;
+  }
+
+  .inner-orbit {
+    width: 140px;
+    height: 140px;
+  }
+  
+  .middle-orbit {
+    width: 240px;
+    height: 240px;
+  }
+  
+  .outer-orbit {
+    width: 340px;
+    height: 340px;
+  }
+
+  .ecosystem-avatar {
+    width: 140px;
+    height: 140px;
+  }
+  
+  /* Hacer los iconos más pequeños en móviles */
+  .ecosystem-tool-icon > div {
+    height: 40px !important;
+    width: 40px !important;
+  }
+
+  .ecosystem-tool-icon > div svg {
+    height: 18px !important;
+    width: 18px !important;
+  }
+
+  .ecosystem-tool-label {
+    font-size: 0.55rem;
+    padding: 1px 4px;
+    white-space: normal;
+    max-width: 60px;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .boostify-brand {
+    font-size: 1.5rem;
+  }
+
+  .motivational-text {
+    font-size: 0.9rem;
+    max-width: 95%;
+  }
+
+  .motivational-text-container {
+    top: 15px;
+  }
+  
+  /* Ajustar los tooltips para dispositivos pequeños */
+  .tool-tooltip {
+    width: 160px;
+    top: -100px;
+    font-size: 0.75rem;
+    padding: 10px;
+  }
+  
+  .outer-orbit .tool-tooltip {
+    top: -110px;
+  }
+
+  .ecosystem-info-panel {
+    width: calc(100% - 20px);
+    padding: 10px;
+    bottom: 15px;
+  }
+
+  .ecosystem-add-button {
+    width: 40px;
+    height: 40px;
+    bottom: 15px;
+    right: 15px;
+  }
+
+  .ecosystem-add-button svg {
+    height: 18px;
+    width: 18px;
+  }
+
+  /* Reducir tamaño de texto en panel de información */
+  .ecosystem-info-panel h3 {
+    font-size: 0.95rem;
+  }
+
+  .ecosystem-info-panel p {
+    font-size: 0.75rem;
+  }
+
+  .ecosystem-info-panel button {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+}
+
+/* Móviles muy pequeños (hasta 480px) */
+@media (max-width: 480px) {
+  .ecosystem-container {
+    min-height: 65vh;
+  }
+
+  .inner-orbit {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .middle-orbit {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .outer-orbit {
+    width: 280px;
+    height: 280px;
+  }
+
+  .ecosystem-avatar {
+    width: 120px;
+    height: 120px;
+  }
+
+  .ecosystem-tool-icon > div {
+    height: 36px !important;
+    width: 36px !important;
+  }
+
+  .ecosystem-tool-icon > div svg {
+    height: 16px !important;
+    width: 16px !important;
+  }
+
+  .boostify-brand {
+    font-size: 1.25rem;
+  }
+
+  .motivational-text {
+    font-size: 0.8rem;
+  }
+
+  .ecosystem-tool-label {
+    font-size: 0.5rem;
+    max-width: 50px;
+  }
+
+  .tool-tooltip {
+    display: none; /* Ocultar tooltips en pantallas muy pequeñas para evitar problemas */
+  }
+}
+
+/* Mejoras adicionales para touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .ecosystem-tool-icon > div {
+    transition: transform 0.2s ease;
+  }
+
+  .ecosystem-tool-icon > div:active {
+    transform: scale(1.15);
+  }
+
+  .tool-tooltip {
+    display: none; /* Ocultar tooltips en dispositivos táctiles */
+  }
+}
+
+/* Optimizaciones para pantallas grandes */
+@media (min-width: 1440px) {
+  .inner-orbit {
+    width: 250px;
+    height: 250px;
+  }
+  
+  .middle-orbit {
+    width: 400px;
+    height: 400px;
+  }
+  
+  .outer-orbit {
+    width: 550px;
+    height: 550px;
+  }
+
+  .ecosystem-avatar {
+    width: 250px;
+    height: 250px;
+  }
+  
+  .ecosystem-tool-icon > div {
+    height: 60px !important;
+    width: 60px !important;
+  }
+
+  .ecosystem-tool-icon > div svg {
+    height: 28px !important;
+    width: 28px !important;
+  }
+  
+  .ecosystem-tool-label {
+    font-size: 0.75rem;
+    padding: 5px 12px;
+  }
+
+  .boostify-brand {
+    font-size: 3rem;
+  }
+
+  .motivational-text {
+    font-size: 1.5rem;
+  }
+}

@@ -1,0 +1,876 @@
+{
+  "generatedAt": "2026-05-04T14:21:59.140Z",
+  "type": "weekly",
+  "diagnostics": [
+    {
+      "id": "ig-boost",
+      "name": "Instagram Boost",
+      "route": "/instagram-boost",
+      "category": "Growth Tools",
+      "status": "live",
+      "healthScore": 85,
+      "completedFeatures": [
+        "AI-powered follower growth engine",
+        "Engagement analytics dashboard",
+        "Standalone pricing modal ($19/$16/$12)",
+        "Stripe checkout integration",
+        "Chrome extension connection",
+        "Reports tab with campaign tracking"
+      ],
+      "improvements": [
+        {
+          "task": "Add usage limits hook for free tier daily caps",
+          "priority": "high",
+          "deadline": "2026-04-15"
+        },
+        {
+          "task": "Implement subscription banner component",
+          "priority": "medium",
+          "deadline": "2026-04-20"
+        },
+        {
+          "task": "Add conversion tracking analytics per product",
+          "priority": "medium",
+          "deadline": "2026-04-25"
+        },
+        {
+          "task": "Webhook handler for ig_boost_pro subscription events",
+          "priority": "high",
+          "deadline": "2026-04-12"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "spotify-boost",
+      "name": "Spotify Growth Suite",
+      "route": "/spotify",
+      "category": "Growth Tools",
+      "status": "live",
+      "healthScore": 82,
+      "completedFeatures": [
+        "5-tab interface (Connect, Tools, Pitch, Growth, Analytics)",
+        "Standalone pricing modal ($19/$16/$12)",
+        "Stripe checkout integration",
+        "Playlist pitching tools",
+        "Stream optimization engine"
+      ],
+      "improvements": [
+        {
+          "task": "Add usage limits hook for free tier",
+          "priority": "high",
+          "deadline": "2026-04-15"
+        },
+        {
+          "task": "Implement Remotion animation player",
+          "priority": "low",
+          "deadline": "2026-05-01"
+        },
+        {
+          "task": "Fix encoding issues in UI strings",
+          "priority": "medium",
+          "deadline": "2026-04-10"
+        },
+        {
+          "task": "Webhook handler for spotify_boost_pro events",
+          "priority": "high",
+          "deadline": "2026-04-12"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "youtube-boost",
+      "name": "YouTube Boost",
+      "route": "/youtube-views",
+      "category": "Growth Tools",
+      "status": "live",
+      "healthScore": 78,
+      "completedFeatures": [
+        "12 AI-powered growth tools",
+        "Standalone pricing modal ($19/$16/$12)",
+        "Stripe checkout integration",
+        "Video SEO optimization",
+        "Thumbnail analysis"
+      ],
+      "improvements": [
+        {
+          "task": "Create use-youtube-boost-limits.ts hook",
+          "priority": "high",
+          "deadline": "2026-04-15"
+        },
+        {
+          "task": "Add SubscriptionBanner component",
+          "priority": "medium",
+          "deadline": "2026-04-20"
+        },
+        {
+          "task": "Webhook handler for youtube_boost events",
+          "priority": "high",
+          "deadline": "2026-04-12"
+        },
+        {
+          "task": "Channel analytics deep integration",
+          "priority": "low",
+          "deadline": "2026-05-15"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "artist-setup",
+      "name": "Artist Setup",
+      "route": "/artist-setup",
+      "category": "Onboarding",
+      "status": "live",
+      "healthScore": 90,
+      "completedFeatures": [
+        "Free onboarding landing page",
+        "3-step flow (Account → Profile → Launch)",
+        "9 tools showcase with branded cards",
+        "Platform icons grid (IG, Spotify, YT, TikTok)",
+        "Features & benefits section with stats",
+        "Responsive design (mobile + desktop)"
+      ],
+      "improvements": [
+        {
+          "task": "Add onboarding analytics funnel tracking",
+          "priority": "medium",
+          "deadline": "2026-04-20"
+        },
+        {
+          "task": "A/B test hero CTA variants",
+          "priority": "low",
+          "deadline": "2026-05-01"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "music-video-creator",
+      "name": "Music Video Creator",
+      "route": "/music-video-creator",
+      "category": "Content Creation",
+      "status": "live",
+      "healthScore": 75,
+      "completedFeatures": [
+        "AI-generated visuals and effects",
+        "Video rendering pipeline",
+        "Shotstack integration",
+        "Template system"
+      ],
+      "improvements": [
+        {
+          "task": "Improve rendering speed",
+          "priority": "high",
+          "deadline": "2026-04-30"
+        },
+        {
+          "task": "Add more video templates",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Mobile preview optimization",
+          "priority": "medium",
+          "deadline": "2026-04-25"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "ai-image-gen",
+      "name": "AI Image Generator",
+      "route": "/image-generator-simple",
+      "category": "Content Creation",
+      "status": "live",
+      "healthScore": 80,
+      "completedFeatures": [
+        "Album cover generation",
+        "Social media post graphics",
+        "Promotional materials",
+        "Style presets"
+      ],
+      "improvements": [
+        {
+          "task": "Add batch generation for multiple images",
+          "priority": "medium",
+          "deadline": "2026-05-01"
+        },
+        {
+          "task": "Implement image editing/refinement",
+          "priority": "high",
+          "deadline": "2026-04-25"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "merchandise",
+      "name": "Merch Store",
+      "route": "/merchandise",
+      "category": "Commerce",
+      "status": "live",
+      "healthScore": 72,
+      "completedFeatures": [
+        "Printful print-on-demand integration",
+        "Product design tools",
+        "Artist branding customization",
+        "Order management"
+      ],
+      "improvements": [
+        {
+          "task": "Add more product types (hats, posters)",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Implement order tracking dashboard",
+          "priority": "high",
+          "deadline": "2026-04-30"
+        },
+        {
+          "task": "Revenue analytics per product",
+          "priority": "medium",
+          "deadline": "2026-05-01"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "boostify-tv",
+      "name": "Boostify TV",
+      "route": "/boostify-tv",
+      "category": "Media",
+      "status": "beta",
+      "healthScore": 60,
+      "completedFeatures": [
+        "Live streaming platform",
+        "Channel browsing",
+        "Basic playback"
+      ],
+      "improvements": [
+        {
+          "task": "Add chat overlay for live streams",
+          "priority": "high",
+          "deadline": "2026-05-01"
+        },
+        {
+          "task": "Implement stream recording",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Add monetization features",
+          "priority": "high",
+          "deadline": "2026-05-30"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "education",
+      "name": "Education Platform",
+      "route": "/education",
+      "category": "Education",
+      "status": "live",
+      "healthScore": 70,
+      "completedFeatures": [
+        "Course catalog",
+        "Video lessons",
+        "Progress tracking"
+      ],
+      "improvements": [
+        {
+          "task": "Add certificate generation",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Implement quiz system",
+          "priority": "high",
+          "deadline": "2026-05-01"
+        },
+        {
+          "task": "Add community discussion forums",
+          "priority": "low",
+          "deadline": "2026-06-01"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "boostiswap",
+      "name": "BoostiSwap DEX",
+      "route": "/boostiswap",
+      "category": "Web3",
+      "status": "live",
+      "healthScore": 68,
+      "completedFeatures": [
+        "Token swap interface",
+        "BTF token wallet",
+        "Staking mechanism",
+        "Artist NFT minting"
+      ],
+      "improvements": [
+        {
+          "task": "Improve swap UX/speed",
+          "priority": "high",
+          "deadline": "2026-04-30"
+        },
+        {
+          "task": "Add liquidity pool analytics",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Implement limit orders",
+          "priority": "low",
+          "deadline": "2026-06-01"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "social-network",
+      "name": "Social Network",
+      "route": "/social-network",
+      "category": "Community",
+      "status": "beta",
+      "healthScore": 55,
+      "completedFeatures": [
+        "User profiles",
+        "Feed system",
+        "Basic interactions"
+      ],
+      "improvements": [
+        {
+          "task": "Add messaging/DMs",
+          "priority": "high",
+          "deadline": "2026-05-01"
+        },
+        {
+          "task": "Implement notifications system",
+          "priority": "high",
+          "deadline": "2026-04-25"
+        },
+        {
+          "task": "Add content moderation AI",
+          "priority": "critical",
+          "deadline": "2026-04-15"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "ai-agents",
+      "name": "AI Agents System",
+      "route": "/ai-agents",
+      "category": "AI",
+      "status": "beta",
+      "healthScore": 65,
+      "completedFeatures": [
+        "Autonomous social media management",
+        "Outreach automation",
+        "Multi-agent orchestration"
+      ],
+      "improvements": [
+        {
+          "task": "Add agent performance dashboards",
+          "priority": "high",
+          "deadline": "2026-04-30"
+        },
+        {
+          "task": "Implement agent marketplace",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Add custom agent builder",
+          "priority": "low",
+          "deadline": "2026-06-15"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "artist-intelligence",
+      "name": "Artist Intelligence Engine",
+      "route": "/api/artist-intel",
+      "category": "Intelligence",
+      "status": "live",
+      "healthScore": 95,
+      "completedFeatures": [
+        "Cross-platform artist search (Spotify + YouTube)",
+        "Multi-platform stats (followers, popularity, subscribers, views)",
+        "Geographic listener distribution (genre-to-region mapping)",
+        "Growth rate analysis with trend classification",
+        "Similar artists discovery (Fans Also Like graph)",
+        "Genre competitor analysis with market position",
+        "Career stage classification (6 tiers)",
+        "7 API endpoints at /api/artist-intel/*"
+      ],
+      "improvements": [
+        {
+          "task": "Add historical data snapshots for true growth tracking",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        },
+        {
+          "task": "Integrate Apple Music stats",
+          "priority": "low",
+          "deadline": "2026-06-01"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "playlist-chart-intelligence",
+      "name": "Playlist & Chart Intelligence",
+      "route": "/api/music-intel",
+      "category": "Intelligence",
+      "status": "live",
+      "healthScore": 92,
+      "completedFeatures": [
+        "Editorial playlist placement tracking",
+        "Active playlist enumeration per artist",
+        "Genre-based global playlist search",
+        "11 Spotify chart definitions (Global, US, MX, ES, GB, BR, DE, FR, CO, AR, Viral 50)",
+        "Real-time chart ranking data from Spotify playlist IDs",
+        "6 API endpoints at /api/music-intel/*"
+      ],
+      "improvements": [
+        {
+          "task": "Add Apple Music charts",
+          "priority": "medium",
+          "deadline": "2026-05-20"
+        },
+        {
+          "task": "Historical chart position tracking",
+          "priority": "low",
+          "deadline": "2026-06-15"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "song-market-intelligence",
+      "name": "Song DNA & Market Analysis",
+      "route": "/api/song-intel",
+      "category": "Intelligence",
+      "status": "live",
+      "healthScore": 100,
+      "completedFeatures": [
+        "Song identity resolution (ISRC, Spotify ID, title+artist)",
+        "Full Song DNA: audio features, genres, mood, key, tempo",
+        "Song performance metrics with stream estimates",
+        "Spotify Audio Features (danceability, energy, valence, acousticness, etc.)",
+        "Genre-aware audience demographics (age, gender, countries, interests)",
+        "Market potential analysis (TAM, penetration, growth gap per city)",
+        "Cross-platform song matching (Spotify, Apple Music, Deezer, MusicBrainz, YouTube)",
+        "ISRC-based exact matching + text search fallback per platform",
+        "Per-platform confidence scoring (exact / high / medium / low)",
+        "POST /api/song-intel/cross-platform",
+        "Predictive hit potential scoring (multi-factor: D&E, valence, tempo, loudness, artist momentum, genre trend, duration)",
+        "Hit grade system: S / A / B / C / D with actionable recommendations",
+        "8 API endpoints at /api/song-intel/*",
+        "MCP tools: match_song_across_platforms, predict_hit_potential"
+      ],
+      "improvements": [],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "tour-intelligence",
+      "name": "Tour Intelligence & Festivals",
+      "route": "/api/tour-intel",
+      "category": "Intelligence",
+      "status": "live",
+      "healthScore": 99,
+      "completedFeatures": [
+        "Local opening act discovery (country-filtered, genre-matched)",
+        "Strategic opening act finder (high-growth emerging artists)",
+        "Festival database (18+ major global festivals across tiers)",
+        "Festival search by genre, country, or name",
+        "Upcoming festivals feed with genre filtering",
+        "Venue search by genre and capacity",
+        "Songkick API — artist calendar + metro-area nearby events",
+        "Bandsintown API — artist event feed with ticket status",
+        "Parallel dual-source fetch with deduplication",
+        "GET /api/tour-intel/events/artist — live artist events",
+        "GET /api/tour-intel/events/nearby — location-based events",
+        "GET /api/tour-intel/events/sources — API config status",
+        "Tour routing optimizer — Nearest-Neighbour TSP + 2-opt improvement",
+        "Built-in coordinate DB with 200+ music-market cities",
+        "Nominatim geocoding fallback for unlisted cities",
+        "Per-stop travel mode (drive/train/fly) + hours estimate",
+        "Rest-day suggestion logic per leg",
+        "Efficiency gain vs. naive input order",
+        "POST /api/tour-intel/routing/optimize",
+        "9 API endpoints at /api/tour-intel/*",
+        "4 new MCP tools: get_artist_live_events, get_nearby_live_events, get_live_event_sources, optimize_tour_route"
+      ],
+      "improvements": [],
+      "lastUpdated": "2026-05-04"
+    },
+    {
+      "id": "mcp-server",
+      "name": "MCP Server (AI Agent Protocol)",
+      "route": "/api/mcp",
+      "category": "Intelligence",
+      "status": "live",
+      "healthScore": 88,
+      "completedFeatures": [
+        "26 AI agent tools exposed via MCP protocol",
+        "HTTP + SSE transport support",
+        "Tool categories: artist-intel, playlist, chart, song, tour, content, audio, voice, distribution",
+        "Tool execution engine with dynamic imports",
+        "Tool listing and category browsing endpoints",
+        "Streaming SSE execution endpoint",
+        "Server info and documentation endpoint"
+      ],
+      "improvements": [
+        {
+          "task": "Add API key auth for external agent access",
+          "priority": "high",
+          "deadline": "2026-05-05"
+        },
+        {
+          "task": "Add Stdio transport for local agent use",
+          "priority": "medium",
+          "deadline": "2026-05-20"
+        },
+        {
+          "task": "Rate limiting per tool category",
+          "priority": "medium",
+          "deadline": "2026-05-15"
+        }
+      ],
+      "lastUpdated": "2026-05-04"
+    }
+  ],
+  "competitiveReport": "# Competitive Intelligence Report\n## Generated: 2026-05-04\n\n### Competitor Landscape\n- **DistroKid** (Music distribution) - $22.99/yr | Threat: high | Weakness: No AI growth tools\n- **TuneCore** (Distribution + publishing) - $9.99/single | Threat: medium | Weakness: Expensive per-release model\n- **CD Baby** (Distribution + sync licensing) - $9.95/single | Threat: low | Weakness: Outdated UI, slow innovation\n- **Amuse** (Free distribution + label) - Free-$60/yr | Threat: medium | Weakness: Limited analytics\n- **UnitedMasters** (Distribution + brand deals) - Free-$5.99/mo | Threat: medium | Weakness: US-centric\n- **Chartmetric** (Music analytics) - $120+/mo | Threat: low | Weakness: Analytics only, no growth tools\n- **Linkfire** (Smart links + insights) - $9.99/mo | Threat: low | Weakness: Single feature product\n- **Hypeddit** (Music promotion) - Free-$18/mo | Threat: medium | Weakness: Limited to pre-saves\n\n### Technology Position\n- **AI Music Generation**: Boostify has it | Opportunity: Differentiate with artist-specific training\n- **AI Video Generation**: Boostify has it | Opportunity: Music-specific video templates\n- **Web3/NFTs for Music**: Boostify has it (BoostiSwap) | Opportunity: Artist tokenization is unique differentiator\n- **AI Social Growth**: Boostify leads | Opportunity: Platform-specific AI for musicians is niche\n- **Print-on-Demand Merch**: Boostify has it | Opportunity: Integrated with artist profile is advantage\n\n### Market Trends\n- **AI-assisted songwriting** (Impact: high, Timeline: Now) → Expand music generator capabilities\n- **Short-form video dominance** (Impact: high, Timeline: Now) → Add TikTok/Reels auto-generation\n- **Fan tokenization** (Impact: medium, Timeline: 2026-2027) → Expand BoostiSwap features\n- **Virtual concerts & metaverse** (Impact: medium, Timeline: 2026-2028) → Research VR integration\n- **AI voice cloning for artists** (Impact: high, Timeline: Now) → Add voice cloning tool\n- **Decentralized music streaming** (Impact: low, Timeline: 2027+) → Monitor Audius, Emanate\n\n### Boostify Competitive Advantages\n- All-in-one platform (no competitor offers everything)\n- AI-native from day one\n- Independent standalone tools model (pay only what you need)\n- Web3 integration (BoostiSwap, NFT minting)\n- 20+ tools vs competitors' 1-3 features\n- Aggressive pricing ($12-19/mo vs $120+/mo for analytics alone)\n\n### Recommended Actions\n1. **Immediate**: Complete webhook handlers for all standalone products (Apr 12)\n2. **Short-term**: Add usage limits and subscription banners (Apr 15-20)\n3. **Medium-term**: Launch TikTok Boost as 4th standalone tool (May 2026)\n4. **Strategic**: Expand AI agent marketplace (Q3 2026)\n",
+  "aiPowered": false,
+  "implementationPrompts": [
+    {
+      "pageId": "ig-boost",
+      "pageName": "Instagram Boost",
+      "prompts": [
+        {
+          "task": "Add usage limits hook for free tier daily caps",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Instagram Boost\" (route: /instagram-boost, category: Growth Tools) currently has a health score of 85%. Already completed features: AI-powered follower growth engine, Engagement analytics dashboard, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Chrome extension connection, Reports tab with campaign tracking. \n\nTASK: Add usage limits hook for free tier daily caps\nPriority: HIGH\nDeadline: 2026-04-15\n\nIMPLEMENTATION INSTRUCTIONS:\nCreate a new React hook `use-instagram-boost-limits.ts` in client/src/hooks/ that:\n1. Fetches the user's current subscription tier from /api/auth/user\n2. Defines daily/monthly limits per tier (free: 5 actions/day, pro: unlimited)\n3. Tracks usage via localStorage with daily reset\n4. Returns { canUse, remaining, limit, tier, isLoading }\n5. Shows a toast when limit is reached suggesting upgrade\nReference the existing `use-spotify-boost-limits.ts` for pattern consistency."
+        },
+        {
+          "task": "Implement subscription banner component",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Instagram Boost\" (route: /instagram-boost, category: Growth Tools) currently has a health score of 85%. Already completed features: AI-powered follower growth engine, Engagement analytics dashboard, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Chrome extension connection, Reports tab with campaign tracking. \n\nTASK: Implement subscription banner component\nPriority: MEDIUM\nDeadline: 2026-04-20\n\nIMPLEMENTATION INSTRUCTIONS:\nCreate a SubscriptionBanner component for Instagram Boost that:\n1. Shows when user is on free tier\n2. Displays remaining daily actions and progress bar\n3. Has \"Upgrade to Pro\" CTA linking to the standalone pricing modal\n4. Matches the gradient style: orange-500 to red-500\n5. Auto-hides after upgrade via subscription check\nReference existing subscription-banner.tsx in spotify-boost for pattern."
+        },
+        {
+          "task": "Add conversion tracking analytics per product",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Instagram Boost\" (route: /instagram-boost, category: Growth Tools) currently has a health score of 85%. Already completed features: AI-powered follower growth engine, Engagement analytics dashboard, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Chrome extension connection, Reports tab with campaign tracking. \n\nTASK: Add conversion tracking analytics per product\nPriority: MEDIUM\nDeadline: 2026-04-25\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Instagram Boost at /instagram-boost\n2. Identify the exact files that need modification\n3. Implement Add conversion tracking analytics per product following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Webhook handler for ig_boost_pro subscription events",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Instagram Boost\" (route: /instagram-boost, category: Growth Tools) currently has a health score of 85%. Already completed features: AI-powered follower growth engine, Engagement analytics dashboard, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Chrome extension connection, Reports tab with campaign tracking. \n\nTASK: Webhook handler for ig_boost_pro subscription events\nPriority: HIGH\nDeadline: 2026-04-12\n\nIMPLEMENTATION INSTRUCTIONS:\nIn server/routes/stripe.ts, add webhook handling for ig_boost_pro:\n1. Listen for checkout.session.completed with metadata.product === \"ig_boost_pro\"\n2. Update user's subscription status in the database\n3. Set tier = \"pro\" and subscription period dates\n4. Send confirmation email via Brevo API\n5. Log the event for analytics"
+        }
+      ]
+    },
+    {
+      "pageId": "spotify-boost",
+      "pageName": "Spotify Growth Suite",
+      "prompts": [
+        {
+          "task": "Add usage limits hook for free tier",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Spotify Growth Suite\" (route: /spotify, category: Growth Tools) currently has a health score of 82%. Already completed features: 5-tab interface (Connect, Tools, Pitch, Growth, Analytics), Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Playlist pitching tools, Stream optimization engine. \n\nTASK: Add usage limits hook for free tier\nPriority: HIGH\nDeadline: 2026-04-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Spotify Growth Suite at /spotify\n2. Identify the exact files that need modification\n3. Implement Add usage limits hook for free tier following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement Remotion animation player",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"Spotify Growth Suite\" (route: /spotify, category: Growth Tools) currently has a health score of 82%. Already completed features: 5-tab interface (Connect, Tools, Pitch, Growth, Analytics), Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Playlist pitching tools, Stream optimization engine. \n\nTASK: Implement Remotion animation player\nPriority: LOW\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Spotify Growth Suite at /spotify\n2. Identify the exact files that need modification\n3. Implement Implement Remotion animation player following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Fix encoding issues in UI strings",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Spotify Growth Suite\" (route: /spotify, category: Growth Tools) currently has a health score of 82%. Already completed features: 5-tab interface (Connect, Tools, Pitch, Growth, Analytics), Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Playlist pitching tools, Stream optimization engine. \n\nTASK: Fix encoding issues in UI strings\nPriority: MEDIUM\nDeadline: 2026-04-10\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Spotify Growth Suite at /spotify\n2. Identify the exact files that need modification\n3. Implement Fix encoding issues in UI strings following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Webhook handler for spotify_boost_pro events",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Spotify Growth Suite\" (route: /spotify, category: Growth Tools) currently has a health score of 82%. Already completed features: 5-tab interface (Connect, Tools, Pitch, Growth, Analytics), Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Playlist pitching tools, Stream optimization engine. \n\nTASK: Webhook handler for spotify_boost_pro events\nPriority: HIGH\nDeadline: 2026-04-12\n\nIMPLEMENTATION INSTRUCTIONS:\nIn server/routes/stripe.ts, add webhook case for spotify_boost_pro:\n1. On checkout.session.completed, extract plan from metadata\n2. Update users table: spotifyBoostTier = \"pro\", spotifyBoostExpiry = +30 days\n3. Send welcome email with Brevo\n4. Trigger analytics event"
+        }
+      ]
+    },
+    {
+      "pageId": "youtube-boost",
+      "pageName": "YouTube Boost",
+      "prompts": [
+        {
+          "task": "Create use-youtube-boost-limits.ts hook",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"YouTube Boost\" (route: /youtube-views, category: Growth Tools) currently has a health score of 78%. Already completed features: 12 AI-powered growth tools, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Video SEO optimization, Thumbnail analysis. \n\nTASK: Create use-youtube-boost-limits.ts hook\nPriority: HIGH\nDeadline: 2026-04-15\n\nIMPLEMENTATION INSTRUCTIONS:\nCreate client/src/hooks/use-youtube-boost-limits.ts following the exact pattern of use-spotify-boost-limits.ts:\n1. Define YouTube-specific limits (free: 5 tools/day, pro: unlimited)\n2. Add tier detection from user subscription data\n3. Track usage in localStorage with key \"yt_boost_usage\"\n4. Export { canUse, remaining, limit, tier, isLoading, trackUsage }"
+        },
+        {
+          "task": "Add SubscriptionBanner component",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"YouTube Boost\" (route: /youtube-views, category: Growth Tools) currently has a health score of 78%. Already completed features: 12 AI-powered growth tools, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Video SEO optimization, Thumbnail analysis. \n\nTASK: Add SubscriptionBanner component\nPriority: MEDIUM\nDeadline: 2026-04-20\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for YouTube Boost at /youtube-views\n2. Identify the exact files that need modification\n3. Implement Add SubscriptionBanner component following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Webhook handler for youtube_boost events",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"YouTube Boost\" (route: /youtube-views, category: Growth Tools) currently has a health score of 78%. Already completed features: 12 AI-powered growth tools, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Video SEO optimization, Thumbnail analysis. \n\nTASK: Webhook handler for youtube_boost events\nPriority: HIGH\nDeadline: 2026-04-12\n\nIMPLEMENTATION INSTRUCTIONS:\nIn server/routes/stripe.ts, add webhook handling for youtube_boost_pro:\n1. On checkout.session.completed with metadata.product === \"youtube_boost_pro\"\n2. Set youtubeBoostTier = \"pro\" in user record\n3. Send confirmation email\n4. Enable all 12 AI tools for the user"
+        },
+        {
+          "task": "Channel analytics deep integration",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"YouTube Boost\" (route: /youtube-views, category: Growth Tools) currently has a health score of 78%. Already completed features: 12 AI-powered growth tools, Standalone pricing modal ($19/$16/$12), Stripe checkout integration, Video SEO optimization, Thumbnail analysis. \n\nTASK: Channel analytics deep integration\nPriority: LOW\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for YouTube Boost at /youtube-views\n2. Identify the exact files that need modification\n3. Implement Channel analytics deep integration following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "artist-setup",
+      "pageName": "Artist Setup",
+      "prompts": [
+        {
+          "task": "Add onboarding analytics funnel tracking",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Artist Setup\" (route: /artist-setup, category: Onboarding) currently has a health score of 90%. Already completed features: Free onboarding landing page, 3-step flow (Account → Profile → Launch), 9 tools showcase with branded cards, Platform icons grid (IG, Spotify, YT, TikTok), Features & benefits section with stats, Responsive design (mobile + desktop). \n\nTASK: Add onboarding analytics funnel tracking\nPriority: MEDIUM\nDeadline: 2026-04-20\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Artist Setup at /artist-setup\n2. Identify the exact files that need modification\n3. Implement Add onboarding analytics funnel tracking following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "A/B test hero CTA variants",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"Artist Setup\" (route: /artist-setup, category: Onboarding) currently has a health score of 90%. Already completed features: Free onboarding landing page, 3-step flow (Account → Profile → Launch), 9 tools showcase with branded cards, Platform icons grid (IG, Spotify, YT, TikTok), Features & benefits section with stats, Responsive design (mobile + desktop). \n\nTASK: A/B test hero CTA variants\nPriority: LOW\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Artist Setup at /artist-setup\n2. Identify the exact files that need modification\n3. Implement A/B test hero CTA variants following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "music-video-creator",
+      "pageName": "Music Video Creator",
+      "prompts": [
+        {
+          "task": "Improve rendering speed",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Music Video Creator\" (route: /music-video-creator, category: Content Creation) currently has a health score of 75%. Already completed features: AI-generated visuals and effects, Video rendering pipeline, Shotstack integration, Template system. \n\nTASK: Improve rendering speed\nPriority: HIGH\nDeadline: 2026-04-30\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Music Video Creator at /music-video-creator\n2. Identify the exact files that need modification\n3. Implement Improve rendering speed following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add more video templates",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Music Video Creator\" (route: /music-video-creator, category: Content Creation) currently has a health score of 75%. Already completed features: AI-generated visuals and effects, Video rendering pipeline, Shotstack integration, Template system. \n\nTASK: Add more video templates\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Music Video Creator at /music-video-creator\n2. Identify the exact files that need modification\n3. Implement Add more video templates following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Mobile preview optimization",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Music Video Creator\" (route: /music-video-creator, category: Content Creation) currently has a health score of 75%. Already completed features: AI-generated visuals and effects, Video rendering pipeline, Shotstack integration, Template system. \n\nTASK: Mobile preview optimization\nPriority: MEDIUM\nDeadline: 2026-04-25\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Music Video Creator at /music-video-creator\n2. Identify the exact files that need modification\n3. Implement Mobile preview optimization following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "ai-image-gen",
+      "pageName": "AI Image Generator",
+      "prompts": [
+        {
+          "task": "Add batch generation for multiple images",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"AI Image Generator\" (route: /image-generator-simple, category: Content Creation) currently has a health score of 80%. Already completed features: Album cover generation, Social media post graphics, Promotional materials, Style presets. \n\nTASK: Add batch generation for multiple images\nPriority: MEDIUM\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for AI Image Generator at /image-generator-simple\n2. Identify the exact files that need modification\n3. Implement Add batch generation for multiple images following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement image editing/refinement",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"AI Image Generator\" (route: /image-generator-simple, category: Content Creation) currently has a health score of 80%. Already completed features: Album cover generation, Social media post graphics, Promotional materials, Style presets. \n\nTASK: Implement image editing/refinement\nPriority: HIGH\nDeadline: 2026-04-25\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for AI Image Generator at /image-generator-simple\n2. Identify the exact files that need modification\n3. Implement Implement image editing/refinement following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "merchandise",
+      "pageName": "Merch Store",
+      "prompts": [
+        {
+          "task": "Add more product types (hats, posters)",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Merch Store\" (route: /merchandise, category: Commerce) currently has a health score of 72%. Already completed features: Printful print-on-demand integration, Product design tools, Artist branding customization, Order management. \n\nTASK: Add more product types (hats, posters)\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Merch Store at /merchandise\n2. Identify the exact files that need modification\n3. Implement Add more product types (hats, posters) following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement order tracking dashboard",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Merch Store\" (route: /merchandise, category: Commerce) currently has a health score of 72%. Already completed features: Printful print-on-demand integration, Product design tools, Artist branding customization, Order management. \n\nTASK: Implement order tracking dashboard\nPriority: HIGH\nDeadline: 2026-04-30\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Merch Store at /merchandise\n2. Identify the exact files that need modification\n3. Implement Implement order tracking dashboard following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Revenue analytics per product",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Merch Store\" (route: /merchandise, category: Commerce) currently has a health score of 72%. Already completed features: Printful print-on-demand integration, Product design tools, Artist branding customization, Order management. \n\nTASK: Revenue analytics per product\nPriority: MEDIUM\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Merch Store at /merchandise\n2. Identify the exact files that need modification\n3. Implement Revenue analytics per product following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "boostify-tv",
+      "pageName": "Boostify TV",
+      "prompts": [
+        {
+          "task": "Add chat overlay for live streams",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Boostify TV\" (route: /boostify-tv, category: Media) currently has a health score of 60%. Already completed features: Live streaming platform, Channel browsing, Basic playback. \n\nTASK: Add chat overlay for live streams\nPriority: HIGH\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Boostify TV at /boostify-tv\n2. Identify the exact files that need modification\n3. Implement Add chat overlay for live streams following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement stream recording",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Boostify TV\" (route: /boostify-tv, category: Media) currently has a health score of 60%. Already completed features: Live streaming platform, Channel browsing, Basic playback. \n\nTASK: Implement stream recording\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Boostify TV at /boostify-tv\n2. Identify the exact files that need modification\n3. Implement Implement stream recording following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add monetization features",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Boostify TV\" (route: /boostify-tv, category: Media) currently has a health score of 60%. Already completed features: Live streaming platform, Channel browsing, Basic playback. \n\nTASK: Add monetization features\nPriority: HIGH\nDeadline: 2026-05-30\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Boostify TV at /boostify-tv\n2. Identify the exact files that need modification\n3. Implement Add monetization features following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "education",
+      "pageName": "Education Platform",
+      "prompts": [
+        {
+          "task": "Add certificate generation",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Education Platform\" (route: /education, category: Education) currently has a health score of 70%. Already completed features: Course catalog, Video lessons, Progress tracking. \n\nTASK: Add certificate generation\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Education Platform at /education\n2. Identify the exact files that need modification\n3. Implement Add certificate generation following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement quiz system",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Education Platform\" (route: /education, category: Education) currently has a health score of 70%. Already completed features: Course catalog, Video lessons, Progress tracking. \n\nTASK: Implement quiz system\nPriority: HIGH\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Education Platform at /education\n2. Identify the exact files that need modification\n3. Implement Implement quiz system following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add community discussion forums",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"Education Platform\" (route: /education, category: Education) currently has a health score of 70%. Already completed features: Course catalog, Video lessons, Progress tracking. \n\nTASK: Add community discussion forums\nPriority: LOW\nDeadline: 2026-06-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Education Platform at /education\n2. Identify the exact files that need modification\n3. Implement Add community discussion forums following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "boostiswap",
+      "pageName": "BoostiSwap DEX",
+      "prompts": [
+        {
+          "task": "Improve swap UX/speed",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"BoostiSwap DEX\" (route: /boostiswap, category: Web3) currently has a health score of 68%. Already completed features: Token swap interface, BTF token wallet, Staking mechanism, Artist NFT minting. \n\nTASK: Improve swap UX/speed\nPriority: HIGH\nDeadline: 2026-04-30\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for BoostiSwap DEX at /boostiswap\n2. Identify the exact files that need modification\n3. Implement Improve swap UX/speed following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add liquidity pool analytics",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"BoostiSwap DEX\" (route: /boostiswap, category: Web3) currently has a health score of 68%. Already completed features: Token swap interface, BTF token wallet, Staking mechanism, Artist NFT minting. \n\nTASK: Add liquidity pool analytics\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for BoostiSwap DEX at /boostiswap\n2. Identify the exact files that need modification\n3. Implement Add liquidity pool analytics following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement limit orders",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"BoostiSwap DEX\" (route: /boostiswap, category: Web3) currently has a health score of 68%. Already completed features: Token swap interface, BTF token wallet, Staking mechanism, Artist NFT minting. \n\nTASK: Implement limit orders\nPriority: LOW\nDeadline: 2026-06-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for BoostiSwap DEX at /boostiswap\n2. Identify the exact files that need modification\n3. Implement Implement limit orders following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "social-network",
+      "pageName": "Social Network",
+      "prompts": [
+        {
+          "task": "Add messaging/DMs",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Social Network\" (route: /social-network, category: Community) currently has a health score of 55%. Already completed features: User profiles, Feed system, Basic interactions. \n\nTASK: Add messaging/DMs\nPriority: HIGH\nDeadline: 2026-05-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Social Network at /social-network\n2. Identify the exact files that need modification\n3. Implement Add messaging/DMs following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement notifications system",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"Social Network\" (route: /social-network, category: Community) currently has a health score of 55%. Already completed features: User profiles, Feed system, Basic interactions. \n\nTASK: Implement notifications system\nPriority: HIGH\nDeadline: 2026-04-25\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Social Network at /social-network\n2. Identify the exact files that need modification\n3. Implement Implement notifications system following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add content moderation AI",
+          "priority": "critical",
+          "prompt": "You are working on the Boostify Music platform. The page \"Social Network\" (route: /social-network, category: Community) currently has a health score of 55%. Already completed features: User profiles, Feed system, Basic interactions. \n\nTASK: Add content moderation AI\nPriority: CRITICAL\nDeadline: 2026-04-15\n\nIMPLEMENTATION INSTRUCTIONS:\nCreate server/routes/content-moderation.ts:\n1. Use OpenAI moderation API endpoint\n2. Check all user-generated content (posts, comments, profile text)\n3. Auto-flag content with high toxicity scores\n4. Create moderation queue UI in admin panel\n5. Add webhook to notify admin of flagged content\nThis is CRITICAL priority - implement immediately."
+        }
+      ]
+    },
+    {
+      "pageId": "ai-agents",
+      "pageName": "AI Agents System",
+      "prompts": [
+        {
+          "task": "Add agent performance dashboards",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"AI Agents System\" (route: /ai-agents, category: AI) currently has a health score of 65%. Already completed features: Autonomous social media management, Outreach automation, Multi-agent orchestration. \n\nTASK: Add agent performance dashboards\nPriority: HIGH\nDeadline: 2026-04-30\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for AI Agents System at /ai-agents\n2. Identify the exact files that need modification\n3. Implement Add agent performance dashboards following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Implement agent marketplace",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"AI Agents System\" (route: /ai-agents, category: AI) currently has a health score of 65%. Already completed features: Autonomous social media management, Outreach automation, Multi-agent orchestration. \n\nTASK: Implement agent marketplace\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for AI Agents System at /ai-agents\n2. Identify the exact files that need modification\n3. Implement Implement agent marketplace following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add custom agent builder",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"AI Agents System\" (route: /ai-agents, category: AI) currently has a health score of 65%. Already completed features: Autonomous social media management, Outreach automation, Multi-agent orchestration. \n\nTASK: Add custom agent builder\nPriority: LOW\nDeadline: 2026-06-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for AI Agents System at /ai-agents\n2. Identify the exact files that need modification\n3. Implement Add custom agent builder following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "artist-intelligence",
+      "pageName": "Artist Intelligence Engine",
+      "prompts": [
+        {
+          "task": "Add historical data snapshots for true growth tracking",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Artist Intelligence Engine\" (route: /api/artist-intel, category: Intelligence) currently has a health score of 95%. Already completed features: Cross-platform artist search (Spotify + YouTube), Multi-platform stats (followers, popularity, subscribers, views), Geographic listener distribution (genre-to-region mapping), Growth rate analysis with trend classification, Similar artists discovery (Fans Also Like graph), Genre competitor analysis with market position, Career stage classification (6 tiers), 7 API endpoints at /api/artist-intel/*. \n\nTASK: Add historical data snapshots for true growth tracking\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Artist Intelligence Engine at /api/artist-intel\n2. Identify the exact files that need modification\n3. Implement Add historical data snapshots for true growth tracking following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Integrate Apple Music stats",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"Artist Intelligence Engine\" (route: /api/artist-intel, category: Intelligence) currently has a health score of 95%. Already completed features: Cross-platform artist search (Spotify + YouTube), Multi-platform stats (followers, popularity, subscribers, views), Geographic listener distribution (genre-to-region mapping), Growth rate analysis with trend classification, Similar artists discovery (Fans Also Like graph), Genre competitor analysis with market position, Career stage classification (6 tiers), 7 API endpoints at /api/artist-intel/*. \n\nTASK: Integrate Apple Music stats\nPriority: LOW\nDeadline: 2026-06-01\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Artist Intelligence Engine at /api/artist-intel\n2. Identify the exact files that need modification\n3. Implement Integrate Apple Music stats following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "playlist-chart-intelligence",
+      "pageName": "Playlist & Chart Intelligence",
+      "prompts": [
+        {
+          "task": "Add Apple Music charts",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"Playlist & Chart Intelligence\" (route: /api/music-intel, category: Intelligence) currently has a health score of 92%. Already completed features: Editorial playlist placement tracking, Active playlist enumeration per artist, Genre-based global playlist search, 11 Spotify chart definitions (Global, US, MX, ES, GB, BR, DE, FR, CO, AR, Viral 50), Real-time chart ranking data from Spotify playlist IDs, 6 API endpoints at /api/music-intel/*. \n\nTASK: Add Apple Music charts\nPriority: MEDIUM\nDeadline: 2026-05-20\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Playlist & Chart Intelligence at /api/music-intel\n2. Identify the exact files that need modification\n3. Implement Add Apple Music charts following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Historical chart position tracking",
+          "priority": "low",
+          "prompt": "You are working on the Boostify Music platform. The page \"Playlist & Chart Intelligence\" (route: /api/music-intel, category: Intelligence) currently has a health score of 92%. Already completed features: Editorial playlist placement tracking, Active playlist enumeration per artist, Genre-based global playlist search, 11 Spotify chart definitions (Global, US, MX, ES, GB, BR, DE, FR, CO, AR, Viral 50), Real-time chart ranking data from Spotify playlist IDs, 6 API endpoints at /api/music-intel/*. \n\nTASK: Historical chart position tracking\nPriority: LOW\nDeadline: 2026-06-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for Playlist & Chart Intelligence at /api/music-intel\n2. Identify the exact files that need modification\n3. Implement Historical chart position tracking following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    },
+    {
+      "pageId": "song-market-intelligence",
+      "pageName": "Song DNA & Market Analysis",
+      "prompts": []
+    },
+    {
+      "pageId": "tour-intelligence",
+      "pageName": "Tour Intelligence & Festivals",
+      "prompts": []
+    },
+    {
+      "pageId": "mcp-server",
+      "pageName": "MCP Server (AI Agent Protocol)",
+      "prompts": [
+        {
+          "task": "Add API key auth for external agent access",
+          "priority": "high",
+          "prompt": "You are working on the Boostify Music platform. The page \"MCP Server (AI Agent Protocol)\" (route: /api/mcp, category: Intelligence) currently has a health score of 88%. Already completed features: 26 AI agent tools exposed via MCP protocol, HTTP + SSE transport support, Tool categories: artist-intel, playlist, chart, song, tour, content, audio, voice, distribution, Tool execution engine with dynamic imports, Tool listing and category browsing endpoints, Streaming SSE execution endpoint, Server info and documentation endpoint. \n\nTASK: Add API key auth for external agent access\nPriority: HIGH\nDeadline: 2026-05-05\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for MCP Server (AI Agent Protocol) at /api/mcp\n2. Identify the exact files that need modification\n3. Implement Add API key auth for external agent access following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Add Stdio transport for local agent use",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"MCP Server (AI Agent Protocol)\" (route: /api/mcp, category: Intelligence) currently has a health score of 88%. Already completed features: 26 AI agent tools exposed via MCP protocol, HTTP + SSE transport support, Tool categories: artist-intel, playlist, chart, song, tour, content, audio, voice, distribution, Tool execution engine with dynamic imports, Tool listing and category browsing endpoints, Streaming SSE execution endpoint, Server info and documentation endpoint. \n\nTASK: Add Stdio transport for local agent use\nPriority: MEDIUM\nDeadline: 2026-05-20\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for MCP Server (AI Agent Protocol) at /api/mcp\n2. Identify the exact files that need modification\n3. Implement Add Stdio transport for local agent use following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        },
+        {
+          "task": "Rate limiting per tool category",
+          "priority": "medium",
+          "prompt": "You are working on the Boostify Music platform. The page \"MCP Server (AI Agent Protocol)\" (route: /api/mcp, category: Intelligence) currently has a health score of 88%. Already completed features: 26 AI agent tools exposed via MCP protocol, HTTP + SSE transport support, Tool categories: artist-intel, playlist, chart, song, tour, content, audio, voice, distribution, Tool execution engine with dynamic imports, Tool listing and category browsing endpoints, Streaming SSE execution endpoint, Server info and documentation endpoint. \n\nTASK: Rate limiting per tool category\nPriority: MEDIUM\nDeadline: 2026-05-15\n\nIMPLEMENTATION INSTRUCTIONS:\n1. Analyze the current codebase for MCP Server (AI Agent Protocol) at /api/mcp\n2. Identify the exact files that need modification\n3. Implement Rate limiting per tool category following existing patterns in the codebase\n4. Ensure TypeScript types are correct (no `any` where avoidable)\n5. Add proper error handling\n6. Test the implementation\n7. Maintain the existing UI style (dark theme, orange-500 accents, slate backgrounds)"
+        }
+      ]
+    }
+  ],
+  "recipient": "convoycubano@gmail.com"
+}

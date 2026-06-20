@@ -1,0 +1,450 @@
+[
+    {
+        "basePath":  "/",
+        "routerVar":  "affiliateTrackingRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "albumGeneratorRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "apiProxyRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "fluxApiRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "musiciansRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "translationRouter"
+    },
+    {
+        "basePath":  "/api",
+        "routerVar":  "uploadApiRouter"
+    },
+    {
+        "basePath":  "/api/aas",
+        "routerVar":  "aasRouter"
+    },
+    {
+        "basePath":  "/api/admin",
+        "routerVar":  "adminUsersRouter"
+    },
+    {
+        "basePath":  "/api/admin/accounting",
+        "routerVar":  "accountingRouter"
+    },
+    {
+        "basePath":  "/api/admin/agent",
+        "routerVar":  "adminAgentRouter"
+    },
+    {
+        "basePath":  "/api/admin/api-usage",
+        "routerVar":  "apiUsageRouter"
+    },
+    {
+        "basePath":  "/api/admin/artists",
+        "routerVar":  "adminArtistsRouter"
+    },
+    {
+        "basePath":  "/api/admin/boostiswap-artists",
+        "routerVar":  "adminBoostiswapArtistsRouter"
+    },
+    {
+        "basePath":  "/api/admin/import-artists",
+        "routerVar":  "adminImportArtistsRouter"
+    },
+    {
+        "basePath":  "/api/admin/stripe-events",
+        "routerVar":  "stripeEventsAdminRouter"
+    },
+    {
+        "basePath":  "/api/affiliate",
+        "routerVar":  "affiliateRouter"
+    },
+    {
+        "basePath":  "/api/agents",
+        "routerVar":  "aiAgentsRouter"
+    },
+    {
+        "basePath":  "/api/agents-sdk",
+        "routerVar":  "agentsSdkRouter"
+    },
+    {
+        "basePath":  "/api/ai",
+        "routerVar":  "aiAssistantRouter"
+    },
+    {
+        "basePath":  "/api/ai-advisor",
+        "routerVar":  "aiAdvisorRouter"
+    },
+    {
+        "basePath":  "/api/ai-ecosystem",
+        "routerVar":  "aiEcosystemRouter.default"
+    },
+    {
+        "basePath":  "/api/ai-intelligence",
+        "routerVar":  "aiIntelligenceRouter"
+    },
+    {
+        "basePath":  "/api/ai-social",
+        "routerVar":  "aiSocialAgentsRouter.default"
+    },
+    {
+        "basePath":  "/api/apify/instagram",
+        "routerVar":  "apifyInstagramRouter"
+    },
+    {
+        "basePath":  "/api/artist",
+        "routerVar":  "artistRouter"
+    },
+    {
+        "basePath":  "/api/artist-generator",
+        "routerVar":  "artistGeneratorRouter"
+    },
+    {
+        "basePath":  "/api/artist-profile",
+        "routerVar":  "artistProfileRouter"
+    },
+    {
+        "basePath":  "/api/artist-profiles",
+        "routerVar":  "artistProfilesRouter"
+    },
+    {
+        "basePath":  "/api/artist-store",
+        "routerVar":  "artistStoreRouter"
+    },
+    {
+        "basePath":  "/api/artist-wallet",
+        "routerVar":  "artistWalletRouter"
+    },
+    {
+        "basePath":  "/api/audio",
+        "routerVar":  "audioTranscriptionRouter"
+    },
+    {
+        "basePath":  "/api/audio-analysis",
+        "routerVar":  "audioAnalysisRouter"
+    },
+    {
+        "basePath":  "/api/auto-edit",
+        "routerVar":  "autoEditRouter"
+    },
+    {
+        "basePath":  "/api/boostiswap",
+        "routerVar":  "boostiswapRouter"
+    },
+    {
+        "basePath":  "/api/boostiswap/contracts",
+        "routerVar":  "boostiswapContractsRouter"
+    },
+    {
+        "basePath":  "/api/btf-card",
+        "routerVar":  "btfCardPurchaseRouter"
+    },
+    {
+        "basePath":  "/api/btf-services",
+        "routerVar":  "btfServicesRouter"
+    },
+    {
+        "basePath":  "/api/business-plan",
+        "routerVar":  "businessPlanRouter"
+    },
+    {
+        "basePath":  "/api/choreography",
+        "routerVar":  "choreographyRouter"
+    },
+    {
+        "basePath":  "/api/contracts",
+        "routerVar":  "contractsRouter"
+    },
+    {
+        "basePath":  "/api/copyright",
+        "routerVar":  "copyrightCertRouter"
+    },
+    {
+        "basePath":  "/api/crowdfunding",
+        "routerVar":  "crowdfundingRouter"
+    },
+    {
+        "basePath":  "/api/diagnostics",
+        "routerVar":  "diagnosticsRouter"
+    },
+    {
+        "basePath":  "/api/editor",
+        "routerVar":  "professionalEditorRouter"
+    },
+    {
+        "basePath":  "/api/epk",
+        "routerVar":  "epkRouter"
+    },
+    {
+        "basePath":  "/api/explicit",
+        "routerVar":  "explicitRouter"
+    },
+    {
+        "basePath":  "/api/fal",
+        "routerVar":  "falApiRouter"
+    },
+    {
+        "basePath":  "/api/fashion",
+        "routerVar":  "fashionStudioRouter"
+    },
+    {
+        "basePath":  "/api/firestore-social",
+        "routerVar":  "firestoreSocialNetworkRouter"
+    },
+    {
+        "basePath":  "/api/gemini",
+        "routerVar":  "faceAnalysisRouter"
+    },
+    {
+        "basePath":  "/api/gemini-agents",
+        "routerVar":  "geminiAgentsRouter"
+    },
+    {
+        "basePath":  "/api/gemini-image",
+        "routerVar":  "geminiImageRouter"
+    },
+    {
+        "basePath":  "/api/image-gallery",
+        "routerVar":  "imageGalleryRouter"
+    },
+    {
+        "basePath":  "/api/images",
+        "routerVar":  "motionDnaImagesRouter"
+    },
+    {
+        "basePath":  "/api/instagram",
+        "routerVar":  "instagramToolsRouter"
+    },
+    {
+        "basePath":  "/api/instagram/auth",
+        "routerVar":  "instagramOAuthRouter"
+    },
+    {
+        "basePath":  "/api/instagram-ext",
+        "routerVar":  "instagramExtensionRouter"
+    },
+    {
+        "basePath":  "/api/investors",
+        "routerVar":  "investorsRouter"
+    },
+    {
+        "basePath":  "/api/kling",
+        "routerVar":  "klingApiRouter"
+    },
+    {
+        "basePath":  "/api/kling",
+        "routerVar":  "klingLipsyncRouter"
+    },
+    {
+        "basePath":  "/api/kling-test",
+        "routerVar":  "klingTestRouter"
+    },
+    {
+        "basePath":  "/api/lyrics-workflow",
+        "routerVar":  "lyricsWorkflowRouter"
+    },
+    {
+        "basePath":  "/api/manager",
+        "routerVar":  "managerRouter"
+    },
+    {
+        "basePath":  "/api/manager/documents",
+        "routerVar":  "managerDocumentsRouter"
+    },
+    {
+        "basePath":  "/api/marketing",
+        "routerVar":  "marketingRouter"
+    },
+    {
+        "basePath":  "/api/merch",
+        "routerVar":  "merchRouter"
+    },
+    {
+        "basePath":  "/api/merch-analytics",
+        "routerVar":  "merchAnalyticsRouter"
+    },
+    {
+        "basePath":  "/api/merch-config",
+        "routerVar":  "merchConfigRouter"
+    },
+    {
+        "basePath":  "/api/merch-contract",
+        "routerVar":  "merchContractRouter"
+    },
+    {
+        "basePath":  "/api/merch-marketing",
+        "routerVar":  "merchMarketingRouter"
+    },
+    {
+        "basePath":  "/api/metadata",
+        "routerVar":  "nftMetadataRouter.default"
+    },
+    {
+        "basePath":  "/api/minimax",
+        "routerVar":  "minimaxVideoRouter"
+    },
+    {
+        "basePath":  "/api/monetization",
+        "routerVar":  "monetizationRouter"
+    },
+    {
+        "basePath":  "/api/music",
+        "routerVar":  "musicRouter"
+    },
+    {
+        "basePath":  "/api/music-video",
+        "routerVar":  "musicVideoRouter"
+    },
+    {
+        "basePath":  "/api/music-video-projects",
+        "routerVar":  "musicVideoProjectsRouter"
+    },
+    {
+        "basePath":  "/api/notifications",
+        "routerVar":  "notificationsRouter"
+    },
+    {
+        "basePath":  "/api/og-image",
+        "routerVar":  "ogImageRouter"
+    },
+    {
+        "basePath":  "/api/performance-segments",
+        "routerVar":  "performanceSegmentsRouter"
+    },
+    {
+        "basePath":  "/api/podcast-studio",
+        "routerVar":  "podcastStudioRouter"
+    },
+    {
+        "basePath":  "/api/pr",
+        "routerVar":  "prAgentRouter"
+    },
+    {
+        "basePath":  "/api/pr-ai",
+        "routerVar":  "prAIRouter"
+    },
+    {
+        "basePath":  "/api/printful",
+        "routerVar":  "printfulRouter"
+    },
+    {
+        "basePath":  "/api/profile",
+        "routerVar":  "profileRouter"
+    },
+    {
+        "basePath":  "/api/proxy",
+        "routerVar":  "apiProxySecure"
+    },
+    {
+        "basePath":  "/api/proxy/piapi/video-upscale",
+        "routerVar":  "videoUpscaleRouter"
+    },
+    {
+        "basePath":  "/api/render-queue",
+        "routerVar":  "renderQueueRouter"
+    },
+    {
+        "basePath":  "/api/social-media",
+        "routerVar":  "socialMediaRouter"
+    },
+    {
+        "basePath":  "/api/songs",
+        "routerVar":  "songsRouter"
+    },
+    {
+        "basePath":  "/api/sponsors",
+        "routerVar":  "sponsorApiRouter"
+    },
+    {
+        "basePath":  "/api/spotify",
+        "routerVar":  "spotifyToolsRouter"
+    },
+    {
+        "basePath":  "/api/stripe",
+        "routerVar":  "stripeRouter"
+    },
+    {
+        "basePath":  "/api/stripe",
+        "routerVar":  "webhookStripeRouter"
+    },
+    {
+        "basePath":  "/api/subscription",
+        "routerVar":  "authenticate"
+    },
+    {
+        "basePath":  "/api/subscription",
+        "routerVar":  "subscriptionApiRouter"
+    },
+    {
+        "basePath":  "/api/tokenization",
+        "routerVar":  "tokenizationRouter"
+    },
+    {
+        "basePath":  "/api/user",
+        "routerVar":  "subscriptionApiRouter"
+    },
+    {
+        "basePath":  "/api/venue-outreach",
+        "routerVar":  "venueOutreachRouter"
+    },
+    {
+        "basePath":  "/api/video",
+        "routerVar":  "videoStatusRouter"
+    },
+    {
+        "basePath":  "/api/video-budget",
+        "routerVar":  "videoBudgetRouter"
+    },
+    {
+        "basePath":  "/api/video-generation",
+        "routerVar":  "videoGenerationRouter"
+    },
+    {
+        "basePath":  "/api/video-rendering",
+        "routerVar":  "videoRenderingRouter"
+    },
+    {
+        "basePath":  "/api/videos",
+        "routerVar":  "generatedVideosRouter"
+    },
+    {
+        "basePath":  "/api/videoservice",
+        "routerVar":  "videoserviceRouter"
+    },
+    {
+        "basePath":  "/api/viral-products",
+        "routerVar":  "viralProductsRouter"
+    },
+    {
+        "basePath":  "/api/virtual-label",
+        "routerVar":  "virtualRecordLabelRouter"
+    },
+    {
+        "basePath":  "/api/voice-ai",
+        "routerVar":  "voiceAiRouter"
+    },
+    {
+        "basePath":  "/api/webhooks/brevo",
+        "routerVar":  "brevoWebhooksRouter"
+    },
+    {
+        "basePath":  "/api/webhooks/resend",
+        "routerVar":  "resendWebhooksRouter"
+    },
+    {
+        "basePath":  "/api/youtube",
+        "routerVar":  "youtubeToolsRouter"
+    },
+    {
+        "basePath":  "/api/youtube-ext",
+        "routerVar":  "youtubeExtensionRouter"
+    }
+]

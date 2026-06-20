@@ -1,0 +1,16 @@
+{
+  "id": "failed_1775235970770",
+  "timestamp": "2026-04-03T17:06:10.770Z",
+  "pageId": "ig-boost",
+  "task": "Add conversion tracking analytics per product",
+  "status": "rolled-back",
+  "model": "n/a",
+  "provider": "n/a",
+  "filesChanged": [
+    "client/src/hooks/use-conversion-tracking.ts",
+    "client/src/pages/instagram-boost.tsx",
+    "server/routes/instagram-boost.ts",
+    "server/db/schema.ts"
+  ],
+  "error": "\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m55\u001b[0m:\u001b[93m6\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS17008: \u001b[0mJSX element 'div' has no corresponding closing tag.\r\n\r\n\u001b[7m55\u001b[0m     <div className=\"min-h-screen flex flex-col bg-background\">\r\n\u001b[7m  \u001b[0m \u001b[91m     ~~~\u001b[0m\r\n\r\n\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m57\u001b[0m:\u001b[93m8\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS17008: \u001b[0mJSX element 'main' has no corresponding closing tag.\r\n\r\n\u001b[7m57\u001b[0m       <main className=\"flex-1 pt-20\">\r\n\u001b[7m  \u001b[0m \u001b[91m       ~~~~\u001b[0m\r\n\r\n\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m58\u001b[0m:\u001b[93m10\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS17008: \u001b[0mJSX element 'div' has no corresponding closing tag.\r\n\r\n\u001b[7m58\u001b[0m         <div className=\"flex-1 max-w-6xl mx-auto space-y-5 sm:space-y-6 p-3 sm:p-6 lg:p-8 pt-4 sm:pt-6\">\r\n\u001b[7m  \u001b[0m \u001b[91m         ~~~\u001b[0m\r\n\r\n\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m205\u001b[0m:\u001b[93m12\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS17008: \u001b[0mJSX element 'Tabs' has no corresponding closing tag.\r\n\r\n\u001b[7m205\u001b[0m           <Tabs value={activeTab} onValueChange={setActiveTab} className=\"space-y-4\">\r\n\u001b[7m   \u001b[0m \u001b[91m           ~~~~\u001b[0m\r\n\r\n\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m294\u001b[0m:\u001b[93m14\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS17008: \u001b[0mJSX element 'TabsContent' has no corresponding closing tag.\r\n\r\n\u001b[7m294\u001b[0m             <TabsContent value=\"growth\">\r\n\u001b[7m   \u001b[0m \u001b[91m             ~~~~~~~~~~~\u001b[0m\r\n\r\n\u001b[96mclient/src/pages/instagram-boost.tsx\u001b[0m:\u001b[93m295\u001b[0m:\u001b[93m1\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS1005: \u001b[0m'</' expected.\r\n\r\n\u001b[7m295\u001b[0m \r\n\u001b[7m   \u001b[0m \u001b[91m\u001b[0m\r\n\r\n\r\nFound 6 errors in the same file, starting at: client/src/pages/instagram-boost.tsx\u001b[90m:55\u001b[0m\r\n\r\n"
+}

@@ -1,0 +1,62 @@
+{
+  "network": "polygon",
+  "chainId": "137",
+  "deployedAt": "2026-02-11T17:36:44.551Z",
+  "deployer": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+  "contracts": {
+    "BTFToken": {
+      "address": "0x3DF18dAa074D8744cC620a89CFc8b7c4138CEb05",
+      "name": "Boostify Token",
+      "symbol": "BTF",
+      "totalSupply": "100000000",
+      "decimals": 18
+    },
+    "BTFStakingVault": {
+      "address": "0x493b942d85d6D8D2E221f2b0FF4192dFBc1BfAAa",
+      "initialRewardsPool": "5000000",
+      "tiers": {
+        "Bronze": "100 BTF",
+        "Silver": "500 BTF",
+        "Gold": "2000 BTF",
+        "Platinum": "10000 BTF"
+      },
+      "lockPeriods": {
+        "30 days": "8% APY",
+        "90 days": "15% APY",
+        "180 days": "25% APY",
+        "365 days": "40% APY"
+      }
+    }
+  },
+  "wallets": {
+    "admin": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "ecosystem": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "liquidity": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "team": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "treasury": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "earlySupporters": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+    "marketing": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E"
+  },
+  "tokenomics": {
+    "totalSupply": "100,000,000 BTF",
+    "transferBurn": "2%",
+    "serviceBurn": "50%",
+    "antiWhale": "2% max per wallet",
+    "allocations": {
+      "ecosystem": "40% (40M) — in contract, 4-year distribution",
+      "liquidity": "15% (15M) — DEX/BoostiSwap",
+      "team": "15% (15M) — 1-year cliff, 3-year vesting",
+      "treasury": "15% (15M) — DAO governed",
+      "earlySupporters": "10% (10M) — 6-month cliff, 1-year vesting",
+      "marketing": "5% (5M) — partnerships & growth"
+    }
+  },
+  "btfArtistMinter": {
+    "address": "0xeFE401C7cF872978e8ab51d08eE740B0B59987B9",
+    "version": "V2",
+    "deployedAt": "2026-02-11",
+    "maxArtists": 1000,
+    "publicSupply": 800,
+    "platformReserve": 200
+  }
+}

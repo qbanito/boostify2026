@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1740697386084,
+      "tag": "0000_nice_chimera",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770068290609,
+      "tag": "0001_mixed_ultimo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770156409207,
+      "tag": "0002_add_song_distribution_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773273389290,
+      "tag": "0003_breezy_black_tom",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773337716263,
+      "tag": "0004_bouncy_mephistopheles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773340579622,
+      "tag": "0005_big_blob",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773517368798,
+      "tag": "0006_fantastic_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774458868752,
+      "tag": "0007_uneven_prima",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775600195501,
+      "tag": "0008_gray_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775960160543,
+      "tag": "0009_abnormal_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776188464003,
+      "tag": "0010_ancient_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776479782601,
+      "tag": "0011_superb_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777328586933,
+      "tag": "0012_left_the_hunter",
+      "breakpoints": true
+    }
+  ]
+}

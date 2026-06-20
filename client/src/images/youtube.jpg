@@ -1,0 +1,6 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" fill="#1A1A1A"/>
+  <path d="M640 360m-200 0a200 200 0 1 0 400 0a200 200 0 1 0-400 0" fill="#FB923C"/>
+  <path d="M580 280l120 80-120 80v-160z" fill="white"/>
+  <text x="640" y="600" text-anchor="middle" fill="#FB923C" font-size="48">YouTube Views Booster</text>
+</svg>

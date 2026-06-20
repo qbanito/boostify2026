@@ -1,0 +1,11 @@
+{
+  "network": "polygon",
+  "chainId": 137,
+  "timestamp": "2025-12-20T05:45:25.051Z",
+  "deployer": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+  "contracts": {
+    "artistToken": "0x16ba188e438b4ebc7edc6acb49bdc1256de2f027",
+    "dex": "0x3bd7c2670f0b43711a9d1fdfa44a0a695b56216c",
+    "royalties": "0x9bb36bf90abce36a8a7771df41e1a35e57dcd1b6"
+  }
+}

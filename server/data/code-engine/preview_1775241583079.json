@@ -1,0 +1,13 @@
+{
+  "id": "preview_1775241583079",
+  "timestamp": "2026-04-03T18:39:43.079Z",
+  "pageId": "ig-boost",
+  "task": "Webhook handler for ig_boost_pro subscription events",
+  "status": "preview",
+  "model": "gpt-4o",
+  "provider": "openai",
+  "filesChanged": [
+    "server/routes/stripe.ts"
+  ],
+  "diff": "--- a/server/routes/stripe.ts\n+++ b/server/routes/stripe.ts\n@@ -495 @@\n     return res.status(400).send(`Webhook Error: ${err.message}`);\n   }\n \n-  // Handle the event\n+// Handle the event\n   switch (event.type) {\n     case 'checkout.session.completed':\n       const session = event.data.object;\n       // Handle successful checkout session completion\n@@ -503 @@\n       console.log(`🔔  Payment for session ${session.id} was successful!`);\n       // You can add more logic here to handle the session, e.g., update the database\n       break;\n-    // Add more event types as needed\n+    case 'customer.subscription.created':\n-    default:\n+    case 'customer.subscription.updated':\n-      console.log(`Unhandled event type ${event.type}`);\n+    case 'customer.subscription.deleted':\n-  }\n+      const subscription = event.data.object;\n-\n+      if (subscription.items.data.some(item => item.price.id.startsWith('price_ig_boost_pro'))) {\n-  // Return a response to acknowledge receipt of the event\n+        console.log(`🔔  Subscription event for IG Boost Pro: ${event.type}`);\n-  res.json({ received: true });\n+        // Implement logic to handle subscription creation, update, or deletion\n-});\n+        // For example, update the user's subscription status in the database\n-\n+      }\n-export default router;\n+      break;\n-\n+    default:\n+      console.log(`Unhandled event type ${event.type}`);\n+  }\n+\n+  // Return a response to acknowledge receipt of the event\n+  res.json({ received: true });\n+});\n+\n+export default router;\n+\n"
+}

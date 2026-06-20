@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+neonConfig.webSocketConstructor = ws;
+const p = new Pool({ connectionString: process.env.DATABASE_URL });
+await p.query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS is_single boolean DEFAULT false NOT NULL');
+await p.query('ALTER TABLE songs ADD COLUMN IF NOT EXISTS single_pinned_at timestamp');
+const r = await p.query("SELECT column_name FROM information_schema.columns WHERE table_name='songs' AND column_name IN ('is_single','single_pinned_at')");
+console.log('Added columns:', r.rows);
+await p.end();

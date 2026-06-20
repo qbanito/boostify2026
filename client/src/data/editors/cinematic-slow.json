@@ -1,0 +1,123 @@
+{
+  "id": "cinematic-slow",
+  "name": "Cinematic Slow-Burn Editor",
+  "title": "Emotional Story-Focused Editor",
+  "bio": "Editor focused on emotional storytelling and cinematic quality. Longer takes, meaningful cuts, visual poetry. Opposite of fast-paced.",
+  "famous_directors": ["Art house music video directors"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Indie/alternative artists",
+      "title": "Cinematic narratives",
+      "year": 2015,
+      "signature_technique": "Long takes, emotional synchronization, visual poetry, cinematic framing"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Slow, deliberate editing focused on emotion and cinematic quality. Every shot matters.",
+    "pace": "slow",
+    "cut_frequency": "Every 3-6 seconds, sometimes longer",
+    "dominant_technique": "Meaningful cuts serving emotional narrative",
+    "music_sync_philosophy": "Rhythm supports emotion, not the reverse. Time for contemplation."
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Loose, using rhythm for emphasis on key moments",
+      "cut_style": "Longer takes, purposeful cuts",
+      "emphasis": ["Narrative moments", "Lyrical content", "Emotional beats"]
+    },
+    "pop": {
+      "beat_sync_approach": "Emotional synchronization",
+      "cut_style": "Slower, more thoughtful",
+      "emphasis": ["Emotional moments", "Story progression", "Visual beauty"]
+    },
+    "rock": {
+      "beat_sync_approach": "Energy-matched but with longer takes",
+      "cut_style": "Cinematic, meaningful transitions",
+      "emphasis": ["Emotional intensity", "Cinematic quality", "Authenticity"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Meditative, following energy curves",
+      "cut_style": "Longer takes, creative transitions",
+      "emphasis": ["Atmosphere", "Visual journey", "Emotional resonance"]
+    },
+    "indie": {
+      "beat_sync_approach": "Lyrical and emotional sync",
+      "cut_style": "Long meaningful takes",
+      "emphasis": ["Emotional authenticity", "Visual poetry", "Lyrical connection"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "Rare, only for important emotional moments",
+      "frequency": "Every 1-2 minutes",
+      "duration": "0.3-0.5 seconds for impact"
+    },
+    "speed_ramps": {
+      "usage": "Subtle, supporting emotion",
+      "speed_ranges": ["0.75x slow-motion", "1x normal"],
+      "moments": "Emotional peaks, visual emphasis moments"
+    },
+    "whip_transitions": {
+      "usage": "Rare, prefer dissolves",
+      "speed": "Slow 0.5-1 second transitions",
+      "effect_style": "Subtle, cinematic"
+    },
+    "jump_cuts": {
+      "usage": "Minimal, purposeful only",
+      "style": "Hard cuts serving emotional logic",
+      "rhythm_sync": "Synchronized to emotional beats, not percussion"
+    },
+    "match_cuts": {
+      "usage": "When they enhance story",
+      "technique": "Compositional, visual, thematic",
+      "impact": "Creates visual poetry"
+    },
+    "crossfades": {
+      "usage": "Frequent, soften transitions",
+      "speed": "Slow 0.8-1.5 second fades",
+      "color_treatment": "Mood-driven, often to black"
+    },
+    "flash_frames": {
+      "usage": "Rare, only for artistic effect",
+      "color": "Subtle, often black or white",
+      "duration": "0.1-0.2 seconds"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "Less is more. Each cut is purposeful and meaningful.",
+    "emotion_first": true,
+    "rhythm_obsessed": false,
+    "storytelling_vs_style": "story-focused",
+    "performance_vs_broll": "40% performance, 60% cinematic B-roll and visual storytelling"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Emotional synchronization",
+      "Meaningful cut placement",
+      "Cinematic framing",
+      "Visual poetry",
+      "Emotional narrative"
+    ],
+    "avoid": [
+      "Fast pacing",
+      "Meaningless quick cuts",
+      "Mechanical beat sync",
+      "Spectacle over substance"
+    ],
+    "emphasis_on": [
+      "Emotional authenticity",
+      "Visual beauty",
+      "Meaningful composition",
+      "Cinematic quality",
+      "Lyrical connection"
+    ],
+    "rhythm_keywords": ["emotion", "story", "moment", "narrative", "build", "climax", "truth"],
+    "visual_keywords": ["cinematic", "poetic", "beautiful", "meaningful", "authentic", "emotional", "contemplative"]
+  }
+}

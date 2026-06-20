@@ -1,0 +1,156 @@
+# 📰 BOOSTIFY NEWS BLAST
+#
+# Sends real Boostify news articles from the platform to artists, industry, and investors.
+# Fetches LIVE articles from the news_articles database.
+#
+# Smart Limits:
+#   - Artists (Resend): auto-rotates 4 accounts × 70/day safe = 280/day total
+#   - Industry (Brevo): 200/day safe
+#   - Investors (Brevo): 200/day safe (shared with Industry)
+#
+# Types: digest (3 articles), single (1 article full), featured (1 article focus)
+# Reply-to: convoycubano@gmail.com on all emails
+
+name: 📰 Boostify News Blast (Real Articles)
+
+on:
+  workflow_dispatch:
+    inputs:
+      email_type:
+        description: 'Email format'
+        required: true
+        default: 'digest'
+        type: choice
+        options:
+          - 'digest'     # 3 latest articles in one email
+          - 'single'     # 1 featured article deep-dive
+          - 'featured'   # 1 article with full hero design
+      audience:
+        description: 'Audience to send to'
+        required: true
+        default: 'artists'
+        type: choice
+        options:
+          - 'artists'
+          - 'industry'
+          - 'investors'
+          - 'all'
+      max_emails:
+        description: 'Max emails per run (Brevo safe: 40 | Resend safe: 65)'
+        required: false
+        default: '40'
+        type: string
+      article_id:
+        description: 'Specific article ID (leave empty for latest)'
+        required: false
+        default: ''
+        type: string
+      preview_mode:
+        description: 'Preview → sends only to convoycubano@gmail.com'
+        required: false
+        default: 'true'
+        type: boolean
+
+  schedule:
+    # Artists digest: every Tuesday + Thursday 1pm UTC
+    - cron: '0 13 * * 2,4'
+    # Industry briefing: every Wednesday 2pm UTC
+    - cron: '0 14 * * 3'
+
+jobs:
+  send-news-blast:
+    name: '📰 News Blast — ${{ github.event.inputs.email_type || "auto" }} → ${{ github.event.inputs.audience || "auto" }}'
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      # Resend rotation (4 accounts × 70/day safe limit)
+      RESEND_API_ARTISTS_1: ${{ secrets.RESEND_API_ARTISTS_1 }}
+      RESEND_API_ARTISTS_2: ${{ secrets.RESEND_API_ARTISTS_2 }}
+      RESEND_API_ARTISTS_3: ${{ secrets.RESEND_API_ARTISTS_3 }}
+      RESEND_API_ARTISTS_4: ${{ secrets.RESEND_API_ARTISTS_4 }}
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🎯 Select config for scheduled runs
+        id: config
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.email_type }}" >> $GITHUB_OUTPUT
+            echo "audience=${{ github.event.inputs.audience }}" >> $GITHUB_OUTPUT
+            echo "max=${{ github.event.inputs.max_emails || '40' }}" >> $GITHUB_OUTPUT
+            echo "preview=${{ github.event.inputs.preview_mode || 'true' }}" >> $GITHUB_OUTPUT
+            echo "article_id=${{ github.event.inputs.article_id || '' }}" >> $GITHUB_OUTPUT
+          else
+            # Scheduled: Tue/Thu → artists digest, Wed → industry briefing
+            DOW=$(date -u +%u)  # 1=Mon 2=Tue 3=Wed 4=Thu
+            if [ "$DOW" == "3" ]; then
+              echo "type=digest" >> $GITHUB_OUTPUT
+              echo "audience=industry" >> $GITHUB_OUTPUT
+              echo "max=40" >> $GITHUB_OUTPUT
+            else
+              echo "type=digest" >> $GITHUB_OUTPUT
+              echo "audience=artists" >> $GITHUB_OUTPUT
+              echo "max=65" >> $GITHUB_OUTPUT
+            fi
+            echo "preview=false" >> $GITHUB_OUTPUT
+            echo "article_id=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📊 Display Configuration
+        run: |
+          echo "══════════════════════════════════════════════════════════════"
+          echo "📰 BOOSTIFY NEWS BLAST"
+          echo "══════════════════════════════════════════════════════════════"
+          echo "📧 Type:       ${{ steps.config.outputs.type }}"
+          echo "🎯 Audience:   ${{ steps.config.outputs.audience }}"
+          echo "📊 Max emails: ${{ steps.config.outputs.max }}"
+          echo "🔄 Preview:    ${{ steps.config.outputs.preview }}"
+          echo "📬 Reply-to:   convoycubano@gmail.com"
+          echo "📰 Articles:   LIVE from boostifymusic.com/news database"
+          echo "⏰ Time (UTC): $(date -u +'%Y-%m-%d %H:%M')"
+          echo "══════════════════════════════════════════════════════════════"
+
+      - name: 📰 Send News Blast
+        run: |
+          ARTICLE_ARG=""
+          if [ -n "${{ steps.config.outputs.article_id }}" ]; then
+            ARTICLE_ARG="--article-id=${{ steps.config.outputs.article_id }}"
+          fi
+
+          node scripts/news-blast-sender.cjs \
+            --type=${{ steps.config.outputs.type }} \
+            --audience=${{ steps.config.outputs.audience }} \
+            --max=${{ steps.config.outputs.max }} \
+            --preview=${{ steps.config.outputs.preview }} \
+            $ARTICLE_ARG
+
+      - name: ✅ News Blast Complete
+        run: |
+          echo ""
+          echo "══════════════════════════════════════════════════════════════"
+          echo "✅ NEWS BLAST SENT"
+          echo "══════════════════════════════════════════════════════════════"
+          echo ""
+          echo "📰 Live articles from: https://boostifymusic.com/news"
+          echo "📬 Replies go to: convoycubano@gmail.com"
+          echo ""
+          echo "📋 Schedule:"
+          echo "   📆 Tue + Thu 1pm UTC  → Artists digest (Resend rotation)"
+          echo "   📆 Wed 2pm UTC        → Industry briefing (Brevo)"
+          echo ""
+          echo "🌐 News hub: https://boostifymusic.com/news"

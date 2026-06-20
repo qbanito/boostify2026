@@ -1,0 +1,98 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Galerías de artistas
+    match /galleries/{artistId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Imágenes de referencia de artistas
+    match /artist-references/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Imágenes de perfil de artistas
+    match /artist-profile-images/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Carpeta general de perfiles de artistas (mantiene compatibilidad)
+    match /artist-profiles/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Imágenes de banner de artistas
+    match /artist-banner-images/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Imágenes generadas por IA
+    match /generated-images/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Música de artistas
+    match /artist_music/{userId}/{songId} {
+      allow read: if true;
+      allow write: if request.resource.size < 50 * 1024 * 1024
+                   && (request.resource.contentType.matches('audio/.*') ||
+                       request.resource.contentType.matches('audio/mpeg') ||
+                       request.resource.contentType.matches('audio/wav') ||
+                       request.resource.contentType.matches('audio/x-wav') ||
+                       request.resource.contentType.matches('audio/ogg') ||
+                       request.resource.contentType.matches('audio/aac') ||
+                       request.resource.contentType.matches('audio/webm'));
+    }
+    
+    // Videos
+    match /videos/{category}/{videoId} {
+      allow read: if true;
+      allow write: if request.resource.size < 200 * 1024 * 1024
+                  && request.resource.contentType.matches('video/.*');
+    }
+    
+    // Imágenes generales
+    match /images/{userId}/{imageId} {
+      allow read: if true;
+      allow write: if request.resource.size < 5 * 1024 * 1024
+                  && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Clips del editor profesional
+    match /editor_clips/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 200 * 1024 * 1024;
+    }
+    
+    // Audio del editor profesional
+    match /editor_audio/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 50 * 1024 * 1024;
+    }
+    
+    // Thumbnails del editor
+    match /editor_thumbnails/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Regla general para cualquier otra ruta
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
+

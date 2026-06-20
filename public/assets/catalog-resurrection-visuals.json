@@ -1,0 +1,46 @@
+{
+  "background": {
+    "id": "catalog-hero-background",
+    "title": "Hero Background",
+    "prompt": "Ultra-wide cinematic editorial photograph, hero background for Boostify Catalog Resurrection Engine featuring archive artist — \"legacy soul catalog\". A futuristic obsidian archive vault: rotating analog 2-inch master tape reels, glowing amber VU meters, holographic rights-data overlays in emerald and cyan, vinyl lacquer suspended in glass, volumetric warm orange key light cutting through dust haze, deep cinematic depth of field, anamorphic lens flare, 35mm film grain, luxury product photography, magazine-cover quality, no words, no logos, no text.",
+    "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347869205_kicyjo.jpeg?alt=media",
+    "provider": "fal-flux-kontext-pro"
+  },
+  "visuals": [
+    {
+      "id": "archive-poster",
+      "title": "Archive Poster",
+      "prompt": "Vertical premium concept poster for the legacy catalog resurrection of archive artist — \"legacy soul catalog\". A restored gold-foil vinyl record floating over a handwritten archive metadata card with publishing notes, surrounded by master tape reels and a warm tungsten studio lamp; deep navy background with accent orange and emerald light, fine paper texture, art-directed editorial still life, Vogue-meets-Rolling-Stone aesthetic, ultra detailed, no text, no typography.",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347858690_eylpa.jpeg?alt=media",
+      "provider": "fal-flux-kontext-pro"
+    },
+    {
+      "id": "rights-ledger",
+      "title": "Rights Ledger",
+      "prompt": "Top-down macro flat-lay of a music publishing rights ledger for archive artist — \"legacy soul catalog\": leather-bound publishing book, ISRC barcode strips, signed copyright slips, tape boxes labeled with handwritten dates, brass key, polished black glass surface reflecting amber and cyan signal lights, photorealistic editorial product photography, ultra detailed, cinematic, no text in image.",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347870245_fmivpc.jpeg?alt=media",
+      "provider": "fal-flux-kontext-pro"
+    },
+    {
+      "id": "master-tape-vault",
+      "title": "Master Tape Vault",
+      "prompt": "Cinematic close-up of an analog studio tape machine playing the master of archive artist — \"legacy soul catalog\": spinning Studer-style reels, illuminated VU meters peaking in warm orange, splice tape and grease pencil annotations, dust motes in volumetric backlight, shallow depth of field, photorealistic music studio editorial photography, no text.",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347850838_5z5qne.jpeg?alt=media",
+      "provider": "fal-flux-kontext-pro"
+    },
+    {
+      "id": "vinyl-lacquer-macro",
+      "title": "Vinyl Lacquer Macro",
+      "prompt": "Macro photograph of a freshly cut vinyl lacquer master of archive artist — \"legacy soul catalog\" on a precision lathe, micro-grooves catching emerald and orange rim light, diamond stylus poised above, glossy obsidian platter, science-meets-craft aesthetic, ultra sharp, photorealistic, no text.",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347869871_d7dsii.jpeg?alt=media",
+      "provider": "fal-flux-kontext-pro"
+    },
+    {
+      "id": "sync-pitch-boardroom",
+      "title": "Sync Pitch Boardroom",
+      "prompt": "Boardroom mood image for sync licensing pitch of archive artist — \"legacy soul catalog\": dark walnut conference table, projected holographic timeline of film, TV and luxury brand placements, leather chairs, ambient orange and cyan rim lighting, cinematic atmosphere, editorial photography, no text, no logos.",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/artist-boost.firebasestorage.app/o/artist-images%2F1778347851240_kcmums.jpeg?alt=media",
+      "provider": "fal-flux-kontext-pro"
+    }
+  ]
+}

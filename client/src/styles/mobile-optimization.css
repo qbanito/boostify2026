@@ -1,0 +1,338 @@
+/**
+ * Estilos para optimización de dispositivos móviles
+ */
+
+:root {
+  --boostify-safe-top: env(safe-area-inset-top, 0px);
+  --boostify-safe-right: env(safe-area-inset-right, 0px);
+  --boostify-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --boostify-safe-left: env(safe-area-inset-left, 0px);
+  --boostify-safe-top-gutter: max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.5rem));
+  --boostify-safe-bottom-gutter: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
+}
+
+.safe-area-x {
+  padding-left: max(1rem, calc(var(--boostify-safe-left) + 1rem));
+  padding-right: max(1rem, calc(var(--boostify-safe-right) + 1rem));
+}
+
+.safe-area-top {
+  padding-top: var(--boostify-safe-top-gutter);
+}
+
+.safe-area-bottom {
+  padding-bottom: var(--boostify-safe-bottom-gutter);
+}
+
+@media (max-width: 768px) {
+  .mobile-responsive {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .mobile-hidden {
+    display: none;
+  }
+  
+  .mobile-full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .mobile-text-center {
+    text-align: center;
+  }
+  
+  .mobile-py-2 {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  
+  .mobile-px-4 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .mobile-mt-4 {
+    margin-top: 1rem;
+  }
+  
+  .mobile-mb-4 {
+    margin-bottom: 1rem;
+  }
+  
+  .mobile-flex-col {
+    flex-direction: column;
+  }
+  
+  .mobile-items-center {
+    align-items: center;
+  }
+  
+  .mobile-justify-center {
+    justify-content: center;
+  }
+  
+  .mobile-text-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+/* Estilos específicos para componentes de audio */
+.audio-controls-mobile {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .audio-player-container {
+    padding: 0.5rem;
+  }
+  
+  .audio-visualization {
+    height: 80px;
+  }
+  
+  .audio-controls-row {
+    flex-direction: column;
+  }
+  
+  .audio-button-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ===== TIMELINE MOBILE OPTIMIZATIONS ===== */
+
+/* Prevent iOS Safari from bouncing/overscrolling on timeline */
+.timeline-container {
+  -webkit-overflow-scrolling: auto;
+  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+}
+
+/* Timeline area: prevent page zoom, allow custom gestures */
+.timeline-background {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Touch-friendly clip handles with visual feedback */
+@media (pointer: coarse) {
+  /* Larger touch targets for coarse pointer (touch) devices */
+  .timeline-clip-handle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  /* Visual indicator when touch is active */
+  .timeline-clip-handle:active {
+    background-color: rgba(249, 115, 22, 0.8) !important;
+    transform: scaleX(1.2);
+  }
+  
+  /* Larger buttons for touch */
+  .timeline-action-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+  
+  /* Clip selection ring more visible on touch */
+  .timeline-clip-selected {
+    outline: 3px solid rgb(249, 115, 22);
+    outline-offset: 2px;
+  }
+}
+
+/* iOS Safe Area support for timeline toolbar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .timeline-toolbar-mobile {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Haptic feedback visual cue */
+@keyframes haptic-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.haptic-feedback {
+  animation: haptic-pulse 0.1s ease-out;
+}
+
+/* Smooth pinch zoom transitions */
+.timeline-zoomable {
+  transition: transform 0.05s ease-out;
+  will-change: transform;
+}
+
+/* Prevent text selection during gestures */
+.timeline-no-select {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* iOS-specific: Fix for timeline scrolling */
+@supports (-webkit-touch-callout: none) {
+  .timeline-ios-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent rubber-banding on iOS */
+  .timeline-ios-no-bounce {
+    position: fixed;
+    overflow: hidden;
+  }
+}
+
+/* ===== CLERK AUTH MOBILE OPTIMIZATIONS ===== */
+
+/* Ensure Clerk components don't overflow on mobile */
+@media (max-width: 640px) {
+  /* Root container */
+  .cl-rootBox {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Card container */
+  .cl-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  /* Form elements */
+  .cl-form {
+    width: 100% !important;
+  }
+  
+  .cl-formFieldRow {
+    width: 100% !important;
+  }
+  
+  .cl-formFieldInput {
+    width: 100% !important;
+    font-size: 16px !important; /* Prevent iOS zoom on input focus */
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Buttons */
+  .cl-formButtonPrimary,
+  .cl-socialButtonsBlockButton {
+    width: 100% !important;
+    min-height: 44px !important; /* Touch-friendly */
+    font-size: 14px !important;
+  }
+  
+  /* Social buttons container */
+  .cl-socialButtons {
+    width: 100% !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  /* Identity preview (verification screen) */
+  .cl-identityPreview {
+    width: 100% !important;
+    word-break: break-all !important;
+    overflow-wrap: break-word !important;
+  }
+  
+  .cl-identityPreviewText {
+    font-size: 14px !important;
+    word-break: break-all !important;
+  }
+  
+  /* OTP input fields */
+  .cl-otpCodeField {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  
+  .cl-otpCodeFieldInput {
+    width: 40px !important;
+    height: 48px !important;
+    font-size: 18px !important;
+  }
+  
+  /* Alternative methods */
+  .cl-alternativeMethodsBlockButton {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+  
+  /* Footer actions */
+  .cl-footerAction {
+    flex-direction: column !important;
+    text-align: center !important;
+    gap: 4px !important;
+  }
+  
+  /* Alert messages */
+  .cl-alert {
+    width: 100% !important;
+    word-break: break-word !important;
+  }
+  
+  /* Main content area */
+  .cl-main {
+    width: 100% !important;
+    padding: 0 !important;
+  }
+  
+  /* Header */
+  .cl-header {
+    padding: 0 !important;
+  }
+  
+  /* Divider */
+  .cl-dividerRow {
+    width: 100% !important;
+  }
+  
+  /* Phone input (if used) */
+  .cl-phoneInputBox {
+    width: 100% !important;
+  }
+  
+  .cl-formFieldPhoneInput {
+    width: 100% !important;
+  }
+}
+
+/* Prevent iOS zoom on input focus */
+@media screen and (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area insets for auth page */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .auth-container-mobile {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+  }
+}

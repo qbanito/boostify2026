@@ -1,0 +1,7 @@
+{
+  "name": "@/pages",
+  "version": "1.0.0",
+  "main": "/home/runner/workspace/client/src/pages/index.js",
+  "module": "/home/runner/workspace/client/src/pages/index.js",
+  "types": "/home/runner/workspace/client/src/pages/index.d.ts"
+}

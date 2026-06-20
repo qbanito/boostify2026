@@ -1,0 +1,12 @@
+[submodule ".agents/marketingskills"]
+	path = .agents/marketingskills
+	url = https://github.com/coreyhaines31/marketingskills.git
+[submodule ".agents/financial-services"]
+	path = .agents/financial-services
+	url = https://github.com/anthropics/financial-services
+[submodule ".agents/pixverse-skills"]
+	path = .agents/pixverse-skills
+	url = https://github.com/PixVerseAI/skills
+[submodule ".agents/video-storyboard-skill"]
+	path = .agents/video-storyboard-skill
+	url = https://github.com/aicontentskills/ai-video-storyboard-skill

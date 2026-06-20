@@ -1,0 +1,32 @@
+[build]
+  publish = "dist/public"
+  command = "npm run build"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Stripe webhook needs raw body for signature verification
+[[headers]]
+  for = "/.netlify/functions/stripe-webhook"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, stripe-signature"
+
+[[headers]]
+  for = "/.netlify/functions/create-checkout"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type"
+
+[dev]
+  port = 8888
+  targetPort = 5173
+
+# Environment variables are set in Netlify dashboard:
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+# PRINTFUL_API_TOKEN, PRINTFUL_STORE_ID,
+# FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY,
+# RESEND_API_KEY

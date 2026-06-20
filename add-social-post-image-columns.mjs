@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+neonConfig.webSocketConstructor = ws;
+const p = new Pool({ connectionString: process.env.DATABASE_URL });
+await p.query('ALTER TABLE social_media_posts ADD COLUMN IF NOT EXISTS image_url text');
+await p.query('ALTER TABLE social_media_posts ADD COLUMN IF NOT EXISTS image_model text');
+const r = await p.query("SELECT column_name FROM information_schema.columns WHERE table_name='social_media_posts' AND column_name IN ('image_url','image_model')");
+console.log('Added columns:', r.rows);
+await p.end();

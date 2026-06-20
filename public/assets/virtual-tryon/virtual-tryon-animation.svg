@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="800" height="450" viewBox="0 0 800 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="450" fill="#1a1a2e"/>
+  
+  <!-- Background gradient -->
+  <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#e94560" stop-opacity="0.1"/>
+    <stop offset="50%" stop-color="#16213e" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#e94560" stop-opacity="0.15"/>
+    <animate attributeName="x1" values="0%;100%;0%" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="y1" values="0%;100%;0%" dur="15s" repeatCount="indefinite"/>
+    <animate attributeName="x2" values="100%;0%;100%" dur="10s" repeatCount="indefinite"/>
+    <animate attributeName="y2" values="100%;0%;100%" dur="15s" repeatCount="indefinite"/>
+  </linearGradient>
+  
+  <rect width="800" height="450" fill="url(#bgGradient)"/>
+  
+  <!-- Side panels -->
+  <g id="sidePanels">
+    <!-- Left panel - Model -->
+    <rect x="50" y="100" width="280" height="350" rx="15" fill="#16213e" opacity="0.8"/>
+    
+    <!-- Right panel - Clothing -->
+    <rect x="470" y="100" width="280" height="350" rx="15" fill="#16213e" opacity="0.8"/>
+    
+    <!-- Center arrow -->
+    <path d="M380 250 L420 250 L400 230 Z" fill="#e94560">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M380 270 L420 270 L400 290 Z" fill="#e94560">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="d" values="M380 270 L420 270 L400 290 Z; M375 270 L425 270 L400 295 Z; M380 270 L420 270 L400 290 Z" dur="2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  
+  <!-- Person silhouette -->
+  <g id="personSilhouette">
+    <ellipse cx="190" cy="160" rx="30" ry="35" fill="#e94560" opacity="0.9"/>
+    <rect x="170" y="185" width="40" height="150" rx="20" fill="#e94560" opacity="0.9"/>
+    <rect x="160" y="240" width="15" height="120" rx="7" fill="#e94560" opacity="0.7" transform="rotate(10, 160, 240)"/>
+    <rect x="205" y="240" width="15" height="120" rx="7" fill="#e94560" opacity="0.7" transform="rotate(-10, 205, 240)"/>
+    <rect x="175" y="330" width="15" height="80" rx="7" fill="#e94560" opacity="0.7" transform="rotate(15, 175, 330)"/>
+    <rect x="195" y="330" width="15" height="80" rx="7" fill="#e94560" opacity="0.7" transform="rotate(-15, 195, 330)"/>
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite"/>
+  </g>
+  
+  <!-- Clothing silhouette -->
+  <g id="clothingSilhouette">
+    <path d="M600 180 L580 230 L620 230 Z" fill="#e94560" opacity="0.9"/>
+    <rect x="570" y="230" width="60" height="100" rx="5" fill="#e94560" opacity="0.9"/>
+    <path d="M570 270 L560 330 L580 330 Z" fill="#e94560" opacity="0.7"/>
+    <path d="M630 270 L640 330 L620 330 Z" fill="#e94560" opacity="0.7"/>
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="4s" repeatCount="indefinite"/>
+  </g>
+  
+  <!-- Result image frame -->
+  <g id="resultFrame">
+    <rect id="resultRect" x="250" y="350" width="0" height="0" rx="15" fill="#16213e" opacity="0">
+      <animate id="frameReveal" attributeName="width" from="0" to="300" begin="5s" dur="1s" fill="freeze"/>
+      <animate attributeName="height" from="0" to="300" begin="5s" dur="1s" fill="freeze"/>
+      <animate attributeName="x" from="400" to="250" begin="5s" dur="1s" fill="freeze"/>
+      <animate attributeName="y" from="500" to="75" begin="5s" dur="1s" fill="freeze"/>
+      <animate attributeName="opacity" from="0" to="0.8" begin="5s" dur="0.5s" fill="freeze"/>
+    </rect>
+    
+    <!-- Result combined silhouette -->
+    <g id="resultSilhouette" opacity="0">
+      <ellipse cx="400" cy="135" rx="30" ry="35" fill="#e94560" opacity="0.9"/>
+      <path d="M400 180 L380 230 L420 230 Z" fill="#e94560" opacity="0.9"/>
+      <rect x="370" y="185" width="60" height="100" rx="5" fill="#e94560" opacity="0.9"/>
+      <rect x="360" y="240" width="15" height="120" rx="7" fill="#e94560" opacity="0.7" transform="rotate(10, 360, 240)"/>
+      <rect x="425" y="240" width="15" height="120" rx="7" fill="#e94560" opacity="0.7" transform="rotate(-10, 425, 240)"/>
+      <path d="M370 270 L360 330 L380 330 Z" fill="#e94560" opacity="0.7"/>
+      <path d="M430 270 L440 330 L420 330 Z" fill="#e94560" opacity="0.7"/>
+      <animate attributeName="opacity" values="0;1" begin="6s" dur="1s" fill="freeze"/>
+      <animate attributeName="opacity" values="0.8;1;0.8" begin="7s" dur="4s" repeatCount="indefinite"/>
+    </g>
+    
+    <!-- Sparkle effect on result -->
+    <g id="sparkles" opacity="0">
+      <circle cx="380" cy="120" r="3" fill="white">
+        <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="6.5s" repeatCount="3"/>
+        <animate attributeName="r" values="1;3;1" dur="0.8s" begin="6.5s" repeatCount="3"/>
+      </circle>
+      <circle cx="420" cy="150" r="2" fill="white">
+        <animate attributeName="opacity" values="0;1;0" dur="0.7s" begin="6.7s" repeatCount="3"/>
+        <animate attributeName="r" values="1;2;1" dur="0.7s" begin="6.7s" repeatCount="3"/>
+      </circle>
+      <circle cx="390" cy="200" r="2" fill="white">
+        <animate attributeName="opacity" values="0;1;0" dur="0.9s" begin="6.9s" repeatCount="3"/>
+        <animate attributeName="r" values="1;2;1" dur="0.9s" begin="6.9s" repeatCount="3"/>
+      </circle>
+      <circle cx="410" cy="250" r="3" fill="white">
+        <animate attributeName="opacity" values="0;1;0" dur="0.8s" begin="7.1s" repeatCount="3"/>
+        <animate attributeName="r" values="1;3;1" dur="0.8s" begin="7.1s" repeatCount="3"/>
+      </circle>
+    </g>
+  </g>
+  
+  <!-- Title and instructions -->
+  <text x="400" y="50" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="#e94560">VIRTUAL TRY-ON</text>
+  <text x="400" y="80" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#ffffff">
+    <tspan x="400" dy="0">Try on clothing virtually with AI</tspan>
+  </text>
+  
+  <!-- Labels -->
+  <text x="190" y="90" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#ffffff">Model</text>
+  <text x="610" y="90" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#ffffff">Garment</text>
+  <text id="resultLabel" x="400" y="400" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#ffffff" opacity="0">
+    <tspan x="400" dy="0">Result</tspan>
+    <animate attributeName="opacity" values="0;1" begin="6s" dur="1s" fill="freeze"/>
+  </text>
+</svg>

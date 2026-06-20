@@ -1,0 +1,94 @@
+name: 📰 Auto News Publisher — Boostify
+
+# Runs daily at 10am UTC automatically, or can be triggered manually with options
+on:
+  schedule:
+    - cron: '0 10 * * *'   # Every day at 10:00 AM UTC
+  workflow_dispatch:
+    inputs:
+      category:
+        description: 'News category'
+        required: false
+        default: 'platform-updates'
+        type: choice
+        options:
+          - platform-updates
+          - ai-music
+          - autonomous-artists
+          - technology
+          - innovation
+          - web3
+          - industry-vision
+          - partnerships
+          - artist-news
+      topic_override:
+        description: 'Optional topic hint for AI (leave blank for auto)'
+        required: false
+        type: string
+        default: ''
+      send_newsletter:
+        description: 'Send newsletter email to subscribers after publishing'
+        required: false
+        default: 'true'
+        type: boolean
+      max_recipients:
+        description: 'Max newsletter recipients (production mode only)'
+        required: false
+        default: '20'
+        type: string
+      preview_mode:
+        description: 'Preview mode — sends only to convoycubano@gmail.com'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  publish-news:
+    name: 📰 Generate & Publish News Article
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      OPENAI_API_KEY:              ${{ secrets.OPENAI_API_KEY }}
+      SUPABASE_CONNECTION_STRING:  ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      BREVO_API_KEY:               ${{ secrets.BREVO_API_KEY }}
+      FAL_KEY:                     ${{ secrets.FAL_KEY }}
+      PREVIEW_EMAIL:               convoycubano@gmail.com
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 📰 Generate & Publish News Article
+        run: |
+          node scripts/news-publisher.cjs \
+            --category="${{ github.event.inputs.category || 'platform-updates' }}" \
+            --topic="${{ github.event.inputs.topic_override || '' }}" \
+            --send-newsletter="${{ github.event.inputs.send_newsletter || 'true' }}" \
+            --max-recipients="${{ github.event.inputs.max_recipients || '20' }}" \
+            --preview="${{ github.event.inputs.preview_mode || 'true' }}"
+
+      - name: ✅ Summary
+        if: success()
+        run: |
+          echo "### 📰 News Article Published Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Category**: ${{ github.event.inputs.category || 'platform-updates' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: ${{ github.event.inputs.preview_mode == 'false' && 'PRODUCTION' || 'PREVIEW' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Newsletter**: ${{ github.event.inputs.send_newsletter || 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **View**: [boostifymusic.com/news](https://boostifymusic.com/news)" >> $GITHUB_STEP_SUMMARY
+
+      - name: ❌ Failure Notice
+        if: failure()
+        run: |
+          echo "### ❌ News Publishing Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Check logs above for details." >> $GITHUB_STEP_SUMMARY

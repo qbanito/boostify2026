@@ -1,0 +1,7 @@
+{
+  "name": "@/lib",
+  "version": "1.0.0",
+  "main": "/home/runner/workspace/client/src/lib/index.js",
+  "module": "/home/runner/workspace/client/src/lib/index.js",
+  "types": "/home/runner/workspace/client/src/lib/index.d.ts"
+}

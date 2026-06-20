@@ -1,0 +1,100 @@
+# Render Blueprint Configuration
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: boostify_music
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=400
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Dedicated Stripe webhook secret for the CrowdSync DJ endpoint
+      # (/api/crowdsync-dj/webhook). Falls back to STRIPE_WEBHOOK_SECRET when
+      # unset. Set the real value in the Render dashboard (Environment tab).
+      - key: STRIPE_CROWDSYNC_WEBHOOK_SECRET
+        sync: false
+      - key: FAL_KEY
+        sync: false
+      # Tripo3D auto-rigging API (hologram character rig/animation).
+      # Set the real key in the Render dashboard (Environment tab).
+      - key: TRIPO_API_KEY
+        sync: false
+      # Meshy rigging API (rigs the existing GLB directly, no regeneration).
+      # Set the real key in the Render dashboard (Environment tab).
+      - key: MESHY_API_KEY
+        sync: false
+      # CEX Trading vault — AES-256-GCM key (64-hex) used to encrypt each
+      # artist's exchange API keys at rest. MUST match the value used in dev
+      # (same Neon DB) or stored keys won't decrypt. Set in Render dashboard.
+      - key: CEX_KEY_SECRET
+        sync: false
+      # Higgsfield Soul image generation (social-media promo posters with
+      # artist likeness). Set both in the Render dashboard (Environment tab).
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: HIGGSFIELD_API_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false
+      - key: VITE_WALLETCONNECT_PROJECT_ID
+        sync: false
+      # ──────────────────────────────────────────────────────────────
+      # ECONOMIC ENGINE — REAL ON-CHAIN MODE
+      # Set TREASURY_WALLET_PRIVATE_KEY in the Render dashboard to
+      # switch the engine from simulation to real Polygon operations
+      # (Aave V3 lending, Uniswap V3 LP, 1inch arbitrage). Leave empty
+      # to keep simulation mode (safe default — no real funds moved).
+      # ──────────────────────────────────────────────────────────────
+      - key: TREASURY_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ALCHEMY_API_KEY
+        sync: false
+      - key: POLYGON_RPC_URL
+        sync: false
+      - key: BTF_TOKEN_ADDRESS
+        sync: false
+      - key: ONEINCH_API_KEY
+        value: "Sjc51tFglRJw6EsHseREwqBegGFEK0F8"
+      # Profit-cascade threshold ($). Defaults to 0.01 in code so even
+      # tiny simulated yields surface in the artist profile dashboard.
+      - key: ECONOMIC_ENGINE_CASCADE_THRESHOLD
+        value: "0.01"

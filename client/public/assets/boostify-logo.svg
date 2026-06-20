@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="800px" viewBox="0 0 800 800" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g stroke="none" fill="none" fill-rule="evenodd">
+    <!-- Base Cloud Shape -->
+    <path d="M650,350 C650,244.77152 563.22848,160 460,160 C376.348,160 305.589,213.526 281.407,287.114 C267.84,281.959 253.174,279 238,279 C171.726,279 118,332.726 118,399 C118,403.248 118.227,407.448 118.672,411.585 C70.575,430.49 36,476.38 36,530 C36,600.692 93.308,658 164,658 L636,658 C706.692,658 764,600.692 764,530 C764,462.581 712.91,407.497 646.576,401.26 C648.837,384.638 650,367.489 650,350 Z" fill="#FF6B00" fill-rule="nonzero"></path>
+    
+    <!-- Audio Wave 1 (Smallest) -->
+    <path d="M330,450 L330,550" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"></path>
+    
+    <!-- Audio Wave 2 (Medium) -->
+    <path d="M400,400 L400,600" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"></path>
+    
+    <!-- Audio Wave 3 (Tallest) -->
+    <path d="M470,370 L470,630" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"></path>
+    
+    <!-- Audio Wave 4 (Medium) -->
+    <path d="M540,400 L540,600" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"></path>
+    
+    <!-- Audio Wave 5 (Smallest) -->
+    <path d="M610,450 L610,550" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"></path>
+  </g>
+</svg>

@@ -1,0 +1,734 @@
+[
+    {
+        "page":  "account.tsx",
+        "components":  "../components/subscription/pricing-plans, ../components/ui/button, ../components/ui/card, ../components/ui/separator, ../components/ui/skeleton, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/api/subscription-service, ../lib/context/subscription-context, ../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "achievements-page.tsx",
+        "components":  "../components/ui/achievement-badge",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "admin.tsx",
+        "components":  "../components/admin/accounting-dashboard, ../components/admin/admin-agent, ../components/admin/affiliate-sessions, ../components/admin/api-links, ../components/admin/api-usage-dashboard, ../components/admin/artist-import-modal, ../components/admin/artists-manager, ../components/admin/boostiswap-artists-manager, ../components/admin/investor-sessions, ../components/admin/session-manager, ../components/admin/stripe-events-log, ../components/admin/user-management, ../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "affiliate-admin.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "affiliate-redirect.tsx",
+        "components":  "../components/ui/alert, ../components/ui/button, ../components/ui/card, ../components/ui/progress-circular",
+        "hooks":  "",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "affiliates.tsx",
+        "components":  "../components/affiliates/affiliate-support, ../components/affiliates/badges, ../components/affiliates/content-generator, ../components/affiliates/coupons, ../components/affiliates/earnings, ../components/affiliates/links, ../components/affiliates/marketing-materials, ../components/affiliates/overview, ../components/affiliates/promotions, ../components/affiliates/referrals, ../components/affiliates/registration, ../components/affiliates/resources, ../components/affiliates/settings, ../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth",
+        "libs":  "../lib/firebase"
+    },
+    {
+        "page":  "affiliates-new.tsx",
+        "components":  "../components/affiliates/badges, ../components/affiliates/content-generator, ../components/affiliates/coupons, ../components/affiliates/earnings, ../components/affiliates/links, ../components/affiliates/marketing-materials, ../components/affiliates/overview, ../components/affiliates/promotions, ../components/affiliates/referrals, ../components/affiliates/settings, ../components/layout/header, ../components/ui/badge, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth",
+        "libs":  ""
+    },
+    {
+        "page":  "ai-advisors.tsx",
+        "components":  "../components/ai-advisors/call-history, ../components/ai-advisors/call-limits, ../components/ai-advisors/call-modal-super-simple, ../components/ui/alert, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/separator, ../components/ui/tabs, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/context/subscription-context, ../lib/services/advisor-call-service"
+    },
+    {
+        "page":  "ai-advisors-new.tsx",
+        "components":  "../components/ai-advisors/advisor-card, ../components/ai-advisors/advisor-chat-modal, ../components/ui/badge, ../components/ui/button",
+        "hooks":  "../hooks/use-artist-context, ../hooks/use-auth",
+        "libs":  "../lib/utils"
+    },
+    {
+        "page":  "ai-advisors-v2.tsx",
+        "components":  "../components/ai-advisors/call-history, ../components/ai-advisors/call-modal, ../components/subscription/subscription-feature, ../components/ui/button, ../components/ui/dialog",
+        "hooks":  "../hooks/use-advisor-access, ../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/context/subscription-context, ../lib/services/advisor-call-service"
+    },
+    {
+        "page":  "ai-agents.tsx",
+        "components":  "../components/ai/agent-analytics-dashboard, ../components/ai/agent-card, ../components/ai/agent-sdk-chat, ../components/ai/ai-data-manager, ../components/ai/artist-selector, ../components/ai/composer-agent, ../components/ai/manager-agent, ../components/ai/marketing-agent, ../components/ai/merchandise-agent, ../components/ai/photographer-agent, ../components/ai/quick-actions-panel, ../components/ai/social-media-agent, ../components/ai/video-director-agent, ../components/layout/header, ../components/ui/accordion, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/tabs, ../components/ui/tooltip, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-artist-context, ../hooks/use-auth",
+        "libs":  "../lib/logger, ../lib/services/agent-usage-service"
+    },
+    {
+        "page":  "ai-video-creation.tsx",
+        "components":  "../components/music-video/MusicVideoWorkspaceComplete",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "analytics.tsx",
+        "components":  "../components/layout/header, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "animated-workflow.tsx",
+        "components":  "../components/music-video/demo-enhanced-workflow, ../components/ui/button",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "article.tsx",
+        "components":  "../components/ui/button, ../components/ui/head",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "artist-dashboard.tsx",
+        "components":  "../components/distribution/distribution-card, ../components/rights/rights-management-card, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area",
+        "hooks":  "../hooks/use-auth",
+        "libs":  ""
+    },
+    {
+        "page":  "artist-generator.tsx",
+        "components":  "../components/analytics/artist-analytics-tab, ../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/scroll-area, ../components/ui/select, ../components/ui/separator, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "artist-image-advisor.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/select, ../components/ui/textarea, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "artist-image-advisor-improved.tsx",
+        "components":  "../components/image-advisor/workflow-guide, ../components/image-generation/improved/final-image-generation, ../components/image-generation/improved/flux-style-improved, ../components/image-generation/improved/flux-upload-improved, ../components/image-generation/improved/results-gallery, ../components/kling/virtual-tryon-improved, ../components/ui/button",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "artist-profile.tsx",
+        "components":  "../components/artist/artist-profile-card, ../components/artist/install-app-banner, ../components/crowdfunding/crowdfunding-button, ../components/ui/head",
+        "hooks":  "../hooks/use-artist-pwa, ../hooks/use-auth",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "artist-store.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "auth-page.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "auth-signup.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "blog.tsx",
+        "components":  "../components/layout/header, ../components/ui/alert-dialog, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/scroll-area, ../components/ui/select, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/logger"
+    },
+    {
+        "page":  "boostify-explicit.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "boostify-international.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/circular-progress, ../components/ui/drawer, ../components/ui/form, ../components/ui/input, ../components/ui/scroll-area, ../components/ui/select, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "boostify-tv.tsx",
+        "components":  "../components/affiliates/video-upload, ../components/layout/header, ../components/tv/tv-social-feed, ../components/tv/tv-video-comments, ../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/dropdown-menu, ../components/ui/input, ../components/ui/skeleton, ../components/ui/tabs, ../components/ui/tooltip",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "boostiswap.tsx",
+        "components":  "../components/boostiswap/artist-prices-ticker, ../components/boostiswap/artist-tokens-marketplace, ../components/boostiswap/btf-swap-widget, ../components/boostiswap/btf-token-widgets, ../components/boostiswap/crypto-price-widget, ../components/boostiswap/dashboard-view, ../components/boostiswap/my-liquidity, ../components/boostiswap/pools-view, ../components/boostiswap/song-tokens-marketplace, ../components/boostiswap/swap-interface, ../components/boostiswap/wallet-connect-button, ../components/ui/tabs",
+        "hooks":  "../hooks/use-btf-token, ../hooks/use-web3",
+        "libs":  ""
+    },
+    {
+        "page":  "btf-artist-mint.tsx",
+        "components":  "../components/boostiswap/wallet-connect-button",
+        "hooks":  "../hooks/use-btf-artist-mint, ../hooks/use-web3",
+        "libs":  "../lib/btf-artist-mint-config, ../lib/btf-token-config"
+    },
+    {
+        "page":  "btf-staking.tsx",
+        "components":  "../components/boostiswap/wallet-connect-button",
+        "hooks":  "../hooks/use-btf-token, ../hooks/use-web3",
+        "libs":  "../lib/btf-token-config"
+    },
+    {
+        "page":  "btf-wallet.tsx",
+        "components":  "../components/boostiswap/wallet-connect-button, ../components/btf/btf-payment-modal, ../components/btf/song-boost-widget",
+        "hooks":  "../hooks/use-btf-payment, ../hooks/use-btf-token, ../hooks/use-web3",
+        "libs":  "../lib/btf-service-pricing, ../lib/btf-token-config"
+    },
+    {
+        "page":  "camera-movements-test.tsx",
+        "components":  "../components/ui/card, ../components/video-generation-test",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "contacts.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/checkbox, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/scroll-area, ../components/ui/select, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/logger"
+    },
+    {
+        "page":  "contracts.tsx",
+        "components":  "../components/contracts/contract-form, ../components/layout/header, ../components/ui/alert-dialog, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/dropdown-menu, ../components/ui/input, ../components/ui/scroll-area, ../components/ui/table, ../components/ui/tabs, ../components/ui/textarea, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/gemini-contracts, ../lib/logger"
+    },
+    {
+        "page":  "cookies.tsx",
+        "components":  "../components/layout/header",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "copyright-verify.tsx",
+        "components":  "../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/label, ../components/ui/separator",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "course-detail.tsx",
+        "components":  "../components/layout/header, ../components/ui/accordion, ../components/ui/alert-dialog, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/label, ../components/ui/progress, ../components/ui/radio-group, ../components/ui/scroll-area",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/api/fal-ai, ../lib/course-content-generator, ../lib/logger, ../lib/unsplash-service"
+    },
+    {
+        "page":  "course-detail-new.tsx",
+        "components":  "../components/education/quiz-dialog, ../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/progress, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "dashboard.tsx",
+        "components":  "../components/analytics/trend-chart, ../components/dashboard/ecosystem-dashboard, ../components/instagram/instagram-connect, ../components/layout/header, ../components/marketing/stats-card, ../components/spotify/playlist-manager, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/firebase-auth, ../lib/logger"
+    },
+    {
+        "page":  "debug-firebase.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "../hooks/use-auth",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "diagnostics.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "ecosystem.tsx",
+        "components":  "../components/layout/header, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "education.tsx",
+        "components":  "../components/education/course-card, ../components/education/create-course-dialog, ../components/layout/header, ../components/ui/button, ../components/ui/input, ../components/ui/tabs",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "education-new.tsx",
+        "components":  "../components/education/create-course-dialog, ../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/progress, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  "../lib/academy-courses"
+    },
+    {
+        "page":  "events.tsx",
+        "components":  "../components/layout/header, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/scroll-area, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "face-swap.tsx",
+        "components":  "../components/face-swap/face-swap, ../components/ui/separator",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "features.tsx",
+        "components":  "../components/layout/footer, ../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "financial-enablement.tsx",
+        "components":  "../components/layout/header",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "firestore-social.tsx",
+        "components":  "../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "global.tsx",
+        "components":  "../components/layout/header, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/select",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "guides.tsx",
+        "components":  "../components/layout, ../components/ui/button, ../components/ui/card, ../components/ui/input",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "home.tsx",
+        "components":  "../components/agents/super-agent, ../components/boostiswap/token-card-visual, ../components/early-access/early-access-modal, ../components/home/AsaasSection, ../components/layout/footer, ../components/subscription/pricing-plans, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/scroll-area",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "image-generator.tsx",
+        "components":  "../components/image-generation/flux-generator-new, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/form, ../components/ui/input, ../components/ui/progress, ../components/ui/radio-group, ../components/ui/select, ../components/ui/separator, ../components/ui/slider, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/api/generated-images-service, ../lib/api/generation-types, ../lib/logger"
+    },
+    {
+        "page":  "image-generator-simple.tsx",
+        "components":  "../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/tabs",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/api/multi-platform-generator, ../lib/logger, ../lib/types/model-types"
+    },
+    {
+        "page":  "init-products.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "instagram-boost.tsx",
+        "components":  "../components/instagram-boost/extension-sync-tab, ../components/layout/header, ../components/promotion/artist-selector, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/progress, ../components/ui/tabs, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-artist-profile, ../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/queryClient"
+    },
+    {
+        "page":  "instagram-boost-old.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/progress, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/firebase"
+    },
+    {
+        "page":  "investors-dashboard.tsx",
+        "components":  "../components/layout/header, ../components/ui/button, ../components/ui/card, ../components/ui/form, ../components/ui/input, ../components/ui/label, ../components/ui/scroll-area, ../components/ui/select, ../components/ui/slider, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "kling-store.tsx",
+        "components":  "../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "kling-test.tsx",
+        "components":  "../components/kling/simple-tryon-improved, ../components/ui/alert, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "kling-tools.tsx",
+        "components":  "../components/kling/effects-component, ../components/kling/lipsync-component, ../components/kling/tryon-component, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "layer-filter-demo.tsx",
+        "components":  "../components/music-video/layer-filter-demo",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "live-podcast-studio.tsx",
+        "components":  "../components/layout/header, ../components/podcast-studio/episode-publisher, ../components/podcast-studio/studio-room, ../components/podcast-studio/studio-setup, ../components/ui/badge, ../components/ui/button",
+        "hooks":  "../hooks/use-auth, ../hooks/use-media-devices, ../hooks/use-podcast-recorder, ../hooks/use-podcast-room, ../hooks/use-toast",
+        "libs":  "../lib/audio-processor, ../lib/socket"
+    },
+    {
+        "page":  "login.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "manager-tools.tsx",
+        "components":  "../components/layout/header, ../components/manager/ai-tools, ../components/manager/budget, ../components/manager/calendar, ../components/manager/hiring, ../components/manager/logistics, ../components/manager/requirements, ../components/manager/technical-rider, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "merchandise.tsx",
+        "components":  "../components/layout/header, ../components/merchandise/analytics-dashboard, ../components/merchandise/printful-dashboard, ../components/merchandise/shopify-integration, ../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/skeleton, ../components/ui/switch, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "messages.tsx",
+        "components":  "../components/layout/header, ../components/messaging/messaging-panel",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "motion-dna.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "music-generator.tsx",
+        "components":  "../components/layout/header, ../components/music/copywrite-workflow/copywrite-workflow, ../components/music/genre-templates/advanced-music-params, ../components/music/genre-templates/genre-data, ../components/music/genre-templates/music-generation-section, ../components/music/voice-ai-studio, ../components/ui/alert, ../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/separator, ../components/ui/skeleton, ../components/ui/tabs, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/api/music-generator-service, ../lib/logger"
+    },
+    {
+        "page":  "music-mastering.tsx",
+        "components":  "../components/music/audio-mastering",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "music-video-cancelled.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "music-video-creator.tsx",
+        "components":  "../components/layout/header, ../components/music-video/directors-list, ../components/music-video/motion-dna-section, ../components/music-video/music-video-ai, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth",
+        "libs":  ""
+    },
+    {
+        "page":  "music-video-pricing.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "music-video-success.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger, ../lib/queryClient"
+    },
+    {
+        "page":  "music-video-workflow-enhanced.tsx",
+        "components":  "../components/music-video/MusicVideoWorkflowComplete",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "music-video-workflow-page.tsx",
+        "components":  "../components/music-video/music-video-workflow",
+        "hooks":  "../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "my-artist.tsx",
+        "components":  "",
+        "hooks":  "../hooks/use-auth",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "my-artists.tsx",
+        "components":  "../components/artist/ai-generation-modal, ../components/artist/artist-landing-page, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/head, ../components/ui/input, ../components/ui/label, ../components/ui/select, ../components/ui/textarea, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/api/artist-profile-service, ../lib/queryClient"
+    },
+    {
+        "page":  "news.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/scroll-area, ../components/ui/skeleton",
+        "hooks":  "",
+        "libs":  "../lib/news-service"
+    },
+    {
+        "page":  "not-found.tsx",
+        "components":  "../components/layout/header, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "plugins.tsx",
+        "components":  "../components/plugins, ../components/plugins/plugin-pricing-plans, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "podcast-episodes.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  ""
+    },
+    {
+        "page":  "pr.tsx",
+        "components":  "../components/layout/header, ../components/ui/avatar, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/checkbox, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/select, ../components/ui/tabs, ../components/ui/textarea, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/queryClient"
+    },
+    {
+        "page":  "pricing.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "privacy.tsx",
+        "components":  "../components/layout/header",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "privacy-extension.tsx",
+        "components":  "../components/layout/header",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "producer-tools.tsx",
+        "components":  "../components/booking/add-musician-form, ../components/booking/admin-musicians-panel, ../components/booking/booking-dialog, ../components/layout/header, ../components/music/audio-mastering, ../components/music/modern-audio-suite, ../components/music/music-ai-generator, ../components/music/ProfessionalVoiceCloning, ../components/producer/FileExchangeHub, ../components/producer/ProductionProgressContainer, ../components/producer/StudioVideoCall, ../components/producer/VersionControl, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/collapsible, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/scroll-area, ../components/ui/switch, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-subscription-feature, ../hooks/use-toast",
+        "libs":  "../lib/api/fal-ai, ../lib/api/kits-ai, ../lib/api/zuno-ai, ../lib/firebase, ../lib/logger"
+    },
+    {
+        "page":  "product-cancelled.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "product-success.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "professional-editor.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "profile.tsx",
+        "components":  "../components/artist/artist-profile-card, ../components/ui/button, ../components/ui/card, ../components/ui/head",
+        "hooks":  "../hooks/use-auth",
+        "libs":  ""
+    },
+    {
+        "page":  "promotion.tsx",
+        "components":  "../components/layout/header, ../components/promotion/campaign-form, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/progress, ../components/ui/scroll-area, ../components/ui/tabs",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/logger"
+    },
+    {
+        "page":  "real-time-translator.tsx",
+        "components":  "../components/layout/header, ../components/translation/real-time-translator",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "record-label-services.tsx",
+        "components":  "../components/layout/header, ../components/manager/artist-roster, ../components/manager/score-creator, ../components/manager/sound-designer, ../components/manager/timeline-editor, ../components/manager/venues-booking, ../components/manager/venues-catalog, ../components/manager/venues-reports, ../components/record-label/movie-networks-dialog, ../components/record-label/radio-networks-dialog, ../components/record-label/service-dialog, ../components/record-label/tv-networks-dialog, ../components/ui/accordion, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/label, ../components/ui/motion, ../components/ui/tabs, ../components/ui/textarea, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/services/record-label-service"
+    },
+    {
+        "page":  "resources.tsx",
+        "components":  "../components/layout, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "settings.tsx",
+        "components":  "../components/ui/button, ../components/ui/card, ../components/ui/form, ../components/ui/input, ../components/ui/label, ../components/ui/select, ../components/ui/switch, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-mobile, ../hooks/use-toast",
+        "libs":  "../lib/context/subscription-context, ../lib/logger"
+    },
+    {
+        "page":  "smart-cards.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "social-media-generator.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "social-network.tsx",
+        "components":  "../components/ai-social, ../components/boostiswap/btf-token-widgets, ../components/boostiswap/buy-btf-widget, ../components/btf/btf-gated-content, ../components/btf/song-boost-widget, ../components/social/artist-mint-widget, ../components/social/artist-profile-embed, ../components/social/post-feed, ../components/ui/avatar, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/queryClient, ../lib/social/types"
+    },
+    {
+        "page":  "sponsor-proposal.tsx",
+        "components":  "../components/ui/badge, ../components/ui/button, ../components/ui/input, ../components/ui/textarea",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "spotify.tsx",
+        "components":  "../components/layout/header, ../components/promotion/artist-selector, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/tabs, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-artist-profile, ../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/queryClient"
+    },
+    {
+        "page":  "store.tsx",
+        "components":  "../components/layout/header, ../components/ui/badge, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "subscription-cancelled.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  "../lib/context/subscription-context"
+    },
+    {
+        "page":  "subscription-example.tsx",
+        "components":  "../components/subscription/subscription-feature, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  "../lib/api/subscription-service, ../lib/context/subscription-context"
+    },
+    {
+        "page":  "subscription-success.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  "../lib/context/subscription-context, ../lib/logger, ../lib/query-client"
+    },
+    {
+        "page":  "terms.tsx",
+        "components":  "../components/layout/header",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "test-page.tsx",
+        "components":  "../components/TestComponent",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "test-progress.tsx",
+        "components":  "../components/ui/button, ../components/ui/card, ../components/ui/progress",
+        "hooks":  "../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "timeline-demo.tsx",
+        "components":  "../components/professional-editor/TimelineDemo",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "timeline-editor.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "tips.tsx",
+        "components":  "../components/layout, ../components/ui/button, ../components/ui/card, ../components/ui/tabs",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "tokenization.tsx",
+        "components":  "../components/layout/footer, ../components/tokenization/artist-testimonials, ../components/tokenization/mini-tutorial, ../components/tokenization/smart-contract-visualizer, ../components/ui/badge, ../components/ui/button",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "token-purchase-success.tsx",
+        "components":  "../components/ui/button, ../components/ui/card",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "tools.tsx",
+        "components":  "../components/layout, ../components/ui/button, ../components/ui/card, ../components/ui/checkbox, ../components/ui/input, ../components/ui/label, ../components/ui/select, ../components/ui/slider, ../components/ui/tabs, ../components/ui/textarea",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "try-on-page.tsx",
+        "components":  "../components/kling/simple-tryon-improved",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "venue-proposal.tsx",
+        "components":  "",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "video-generation-test.tsx",
+        "components":  "../components/ui/card, ../components/video-generation-test",
+        "hooks":  "",
+        "libs":  ""
+    },
+    {
+        "page":  "videos.tsx",
+        "components":  "../components/layout/header, ../components/ui/alert-dialog, ../components/ui/button, ../components/ui/card, ../components/ui/dialog, ../components/ui/input, ../components/ui/label, ../components/ui/scroll-area, ../components/ui/textarea",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/firebase, ../lib/logger"
+    },
+    {
+        "page":  "videoservice.tsx",
+        "components":  "../components/layout/footer, ../components/ui/badge, ../components/ui/button, ../components/videoservice/video-demo-showcase, ../components/videoservice/video-intake-form",
+        "hooks":  "",
+        "libs":  "../lib/videoservice-i18n"
+    },
+    {
+        "page":  "videoservice-success.tsx",
+        "components":  "../components/ui/button",
+        "hooks":  "",
+        "libs":  "../lib/queryClient, ../lib/videoservice-i18n"
+    },
+    {
+        "page":  "virtual-record-label.tsx",
+        "components":  "../components/hero-section, ../components/layout/header, ../components/ProgressOverlay, ../components/ui/breadcrumb, ../components/ui/button, ../components/ui/card, ../components/ui/input, ../components/ui/label, ../components/ui/progress, ../components/ui/select, ../components/ui/tabs, ../components/ui/textarea, ../components/UnderReviewScreen, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    },
+    {
+        "page":  "youtube-views.tsx",
+        "components":  "../components/layout/header, ../components/promotion/artist-selector, ../components/services/extra-services-section, ../components/ui/badge, ../components/ui/button, ../components/ui/input, ../components/ui/progress, ../components/ui/tabs, ../components/ui/textarea, ../components/youtube-views/extension-sync-tab, ../components/youtube-views/plan-tier-guard",
+        "hooks":  "../hooks/use-artist-profile, ../hooks/use-auth, ../hooks/use-toast",
+        "libs":  "../lib/logger"
+    }
+]

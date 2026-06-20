@@ -1,0 +1,123 @@
+{
+  "id": "hype-williams",
+  "name": "Hype Williams",
+  "title": "Legendary Music Video Editor & Director",
+  "bio": "Iconic editor and director who defined 90s hip-hop video aesthetics. Known for revolutionary editing techniques, fish-eye lenses, colored filters, and ultra-fast pacing that synchronized perfectly with beats.",
+  "famous_directors": ["Himself", "Collaborated with countless hip-hop artists"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Missy Elliott",
+      "title": "The Rain (Supa Dupa Fly)",
+      "year": 1997,
+      "signature_technique": "Ultra-fast jump cuts synchronized to beat, colored filters, creative transitions"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Ultra-fast, beat-driven editing with creative transitions, colored overlays, and experimental camera work",
+    "pace": "ultra-fast",
+    "cut_frequency": "Every 0.5-1.5 seconds on average",
+    "dominant_technique": "Jump cuts synchronized to hi-hats and snares",
+    "music_sync_philosophy": "Every cut is a beat. Edit follows the percussion strictly."
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Obsessive synchronization to 808s, snares, hi-hats. Every cut on a beat.",
+      "cut_style": "Jump cuts, match cuts, whip transitions, speed ramps on drops",
+      "emphasis": ["808 kick cuts", "Hi-hat rhythm cuts", "Snare transitions", "Verse-to-hook visual changes"]
+    },
+    "pop": {
+      "beat_sync_approach": "Synchronized to main rhythm, looser on quieter sections",
+      "cut_style": "Mix of jump cuts and smooth transitions",
+      "emphasis": ["Hook visual emphasis", "Chorus build-up cuts", "Performance moments"]
+    },
+    "rock": {
+      "beat_sync_approach": "Synchronized to drum fills and main beat",
+      "cut_style": "More motion, less jump cuts",
+      "emphasis": ["Guitar fills", "Drum climax moments", "Vocal power points"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Ultra-precise to synthesizer rhythm and bass drops",
+      "cut_style": "Freeze frames on drops, fast cuts on builds",
+      "emphasis": ["Bass drop moments", "Synth lead transitions", "Build-up acceleration"]
+    },
+    "indie": {
+      "beat_sync_approach": "Conversational rhythm editing, follows emotional beats",
+      "cut_style": "Thoughtful transitions, occasional quick cuts for emphasis",
+      "emphasis": ["Lyrical moments", "Emotional peaks", "Textural changes"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "On impact moments - beat drops, vocal hits, action peaks",
+      "frequency": "Every 30-45 seconds on average",
+      "duration": "0.15 seconds (quick freeze for impact)"
+    },
+    "speed_ramps": {
+      "usage": "During transitions, beat builds, action moments",
+      "speed_ranges": ["0.5x slow motion", "1x normal", "1.5x-2x fast speed"],
+      "moments": "Verse-to-hook, bridge builds, drop moments"
+    },
+    "whip_transitions": {
+      "usage": "Between scene changes, especially on beat changes",
+      "speed": "Fast 0.3-0.5 second whips",
+      "effect_style": "Colored whips matching video mood (neon, grayscale, etc.)"
+    },
+    "jump_cuts": {
+      "usage": "Primary editing technique - cuts on beat throughout",
+      "style": "Hard cuts without transition effects",
+      "rhythm_sync": "Synchronized to percussion hits"
+    },
+    "match_cuts": {
+      "usage": "Visual continuity within fast pacing",
+      "technique": "Match composition, color, or motion between clips",
+      "impact": "Creates coherence despite fast cutting"
+    },
+    "crossfades": {
+      "usage": "Rare, reserved for emotional or atmospheric moments",
+      "speed": "Quick 0.2-0.3 second fades",
+      "color_treatment": "Sometimes fade to color (black, white, or mood color)"
+    },
+    "flash_frames": {
+      "usage": "Single frames of color/image for visual punctuation",
+      "color": "Often white, black, or neon depending on mood",
+      "duration": "1-3 frames (0.04-0.12 seconds)"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "The edit IS the performance. Rhythm and style are inseparable.",
+    "emotion_first": false,
+    "rhythm_obsessed": true,
+    "storytelling_vs_style": "style-obsessed",
+    "performance_vs_broll": "70% performance cuts synchronized to music, 30% creative B-roll with style"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Beat synchronization on every cut",
+      "Fast-paced energy throughout",
+      "Creative transitions between scenes",
+      "Visual excitement matching audio intensity",
+      "Clear section changes (verse/hook/bridge)"
+    ],
+    "avoid": [
+      "Slow contemplative pacing",
+      "Static shots without cuts",
+      "Smooth, subtle transitions",
+      "Misaligned cuts with beat"
+    ],
+    "emphasis_on": [
+      "Rhythm and beat synchronization",
+      "Visual style and creativity",
+      "Performance moments",
+      "Transitional impact",
+      "Energetic pacing"
+    ],
+    "rhythm_keywords": ["808", "snare", "hi-hat", "kick", "drop", "build", "beat", "percussion"],
+    "visual_keywords": ["fast", "energetic", "creative", "bold", "impact", "dynamic", "colorful", "stylized"]
+  }
+}

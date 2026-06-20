@@ -1,0 +1,123 @@
+{
+  "id": "spike-jonze",
+  "name": "Spike Jonze",
+  "title": "Innovative Director & Editor",
+  "bio": "Revolutionary editor-director who brought conceptual storytelling to music videos. Known for narrative coherence, creative camera work, and editing that serves the story above all else.",
+  "famous_directors": ["Himself", "Collaborated with Fatboy Slim, Björk, Kanye West"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Fatboy Slim",
+      "title": "Praise You",
+      "year": 1998,
+      "signature_technique": "Conceptual narrative editing, handheld realism, emotional beats aligned with music"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Narrative-driven editing with creative transitions, conceptual storytelling, emotional rhythm, and innovative camera techniques",
+    "pace": "dynamic",
+    "cut_frequency": "Varies by narrative moment - fast on action, slower on emotional beats",
+    "dominant_technique": "Story-focused cuts that serve narrative purpose",
+    "music_sync_philosophy": "Edit serves the story and emotion, rhythm is secondary to narrative"
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Loose synchronization, emphasis on story moments and beat drops",
+      "cut_style": "Mix of quick cuts and longer takes for narrative",
+      "emphasis": ["Story beats", "Character moments", "Conceptual visuals", "Emotional peaks"]
+    },
+    "pop": {
+      "beat_sync_approach": "Synchronized to emotional moments and hooks",
+      "cut_style": "Performance focus with conceptual interludes",
+      "emphasis": ["Emotional narrative", "Character development", "Visual storytelling"]
+    },
+    "rock": {
+      "beat_sync_approach": "Energy-matched to song dynamics",
+      "cut_style": "Longer takes, purposeful cuts",
+      "emphasis": ["Authenticity", "Raw performance", "Emotional truth"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Creative interpretation of rhythm",
+      "cut_style": "Experimental transitions, creative montages",
+      "emphasis": ["Conceptual visuals", "Experimental editing", "Innovative transitions"]
+    },
+    "indie": {
+      "beat_sync_approach": "Emotional and lyrical synchronization",
+      "cut_style": "Thoughtful, purposeful cuts",
+      "emphasis": ["Emotional authenticity", "Lyrical connection", "Visual poetry"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "Emphasize important emotional or narrative moments",
+      "frequency": "Selective, meaningful use",
+      "duration": "0.2-0.5 seconds for impact"
+    },
+    "speed_ramps": {
+      "usage": "Enhance dramatic moments, emotional peaks",
+      "speed_ranges": ["0.25x-0.75x slow motion", "1x normal", "1.25x-1.5x fast"],
+      "moments": "Key emotional beats, dramatic reveals"
+    },
+    "whip_transitions": {
+      "usage": "Occasional scene transitions",
+      "speed": "Medium 0.4-0.6 second whips",
+      "effect_style": "Creative, sometimes colored"
+    },
+    "jump_cuts": {
+      "usage": "Used purposefully for narrative effect",
+      "style": "Often with match-cut logic",
+      "rhythm_sync": "Synchronized to emotional beats rather than percussion"
+    },
+    "match_cuts": {
+      "usage": "Frequent, creating visual narrative continuity",
+      "technique": "Shape, color, movement matches between scenes",
+      "impact": "Seamless storytelling"
+    },
+    "crossfades": {
+      "usage": "Soften transitions, create flow",
+      "speed": "Medium 0.5-1.0 second fades",
+      "color_treatment": "Often to mood colors supporting emotion"
+    },
+    "flash_frames": {
+      "usage": "Occasional emphasis frames",
+      "color": "Conceptually motivated",
+      "duration": "0.05-0.15 seconds"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "The edit serves the story. Style amplifies meaning, not the reverse.",
+    "emotion_first": true,
+    "rhythm_obsessed": false,
+    "storytelling_vs_style": "story-focused",
+    "performance_vs_broll": "60% conceptual moments, 40% performance for story context"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Narrative coherence throughout",
+      "Emotional alignment with music",
+      "Purposeful cut placement",
+      "Visual storytelling",
+      "Creative transitions serving story"
+    ],
+    "avoid": [
+      "Cuts without narrative purpose",
+      "Style over substance",
+      "Mechanical beat synchronization",
+      "Predictable editing patterns"
+    ],
+    "emphasis_on": [
+      "Narrative clarity",
+      "Emotional truth",
+      "Creative storytelling",
+      "Visual innovation",
+      "Character moments"
+    ],
+    "rhythm_keywords": ["narrative", "story", "emotional", "concept", "build", "climax", "reveal"],
+    "visual_keywords": ["creative", "conceptual", "authentic", "innovative", "emotional", "poetic", "meaningful"]
+  }
+}

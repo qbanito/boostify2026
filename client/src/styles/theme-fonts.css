@@ -1,0 +1,26 @@
+/**
+ * Theme Fonts — Google Fonts loaded per preset
+ * 
+ * Only loaded when a non-default theme is active.
+ * Default theme uses the existing Inter/system stack — UNTOUCHED.
+ *
+ * display=swap ensures text is visible while fonts load.
+ */
+
+/* Minimal: Geist (clean, Apple/Linear feel) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Vibrant: Plus Jakarta Sans (modern, Spotify-like) */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* Neon: Space Grotesk (technical, cyberpunk) + JetBrains Mono for accents */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* Earth: Lora (warm serif for headings) */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* Monochrome: IBM Plex Mono (editorial, developer) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
+
+/* Moon: Cormorant Garamond (ethereal, literary) */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');

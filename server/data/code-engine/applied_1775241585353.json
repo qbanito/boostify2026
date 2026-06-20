@@ -1,0 +1,13 @@
+{
+  "id": "applied_1775241585353",
+  "timestamp": "2026-04-03T18:39:45.353Z",
+  "pageId": "ig-boost",
+  "task": "Webhook handler for ig_boost_pro subscription events",
+  "status": "committed",
+  "model": "n/a",
+  "provider": "n/a",
+  "filesChanged": [
+    "server/routes/stripe.ts"
+  ],
+  "commitHash": "dea401b1"
+}

@@ -1,0 +1,138 @@
+{
+  "id": "emmanuel-lubezki",
+  "name": "Emmanuel Lubezki",
+  "title": "Director of Photography",
+  "bio": "3-time Oscar winner. Modern master of natural light cinematography and innovative camera movement. Pioneer of handheld camera storytelling at premium scale. Known for ethereal, breathtaking visuals.",
+  "famous_directors_worked_with": ["Alfonso Cuarón", "Terrence Malick", "Alejandro González Iñárritu"],
+  
+  "iconic_films": [
+    {
+      "title": "Gravity",
+      "director": "Alfonso Cuarón",
+      "year": 2013,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "Birdman",
+      "director": "Alejandro González Iñárritu",
+      "year": 2014,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "The Revenant",
+      "director": "Alejandro González Iñárritu",
+      "year": 2015,
+      "awards": ["Academy Award for Best Cinematography"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Natural light mastery with ethereal quality. Seamless handheld camera movement that feels organic. Warm golden tones with deep shadows. Dreamlike cinematography that feels both grounded and transcendent.",
+    "key_characteristic": "Uses natural light and practical sources to create poetic, dreamlike environments. Movement is character, not distraction.",
+    "legendary_technique": "Pioneered single-take aesthetic in premium cinema; mastered shooting with natural light at unprecedented scales"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Alexa 65",
+        "format": "Digital 65mm",
+        "sensor": "54mm x 30.2mm, 14+ stops",
+        "use_case": "Epic natural light cinematography, ethereal landscapes"
+      },
+      {
+        "name": "RED Helium",
+        "format": "8K digital",
+        "sensor": "40.96mm x 21.6mm, high speed capability",
+        "use_case": "Fast-moving sequences, high frame rate slow motion"
+      },
+      {
+        "name": "Panavision Millennium DXL",
+        "format": "35mm/Digital hybrid",
+        "sensor": "Full anamorphic support",
+        "use_case": "Character moments, intimate scenes"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Zeiss",
+        "series": "Master Prime",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Minimal distortion", "Clean bokeh", "T1.3 speed for low-light naturalism"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Leica",
+        "series": "Summilux-C",
+        "focal_lengths": ["16mm", "25mm", "35mm", "50mm", "75mm", "100mm"],
+        "characteristics": ["Vintage warmth", "Organic bokeh", "Cinematic character"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 50D",
+        "iso": 50,
+        "characteristics": "Ultra-fine grain, ethereal quality, daylight balanced",
+        "mood": "Ethereal, dreamlike, natural, luminous"
+      },
+      {
+        "name": "Kodak Vision3 500T",
+        "iso": 500,
+        "characteristics": "Warm grain, tungsten balanced",
+        "mood": "Intimate, warm, golden-hour nostalgic"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Primarily natural light with minimal manipulation. Uses practical sources and motivated lighting. Creates magic through understanding how light falls naturally.",
+    "color_science": "Warm golden tones balanced against deep cool shadows. Desaturated elegance. Colors that feel found, not created.",
+    "exposure_philosophy": "Expose for mid-tones, preserve highlight and shadow detail. Use dynamic range to show dimension and depth.",
+    "dynamic_range_preference": "14+ stops, utilize for naturalistic tone mapping",
+    "frame_rate_preference": ["24fps standard", "48fps for dreamlike slow motion", "High frame rates for intimate moments"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Intuitive, poetic collaboration. Focuses on capturing the spirit of a moment rather than controlling it.",
+    "strengths_with_narrative": "Translates emotional and spiritual landscapes into visual poetry. Makes audiences feel transcendence.",
+    "best_for_genres": ["Epic adventure", "Intimate drama", "Dreamscapes", "Nature-based narratives", "Spiritual journeys"],
+    "complements_directors": ["Cuarón (perfect match)", "Iñárritu (emotional depth)", "Malick (spiritual cinema)"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Natural light dominance with warm golden tones",
+      "Organic handheld camera movement",
+      "Deep dimensional shadows",
+      "Ethereal, dreamlike quality",
+      "Warm color palette with cool accents",
+      "Minimal artificial lighting visible"
+    ],
+    "technical_mandates": [
+      "Natural light as primary source",
+      "Zeiss Master Prime or Leica Summilux-C lenses",
+      "Warm color temperature bias (golden hour aesthetic)",
+      "Handheld or fluid camera movement",
+      "High dynamic range utilization",
+      "Film stock emulation for warmth and grain"
+    ],
+    "avoid": [
+      "Hard artificial lighting",
+      "Cool color temperature dominance",
+      "Static tripod shots (unless intentional)",
+      "Crushed blacks or blown highlights",
+      "Sterile digital look"
+    ],
+    "emphasis_on": [
+      "Natural beauty captured with technical mastery",
+      "Poetic visual storytelling",
+      "Warm, intimate lighting",
+      "Organic camera movement",
+      "Spiritual and emotional connection",
+      "Dreamlike cinematography"
+    ]
+  }
+}

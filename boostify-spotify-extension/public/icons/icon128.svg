@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="ig" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#833ab4"/>
+      <stop offset="50%" style="stop-color:#fd1d1d"/>
+      <stop offset="100%" style="stop-color:#fcb045"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#ig)"/>
+  <!-- Instagram camera outline -->
+  <rect x="28" y="28" width="72" height="72" rx="20" stroke="white" stroke-width="5" fill="none"/>
+  <circle cx="64" cy="64" r="20" stroke="white" stroke-width="5" fill="none"/>
+  <circle cx="88" cy="40" r="5" fill="white"/>
+  <!-- Boostify lightning bolt -->
+  <path d="M58 50L54 64h8l-4 14 14-18h-8l4-10z" fill="white" opacity="0.9"/>
+</svg>

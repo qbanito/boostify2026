@@ -1,0 +1,146 @@
+{
+  "id": "janusz-kaminski",
+  "name": "Janusz Kaminski",
+  "title": "Director of Photography",
+  "bio": "3-time Oscar winner and Steven Spielberg's primary cinematographer. Master of emotional lighting and revolutionary color science. Known for transforming digital cinematography into emotional storytelling.",
+  "famous_directors_worked_with": ["Steven Spielberg", "Sam Raimi", "Clint Eastwood"],
+  
+  "iconic_films": [
+    {
+      "title": "Saving Private Ryan",
+      "director": "Steven Spielberg",
+      "year": 1998,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "Schindler's List",
+      "director": "Steven Spielberg",
+      "year": 1993,
+      "awards": ["Academy Award Nomination"]
+    },
+    {
+      "title": "War Horse",
+      "director": "Steven Spielberg",
+      "year": 2011,
+      "awards": ["Academy Award Nomination"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Ultra-naturalistic cinematography with poetic color grading. Desaturated primary colors with selective warm/cool accents. Intimate handheld combined with sweeping crane movements. Masterful use of shadows and highlights for emotional depth.",
+    "key_characteristic": "Emotional depth through lighting - creates psychological mood through subtle color temperature shifts and motivated practicals",
+    "legendary_technique": "Pioneered digital color grading for emotional storytelling in major studio films; pioneered green-and-gold color palette as emotional language"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Panavision System 65",
+        "format": "VistaVision 65mm",
+        "sensor": "6 perforations per frame, 2.39:1 native",
+        "use_case": "Epic scope sequences, establishing moments of grandeur, war sequences"
+      },
+      {
+        "name": "Alexa 65",
+        "format": "Digital 65mm equivalent",
+        "sensor": "54mm x 30.2mm, 14+ stops dynamic range",
+        "use_case": "High dynamic range storytelling, intimate character drama"
+      },
+      {
+        "name": "Panavision Millennium XL",
+        "format": "35mm anamorphic",
+        "sensor": "6K effective resolution",
+        "use_case": "Character-driven moments, emotional intimacy, legacy anamorphic look"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "System 65 Lenses",
+        "focal_lengths": ["14mm", "21mm", "32mm", "48mm", "65mm", "100mm"],
+        "characteristics": ["Unmatched sharpness", "Flawless optics", "Anamorphic compression", "Warm color coating"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Zeiss",
+        "series": "Master Prime",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Minimal aberrations", "Exceptional color rendition", "T1.3 speed", "Neutral color"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Cooke",
+        "series": "Anamorphic/i",
+        "focal_lengths": ["32mm", "40mm", "50mm", "65mm", "100mm"],
+        "characteristics": ["Warm coating", "Painterly bokeh", "Romantic anamorphic flare", "Iconic vintage look"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 500T",
+        "iso": 500,
+        "characteristics": "Fine grain, warm color bias, classic film emulation",
+        "mood": "Nostalgic, emotional, intimate, timeless"
+      },
+      {
+        "name": "Kodak Vision3 200T",
+        "iso": 200,
+        "characteristics": "Ultra-fine grain, silky smooth, digital-like cleanliness",
+        "mood": "Cinematic, pristine, epic, grand"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Motivated practical lights with carefully balanced key/fill ratio. Often uses warm tungsten with cool practical sources to create emotional contrast. Shadows carry meaning, not just darkness.",
+    "color_science": "Desaturated primary colors with selective saturation on emotional beats. Warm ambers and cool blues as emotional anchors. Green-and-gold palette for hope and victory.",
+    "exposure_philosophy": "Expose for highlights, maintain shadow detail, use full dynamic range for emotional depth. Crushed blacks reserved for moments of darkness or loss.",
+    "dynamic_range_preference": "14+ stops, fully utilize sensor capability for maximum visual information",
+    "frame_rate_preference": ["24fps for drama", "23.976fps for modern digital workflow", "Variable frame rates for emotional emphasis"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Deep visual collaboration - builds mood through light and color to support director's emotional narrative intent. Silent communicator; lets images speak.",
+    "strengths_with_narrative": "Transforms emotional subtext into visual language. Expert at conveying psychological states through lighting. Makes audiences FEEL before they understand.",
+    "best_for_genres": ["Epic drama", "War films", "Intimate character studies", "Historical pieces", "Emotional journey narratives"],
+    "complements_directors": ["Spielberg (perfect artistic match)", "Scorsese style (classical approach to color)", "Fincher (technical precision meets emotion)"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Sophisticated lighting ratios with motivated sources",
+      "Desaturated color palette with emotional accents",
+      "Shallow depth of field with pin-sharp focus on performance",
+      "Warm/cool color temperature contrast as emotional language",
+      "Professional cinema camera composition and framing",
+      "Shadows that carry psychological weight"
+    ],
+    "technical_mandates": [
+      "Shoot on 65mm equivalent digital format (Alexa 65 standard)",
+      "Anamorphic lens aesthetic (Panavision preferred for vintage, Zeiss for modern precision)",
+      "Kodak film stock emulation (warm grain texture for intimacy)",
+      "Professional cinema lighting setup (no flat digital look)",
+      "Masterful exposure control - full dynamic range utilization",
+      "24fps frame rate for emotional pacing"
+    ],
+    "avoid": [
+      "Flat digital look without emotional lighting",
+      "Overexposed highlights that lose detail",
+      "Crushed shadows without intentional purpose",
+      "Unnatural color grading that doesn't serve emotion",
+      "Artificial lighting that doesn't feel motivated by story",
+      "Oversaturated colors without selective color emphasis"
+    ],
+    "emphasis_on": [
+      "Emotional lighting that supports performance and subtext",
+      "Color as narrative and psychological language",
+      "Classical cinema aesthetics executed with modern precision",
+      "Technical perfection without coldness",
+      "Visual storytelling through light, shadow, and color",
+      "Making audiences feel the emotional truth"
+    ]
+  }
+}

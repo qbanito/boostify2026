@@ -1,0 +1,1 @@
+ALTER TABLE "venue_booking_campaigns" ADD COLUMN "email_template" text DEFAULT 'professional_pitch';

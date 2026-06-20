@@ -1,0 +1,123 @@
+{
+  "id": "tiktok-short-form",
+  "name": "TikTok Short-Form Editor",
+  "title": "Modern Viral Content Editor",
+  "bio": "Modern editor optimized for short-form viral content. Ultra-fast cuts, trend-forward, attention-grabbing, designed for social media impact.",
+  "famous_directors": ["Modern TikTok creators"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Multiple viral artists",
+      "title": "TikTok trending sounds",
+      "year": 2020,
+      "signature_technique": "Ultra-fast cuts, text overlays, trending transitions, dopamine-hit editing"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Ultra-fast, trend-forward editing optimized for viral content and social media. Dopamine-driven cuts.",
+    "pace": "ultra-fast",
+    "cut_frequency": "Every 0.3-1 second",
+    "dominant_technique": "Quick cuts, trending transitions, text synchronization",
+    "music_sync_philosophy": "Every beat change is a visual change. Attention is currency."
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Ultra-fast to rap rhythm",
+      "cut_style": "Rapid-fire cuts, trending transitions",
+      "emphasis": ["Rap flow hits", "Hook moments", "Ad-lib visuals"]
+    },
+    "pop": {
+      "beat_sync_approach": "Ultra-fast to hook",
+      "cut_style": "Quick cuts with trending effects",
+      "emphasis": ["Hook moments", "Performance sections", "Trend moments"]
+    },
+    "rock": {
+      "beat_sync_approach": "Fast to drum hits",
+      "cut_style": "Dynamic, occasionally slower",
+      "emphasis": ["Beats", "Vocal peaks", "Guitar moments"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Ultra-fast to rhythm",
+      "cut_style": "Quick cuts, drop moments emphasized",
+      "emphasis": ["Drop hits", "Synth moments", "Bass hits"]
+    },
+    "indie": {
+      "beat_sync_approach": "Moderate with selective quick cuts",
+      "cut_style": "Mix, following emotional beats",
+      "emphasis": ["Lyrical moments", "Emotional peaks", "Chorus hits"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "Every 1-2 seconds for impact",
+      "frequency": "Very frequent",
+      "duration": "0.08-0.15 seconds"
+    },
+    "speed_ramps": {
+      "usage": "Constant, every few cuts",
+      "speed_ranges": ["0.25x slow-mo", "1x normal", "3x fast"],
+      "moments": "Every transition opportunity"
+    },
+    "whip_transitions": {
+      "usage": "Primary transition method",
+      "speed": "Fast 0.2-0.3 seconds",
+      "effect_style": "Trending, viral aesthetics"
+    },
+    "jump_cuts": {
+      "usage": "Constant, every cut",
+      "style": "Hard, energetic cuts",
+      "rhythm_sync": "Every beat change is a cut"
+    },
+    "match_cuts": {
+      "usage": "When possible, but style over substance",
+      "technique": "Quick match for visual flow",
+      "impact": "Keep engagement high"
+    },
+    "crossfades": {
+      "usage": "Rare, faster cuts preferred",
+      "speed": "Very fast 0.1-0.2 seconds",
+      "color_treatment": "Neon, trending colors"
+    },
+    "flash_frames": {
+      "usage": "Frequent, every few seconds",
+      "color": "Trending colors, neon, contrasting",
+      "duration": "0.03-0.08 seconds"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "Speed, trend, and engagement. Make people feel something in 3 seconds.",
+    "emotion_first": false,
+    "rhythm_obsessed": true,
+    "storytelling_vs_style": "style-obsessed",
+    "performance_vs_broll": "60% performance, 40% trending B-roll"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Ultra-fast pacing",
+      "Every-beat synchronization",
+      "Frequent visual changes",
+      "Trending transitions",
+      "High engagement factor"
+    ],
+    "avoid": [
+      "Slow pacing",
+      "Long static shots",
+      "Subtle transitions",
+      "Outdated aesthetics"
+    ],
+    "emphasis_on": [
+      "Speed and engagement",
+      "Trend-forward aesthetics",
+      "Constant visual changes",
+      "Viral moments",
+      "Dopamine hits"
+    ],
+    "rhythm_keywords": ["beat", "drop", "fast", "trend", "viral", "impact", "change"],
+    "visual_keywords": ["fast", "trendy", "engaging", "colorful", "neon", "viral", "dynamic", "exciting"]
+  }
+}

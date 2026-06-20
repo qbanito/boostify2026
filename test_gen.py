@@ -1,0 +1,1 @@
+import requests\nresp=requests.post(" http://127.0.0.1:9001/generate\, json={\task\:\video\,\prompt\:\cat dancing in neon\,\duration\:5,\resolution\:\512x512\})\nprint(resp.status_code)\nprint(resp.text)

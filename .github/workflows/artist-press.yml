@@ -1,0 +1,123 @@
+name: 🎤 Artist Press Release Campaign
+
+on:
+  # Automated schedule — rotate artists across the week
+  schedule:
+    - cron: '0 14 * * 1'   # Mon 14:00 UTC → Redwine (Vino con Sal)
+    - cron: '0 15 * * 2'   # Tue 15:00 UTC → Redwine (Life Vol. II)
+    - cron: '0 14 * * 3'   # Wed 14:00 UTC → Qbanito (Conciencia)
+    - cron: '0 15 * * 4'   # Thu 15:00 UTC → Qbanito (Nocturnal)
+    - cron: '0 14 * * 5'   # Fri 14:00 UTC → Qbanito (Bollywood)
+
+  # Manual trigger — choose exactly which artist to promote
+  workflow_dispatch:
+    inputs:
+      artist:
+        description: 'Artist slug or group to promote'
+        required: true
+        default: 'random'
+        type: choice
+        options:
+          - random
+          - redwine
+          - qbanito
+          - redwine_vinoconsal
+          - redwine_lifevol2
+          - redwineli
+          - qbanito-nocturnal
+          - qbanito_conciencia
+          - qbanitobollwood
+          - all
+      max_emails:
+        description: 'Max emails to send (Brevo safe limit: 200/day)'
+        required: false
+        default: '40'
+        type: string
+      preview_mode:
+        description: 'Preview only (send to convoycubano@gmail.com)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      dry_run:
+        description: 'Dry run — log only, do NOT send'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  send-press-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Map schedule day → artist slug
+    env:
+      ARTIST_SLUG: ${{ github.event.inputs.artist || 'random' }}
+      MAX_EMAILS:  ${{ github.event.inputs.max_emails || '40' }}
+      PREVIEW:     ${{ github.event.inputs.preview_mode || 'false' }}
+      DRY:         ${{ github.event.inputs.dry_run || 'false' }}
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🗓️ Resolve artist for scheduled run
+        if: github.event_name == 'schedule'
+        run: |
+          DAY=$(date +%u)   # 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri
+          case $DAY in
+            1) SLUG="redwine_vinoconsal" ;;
+            2) SLUG="redwine_lifevol2" ;;
+            3) SLUG="qbanito_conciencia" ;;
+            4) SLUG="qbanito-nocturnal" ;;
+            5) SLUG="qbanitobollwood" ;;
+            6) SLUG="redwineli" ;;
+            *) SLUG="random" ;;
+          esac
+          echo "ARTIST_SLUG=$SLUG" >> $GITHUB_ENV
+          echo "📅 Day $DAY → promoting: $SLUG"
+
+      - name: 🎤 Run Artist Press Release Campaign
+        env:
+          DATABASE_URL:               ${{ secrets.DATABASE_URL }}
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+          BREVO_API_KEY:              ${{ secrets.BREVO_API_KEY }}
+          RESEND_API_ARTISTS_1:       ${{ secrets.RESEND_API_ARTISTS_1 }}
+          RESEND_API_ARTISTS_2:       ${{ secrets.RESEND_API_ARTISTS_2 }}
+          RESEND_API_ARTISTS_3:       ${{ secrets.RESEND_API_ARTISTS_3 }}
+          RESEND_API_ARTISTS_4:       ${{ secrets.RESEND_API_ARTISTS_4 }}
+        run: |
+          echo "🎤 BOOSTIFY ARTIST PRESS RELEASE"
+          echo "Artist : $ARTIST_SLUG"
+          echo "Max    : $MAX_EMAILS"
+          echo "Preview: $PREVIEW"
+          echo "Dry    : $DRY"
+          node scripts/artist-press-sender.cjs \
+            --artist=$ARTIST_SLUG \
+            --max=$MAX_EMAILS \
+            --preview=$PREVIEW \
+            --dry=$DRY
+
+      - name: 📊 Upload press logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-press-logs-${{ github.run_id }}
+          path: |
+            *.log
+            logs/
+          if-no-files-found: ignore

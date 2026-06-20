@@ -1,0 +1,874 @@
+/**
+ * MiniStudio — Producer Tools
+ * ─────────────────────────────────────────────────────────────
+ * A mobile-first, PC-friendly multi-track recording studio.
+ *
+ *   • Record audio via MediaRecorder (mic or tab)
+ *   • Multiple tracks: rename, delete, mute, solo, volume
+ *   • Per-track 3-band EQ + master gain (Web Audio API)
+ *   • Import audio files (wav / mp3 / m4a / ogg / webm)
+ *   • Export individual tracks OR render a mixdown to WAV
+ *   • Lyrics panel: paste / generate with AI / read aloud (TTS)
+ *   • Fully local — audio never leaves the browser unless exported
+ *
+ * Browsers: Chrome/Edge/Safari modern, mobile Safari 14+.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
+import { Slider } from '../ui/slider';
+import { Badge } from '../ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { useToast } from '../../hooks/use-toast';
+import {
+  Mic, Square, Play, Pause, Trash2, Download, Upload, Volume2, VolumeX,
+  Headphones, Sparkles, BookText, FileAudio, Loader2, StopCircle, Settings2,
+  SkipBack, Disc3, Radio, Plus,
+} from 'lucide-react';
+
+// ── Types ──────────────────────────────────────────────────────────
+interface Track {
+  id: string;
+  name: string;
+  buffer: AudioBuffer | null;
+  blob: Blob | null;
+  volume: number; // 0..1
+  muted: boolean;
+  solo: boolean;
+  eqLow: number; // -12..12 dB
+  eqMid: number;
+  eqHigh: number;
+  color: string;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+const TRACK_COLORS = [
+  'from-orange-500 to-red-500',
+  'from-violet-500 to-fuchsia-500',
+  'from-emerald-500 to-teal-500',
+  'from-sky-500 to-blue-500',
+  'from-amber-500 to-yellow-500',
+  'from-rose-500 to-pink-500',
+];
+
+function fmtTime(seconds: number): string {
+  if (!isFinite(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function makeId() {
+  return `trk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// Encode an AudioBuffer to a 16-bit PCM WAV Blob
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numCh = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length * numCh * 2 + 44;
+  const out = new ArrayBuffer(length);
+  const view = new DataView(out);
+
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, length - 8, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numCh * 2, true);
+  view.setUint16(32, numCh * 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, length - 44, true);
+
+  const channels: Float32Array[] = [];
+  for (let ch = 0; ch < numCh; ch++) channels.push(buffer.getChannelData(ch));
+
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numCh; ch++) {
+      const s = Math.max(-1, Math.min(1, channels[ch][i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
+  }
+  return new Blob([out], { type: 'audio/wav' });
+}
+
+// ── Component ──────────────────────────────────────────────────────
+export function MiniStudio() {
+  const { toast } = useToast();
+
+  // Audio graph
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const getCtx = useCallback(() => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current!;
+  }, []);
+
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [masterVolume, setMasterVolume] = useState(0.9);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTrackId, setRecordingTrackId] = useState<string | null>(null);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [lyrics, setLyrics] = useState('');
+  const [lyricsTopic, setLyricsTopic] = useState('');
+  const [lyricsGenre, setLyricsGenre] = useState('pop');
+  const [lyricsMood, setLyricsMood] = useState('uplifting');
+  const [lyricsLang, setLyricsLang] = useState('en');
+  const [genLoading, setGenLoading] = useState(false);
+  const [ttsActive, setTtsActive] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+
+  // Recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
+  const recordStartRef = useRef<number>(0);
+
+  // Playback refs
+  const playSourcesRef = useRef<Array<{ src: AudioBufferSourceNode; gain: GainNode }>>([]);
+  const playStartRef = useRef<number>(0);
+  const playOffsetRef = useRef<number>(0);
+  const playTimerRef = useRef<number | null>(null);
+
+  // Derived: total duration
+  const totalDuration = useMemo(
+    () => tracks.reduce((acc, t) => Math.max(acc, t.buffer?.duration ?? 0), 0),
+    [tracks],
+  );
+  const hasSolo = tracks.some((t) => t.solo);
+
+  // ── Recording ───────────────────────────────────────────────────
+  const startRecording = useCallback(async () => {
+    try {
+      if (isRecording) return;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      recordStreamRef.current = stream;
+      recordChunksRef.current = [];
+
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
+      const mr = new MediaRecorder(stream, { mimeType: mime });
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        const blob = new Blob(recordChunksRef.current, { type: mime });
+        const arrBuf = await blob.arrayBuffer();
+        try {
+          const ctx = getCtx();
+          const decoded = await ctx.decodeAudioData(arrBuf.slice(0));
+          const id = makeId();
+          setTracks((prev) => [
+            ...prev,
+            {
+              id,
+              name: `Track ${prev.length + 1}`,
+              buffer: decoded,
+              blob,
+              volume: 0.85,
+              muted: false,
+              solo: false,
+              eqLow: 0,
+              eqMid: 0,
+              eqHigh: 0,
+              color: TRACK_COLORS[prev.length % TRACK_COLORS.length],
+            },
+          ]);
+          toast({ title: 'Track recorded', description: `${fmtTime(decoded.duration)} captured` });
+        } catch (err: any) {
+          toast({ title: 'Decode failed', description: err.message, variant: 'destructive' });
+        }
+        recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+        recordStreamRef.current = null;
+        setIsRecording(false);
+        setRecordingTrackId(null);
+        setRecordElapsed(0);
+        if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      };
+
+      const tempId = makeId();
+      setRecordingTrackId(tempId);
+      setIsRecording(true);
+      recordStartRef.current = performance.now();
+      recordTimerRef.current = window.setInterval(() => {
+        setRecordElapsed((performance.now() - recordStartRef.current) / 1000);
+      }, 100);
+      mr.start(250);
+    } catch (err: any) {
+      toast({ title: 'Mic unavailable', description: err.message, variant: 'destructive' });
+    }
+  }, [isRecording, getCtx, toast]);
+
+  const stopRecording = useCallback(() => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') mr.stop();
+  }, []);
+
+  // ── Import ──────────────────────────────────────────────────────
+  const importFile = useCallback(async (file: File) => {
+    try {
+      const arrBuf = await file.arrayBuffer();
+      const ctx = getCtx();
+      const decoded = await ctx.decodeAudioData(arrBuf.slice(0));
+      const id = makeId();
+      setTracks((prev) => [
+        ...prev,
+        {
+          id,
+          name: file.name.replace(/\.[^.]+$/, '').slice(0, 40) || `Track ${prev.length + 1}`,
+          buffer: decoded,
+          blob: file,
+          volume: 0.85,
+          muted: false,
+          solo: false,
+          eqLow: 0,
+          eqMid: 0,
+          eqHigh: 0,
+          color: TRACK_COLORS[prev.length % TRACK_COLORS.length],
+        },
+      ]);
+      toast({ title: 'Imported', description: `${file.name} (${fmtTime(decoded.duration)})` });
+    } catch (err: any) {
+      toast({ title: 'Import failed', description: err.message, variant: 'destructive' });
+    }
+  }, [getCtx, toast]);
+
+  const onImportInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach((f) => importFile(f));
+    e.target.value = '';
+  };
+
+  // ── Playback ────────────────────────────────────────────────────
+  const buildGraphForTrack = (ctx: AudioContext, t: Track, destination: AudioNode): { src: AudioBufferSourceNode; gain: GainNode } | null => {
+    if (!t.buffer) return null;
+    const src = ctx.createBufferSource();
+    src.buffer = t.buffer;
+
+    // 3-band EQ
+    const low = ctx.createBiquadFilter();
+    low.type = 'lowshelf';
+    low.frequency.value = 200;
+    low.gain.value = t.eqLow;
+
+    const mid = ctx.createBiquadFilter();
+    mid.type = 'peaking';
+    mid.frequency.value = 1000;
+    mid.Q.value = 1;
+    mid.gain.value = t.eqMid;
+
+    const high = ctx.createBiquadFilter();
+    high.type = 'highshelf';
+    high.frequency.value = 5000;
+    high.gain.value = t.eqHigh;
+
+    const gain = ctx.createGain();
+    const effectiveMuted = t.muted || (hasSolo && !t.solo);
+    gain.gain.value = effectiveMuted ? 0 : t.volume;
+
+    src.connect(low);
+    low.connect(mid);
+    mid.connect(high);
+    high.connect(gain);
+    gain.connect(destination);
+    return { src, gain };
+  };
+
+  const stopPlayback = useCallback(() => {
+    playSourcesRef.current.forEach((s) => {
+      try { s.src.stop(); } catch {}
+    });
+    playSourcesRef.current = [];
+    if (playTimerRef.current) {
+      window.clearInterval(playTimerRef.current);
+      playTimerRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
+  const startPlayback = useCallback(async (fromOffset = 0) => {
+    stopPlayback();
+    const ctx = getCtx();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const master = ctx.createGain();
+    master.gain.value = masterVolume;
+    master.connect(ctx.destination);
+
+    const playable = tracks.filter((t) => t.buffer);
+    if (playable.length === 0) return;
+
+    const when = ctx.currentTime + 0.05;
+    for (const t of playable) {
+      const node = buildGraphForTrack(ctx, t, master);
+      if (!node) continue;
+      node.src.start(when, fromOffset);
+      playSourcesRef.current.push(node);
+    }
+    playStartRef.current = when;
+    playOffsetRef.current = fromOffset;
+    setIsPlaying(true);
+
+    playTimerRef.current = window.setInterval(() => {
+      const elapsed = ctx.currentTime - playStartRef.current + fromOffset;
+      setPlaybackTime(elapsed);
+      if (elapsed >= totalDuration) stopPlayback();
+    }, 100);
+  }, [getCtx, masterVolume, tracks, totalDuration, hasSolo, stopPlayback]);
+
+  // Keep live gain updates while playing (volume/mute changes without restart)
+  useEffect(() => {
+    if (!isPlaying) return;
+    tracks.forEach((t, i) => {
+      const node = playSourcesRef.current[i];
+      if (!node) return;
+      const effectiveMuted = t.muted || (hasSolo && !t.solo);
+      node.gain.gain.setTargetAtTime(effectiveMuted ? 0 : t.volume, getCtx().currentTime, 0.02);
+    });
+  }, [tracks, isPlaying, hasSolo, getCtx]);
+
+  // ── Mixdown export ──────────────────────────────────────────────
+  const renderMixdown = async (): Promise<Blob | null> => {
+    const playable = tracks.filter((t) => t.buffer);
+    if (playable.length === 0) return null;
+    const sampleRate = playable[0].buffer!.sampleRate;
+    const length = Math.ceil(totalDuration * sampleRate);
+    const numCh = 2;
+    const offline = new OfflineAudioContext(numCh, length, sampleRate);
+    const master = offline.createGain();
+    master.gain.value = masterVolume;
+    master.connect(offline.destination);
+
+    for (const t of playable) {
+      const src = offline.createBufferSource();
+      src.buffer = t.buffer!;
+      const low = offline.createBiquadFilter();
+      low.type = 'lowshelf'; low.frequency.value = 200; low.gain.value = t.eqLow;
+      const mid = offline.createBiquadFilter();
+      mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 1; mid.gain.value = t.eqMid;
+      const high = offline.createBiquadFilter();
+      high.type = 'highshelf'; high.frequency.value = 5000; high.gain.value = t.eqHigh;
+      const gain = offline.createGain();
+      const effectiveMuted = t.muted || (hasSolo && !t.solo);
+      gain.gain.value = effectiveMuted ? 0 : t.volume;
+      src.connect(low); low.connect(mid); mid.connect(high); high.connect(gain); gain.connect(master);
+      src.start(0);
+    }
+    const rendered = await offline.startRendering();
+    return audioBufferToWav(rendered);
+  };
+
+  const exportMix = async () => {
+    try {
+      toast({ title: 'Rendering mix…' });
+      const blob = await renderMixdown();
+      if (!blob) return toast({ title: 'Nothing to export', variant: 'destructive' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `boostify-mix-${Date.now()}.wav`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Mix exported', description: 'WAV downloaded' });
+    } catch (err: any) {
+      toast({ title: 'Export failed', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const exportTrack = (t: Track) => {
+    if (!t.blob && !t.buffer) return;
+    const blob = t.buffer ? audioBufferToWav(t.buffer) : t.blob!;
+    const ext = t.buffer ? 'wav' : (t.blob!.type.includes('webm') ? 'webm' : 'audio');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${t.name.replace(/\s+/g, '_')}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Track mutations ─────────────────────────────────────────────
+  const updateTrack = (id: string, patch: Partial<Track>) =>
+    setTracks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const removeTrack = (id: string) => setTracks((prev) => prev.filter((t) => t.id !== id));
+  const clearAll = () => {
+    stopPlayback();
+    setTracks([]);
+  };
+
+  // ── Lyrics ──────────────────────────────────────────────────────
+  const generateLyrics = async () => {
+    if (!lyricsTopic.trim()) return toast({ title: 'Topic required', variant: 'destructive' });
+    setGenLoading(true);
+    try {
+      const r = await fetch('/api/mini-studio/lyrics/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          topic: lyricsTopic,
+          genre: lyricsGenre,
+          mood: lyricsMood,
+          language: lyricsLang,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data.error || 'Failed');
+      setLyrics(data.lyrics);
+      toast({ title: 'Lyrics generated' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
+  const speakLyrics = () => {
+    if (!('speechSynthesis' in window)) {
+      return toast({ title: 'TTS unavailable', description: 'Your browser does not support speech synthesis', variant: 'destructive' });
+    }
+    if (ttsActive) {
+      window.speechSynthesis.cancel();
+      setTtsActive(false);
+      return;
+    }
+    if (!lyrics.trim()) return toast({ title: 'No lyrics to read', variant: 'destructive' });
+    // Strip section tags
+    const cleaned = lyrics.replace(/\[[^\]]+\]/g, '. ');
+    const utter = new SpeechSynthesisUtterance(cleaned);
+    utter.rate = 0.95;
+    utter.pitch = 1;
+    utter.lang = lyricsLang === 'es' ? 'es-ES' : lyricsLang === 'pt' ? 'pt-BR' : 'en-US';
+    utter.onend = () => setTtsActive(false);
+    utter.onerror = () => setTtsActive(false);
+    window.speechSynthesis.speak(utter);
+    setTtsActive(true);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopPlayback();
+      if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    };
+  }, [stopPlayback]);
+
+  // ── Render ──────────────────────────────────────────────────────
+  return (
+    <div className="space-y-4">
+      {/* Hero / controls */}
+      <Card className="bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/40 border-orange-500/20 p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <Disc3 className={`h-6 w-6 text-white ${isRecording || isPlaying ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <h3 className="text-lg sm:text-xl font-bold">Mini Studio</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Record, mix, and export — right in your browser
+              </p>
+            </div>
+          </div>
+
+          {/* Primary transport */}
+          <div className="flex flex-wrap items-center gap-2">
+            {!isRecording ? (
+              <Button
+                onClick={startRecording}
+                className="bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30 min-w-[120px]"
+              >
+                <Mic className="h-4 w-4 mr-2" /> Record
+              </Button>
+            ) : (
+              <Button
+                onClick={stopRecording}
+                className="bg-red-600 hover:bg-red-700 text-white animate-pulse min-w-[120px]"
+              >
+                <StopCircle className="h-4 w-4 mr-2" /> Stop · {fmtTime(recordElapsed)}
+              </Button>
+            )}
+
+            <Button
+              onClick={() => (isPlaying ? stopPlayback() : startPlayback(0))}
+              disabled={tracks.length === 0}
+              variant="outline"
+              className="border-orange-500/40 hover:bg-orange-500/10"
+            >
+              {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+              {isPlaying ? 'Pause' : 'Play'}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => { stopPlayback(); setPlaybackTime(0); }}
+              disabled={tracks.length === 0}
+            >
+              <SkipBack className="h-4 w-4" />
+            </Button>
+
+            <input
+              id="mini-studio-import"
+              type="file"
+              accept="audio/*"
+              multiple
+              className="hidden"
+              onChange={onImportInput}
+            />
+            <Button
+              variant="outline"
+              onClick={() => document.getElementById('mini-studio-import')?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" /> Import
+            </Button>
+
+            <Button
+              onClick={exportMix}
+              disabled={tracks.length === 0}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              <Download className="h-4 w-4 mr-2" /> Export Mix
+            </Button>
+
+            <Button variant="outline" size="icon" onClick={() => setShowLibrary(true)} title="Library & tools">
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Master + timeline */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center">
+          <div className="bg-slate-950/60 rounded-lg p-3 border border-slate-800">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+              <span>{fmtTime(playbackTime)}</span>
+              <span>{fmtTime(totalDuration)}</span>
+            </div>
+            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all"
+                style={{ width: totalDuration > 0 ? `${Math.min(100, (playbackTime / totalDuration) * 100)}%` : '0%' }}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 min-w-[180px]">
+            <Volume2 className="h-4 w-4 text-muted-foreground" />
+            <Slider
+              value={[Math.round(masterVolume * 100)]}
+              onValueChange={([v]) => setMasterVolume(v / 100)}
+              max={100}
+              step={1}
+              className="flex-1"
+            />
+            <span className="text-xs tabular-nums w-8 text-right">{Math.round(masterVolume * 100)}</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Main workspace: tracks + lyrics */}
+      <Tabs defaultValue="tracks">
+        <TabsList className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="tracks"><FileAudio className="h-4 w-4 mr-2" />Tracks ({tracks.length})</TabsTrigger>
+          <TabsTrigger value="lyrics"><BookText className="h-4 w-4 mr-2" />Lyrics</TabsTrigger>
+        </TabsList>
+
+        {/* TRACKS */}
+        <TabsContent value="tracks" className="mt-4">
+          {tracks.length === 0 && !isRecording ? (
+            <Card className="p-8 text-center bg-slate-900/40 border-dashed border-orange-500/20">
+              <Mic className="h-10 w-10 mx-auto mb-3 text-orange-500/60" />
+              <h4 className="font-semibold mb-1">Your studio is empty</h4>
+              <p className="text-sm text-muted-foreground mb-4">
+                Tap <strong>Record</strong> to capture audio or <strong>Import</strong> a file.
+              </p>
+              <div className="flex justify-center gap-2">
+                <Button onClick={startRecording} className="bg-red-500 hover:bg-red-600">
+                  <Mic className="h-4 w-4 mr-2" /> Start recording
+                </Button>
+                <Button variant="outline" onClick={() => document.getElementById('mini-studio-import')?.click()}>
+                  <Upload className="h-4 w-4 mr-2" /> Import audio
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {isRecording && (
+                <Card className="p-3 bg-red-500/10 border-red-500/30 flex items-center gap-3">
+                  <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-medium">Recording new track…</span>
+                  <span className="ml-auto text-sm tabular-nums">{fmtTime(recordElapsed)}</span>
+                </Card>
+              )}
+              {tracks.map((t, idx) => (
+                <TrackRow
+                  key={t.id}
+                  track={t}
+                  index={idx}
+                  hasSolo={hasSolo}
+                  onChange={(patch) => updateTrack(t.id, patch)}
+                  onDelete={() => removeTrack(t.id)}
+                  onExport={() => exportTrack(t)}
+                />
+              ))}
+              {tracks.length > 0 && (
+                <div className="flex justify-end pt-2">
+                  <Button variant="ghost" size="sm" onClick={clearAll} className="text-red-400 hover:text-red-500 hover:bg-red-500/10">
+                    <Trash2 className="h-4 w-4 mr-2" /> Clear all tracks
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* LYRICS */}
+        <TabsContent value="lyrics" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+            <Card className="p-3 bg-slate-900/60 border-orange-500/10">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-semibold">Lyrics sheet</Label>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={ttsActive ? 'default' : 'outline'}
+                    onClick={speakLyrics}
+                    className={ttsActive ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+                  >
+                    <Radio className="h-3.5 w-3.5 mr-1.5" />
+                    {ttsActive ? 'Stop reading' : 'Read aloud'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const blob = new Blob([lyrics], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = `lyrics-${Date.now()}.txt`;
+                      a.click(); URL.revokeObjectURL(url);
+                    }}
+                    disabled={!lyrics.trim()}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> .txt
+                  </Button>
+                </div>
+              </div>
+              <Textarea
+                value={lyrics}
+                onChange={(e) => setLyrics(e.target.value)}
+                rows={18}
+                placeholder={"[Verse 1]\nWrite your lyrics here, or generate them with AI →\n\n[Chorus]\n…"}
+                className="font-mono text-sm min-h-[360px] resize-y"
+              />
+            </Card>
+
+            <Card className="p-3 bg-slate-900/60 border-orange-500/10 space-y-3 h-fit">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="h-4 w-4 text-orange-500" /> AI lyrics generator
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Topic / theme</Label>
+                <Input value={lyricsTopic} onChange={(e) => setLyricsTopic(e.target.value)} placeholder="Late nights, chasing dreams" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Genre</Label>
+                  <Input value={lyricsGenre} onChange={(e) => setLyricsGenre(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Mood</Label>
+                  <Input value={lyricsMood} onChange={(e) => setLyricsMood(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Language</Label>
+                <select
+                  value={lyricsLang}
+                  onChange={(e) => setLyricsLang(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-md h-9 px-2 text-sm"
+                >
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="pt">Português</option>
+                  <option value="fr">Français</option>
+                  <option value="it">Italiano</option>
+                </select>
+              </div>
+              <Button
+                onClick={generateLyrics}
+                disabled={genLoading || !lyricsTopic.trim()}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+              >
+                {genLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Writing…</> : <><Sparkles className="h-4 w-4 mr-2" /> Generate lyrics</>}
+              </Button>
+              <p className="text-[10px] text-muted-foreground">
+                Output is 100% original. Review for style before publishing.
+              </p>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Library / tools dialog */}
+      <Dialog open={showLibrary} onOpenChange={setShowLibrary}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Headphones className="h-5 w-5 text-orange-500" /> Studio toolkit</DialogTitle>
+            <DialogDescription>Quick tips and monitoring tools for your session.</DialogDescription>
+          </DialogHeader>
+          <ul className="text-sm space-y-2 text-muted-foreground">
+            <li>🎙 <strong>Record</strong> — uses your mic with echo-cancellation, noise-suppression and auto-gain.</li>
+            <li>📥 <strong>Import</strong> — wav / mp3 / m4a / ogg / webm. Decoded locally, stays private.</li>
+            <li>🎚 <strong>Per-track EQ</strong> — low-shelf (200 Hz), mid-peak (1 kHz), high-shelf (5 kHz), ±12 dB.</li>
+            <li>🔇 <strong>Mute / Solo</strong> — solo is exclusive; any solo mutes non-solo tracks.</li>
+            <li>🎛 <strong>Master</strong> — global gain applied to the mixdown.</li>
+            <li>💾 <strong>Export</strong> — per-track or full mixdown as 16-bit WAV rendered offline.</li>
+            <li>✍️ <strong>Lyrics</strong> — write manually, generate with AI, or have the browser read them aloud.</li>
+            <li>📱 <strong>Mobile</strong> — tap Record, grant mic permission once, and track away. Works on iOS Safari 14+.</li>
+          </ul>
+          <DialogFooter>
+            <Button onClick={() => setShowLibrary(false)} className="bg-orange-500 hover:bg-orange-600">Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ── TrackRow sub-component ────────────────────────────────────────
+function TrackRow({
+  track, index, hasSolo, onChange, onDelete, onExport,
+}: {
+  track: Track;
+  index: number;
+  hasSolo: boolean;
+  onChange: (patch: Partial<Track>) => void;
+  onDelete: () => void;
+  onExport: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const effectiveMuted = track.muted || (hasSolo && !track.solo);
+
+  return (
+    <Card className={`p-3 bg-slate-900/70 border-slate-800 ${effectiveMuted ? 'opacity-60' : ''}`}>
+      <div className="flex items-center gap-2">
+        <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${track.color} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+          {index + 1}
+        </div>
+        <Input
+          value={track.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          className="h-8 bg-transparent border-transparent hover:border-slate-700 focus:border-orange-500 flex-1 min-w-0 text-sm font-semibold px-2"
+        />
+        <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">
+          {track.buffer ? fmtTime(track.buffer.duration) : '—'}
+        </Badge>
+        <Button
+          size="icon"
+          variant={track.muted ? 'default' : 'ghost'}
+          className={`h-8 w-8 ${track.muted ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
+          onClick={() => onChange({ muted: !track.muted })}
+          title="Mute"
+        >
+          {track.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </Button>
+        <Button
+          size="icon"
+          variant={track.solo ? 'default' : 'ghost'}
+          className={`h-8 w-8 hidden xs:inline-flex ${track.solo ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
+          onClick={() => onChange({ solo: !track.solo })}
+          title="Solo"
+        >
+          <span className="text-[10px] font-bold">S</span>
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={() => setExpanded((v) => !v)}
+          title="EQ"
+        >
+          <Settings2 className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onExport} title="Export">
+          <Download className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-500/10"
+          onClick={onDelete}
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Volume always visible */}
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <span className="text-[10px] text-muted-foreground w-8">VOL</span>
+        <Slider
+          value={[Math.round(track.volume * 100)]}
+          onValueChange={([v]) => onChange({ volume: v / 100 })}
+          max={100}
+          step={1}
+          className="flex-1"
+        />
+        <span className="text-[10px] tabular-nums w-8 text-right">{Math.round(track.volume * 100)}</span>
+      </div>
+
+      {/* EQ panel */}
+      {expanded && (
+        <div className="mt-3 grid grid-cols-3 gap-3 p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+          {(['eqLow', 'eqMid', 'eqHigh'] as const).map((key, i) => (
+            <div key={key} className="space-y-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground uppercase">
+                <span>{['Low', 'Mid', 'High'][i]}</span>
+                <span className="tabular-nums">{(track[key] > 0 ? '+' : '') + track[key].toFixed(1)} dB</span>
+              </div>
+              <Slider
+                value={[track[key]]}
+                onValueChange={([v]) => onChange({ [key]: v } as Partial<Track>)}
+                min={-12}
+                max={12}
+                step={0.5}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export default MiniStudio;

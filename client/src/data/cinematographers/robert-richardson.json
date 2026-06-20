@@ -1,0 +1,126 @@
+{
+  "id": "robert-richardson",
+  "name": "Robert Richardson",
+  "title": "Director of Photography",
+  "bio": "3-time Oscar winner. Quentin Tarantino's primary cinematographer. Master of bold color, dynamic camera movement, and visually striking compositions. Known for innovative VFX integration and style-forward cinematography.",
+  "famous_directors_worked_with": ["Quentin Tarantino", "Oliver Stone", "Martin Scorsese"],
+  
+  "iconic_films": [
+    {
+      "title": "Kill Bill Vol. 1",
+      "director": "Quentin Tarantino",
+      "year": 2003,
+      "awards": ["Visual innovation in action cinema"]
+    },
+    {
+      "title": "Inglourious Basterds",
+      "director": "Quentin Tarantino",
+      "year": 2009,
+      "awards": ["Academy Award Nomination"]
+    },
+    {
+      "title": "Django Unchained",
+      "director": "Quentin Tarantino",
+      "year": 2012,
+      "awards": ["Academy Award Nomination"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Bold, stylized cinematography with saturated colors and dynamic camera movement. High contrast images with graphic quality. Cinematic references layered throughout. Strong geometric composition.",
+    "key_characteristic": "Visual style as narrative voice. Every shot is carefully composed and colored. Cinematography draws from cinema history.",
+    "legendary_technique": "Master of integrating VFX with practical cinematography; pioneer of stylized color for indie films at blockbuster scale"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Panavision System LF",
+        "format": "8.8K Digital Large Format",
+        "sensor": "Premium motion picture format",
+        "use_case": "Feature films, stylized narrative"
+      },
+      {
+        "name": "Alexa Mini",
+        "format": "35mm digital",
+        "sensor": "Flexible, mobile cinematography",
+        "use_case": "Action sequences, dynamic movement"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "Master Primes",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Graphic sharpness", "Bold rendering", "Stylized bokeh"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Zeiss",
+        "series": "Super Speed",
+        "focal_lengths": ["18mm", "25mm", "35mm", "50mm", "85mm"],
+        "characteristics": ["Vintage character", "Warm rendering", "Cinematic glow"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 500T - Vibrant Grading",
+        "iso": 500,
+        "characteristics": "Saturated warm tones, bold grain, cinematic punch",
+        "mood": "Stylized, bold, cinematic, vibrant"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Bold, graphic lighting with strong shadows and highlights. Color-motivated lighting. High-contrast setups. Practical effects integrated with cinematic lighting.",
+    "color_science": "Saturated primary colors with selective desaturation. Bold teals and oranges. Color creates mood and pacing.",
+    "exposure_philosophy": "Expose for style and impact. Maintain graphic quality. Crush blacks and lift shadows for cinematic punch.",
+    "dynamic_range_preference": "Controlled dynamic range for graphic impact",
+    "frame_rate_preference": ["24fps standard", "Variable frame rates for stylistic effect"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Creative, visually literate collaboration. References cinema history. Speaks in visual language and cinematic allusions.",
+    "strengths_with_narrative": "Elevates dialogue-heavy scenes through visual storytelling. Makes static scenes visually dynamic. Creates visual rhythm.",
+    "best_for_genres": ["Stylized drama", "Crime narratives", "Action", "Character-driven dialogue", "Visionary narratives"],
+    "complements_directors": ["Tarantino (perfect match)", "Scorsese (visual precision)", "Visually-literate directors"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Saturated, bold color palette",
+      "High contrast graphic quality",
+      "Strong geometric composition",
+      "Stylized cinematography",
+      "Cinematic references in visual language",
+      "Dynamic camera positioning"
+    ],
+    "technical_mandates": [
+      "Large format digital (Panavision System LF)",
+      "Panavision Master Primes for precision",
+      "Bold color grading with teal/orange contrast",
+      "High contrast lighting setup",
+      "Graphic composition in every frame",
+      "Cinema-referential visual language"
+    ],
+    "avoid": [
+      "Naturalistic, understated cinematography",
+      "Muted color palette",
+      "Flat, even lighting",
+      "Invisible cinematography",
+      "Low contrast imagery"
+    ],
+    "emphasis_on": [
+      "Bold visual style as storytelling",
+      "Saturated color as mood",
+      "Graphic composition",
+      "Cinema history references",
+      "Dynamic camera work",
+      "Visual impact and punch"
+    ]
+  }
+}

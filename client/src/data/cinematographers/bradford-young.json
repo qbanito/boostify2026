@@ -1,0 +1,113 @@
+{
+  "id": "bradford-young",
+  "name": "Bradford Young",
+  "title": "Director of Photography",
+  "bio": "Contemporary master of intimate, poetic cinematography. Known for experimental approaches to lighting and color. Pioneer of digital cinematography for intimate narratives. Works with visionary indie and international directors.",
+  "famous_directors_worked_with": ["A.A. Donoghue", "Ari Aster", "Kelly Reichardt", "Nir Bergman"],
+  
+  "iconic_films": [
+    {
+      "title": "A Ghost Story",
+      "director": "David Lowery",
+      "year": 2017,
+      "awards": ["Innovative intimate cinematography"]
+    },
+    {
+      "title": "Hereditary",
+      "director": "Ari Aster",
+      "year": 2018,
+      "awards": ["Visual horror mastery"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Intimate, poetic cinematography with experimental color approaches. Cool desaturated tones with occasional warm bursts. Grain-heavy aesthetics. Dreamlike quality. Psychological depth through visual language.",
+    "key_characteristic": "Colors and lights express psychological state rather than reality. Cinematography is subjective and emotional.",
+    "legendary_technique": "Pioneer of experimental color temperature shifts; master of anxiety-inducing visual language"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Alexa Mini",
+        "format": "35mm digital",
+        "sensor": "Intimate scale, flexible",
+        "use_case": "Close character work, psychological intimate scenes"
+      },
+      {
+        "name": "RED Komodo",
+        "format": "Compact 8K",
+        "sensor": "Experimental work, indie scale",
+        "use_case": "Experimental cinematography, POV work"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Zeiss",
+        "series": "Loxia Vintage",
+        "focal_lengths": ["21mm", "35mm", "50mm", "85mm"],
+        "characteristics": ["Vintage character", "Warm rendering", "Psychological bokeh"],
+        "cost_tier": "Professional"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 200T - Experimental Grade",
+        "iso": 200,
+        "characteristics": "Experimental color shifts, fine grain, psychological mood",
+        "mood": "Intimate, poetic, psychological, experimental"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Psychological lighting that expresses emotional state. Color temperature shifts convey mood. Minimal but meaningful practicals. Lighting that disturbs as much as illuminates.",
+    "color_science": "Desaturated with psychological color shifts. Cool dominance with warm accents conveying warmth/danger. Color expresses subconscious.",
+    "exposure_philosophy": "Expose for emotional truth, not technical perfection. Grain and artifacts as emotional language.",
+    "dynamic_range_preference": "Crushed shadows and lifted blacks for psychological effect",
+    "frame_rate_preference": ["24fps for dreamy quality", "Variable rates for disorientation"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Experimental, philosophical collaboration. Discusses emotion and psychology before technical specs.",
+    "strengths_with_narrative": "Externalizes internal emotional states through cinematography. Makes audiences feel psychological unease or comfort through light and color.",
+    "best_for_genres": ["Psychological drama", "Horror", "Indie intimate narratives", "Experimental film", "Spiritual journeys"],
+    "complements_directors": ["Aster (psychological mastery)", "Lowery (poetic indie)", "Experimental visionary directors"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Desaturated primary color palette",
+      "Psychological color temperature shifts",
+      "Grain-heavy aesthetic",
+      "Intimate scale cinematography",
+      "Poetic emotional expression",
+      "Experimental visual approach"
+    ],
+    "technical_mandates": [
+      "Intimate scale digital (Alexa Mini)",
+      "Vintage or experimental lenses",
+      "Desaturated color grading by default",
+      "Grain emulation throughout",
+      "Psychological color temperature contrast",
+      "Experimental exposure techniques"
+    ],
+    "avoid": [
+      "Glossy, clean digital look",
+      "Conventional color palette",
+      "Technical perfection without emotion",
+      "Bright cheerful lighting",
+      "Conventional cinematography"
+    ],
+    "emphasis_on": [
+      "Emotional and psychological expression through cinematography",
+      "Experimental color approaches",
+      "Grain and texture as emotion",
+      "Intimate scale storytelling",
+      "Poetic visual language",
+      "Subconscious visual representation"
+    ]
+  }
+}

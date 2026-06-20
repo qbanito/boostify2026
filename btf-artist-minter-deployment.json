@@ -1,0 +1,43 @@
+{
+  "network": "polygon",
+  "chainId": "137",
+  "deployer": "0xa617cC0998c0bC4bf86301003FF2c172d57B506E",
+  "deployedAt": "2026-02-11T00:00:00.000Z",
+  "version": "V2",
+  "contracts": {
+    "btfToken": "0x3DF18dAa074D8744cC620a89CFc8b7c4138CEb05",
+    "stakingVault": "0x493b942d85d6D8D2E221f2b0FF4192dFBc1BfAAa",
+    "artistMinter": "0xeFE401C7cF872978e8ab51d08eE740B0B59987B9"
+  },
+  "configuration": {
+    "maxArtists": 1000,
+    "publicSupply": 800,
+    "platformReserve": 200,
+    "maxPerWallet": 5,
+    "burnBps": 4000,
+    "stakingBps": 3000,
+    "treasuryBps": 2000,
+    "reserveFundBps": 1000
+  },
+  "bondingCurve": {
+    "tier1": { "artists": "1-160", "base": "2,000 BTF", "step": "+10/mint" },
+    "tier2": { "artists": "161-400", "base": "3,500 BTF", "step": "+20/mint" },
+    "tier3": { "artists": "401-600", "base": "6,000 BTF", "step": "+40/mint" },
+    "tier4": { "artists": "601-720", "base": "10,000 BTF", "step": "+80/mint" },
+    "tier5": { "artists": "721-800", "base": "20,000 BTF", "step": "+150/mint" }
+  },
+  "tokenDistribution": {
+    "burn": "40%",
+    "stakingVault": "30%",
+    "treasury": "20%",
+    "reserveFund": "10%"
+  },
+  "valueAppreciation": {
+    "song_created": 50,
+    "video_created": 200,
+    "collab_completed": 100,
+    "fan_interaction": 25,
+    "merch_sold": 75,
+    "stream_milestone": 150
+  }
+}

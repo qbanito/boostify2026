@@ -1,0 +1,13 @@
+{
+  "id": "preview_1775241504998",
+  "timestamp": "2026-04-03T18:38:24.998Z",
+  "pageId": "youtube-boost",
+  "task": "Create use-youtube-boost-limits.ts hook",
+  "status": "preview",
+  "model": "gpt-4o",
+  "provider": "openai",
+  "filesChanged": [
+    "client/src/hooks/use-youtube-boost-limits.ts"
+  ],
+  "diff": "--- a/client/src/hooks/use-youtube-boost-limits.ts\n+++ b/client/src/hooks/use-youtube-boost-limits.ts\n"
+}

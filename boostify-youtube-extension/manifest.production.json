@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Boostify YouTube Sync",
+  "version": "1.0.0",
+  "description": "Sync your YouTube channel with Boostify AI tools in real-time. Get SEO optimization, trend alerts, and channel analytics directly inside YouTube.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "sidePanel",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://studio.youtube.com/*",
+    "https://boostifymusic.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content/youtube-public.ts"],
+      "css": ["src/content/styles/boostify-overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://studio.youtube.com/*"],
+      "js": ["src/content/youtube-studio.ts"],
+      "css": ["src/content/styles/boostify-studio.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://boostifymusic.com/*"
+    ]
+  }
+}

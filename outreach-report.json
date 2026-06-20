@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-01-30T00:01:50.120Z",
+  "stats": {
+    "totalLeads": 708,
+    "availableLeads": 10,
+    "emailsSent": 0,
+    "emailsFailed": 0,
+    "newLeadsScraped": 0
+  },
+  "actions": [
+    "2026-01-30T00:01:50.139Z: 📊 Checking current lead statistics...",
+    "2026-01-30T00:01:52.192Z:    Total leads: 708",
+    "2026-01-30T00:01:52.192Z:    Leads not yet contacted: 0",
+    "2026-01-30T00:01:52.504Z:    Available for outreach: 10",
+    "2026-01-30T00:01:52.504Z: \n⚠️ Low lead count (10 < 100)",
+    "2026-01-30T00:01:52.505Z: 🔄 Triggering automatic lead import...",
+    "2026-01-30T00:01:52.506Z: 📥 Fetching leads from Apify dataset: ebsl5vr8G0Y7lDBEV",
+    "2026-01-30T00:01:53.489Z: ✅ Found 700 leads in Apify dataset",
+    "2026-01-30T00:01:53.493Z: 📥 Importing 700 leads from Apify dataset...",
+    "2026-01-30T00:01:53.494Z: [DRY RUN] Would import 700 leads",
+    "2026-01-30T00:01:53.680Z: \n📧 Starting email outreach...",
+    "2026-01-30T00:01:53.680Z: [DRY RUN] Would send emails to:",
+    "2026-01-30T00:01:53.874Z:    • Barry Olliff (bolliff@citlon.com) - ceo at City of London Investment Management Company Ltd",
+    "2026-01-30T00:01:53.874Z:    • David Uible (uibled@uiblegroup.com) - CEO at Uible Management Group",
+    "2026-01-30T00:01:53.875Z:    • Jane Lou (jlou@awih.ca) - CEO at All Win International Holding Co., Ltd.",
+    "2026-01-30T00:01:53.875Z:    • Francois Magny (fm@rdacap.com) - CEO at RDA Capital",
+    "2026-01-30T00:01:53.876Z:    • Don Ganguly (don@homeunion.com) - CEO at HomeUnion",
+    "2026-01-30T00:01:53.876Z:    ... and 5 more"
+  ],
+  "errors": []
+}

@@ -1,0 +1,123 @@
+{
+  "id": "glitch-experimental",
+  "name": "Glitch & Experimental Editor",
+  "title": "Avant-Garde Digital Editing",
+  "bio": "Experimental editor using digital artifacts, glitches, and unconventional techniques. Pushes boundaries of what music video editing can be.",
+  "famous_directors": ["Experimental/electronic artists' collaborators"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Electronic/experimental artists",
+      "title": "Experimental visuals",
+      "year": 2018,
+      "signature_technique": "Digital glitches, unconventional transitions, experimental color shifts, boundary-pushing"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Experimental, boundary-pushing editing with glitches, unconventional transitions, and digital artifacts as aesthetic choices",
+    "pace": "unpredictable",
+    "cut_frequency": "Varies drastically, surprising cuts",
+    "dominant_technique": "Experimental transitions, digital artifacts, unconventional timing",
+    "music_sync_philosophy": "Rhythm is one tool among many. Surprise and innovation matter more."
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Loose, using glitch as rhythm element",
+      "cut_style": "Experimental cuts, digital artifacts",
+      "emphasis": ["Creative synchronization", "Experimental moments", "Avant-garde visuals"]
+    },
+    "pop": {
+      "beat_sync_approach": "Experimental interpretation",
+      "cut_style": "Unconventional transitions",
+      "emphasis": ["Surprising moments", "Creative risk-taking", "Visual innovation"]
+    },
+    "rock": {
+      "beat_sync_approach": "Energy-based with experimental touches",
+      "cut_style": "Glitchy, unpredictable",
+      "emphasis": ["Intensity moments", "Experimental effects", "Sonic alignment"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Digital interpretation of rhythm",
+      "cut_style": "Glitch transitions, digital artifacts",
+      "emphasis": ["Digital aesthetics", "Experimental sync", "Boundary-pushing"]
+    },
+    "indie": {
+      "beat_sync_approach": "Experimental emotional sync",
+      "cut_style": "Unconventional, surprising",
+      "emphasis": ["Artistic risk", "Visual experimentation", "Emotional glitches"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "Experimental use, sometimes multiple rapid freezes",
+      "frequency": "Unpredictable, surprising",
+      "duration": "Varied, 0.1-0.4 seconds"
+    },
+    "speed_ramps": {
+      "usage": "Extreme, unexpected speed changes",
+      "speed_ranges": ["0.1x extreme slow-mo", "1x normal", "5x extreme fast"],
+      "moments": "Surprising, boundary-pushing moments"
+    },
+    "whip_transitions": {
+      "usage": "Distorted, glitchy whips",
+      "speed": "Unpredictable, sometimes stuttering",
+      "effect_style": "Experimental, digital artifacts"
+    },
+    "jump_cuts": {
+      "usage": "Surprising, unconventional timing",
+      "style": "Hard cuts at unexpected moments",
+      "rhythm_sync": "Defying expectation"
+    },
+    "match_cuts": {
+      "usage": "Rarely, or used in unexpected ways",
+      "technique": "Sometimes broken matches, jarring transitions",
+      "impact": "Creates surprise and newness"
+    },
+    "crossfades": {
+      "usage": "Distorted, glitchy fades",
+      "speed": "Unpredictable timing",
+      "color_treatment": "Experimental, digital artifacts, color shifts"
+    },
+    "flash_frames": {
+      "usage": "Frequent, unexpected",
+      "color": "Unexpected combinations, noise, artifacts",
+      "duration": "Variable, sometimes stutter frames"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "Push boundaries. Innovation and surprise matter more than convention.",
+    "emotion_first": false,
+    "rhythm_obsessed": false,
+    "storytelling_vs_style": "style-obsessed",
+    "performance_vs_broll": "70% experimental visuals, 30% performance integrated experimentally"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Experimental transitions",
+      "Boundary-pushing choices",
+      "Digital artifacts as aesthetic",
+      "Surprising moments",
+      "Visual innovation"
+    ],
+    "avoid": [
+      "Safe, conventional choices",
+      "Predictable editing",
+      "Smooth, polished look",
+      "Conservative pacing"
+    ],
+    "emphasis_on": [
+      "Innovation and surprise",
+      "Experimental techniques",
+      "Boundary-pushing",
+      "Digital aesthetics",
+      "Unconventional timing"
+    ],
+    "rhythm_keywords": ["experimental", "surprising", "innovative", "boundary-pushing", "glitch", "digital"],
+    "visual_keywords": ["experimental", "innovative", "glitchy", "digital", "surprising", "avant-garde", "boundary-pushing"]
+  }
+}

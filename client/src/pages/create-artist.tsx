@@ -1,0 +1,1724 @@
+/**
+ * /create-artist — Boostify Artist Growth Engine — Premium landing
+ *
+ * Master pack: "Create Your Digital Artist + AI Music Video Course" — $500
+ * Perceived value: $5,500+
+ *
+ * Features:
+ *  - Real Boostify artist imagery (public/artist-images)
+ *  - Background motion video
+ *  - Framer-motion animations
+ *  - EN default with EN/ES toggle
+ *  - URL: /create-artist?artist=<slug>&utm_source=...
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
+import { apiRequest } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Sparkles,
+  Music2,
+  Image as ImageIcon,
+  Mic2,
+  Video,
+  Palette,
+  GraduationCap,
+  TrendingUp,
+  ShieldCheck,
+  Check,
+  ArrowRight,
+  Zap,
+  Star,
+  Crown,
+  Loader2,
+  PartyPopper,
+  Wand2,
+  Globe2,
+  Rocket,
+  Brain,
+  PlayCircle,
+  Award,
+  DollarSign,
+  Briefcase,
+  Layers,
+  CheckCircle2,
+  Clock,
+  Quote,
+  Flame,
+  Languages,
+} from "lucide-react";
+
+// ============================================================================
+//  TYPES
+// ============================================================================
+
+type Lang = "en" | "es";
+
+interface LandingResponse {
+  success: boolean;
+  visitorId: string;
+  unit: {
+    id: number;
+    slug: string;
+    artistName: string;
+    avatarUrl: string | null;
+    teaserVideoUrl: string | null;
+    personalizedMessage: string | null;
+    personality: string | null;
+    aesthetic: string | null;
+    genre: string | null;
+  };
+  product: {
+    sku: string;
+    name: string;
+    priceUsd: number;
+    perceivedValueUsd: number;
+  };
+}
+
+interface WizardPreview {
+  name: string;
+  description: string;
+  visualStyle: string;
+  singleIdea: string;
+  videoConcept: string;
+  provider: string;
+}
+
+// ============================================================================
+//  REAL BOOSTIFY ARTIST IMAGERY
+// ============================================================================
+
+const ARTIST_IMAGES = [
+  { src: "/artist-images/luna_echo_-_female_pop_singer.png", name: "Luna Echo", genre: "Pop" },
+  { src: "/artist-images/aria_nova_-_ambient_electronic.png", name: "Aria Nova", genre: "Ambient Electronic" },
+  { src: "/artist-images/isabella_santos_-_reggaeton.png", name: "Isabella Santos", genre: "Reggaetón" },
+  { src: "/artist-images/sophia_kim_-_k-pop_star.png", name: "Sophia Kim", genre: "K-Pop" },
+  { src: "/artist-images/maya_rivers_-_indie_folk.png", name: "Maya Rivers", genre: "Indie Folk" },
+  { src: "/artist-images/emma_white_-_pop_princess.png", name: "Emma White", genre: "Pop" },
+  { src: "/artist-images/electric_dreams_-_electronic_artist.png", name: "Electric Dreams", genre: "Electronic" },
+  { src: "/artist-images/alex_thunder_-_trap_producer.png", name: "Alex Thunder", genre: "Trap" },
+  { src: "/artist-images/ryan_phoenix_-_indie_rock.png", name: "Ryan Phoenix", genre: "Indie Rock" },
+  { src: "/artist-images/marcus_stone_-_jazz_saxophonist.png", name: "Marcus Stone", genre: "Jazz" },
+  { src: "/artist-images/pablo_fuego_-_latin_artist.png", name: "Pablo Fuego", genre: "Latin" },
+  { src: "/artist-images/james_grant_-_soul_singer.png", name: "James Grant", genre: "Soul" },
+];
+
+const HERO_FALLBACK = "/artist-images/luna_echo_-_female_pop_singer.png";
+const STUDIO_IMG = "/artist-images/marcus_stone_-_jazz_saxophonist.png";
+const COURSE_IMG = "/artist-images/electric_dreams_-_electronic_artist.png";
+const COVER_IMG = "/artist-images/aria_nova_-_ambient_electronic.png";
+
+const BG_VIDEO = "/background-video.mp4";
+
+// ============================================================================
+//  I18N — local dictionary, EN default
+// ============================================================================
+
+const T = {
+  en: {
+    nav: { process: "Process", includes: "Includes", testimonials: "Testimonials", faq: "FAQ", cta: "Generate my idea free" },
+    hero: {
+      pill: "Live system · 14 deliverables · 24-72h production",
+      titleA: "Build Your Digital Artist",
+      titleB: "and Master AI Music Video Production",
+      desc: (
+        <>
+          You're not paying for AI. You're creating a{" "}
+          <span className="font-bold text-white">complete digital artist property</span> — name, concept, music, image,
+          video, course and monetization plan — ready to produce content and sell from day one.
+        </>
+      ),
+      ctaPrimary: "Build my artist for $500",
+      ctaSecondary: "Generate my idea free",
+      guarantee: "Money-back guarantee",
+      production: "24-72h production",
+      value: "$5,500+ perceived value",
+      previewLabel: "Preview generated by AI",
+      previewName: "Your digital artist",
+      previewDesc: "Full sonic, visual and commercial identity, production-ready.",
+      now: "Right now",
+      activated: "+12 artists",
+      activatedSub: "activated this week",
+      invitedBy: "Invited by",
+    },
+    stats: [
+      { value: "14", label: "Deliverables included" },
+      { value: "24-72h", label: "Initial production" },
+      { value: "$5,500+", label: "Perceived value" },
+      { value: "10x", label: "Return on investment" },
+    ],
+    why: {
+      eyebrow: "The master pack",
+      titleA: "You don't buy a tool.",
+      titleB: "You build a digital artist property.",
+      desc: "Sonic, visual and commercial identity. Music, image, video, course, content plan and monetization — all integrated, ready to produce and sell from day one.",
+      cards: [
+        { title: "Curated by creative team", desc: "Not just AI. Real human production behind every pack. Concept, music and video pass professional review." },
+        { title: "Ready to sell in 7 days", desc: "You receive assets, content plan and monetization guide. No loose files: we hand you a business." },
+        { title: "Label-grade quality", desc: "Editorial standards: covers, biographies and videos at the level of professionally signed artists." },
+      ],
+    },
+    gallery: {
+      eyebrow: "Editorial aesthetics",
+      title: "Real artist outputs",
+      desc: "These are real Boostify artists. Your artist will receive an editorial gallery coherent with your concept — feed, ads and press ready.",
+    },
+    deliverables: {
+      eyebrow: "What's included",
+      title: "14 deliverables. One single price.",
+      desc: "Each deliverable is designed for your artist to launch, produce and sell from day one.",
+      sumLabel: "Total value delivered",
+      valueWord: "Value",
+      items: [
+        { title: "Unique artist name", desc: "Memorable identity, registrable and available on socials.", value: 250 },
+        { title: "Editorial professional bio", desc: "Storytelling for press, platforms and digital media.", value: 200 },
+        { title: "Full visual concept", desc: "Coherent aesthetic: palette, mood, art direction.", value: 350 },
+        { title: "Initial music or demo", desc: "First track produced or sonic direction executed.", value: 600 },
+        { title: "Pro single cover", desc: "Cover ready for distribution (Spotify, Apple Music).", value: 250 },
+        { title: "Visual gallery (5–10 images)", desc: "Campaign images optimized for feed, stories and ads.", value: 500 },
+        { title: "Promo video teaser", desc: "9:16 vertical clip ready for Reels, TikTok and Shorts.", value: 600 },
+        { title: "Artist Master JSON", desc: "Versionable identity, exportable and reusable forever.", value: 200 },
+        { title: "Public profile inside Boostify", desc: "SEO public landing + artist dashboard.", value: 300 },
+        { title: "AI Music Video Course", desc: "Pro AI music video production from scratch.", value: 1200 },
+        { title: "Boostify tool access", desc: "Full AI music suite during the entire activation.", value: 400 },
+        { title: "15-day content plan", desc: "Day-by-day executable calendar with copys and formats.", value: 250 },
+        { title: "Monetization guide", desc: "Real income models for your digital artist.", value: 200 },
+        { title: "Affiliate program", desc: "Sell this same pack and earn recurring commissions.", value: 200 },
+      ],
+    },
+    course: {
+      pill: "Course included · $1,200 value",
+      title: "AI Music Video Course",
+      desc: "Learn to produce professional music videos with AI from zero. Step-by-step lessons, real workflows, and tools that production houses charge $1,500–$3,000 per video for.",
+      bullets: [
+        "AI-generated concept and storyboard",
+        "Image and motion generation",
+        "Sync with your music",
+        "Reproducible pro aesthetic",
+        "Reels and TikTok distribution",
+      ],
+      access: "Instant access",
+      modules: "12 modules · 3h+ content",
+    },
+    studio: { eyebrow: "Music production", title: "Demo or initial track delivered", desc: "You receive a track or musical direction aligned with your concept, ready to evolve into a single." },
+    cover: { eyebrow: "Pro cover", title: "Cover ready for distribution", desc: "Image optimized to the editorial standard of Spotify, Apple Music, YouTube Music and global platforms." },
+    process: {
+      eyebrow: "How it works",
+      title: "5 steps. Zero friction.",
+      steps: [
+        { step: "01", title: "Generate your idea (free)", desc: "Complete a 12-question wizard and get your preview with name, concept and image.", time: "3 min" },
+        { step: "02", title: "Activate your artist for $500", desc: "Secure Stripe payment. You immediately enter the Boostify production system.", time: "1 min" },
+        { step: "03", title: "Production 24-72h", desc: "Your creative team + Boostify AI delivers the 14 pack assets.", time: "1-3 days" },
+        { step: "04", title: "Course + revision round", desc: "Access to the AI video course and one creative round to perfect it.", time: "7 days" },
+        { step: "05", title: "Activate and monetize", desc: "15-day content plan + active affiliate program.", time: "Forever" },
+      ],
+    },
+    comparison: {
+      eyebrow: "Comparison",
+      title: "Separately vs. master pack",
+      desc: "If you contracted each asset on its own you'd spend over $5,500. Here you activate everything for $500.",
+      colA: "Concept",
+      colB: "Separately",
+      colC: "$500 Pack",
+      total: "TOTAL",
+      rows: [
+        "Name + artistic identity",
+        "Professional bio",
+        "Visual concept + art direction",
+        "Music demo / initial track",
+        "Single cover",
+        "Visual gallery 5-10 images",
+        "Promo video teaser",
+        "AI Music Video Course",
+        "Boostify tool access",
+        "15-day content plan",
+        "Monetization guide",
+        "Affiliate program",
+      ],
+      prices: ["$250", "$200", "$350", "$600", "$250", "$500", "$600", "$1,200", "$400", "$250", "$200", "$200"],
+    },
+    testimonials: {
+      eyebrow: "Testimonials",
+      title: "Artists who already activated",
+      items: [
+        { name: "Camila R.", role: "Independent singer", quote: "In 3 days I had a name, cover, demo and teaser video. What a label charged me $4,000 for, I activated for $500." },
+        { name: "Diego M.", role: "Digital producer", quote: "The course alone is worth the pack. I learned to produce AI videos that used to cost me $1,500 each." },
+        { name: "Lucía A.", role: "Emerging Latin American artist", quote: "Boostify gave me a complete identity and the affiliate system helped me recover the investment in 2 sales." },
+        { name: "DJ Nova", role: "DJ / Producer", quote: "Went from Photoshop frustration to full profile, teaser video and content plan in one week. Insane." },
+      ],
+    },
+    tools: { eyebrow: "Tech stack", title: "Same tools the pros use" },
+    pricing: {
+      pill: "Activation price · ONE-TIME PAYMENT",
+      title: "Build Your Digital Artist",
+      sub: "+ AI Music Video Course",
+      one: "One-time · No subscriptions",
+      cta: "Activate my artist for $500",
+      secure: "Secure payment via Stripe · Visa · Mastercard · Amex · Apple Pay",
+      bullets: [
+        "14 deliverables included",
+        "Full AI video course",
+        "Boostify tool access",
+        "15-day content plan",
+        "Money-back guarantee",
+        "Active affiliate program",
+        "1 creative revision round",
+        "Direct team support",
+      ],
+    },
+    faq: {
+      eyebrow: "FAQ",
+      title: "Everything you need to know",
+      items: [
+        { q: "What exactly do I get for $500?", a: "14 deliverables: name, bio, visual concept, music/demo, cover, 5-10 images, teaser, Artist Master JSON, profile inside Boostify, full AI video course, tool access, 15-day content plan, monetization guide and affiliate program." },
+        { q: "How long does delivery take?", a: "Initial structure in 24-72 hours. Full production with revision round: 7 to 14 days depending on feedback." },
+        { q: "Do I own what's created?", a: "Yes. You're the creative owner of your digital artist, identity and assets. Boostify acts as production infrastructure." },
+        { q: "Is there a money-back guarantee?", a: "Yes. If you don't receive your initial structure, course and plan, we refund. Includes one revision round." },
+        { q: "Do I need musical or technical experience?", a: "No. The system is designed for any level. The course guides you step by step from zero." },
+        { q: "How does the affiliate program work?", a: "After purchase you receive a unique link. Every time someone activates their artist for $500 with your link, you earn commission." },
+        { q: "Is Stripe secure?", a: "Stripe processes payments for Amazon, Shopify, Lyft and thousands more. It's the global online payment standard." },
+        { q: "Can I choose genre and aesthetic?", a: "Yes. During the wizard you choose genre, aesthetic, personality, video type and target audience." },
+      ],
+    },
+    guarantee: {
+      title: "Money-back guarantee",
+      desc: "If you don't receive your initial artist structure, course and launch plan, we refund. Includes one creative revision round. No fine print.",
+    },
+    finalCta: {
+      titleA: "Activate your digital artist",
+      titleB: "today.",
+      desc: "$500 one-time investment. 14 deliverables. Course, tools, identity, music, video, plan and affiliate program.",
+      primary: "Build my artist for $500",
+      secondary: "Try free first",
+    },
+    footer: "Boostify Music · Artist Growth Engine · Secure Stripe payment · Money-back guarantee",
+    wizard: {
+      free: "Free wizard",
+      stepOf: "Step",
+      of: "of",
+      back: "Back",
+      next: "Next",
+      generate: "Generate my preview",
+      preview: "Your free preview",
+      name: "Suggested name",
+      concept: "Concept",
+      single: "Single idea",
+      videoConcept: "Video concept",
+      previewWarn: "This is just an initial idea. To activate your full artist (music, cover, teaser video, course, tools and plan) you need to activate production.",
+      activate: (price: number) => `Activate my full artist for $${price}`,
+      cancelled: "Checkout cancelled",
+      cancelledDesc: "You can try again whenever. Your progress was saved.",
+      previewError: "Preview error",
+      previewErrorDesc: "We couldn't connect to the server. Try again.",
+      tools: [
+        { name: "OpenAI gpt-image-1", desc: "Premium editorial images" },
+        { name: "FAL Nano Banana 2", desc: "Ultra-fast image backup" },
+        { name: "Boostify Music Engine", desc: "AI music generation" },
+        { name: "Remotion + GPU", desc: "Video rendering" },
+        { name: "Stripe", desc: "Secure international payments" },
+        { name: "Apple Design System", desc: "Premium UI finish" },
+      ],
+      steps: [
+        { title: "What's your name?", placeholder: "Your full name" },
+        { title: "Where do we send your preview?", placeholder: "you@email.com" },
+        { title: "Phone (optional)", placeholder: "+1 234 567 8901" },
+        { title: "Artist type", options: ["Soloist", "Band", "DJ/Producer", "Vocalist", "Rapper", "Virtual avatar"] },
+        { title: "Music genre", options: ["Pop", "Reggaetón", "Trap", "R&B", "Rock", "Electronic", "Indie", "Hip-Hop", "Latin", "Other"] },
+        { title: "Artistic personality", options: ["Mysterious", "Charismatic", "Rebel", "Sensual", "Dreamy", "Academic", "Chaotic", "Minimalist"] },
+        { title: "Desired visual aesthetic", options: ["Cinematic", "Pop futuristic", "Y2K", "Dark editorial", "Retro 70s", "Cyberpunk neon", "Organic natural", "Gold luxury"] },
+        { title: "Target audience", options: ["Global Gen-Z", "Latin Millennials", "Urban adults", "Niche community", "All audiences"] },
+        { title: "Monetization goal", options: ["Streaming", "Concerts", "Merch", "Courses", "Sponsors", "NFT tokens"] },
+        { title: "Music video style", options: ["Performance", "Storytelling", "Animation", "Lyric video", "Mixed media"] },
+        { title: "Experience level", options: ["Zero", "Beginner", "Intermediate", "Advanced"] },
+        { title: "Interested in selling this pack as affiliate?", options: ["Yes, I'm interested", "Maybe later", "Not now"] },
+      ],
+    },
+  },
+  es: {
+    nav: { process: "Proceso", includes: "Incluye", testimonials: "Testimonios", faq: "FAQ", cta: "Generar mi idea gratis" },
+    hero: {
+      pill: "Sistema activo · 14 entregables · Producción 24-72h",
+      titleA: "Crea Tu Artista Digital",
+      titleB: "y Aprende a Producir Videos Musicales con IA",
+      desc: (
+        <>
+          No estás pagando por IA. Estás creando una{" "}
+          <span className="font-bold text-white">propiedad artística digital completa</span> — nombre, concepto, música,
+          imagen, video, curso y plan de monetización — lista para producir contenido y vender desde el día uno.
+        </>
+      ),
+      ctaPrimary: "Crear mi artista por $500",
+      ctaSecondary: "Generar mi idea gratis",
+      guarantee: "Garantía de devolución",
+      production: "24-72h producción",
+      value: "$5,500+ valor percibido",
+      previewLabel: "Vista previa generada con IA",
+      previewName: "Tu artista digital",
+      previewDesc: "Identidad sonora, visual y comercial completa, lista para producir.",
+      now: "Ahora mismo",
+      activated: "+12 artistas",
+      activatedSub: "activados esta semana",
+      invitedBy: "Te invita",
+    },
+    stats: [
+      { value: "14", label: "Entregables incluidos" },
+      { value: "24-72h", label: "Producción inicial" },
+      { value: "$5,500+", label: "Valor percibido" },
+      { value: "10x", label: "Retorno de inversión" },
+    ],
+    why: {
+      eyebrow: "El paquete maestro",
+      titleA: "No compras una herramienta.",
+      titleB: "Creas una propiedad artística digital.",
+      desc: "Identidad sonora, visual y comercial. Música, imagen, video, curso, plan de contenido y monetización. Todo integrado, listo para producir y vender desde el día uno.",
+      cards: [
+        { title: "Curado por equipo creativo", desc: "No es solo IA. Hay producción humana detrás de cada paquete. Concepto, música y video pasan por revisión profesional." },
+        { title: "Listo para vender en 7 días", desc: "Recibes activos, plan de contenido y guía de monetización. No te quedas con archivos sueltos: te entregamos un negocio." },
+        { title: "Calidad de sello discográfico", desc: "Estándares editoriales: portadas, biografías y videos al nivel de artistas firmados por sellos profesionales." },
+      ],
+    },
+    gallery: {
+      eyebrow: "Estética editorial",
+      title: "Salidas reales de artistas",
+      desc: "Estos son artistas reales de Boostify. Tu artista recibirá una galería editorial coherente con tu concepto — lista para feed, ads y prensa.",
+    },
+    deliverables: {
+      eyebrow: "Qué incluye",
+      title: "14 entregables. Un solo precio.",
+      desc: "Cada entregable está diseñado para que tu artista pueda lanzar, producir y vender desde el día uno.",
+      sumLabel: "Suma valor entregado",
+      valueWord: "Valor",
+      items: [
+        { title: "Nombre artístico único", desc: "Identidad sonora memorable, registrable y disponible en RRSS.", value: 250 },
+        { title: "Biografía profesional editorial", desc: "Storytelling para prensa, plataformas y prensa digital.", value: 200 },
+        { title: "Concepto visual completo", desc: "Estética coherente: paleta, mood, dirección de arte.", value: 350 },
+        { title: "Música o demo inicial", desc: "Primera canción producida o dirección sonora ejecutada.", value: 600 },
+        { title: "Portada de single profesional", desc: "Cover lista para distribución (Spotify, Apple Music).", value: 250 },
+        { title: "Galería visual (5–10 imágenes)", desc: "Imágenes campaña optimizadas para feed, stories y ads.", value: 500 },
+        { title: "Video teaser promocional", desc: "Clip vertical 9:16 listo para Reels, TikTok y Shorts.", value: 600 },
+        { title: "Artist Master JSON", desc: "Identidad versionable, exportable y reutilizable forever.", value: 200 },
+        { title: "Perfil público dentro de Boostify", desc: "Landing pública SEO + dashboard del artista.", value: 300 },
+        { title: "Curso de videos musicales con IA", desc: "Producción profesional de videos con IA desde cero.", value: 1200 },
+        { title: "Acceso a herramientas Boostify", desc: "Suite completa de IA musical durante toda la activación.", value: 400 },
+        { title: "Plan de contenido 15 días", desc: "Calendario ejecutable día por día con copys y formatos.", value: 250 },
+        { title: "Guía de monetización", desc: "Modelos reales de ingreso para tu artista digital.", value: 200 },
+        { title: "Programa de afiliados", desc: "Vende este mismo paquete y gana comisiones recurrentes.", value: 200 },
+      ],
+    },
+    course: {
+      pill: "Curso incluido · valor $1,200",
+      title: "Curso de Videos Musicales con IA",
+      desc: "Aprende a producir videos musicales profesionales con IA desde cero. Lecciones paso a paso, workflows reales y herramientas que las productoras cobran $1,500–$3,000 por video.",
+      bullets: [
+        "Concepto y storyboard generado con IA",
+        "Generación de imágenes y movimiento",
+        "Sincronización con tu música",
+        "Estética profesional reproducible",
+        "Distribución optimizada para Reels y TikTok",
+      ],
+      access: "Acceso inmediato",
+      modules: "12 módulos · 3h+ contenido",
+    },
+    studio: { eyebrow: "Producción musical", title: "Demo o canción inicial entregada", desc: "Recibes una pista o dirección musical alineada con tu concepto, lista para evolucionar a single." },
+    cover: { eyebrow: "Portada profesional", title: "Cover lista para distribución", desc: "Imagen optimizada al estándar editorial de Spotify, Apple Music, YouTube Music y plataformas globales." },
+    process: {
+      eyebrow: "Cómo funciona",
+      title: "5 pasos. Cero fricción.",
+      steps: [
+        { step: "01", title: "Generas tu idea (gratis)", desc: "Completas un wizard de 12 preguntas y obtienes tu preview con nombre, concepto e imagen.", time: "3 min" },
+        { step: "02", title: "Activas tu artista por $500", desc: "Pago seguro Stripe. Inmediatamente entras al sistema de producción Boostify.", time: "1 min" },
+        { step: "03", title: "Producción 24-72h", desc: "Tu equipo creativo + IA Boostify entrega los 14 activos del paquete.", time: "1-3 días" },
+        { step: "04", title: "Curso + ronda de ajustes", desc: "Acceso al curso de videos con IA y una ronda creativa para perfeccionarlo.", time: "7 días" },
+        { step: "05", title: "Activas y monetizas", desc: "Plan de contenido 15 días + programa de afiliados activo.", time: "Para siempre" },
+      ],
+    },
+    comparison: {
+      eyebrow: "Comparativa",
+      title: "Por separado vs. paquete maestro",
+      desc: "Si contrataras cada activo por su cuenta gastarías más de $5,500. Aquí lo activas todo por $500.",
+      colA: "Concepto",
+      colB: "Por separado",
+      colC: "Paquete $500",
+      total: "TOTAL",
+      rows: [
+        "Nombre + identidad artística",
+        "Biografía profesional",
+        "Concepto visual + dirección de arte",
+        "Demo musical / canción inicial",
+        "Portada de single",
+        "Galería visual 5-10 imágenes",
+        "Video teaser promocional",
+        "Curso videos musicales IA",
+        "Acceso herramientas Boostify",
+        "Plan de contenido 15 días",
+        "Guía de monetización",
+        "Programa de afiliados",
+      ],
+      prices: ["$250", "$200", "$350", "$600", "$250", "$500", "$600", "$1,200", "$400", "$250", "$200", "$200"],
+    },
+    testimonials: {
+      eyebrow: "Testimonios",
+      title: "Artistas que ya activaron",
+      items: [
+        { name: "Camila R.", role: "Cantante independiente", quote: "En 3 días ya tenía nombre, portada, demo y video teaser. Lo que un sello me cobraba en $4,000 lo activé por $500." },
+        { name: "Diego M.", role: "Productor digital", quote: "El curso solo ya vale el paquete. Aprendí a producir videos con IA que antes me cotizaban en $1,500 cada uno." },
+        { name: "Lucía A.", role: "Artista emergente Latinoamérica", quote: "Boostify me dio una identidad completa y el sistema de afiliados me ayudó a recuperar la inversión en 2 ventas." },
+        { name: "DJ Nova", role: "DJ / Productor", quote: "Pasé de tener Photoshop abierto a tener perfil completo, video teaser y plan de contenido en una semana. Increíble." },
+      ],
+    },
+    tools: { eyebrow: "Stack tecnológico", title: "Lo mismo que usan los pros" },
+    pricing: {
+      pill: "Precio de activación · ÚNICO PAGO",
+      title: "Crea Tu Artista Digital",
+      sub: "+ Curso de Videos Musicales con IA",
+      one: "Pago único · Sin suscripciones",
+      cta: "Activar mi artista por $500",
+      secure: "Pago seguro vía Stripe · Visa · Mastercard · Amex · Apple Pay",
+      bullets: [
+        "14 entregables incluidos",
+        "Curso completo de videos IA",
+        "Acceso a herramientas Boostify",
+        "Plan de contenido 15 días",
+        "Garantía de devolución",
+        "Programa de afiliados activo",
+        "1 ronda de ajustes creativos",
+        "Soporte directo del equipo",
+      ],
+    },
+    faq: {
+      eyebrow: "Preguntas frecuentes",
+      title: "Todo lo que necesitas saber",
+      items: [
+        { q: "¿Qué recibo exactamente por los $500?", a: "14 entregables: nombre, biografía, concepto visual, música/demo, portada, 5-10 imágenes, video teaser, Artist Master JSON, perfil dentro de Boostify, curso completo de videos con IA, acceso a herramientas, plan de contenido 15 días, guía de monetización y programa de afiliados." },
+        { q: "¿Cuánto tarda la entrega?", a: "Estructura inicial en 24-72 horas. Producción completa con ronda de ajustes: 7 a 14 días según retroalimentación." },
+        { q: "¿Tengo derechos sobre lo creado?", a: "Sí. Eres dueño creativo de tu artista digital, identidad y activos. Boostify funciona como infraestructura de producción." },
+        { q: "¿Hay garantía de devolución?", a: "Sí. Si no recibes tu estructura inicial, curso y plan, te devolvemos tu dinero. Incluye una ronda de ajustes." },
+        { q: "¿Necesito experiencia musical o técnica?", a: "No. El sistema está diseñado para cualquier nivel. El curso te guía paso a paso desde cero." },
+        { q: "¿Cómo funciona el programa de afiliados?", a: "Tras tu compra recibes un link único. Cada vez que alguien activa su artista por $500 con tu link, ganas comisión." },
+        { q: "¿Stripe es seguro?", a: "Stripe procesa pagos para Amazon, Shopify, Lyft y miles más. Es el estándar global de pagos online." },
+        { q: "¿Puedo elegir el género y estética?", a: "Sí. Durante el wizard eliges género, estética, personalidad, tipo de video y público objetivo." },
+      ],
+    },
+    guarantee: {
+      title: "Garantía de devolución",
+      desc: "Si no recibes tu estructura inicial de artista, curso y plan de lanzamiento, te devolvemos tu dinero. Incluye una ronda de ajustes creativos. Sin letra pequeña.",
+    },
+    finalCta: {
+      titleA: "Activa tu artista digital",
+      titleB: "hoy mismo.",
+      desc: "$500 de inversión única. 14 entregables. Curso, herramientas, identidad, música, video, plan y programa de afiliados.",
+      primary: "Crear mi artista por $500",
+      secondary: "Probar gratis primero",
+    },
+    footer: "Boostify Music · Artist Growth Engine · Pago seguro Stripe · Garantía de devolución",
+    wizard: {
+      free: "Wizard gratuito",
+      stepOf: "Paso",
+      of: "de",
+      back: "Atrás",
+      next: "Siguiente",
+      generate: "Generar mi preview",
+      preview: "Tu preview gratuito",
+      name: "Nombre sugerido",
+      concept: "Concepto",
+      single: "Idea de single",
+      videoConcept: "Concepto de video",
+      previewWarn: "Esto es solo una idea inicial. Para activar tu artista completo (música, portada, video teaser, curso, herramientas y plan) necesitas activar la producción.",
+      activate: (price: number) => `Activar mi artista completo por $${price}`,
+      cancelled: "Checkout cancelado",
+      cancelledDesc: "Puedes intentarlo de nuevo cuando quieras. Tu progreso quedó guardado.",
+      previewError: "Error en el preview",
+      previewErrorDesc: "No pudimos conectar con el servidor. Intenta de nuevo.",
+      tools: [
+        { name: "OpenAI gpt-image-1", desc: "Imágenes editoriales premium" },
+        { name: "FAL Nano Banana 2", desc: "Backup de imagen ultra-rápido" },
+        { name: "Boostify Music Engine", desc: "Generación musical IA" },
+        { name: "Remotion + GPU", desc: "Renderizado de video" },
+        { name: "Stripe", desc: "Pagos seguros internacionales" },
+        { name: "Apple Design System", desc: "Acabado UI premium" },
+      ],
+      steps: [
+        { title: "¿Cómo te llamas?", placeholder: "Tu nombre completo" },
+        { title: "¿A qué email te enviamos tu preview?", placeholder: "tu@email.com" },
+        { title: "Teléfono (opcional)", placeholder: "+1 234 567 8901" },
+        { title: "Tipo de artista", options: ["Solista", "Banda", "DJ/Productor", "Vocalista", "Rapper", "Avatar virtual"] },
+        { title: "Género musical", options: ["Pop", "Reggaetón", "Trap", "R&B", "Rock", "Electrónica", "Indie", "Hip-Hop", "Latin", "Otro"] },
+        { title: "Personalidad artística", options: ["Misteriosa", "Carismática", "Rebelde", "Sensual", "Soñadora", "Académica", "Caótica", "Minimalista"] },
+        { title: "Estética visual deseada", options: ["Cinematográfica", "Pop futurista", "Y2K", "Dark editorial", "Retro 70s", "Neón cyberpunk", "Natural orgánico", "Lujo dorado"] },
+        { title: "Público objetivo", options: ["Gen-Z global", "Millennials latinos", "Adultos urbanos", "Comunidad nicho", "Todo público"] },
+        { title: "Objetivo de monetización", options: ["Streaming", "Conciertos", "Merchandising", "Cursos", "Sponsors", "Tokens NFT"] },
+        { title: "Tipo de video musical", options: ["Performance", "Storytelling", "Animación", "Lyric video", "Mixed media"] },
+        { title: "Nivel de experiencia", options: ["Cero", "Principiante", "Intermedio", "Avanzado"] },
+        { title: "¿Te interesa vender este paquete como afiliado?", options: ["Sí, me interesa", "Tal vez después", "No por ahora"] },
+      ],
+    },
+  },
+} as const;
+
+const WIZARD_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "artistType",
+  "genre",
+  "personality",
+  "aesthetic",
+  "audience",
+  "monetization",
+  "videoStyle",
+  "experience",
+  "affiliateInterest",
+] as const;
+
+const WIZARD_INITIAL = {
+  name: "",
+  email: "",
+  phone: "",
+  language: "en",
+  artistType: "",
+  genre: "",
+  personality: "",
+  aesthetic: "",
+  audience: "",
+  monetization: "",
+  videoStyle: "",
+  experience: "",
+  affiliateInterest: "",
+};
+
+// ============================================================================
+//  ANIMATION VARIANTS
+// ============================================================================
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
+};
+
+const stagger = {
+  visible: { transition: { staggerChildren: 0.06 } },
+};
+
+// ============================================================================
+//  COMPONENT
+// ============================================================================
+
+export default function CreateArtistLandingPage() {
+  const [location] = useLocation();
+  const { toast } = useToast();
+  const [lang, setLang] = useState<Lang>(() => {
+    if (typeof window === "undefined") return "en";
+    const saved = window.localStorage.getItem("age-lang");
+    return saved === "es" ? "es" : "en";
+  });
+  const t = T[lang];
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardData, setWizardData] = useState({ ...WIZARD_INITIAL, language: lang });
+  const [preview, setPreview] = useState<WizardPreview | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [leadId, setLeadId] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [activeGalleryIdx, setActiveGalleryIdx] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("age-lang", lang);
+    setWizardData((d) => ({ ...d, language: lang }));
+  }, [lang]);
+
+  const params = useMemo(() => {
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const usp = new URLSearchParams(search);
+    return {
+      artist: usp.get("artist") || "",
+      utmSource: usp.get("utm_source") || "",
+      utmCampaign: usp.get("utm_campaign") || "",
+      utmContent: usp.get("utm_content") || "",
+      campaignId: usp.get("campaign_id") || "",
+      adId: usp.get("ad_id") || "",
+      ref: usp.get("ref") || "",
+      cancelled: usp.get("cancelled") === "1",
+    };
+  }, [location]);
+
+  const slug = (params.artist || "boostify").toLowerCase().trim();
+
+  const landingQuery = useQuery<LandingResponse>({
+    queryKey: ["age-landing", slug, params.utmSource, params.utmCampaign, params.utmContent, params.adId],
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      if (params.utmSource) qs.set("utm_source", params.utmSource);
+      if (params.utmCampaign) qs.set("utm_campaign", params.utmCampaign);
+      if (params.utmContent) qs.set("utm_content", params.utmContent);
+      if (params.campaignId) qs.set("campaign_id", params.campaignId);
+      if (params.adId) qs.set("ad_id", params.adId);
+      if (params.ref) qs.set("ref", params.ref);
+      const res = await apiRequest(`/api/age/landing/${slug}?${qs.toString()}`);
+      return res as LandingResponse;
+    },
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (params.cancelled) {
+      toast({ title: t.wizard.cancelled, description: t.wizard.cancelledDesc });
+    }
+  }, [params.cancelled, toast, t.wizard.cancelled, t.wizard.cancelledDesc]);
+
+  useEffect(() => {
+    const tm = setInterval(() => setActiveGalleryIdx((i) => (i + 1) % ARTIST_IMAGES.length), 3500);
+    return () => clearInterval(tm);
+  }, []);
+
+  const wizardMutation = useMutation({
+    mutationFn: async () => {
+      const res: any = await apiRequest("/api/age/wizard", {
+        method: "POST",
+        data: { slug, ...wizardData },
+      });
+      return res;
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        setPreview(data.preview);
+        setPreviewImageUrl(data.previewImageUrl);
+        setLeadId(data.leadId);
+        setSessionId(data.sessionId);
+        setWizardStep(99);
+      } else {
+        toast({ title: t.wizard.previewError, description: data?.error || t.wizard.previewErrorDesc, variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      console.error("[wizard] error:", err);
+      toast({ title: t.wizard.previewError, description: err?.message || t.wizard.previewErrorDesc, variant: "destructive" });
+    },
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      const res: any = await apiRequest("/api/age/checkout", {
+        method: "POST",
+        data: { slug, email: wizardData.email, leadId, sessionId },
+      });
+      return res;
+    },
+    onSuccess: (data: any) => {
+      if (data?.success && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        toast({ title: t.wizard.previewError, description: data?.error || "Checkout error", variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: t.wizard.previewError, description: err?.message || "Checkout error", variant: "destructive" });
+    },
+  });
+
+  const unit = landingQuery.data?.unit;
+  const product = landingQuery.data?.product;
+  const heroImage = previewImageUrl || unit?.avatarUrl || HERO_FALLBACK;
+
+  const totalValue = t.deliverables.items.reduce((s, d) => s + d.value, 0);
+
+  const openWizard = () => {
+    setWizardOpen(true);
+    setWizardStep(0);
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white">
+      {/* TOP BAR */}
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-black/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-to-br from-orange-500 to-rose-500 shadow-lg shadow-orange-500/30">
+              <Music2 className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase tracking-widest text-white">Boostify</p>
+              <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-orange-300">Artist Growth Engine</p>
+            </div>
+          </div>
+          <div className="hidden items-center gap-6 lg:flex">
+            <a href="#proceso" className="text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-white">{t.nav.process}</a>
+            <a href="#entregables" className="text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-white">{t.nav.includes}</a>
+            <a href="#testimonios" className="text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-white">{t.nav.testimonials}</a>
+            <a href="#faq" className="text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-white">{t.nav.faq}</a>
+          </div>
+          <div className="flex items-center gap-2">
+            <LangToggle lang={lang} onChange={setLang} />
+            <Button onClick={openWizard} className="hidden bg-white text-black hover:bg-orange-200 sm:inline-flex">
+              {t.nav.cta}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* HERO with motion video bg */}
+      <section className="relative overflow-hidden">
+        {/* Video background */}
+        <div className="absolute inset-0">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover opacity-30"
+            poster={HERO_FALLBACK}
+          >
+            <source src={BG_VIDEO} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/70 to-zinc-950" />
+          <div
+            className="absolute inset-0 opacity-50"
+            style={{
+              background:
+                "radial-gradient(circle at 25% 30%, rgba(249,115,22,0.4), transparent 55%), radial-gradient(circle at 75% 70%, rgba(244,63,94,0.3), transparent 60%)",
+            }}
+          />
+        </div>
+
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2 lg:py-28">
+          <motion.div initial="hidden" animate="visible" variants={stagger} className="space-y-6">
+            {unit && unit.slug !== "boostify" && (
+              <motion.div variants={fadeUp} className="inline-flex items-center gap-3 rounded-full border border-orange-500/40 bg-orange-500/10 px-4 py-2">
+                {unit.avatarUrl ? (
+                  <img src={unit.avatarUrl} alt={unit.artistName} className="h-7 w-7 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/40 text-[10px] font-black uppercase">
+                    {unit.artistName.slice(0, 2)}
+                  </div>
+                )}
+                <span className="text-xs font-bold uppercase tracking-wider text-orange-200">
+                  {t.hero.invitedBy} {unit.artistName}
+                </span>
+              </motion.div>
+            )}
+
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-bold text-zinc-300">
+              <Flame className="h-3.5 w-3.5 text-orange-400" />
+              {t.hero.pill}
+            </motion.div>
+
+            <motion.h1 variants={fadeUp} className="font-black leading-[1.02] tracking-tight">
+              <span className="block text-4xl text-white sm:text-5xl lg:text-[64px]">{t.hero.titleA}</span>
+              <span className="block bg-gradient-to-r from-orange-400 via-rose-400 to-orange-300 bg-clip-text text-3xl text-transparent sm:text-4xl lg:text-[52px]">
+                {t.hero.titleB}
+              </span>
+            </motion.h1>
+
+            <motion.p variants={fadeUp} className="max-w-xl text-base leading-relaxed text-zinc-300 sm:text-lg">
+              {t.hero.desc}
+            </motion.p>
+
+            <motion.div variants={fadeUp} className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                size="lg"
+                onClick={openWizard}
+                className="group bg-gradient-to-r from-orange-500 to-rose-500 px-8 py-7 text-base font-black uppercase tracking-wide text-white shadow-xl shadow-orange-500/30 transition hover:shadow-orange-500/50"
+              >
+                {t.hero.ctaPrimary}
+                <ArrowRight className="ml-2 h-5 w-5 transition group-hover:translate-x-1" />
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={openWizard}
+                className="border-white/20 bg-white/5 px-8 py-7 text-base font-bold uppercase tracking-wide text-white hover:border-orange-500/60 hover:bg-white/10"
+              >
+                <Sparkles className="mr-2 h-5 w-5 text-orange-300" /> {t.hero.ctaSecondary}
+              </Button>
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="grid grid-cols-3 gap-4 pt-4 text-xs">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                <span className="text-zinc-300">{t.hero.guarantee}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                <span className="text-zinc-300">{t.hero.production}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Crown className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                <span className="text-zinc-300">{t.hero.value}</span>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Hero visual (real artist image with parallax) */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="relative"
+          >
+            <motion.div
+              animate={{ rotate: [0, 1.5, 0, -1.5, 0] }}
+              transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-orange-500/30 to-rose-500/20 blur-3xl"
+            />
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/80 shadow-2xl">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={heroImage}
+                  src={heroImage}
+                  alt="Your digital artist"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.7 }}
+                  className="h-[520px] w-full object-cover"
+                />
+              </AnimatePresence>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent p-6">
+                <p className="text-xs font-black uppercase tracking-widest text-orange-300">{t.hero.previewLabel}</p>
+                <p className="mt-1 text-2xl font-black text-white">{preview?.name || unit?.artistName || t.hero.previewName}</p>
+                <p className="mt-1 text-sm text-zinc-300">{preview?.description || t.hero.previewDesc}</p>
+              </div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="absolute -bottom-6 -left-6 hidden rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-xl sm:block"
+            >
+              <p className="text-[9px] font-black uppercase tracking-widest text-orange-300">{t.hero.now}</p>
+              <p className="mt-1 text-lg font-black text-white">{t.hero.activated}</p>
+              <p className="text-[10px] text-zinc-400">{t.hero.activatedSub}</p>
+            </motion.div>
+          </motion.div>
+        </div>
+
+        {/* Stats strip */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="border-y border-white/5 bg-black/40 backdrop-blur-sm"
+        >
+          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-6 py-8 sm:grid-cols-4">
+            {t.stats.map((s, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="text-center"
+              >
+                <p className="bg-gradient-to-br from-orange-300 to-rose-300 bg-clip-text text-3xl font-black text-transparent sm:text-4xl">{s.value}</p>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">{s.label}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* WHY */}
+      <section className="bg-black py-20">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-80px" }}
+          variants={stagger}
+          className="mx-auto max-w-5xl px-6 text-center"
+        >
+          <motion.p variants={fadeUp} className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.why.eyebrow}</motion.p>
+          <motion.h2 variants={fadeUp} className="mt-3 text-3xl font-black text-white sm:text-4xl lg:text-5xl">
+            {t.why.titleA}
+            <br />
+            <span className="bg-gradient-to-r from-orange-400 to-rose-400 bg-clip-text text-transparent">{t.why.titleB}</span>
+          </motion.h2>
+          <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-zinc-300">
+            {t.why.desc}
+          </motion.p>
+
+          <div className="mt-16 grid gap-6 lg:grid-cols-3">
+            {t.why.cards.map((c, i) => {
+              const icons = [Brain, Rocket, Award];
+              const Icon = icons[i];
+              return (
+                <motion.div
+                  key={i}
+                  variants={fadeUp}
+                  whileHover={{ y: -4 }}
+                  className={`rounded-3xl border bg-gradient-to-b p-8 text-left ${
+                    i === 1
+                      ? "border-orange-500/30 from-orange-500/[0.08] to-transparent"
+                      : "border-white/10 from-white/[0.04] to-transparent"
+                  }`}
+                >
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${i === 1 ? "bg-orange-500/25 text-orange-200" : "bg-orange-500/15 text-orange-300"}`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-5 text-lg font-black text-white">{c.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{c.desc}</p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* GALLERY — real artist images */}
+      <section className="relative overflow-hidden bg-zinc-950 py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-10 text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.gallery.eyebrow}</p>
+            <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">{t.gallery.title}</h3>
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400">{t.gallery.desc}</p>
+          </motion.div>
+
+          <div className="relative h-[460px] overflow-hidden rounded-3xl border border-white/10">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={ARTIST_IMAGES[activeGalleryIdx].src}
+                src={ARTIST_IMAGES[activeGalleryIdx].src}
+                alt={ARTIST_IMAGES[activeGalleryIdx].name}
+                initial={{ opacity: 0, scale: 1.08 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            </AnimatePresence>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+            <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-orange-300">{ARTIST_IMAGES[activeGalleryIdx].genre}</p>
+                <p className="mt-1 text-2xl font-black text-white">{ARTIST_IMAGES[activeGalleryIdx].name}</p>
+              </div>
+              <div className="flex gap-1.5">
+                {ARTIST_IMAGES.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveGalleryIdx(i)}
+                    className={`h-1 rounded-full transition-all ${i === activeGalleryIdx ? "w-8 bg-orange-400" : "w-4 bg-white/30"}`}
+                    aria-label={`Image ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">
+            {ARTIST_IMAGES.map((a, i) => (
+              <motion.button
+                key={i}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setActiveGalleryIdx(i)}
+                className={`overflow-hidden rounded-xl border transition ${
+                  i === activeGalleryIdx ? "border-orange-500 ring-2 ring-orange-500/40" : "border-white/10 hover:border-white/30"
+                }`}
+              >
+                <img src={a.src} alt={a.name} className="aspect-square w-full object-cover" loading="lazy" />
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* DELIVERABLES */}
+      <section id="entregables" className="bg-black py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-12 flex flex-wrap items-end justify-between gap-4"
+          >
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.deliverables.eyebrow}</p>
+              <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl lg:text-5xl">{t.deliverables.title}</h3>
+              <p className="mt-3 max-w-xl text-sm text-zinc-400">{t.deliverables.desc}</p>
+            </div>
+            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] px-5 py-3 text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-300">{t.deliverables.sumLabel}</p>
+              <p className="mt-1 text-2xl font-black text-white">${totalValue.toLocaleString()}+</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            variants={stagger}
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          >
+            {t.deliverables.items.map((d, i) => {
+              const icons = [Sparkles, Mic2, Palette, Music2, ImageIcon, ImageIcon, Video, Layers, Globe2, GraduationCap, Wand2, TrendingUp, DollarSign, Star];
+              const Icon = icons[i] || Sparkles;
+              return (
+                <motion.div
+                  key={i}
+                  variants={fadeUp}
+                  whileHover={{ y: -3, borderColor: "rgba(249,115,22,0.4)" }}
+                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5 transition"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/15 text-orange-300 group-hover:bg-orange-500/25">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h4 className="mt-4 text-sm font-black text-white">{d.title}</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">{d.desc}</p>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">{t.deliverables.valueWord}</span>
+                    <span className="text-xs font-black text-orange-300">${d.value}</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* COURSE + STUDIO + COVER */}
+      <section className="bg-zinc-950 py-20">
+        <div className="mx-auto max-w-7xl space-y-12 px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/[0.08] via-transparent to-rose-500/[0.05]"
+          >
+            <div className="grid lg:grid-cols-2">
+              <div className="p-10 lg:p-14">
+                <div className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-orange-300">
+                  <GraduationCap className="h-3.5 w-3.5" /> {t.course.pill}
+                </div>
+                <h3 className="mt-5 text-3xl font-black text-white sm:text-4xl">{t.course.title}</h3>
+                <p className="mt-4 text-base leading-relaxed text-zinc-300">{t.course.desc}</p>
+                <ul className="mt-6 space-y-3 text-sm text-zinc-300">
+                  {t.course.bullets.map((b, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-orange-300" />
+                      <span>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="relative h-[300px] lg:h-auto">
+                <img src={COURSE_IMG} alt="AI video course" className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute bottom-6 left-6 flex items-center gap-3 rounded-2xl bg-black/80 px-4 py-3 backdrop-blur-xl">
+                  <PlayCircle className="h-6 w-6 text-orange-400" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-300">{t.course.access}</p>
+                    <p className="text-sm font-bold text-white">{t.course.modules}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {[
+              { img: STUDIO_IMG, eyebrow: t.studio.eyebrow, title: t.studio.title, desc: t.studio.desc },
+              { img: COVER_IMG, eyebrow: t.cover.eyebrow, title: t.cover.title, desc: t.cover.desc },
+            ].map((card, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="overflow-hidden rounded-3xl border border-white/10"
+              >
+                <img src={card.img} alt={card.title} className="h-64 w-full object-cover" />
+                <div className="bg-black p-6">
+                  <p className="text-xs font-black uppercase tracking-widest text-orange-300">{card.eyebrow}</p>
+                  <h4 className="mt-2 text-xl font-black text-white">{card.title}</h4>
+                  <p className="mt-2 text-sm text-zinc-400">{card.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PROCESS */}
+      <section id="proceso" className="bg-black py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-12 text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.process.eyebrow}</p>
+            <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl lg:text-5xl">{t.process.title}</h3>
+          </motion.div>
+
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger} className="space-y-3">
+            {t.process.steps.map((s, i) => {
+              const icons = [Brain, Zap, Briefcase, GraduationCap, Rocket];
+              const Icon = icons[i];
+              return (
+                <motion.div
+                  key={i}
+                  variants={fadeUp}
+                  whileHover={{ x: 4 }}
+                  className="grid items-center gap-6 rounded-3xl border border-white/10 bg-gradient-to-r from-white/[0.03] to-transparent p-6 hover:border-orange-500/30 sm:grid-cols-[auto_1fr_auto]"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="bg-gradient-to-br from-orange-400 to-rose-400 bg-clip-text text-5xl font-black text-transparent">{s.step}</span>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-300">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-white">{s.title}</h4>
+                    <p className="mt-1 text-sm text-zinc-400">{s.desc}</p>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                    <Clock className="h-3.5 w-3.5 text-orange-300" /> {s.time}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* COMPARISON */}
+      <section className="bg-gradient-to-br from-orange-500/[0.06] via-transparent to-rose-500/[0.04] py-20">
+        <div className="mx-auto max-w-5xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-12 text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.comparison.eyebrow}</p>
+            <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">{t.comparison.title}</h3>
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400">{t.comparison.desc}</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="overflow-hidden rounded-3xl border border-white/10 bg-black/60"
+          >
+            <div className="grid grid-cols-3 border-b border-white/10 bg-white/[0.03] px-6 py-4 text-xs font-bold uppercase tracking-widest text-zinc-400">
+              <p>{t.comparison.colA}</p>
+              <p className="text-center">{t.comparison.colB}</p>
+              <p className="text-center">{t.comparison.colC}</p>
+            </div>
+            {t.comparison.rows.map((r, i) => (
+              <div key={i} className="grid grid-cols-3 items-center border-b border-white/5 px-6 py-3.5 text-sm last:border-0">
+                <p className="text-zinc-200">{r}</p>
+                <p className="text-center font-mono text-zinc-500 line-through">{t.comparison.prices[i]}</p>
+                <p className="text-center">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/20">
+                    <Check className="h-4 w-4 text-orange-300" />
+                  </span>
+                </p>
+              </div>
+            ))}
+            <div className="grid grid-cols-3 items-center bg-gradient-to-r from-orange-500/[0.08] to-rose-500/[0.05] px-6 py-5 text-sm font-black">
+              <p className="text-white">{t.comparison.total}</p>
+              <p className="text-center font-mono text-zinc-300 line-through">$5,500+</p>
+              <p className="text-center text-2xl text-orange-300">$500</p>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* TESTIMONIALS */}
+      <section id="testimonios" className="bg-black py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-12 text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.testimonials.eyebrow}</p>
+            <h3 className="mt-2 text-3xl font-black text-white sm:text-4xl">{t.testimonials.title}</h3>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={stagger}
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+          >
+            {t.testimonials.items.map((tm, i) => {
+              const avatars = [
+                "/artist-images/luna_echo_-_female_pop_singer.png",
+                "/artist-images/alex_thunder_-_trap_producer.png",
+                "/artist-images/isabella_santos_-_reggaeton.png",
+                "/artist-images/electric_dreams_-_electronic_artist.png",
+              ];
+              return (
+                <motion.div
+                  key={i}
+                  variants={fadeUp}
+                  whileHover={{ y: -4 }}
+                  className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-6"
+                >
+                  <Quote className="h-6 w-6 text-orange-400/60" />
+                  <p className="mt-4 text-sm leading-relaxed text-zinc-200">"{tm.quote}"</p>
+                  <div className="mt-6 flex items-center gap-3">
+                    <img src={avatars[i]} alt={tm.name} className="h-10 w-10 rounded-full object-cover" />
+                    <div>
+                      <p className="text-sm font-black text-white">{tm.name}</p>
+                      <p className="text-[11px] text-zinc-500">{tm.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* TOOLS */}
+      <section className="bg-zinc-950 py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-10 text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.tools.eyebrow}</p>
+            <h3 className="mt-2 text-2xl font-black text-white sm:text-3xl">{t.tools.title}</h3>
+          </motion.div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {t.wizard.tools.map((tool, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-center"
+              >
+                <p className="text-xs font-black text-white">{tool.name}</p>
+                <p className="mt-1 text-[10px] text-zinc-500">{tool.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section className="bg-black py-20">
+        <div className="mx-auto max-w-5xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="overflow-hidden rounded-[2rem] border border-orange-500/30 bg-gradient-to-br from-orange-500/[0.12] via-zinc-950 to-rose-500/[0.06] p-1"
+          >
+            <div className="rounded-[1.85rem] bg-zinc-950 p-10 sm:p-14">
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-orange-300">
+                  <Crown className="h-3.5 w-3.5" /> {t.pricing.pill}
+                </div>
+                <h3 className="mt-6 text-4xl font-black text-white sm:text-5xl lg:text-6xl">{t.pricing.title}</h3>
+                <p className="mt-2 text-lg text-zinc-300">{t.pricing.sub}</p>
+
+                <div className="mt-10 flex items-end justify-center gap-3">
+                  <span className="text-2xl font-bold text-zinc-500 line-through">${product?.perceivedValueUsd?.toLocaleString() || "5,500"}</span>
+                  <motion.span
+                    initial={{ scale: 0.9 }}
+                    whileInView={{ scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ type: "spring", stiffness: 200, damping: 12 }}
+                    className="bg-gradient-to-r from-orange-400 to-rose-400 bg-clip-text text-7xl font-black leading-none text-transparent sm:text-8xl"
+                  >
+                    ${product?.priceUsd || 500}
+                  </motion.span>
+                  <span className="pb-3 text-xs font-bold text-zinc-400">USD</span>
+                </div>
+                <p className="mt-2 text-xs font-bold uppercase tracking-widest text-orange-300">{t.pricing.one}</p>
+
+                <div className="mx-auto mt-10 grid max-w-2xl gap-3 text-left sm:grid-cols-2">
+                  {t.pricing.bullets.map((b, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-4 py-3">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-orange-300" />
+                      <span className="text-sm text-zinc-200">{b}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  size="lg"
+                  onClick={openWizard}
+                  className="mt-10 w-full max-w-md bg-gradient-to-r from-orange-500 to-rose-500 px-8 py-7 text-base font-black uppercase tracking-wide text-white shadow-2xl shadow-orange-500/40"
+                >
+                  {t.pricing.cta} <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <p className="mt-4 text-xs text-zinc-500">{t.pricing.secure}</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="bg-zinc-950 py-20">
+        <div className="mx-auto max-w-3xl px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.4em] text-orange-300">{t.faq.eyebrow}</p>
+            <h3 className="mt-3 text-3xl font-black text-white sm:text-4xl">{t.faq.title}</h3>
+          </motion.div>
+          <div className="mt-10 space-y-3">
+            {t.faq.items.map((f, i) => (
+              <motion.details
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.04 }}
+                className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition open:bg-white/[0.06]"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-bold text-white">
+                  {f.q}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/20 text-orange-300 transition group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-300">{f.a}</p>
+              </motion.details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* GUARANTEE */}
+      <section className="border-t border-white/5 bg-black py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mx-auto max-w-3xl px-6 text-center"
+        >
+          <ShieldCheck className="mx-auto h-12 w-12 text-orange-300" />
+          <p className="mt-4 text-xl font-black text-white">{t.guarantee.title}</p>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-300">{t.guarantee.desc}</p>
+        </motion.div>
+      </section>
+
+      {/* FINAL CTA */}
+      <section className="relative overflow-hidden py-24">
+        <div className="absolute inset-0 opacity-50" style={{ background: "radial-gradient(circle at 50% 50%, rgba(249,115,22,0.4), transparent 60%)" }} />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="relative mx-auto max-w-4xl px-6 text-center"
+        >
+          <h3 className="text-3xl font-black text-white sm:text-4xl lg:text-6xl">
+            {t.finalCta.titleA}
+            <br />
+            <span className="bg-gradient-to-r from-orange-400 to-rose-400 bg-clip-text text-transparent">{t.finalCta.titleB}</span>
+          </h3>
+          <p className="mx-auto mt-6 max-w-2xl text-base text-zinc-300 sm:text-lg">{t.finalCta.desc}</p>
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button
+              size="lg"
+              onClick={openWizard}
+              className="group bg-gradient-to-r from-orange-500 to-rose-500 px-10 py-7 text-base font-black uppercase tracking-wide text-white shadow-2xl shadow-orange-500/40"
+            >
+              {t.finalCta.primary} <ArrowRight className="ml-2 h-5 w-5 transition group-hover:translate-x-1" />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={openWizard}
+              className="border-white/20 bg-white/5 px-10 py-7 text-base font-bold uppercase tracking-wide text-white hover:border-orange-500/60 hover:bg-white/10"
+            >
+              {t.finalCta.secondary}
+            </Button>
+          </div>
+        </motion.div>
+      </section>
+
+      <footer className="border-t border-white/5 bg-black py-8">
+        <div className="mx-auto max-w-7xl px-6 text-center text-xs text-zinc-500">
+          © {new Date().getFullYear()} {t.footer}
+        </div>
+      </footer>
+
+      <AnimatePresence>
+        {wizardOpen && (
+          <WizardModal
+            t={t}
+            step={wizardStep}
+            setStep={setWizardStep}
+            data={wizardData}
+            setData={setWizardData}
+            onClose={() => {
+              setWizardOpen(false);
+              setWizardStep(0);
+            }}
+            onSubmit={() => wizardMutation.mutate()}
+            loading={wizardMutation.isPending}
+            preview={preview}
+            previewImageUrl={previewImageUrl}
+            onCheckout={() => checkoutMutation.mutate()}
+            checkoutLoading={checkoutMutation.isPending}
+            product={product}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================================================
+//  LANG TOGGLE
+// ============================================================================
+
+function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
+  return (
+    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1">
+      <Languages className="ml-2 h-3.5 w-3.5 text-zinc-400" />
+      {(["en", "es"] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => onChange(l)}
+          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition ${
+            lang === l ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+          }`}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+//  WIZARD MODAL
+// ============================================================================
+
+interface WizardModalProps {
+  t: typeof T["en"];
+  step: number;
+  setStep: (n: number) => void;
+  data: typeof WIZARD_INITIAL;
+  setData: (d: typeof WIZARD_INITIAL) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  loading: boolean;
+  preview: WizardPreview | null;
+  previewImageUrl: string | null;
+  onCheckout: () => void;
+  checkoutLoading: boolean;
+  product: LandingResponse["product"] | undefined;
+}
+
+function WizardModal({ t, step, setStep, data, setData, onClose, onSubmit, loading, preview, previewImageUrl, onCheckout, checkoutLoading, product }: WizardModalProps) {
+  const isPreview = step === 99;
+  const stepConfig = t.wizard.steps[step];
+  const field = WIZARD_FIELDS[step];
+  const requiresValue = step === 0 || step === 1;
+  const value = (data as any)[field] || "";
+  const canAdvance = !requiresValue || !!value;
+
+  const handleNext = () => {
+    if (step < t.wizard.steps.length - 1) setStep(step + 1);
+    else onSubmit();
+  };
+
+  const handlePrev = () => {
+    if (step > 0) setStep(step - 1);
+  };
+
+  const isInputStep = step <= 2;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 p-4 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        transition={{ ease: [0.16, 1, 0.3, 1] }}
+        className="relative my-auto w-full max-w-2xl rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl sm:p-8"
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+
+        {!isPreview && stepConfig && (
+          <>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-500/20 text-orange-300">
+                <Wand2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-300">{t.wizard.free}</p>
+                <p className="text-xs text-zinc-500">{t.wizard.stepOf} {step + 1} {t.wizard.of} {t.wizard.steps.length}</p>
+              </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.25 }}
+              >
+                <h3 className="text-2xl font-black text-white sm:text-3xl">{stepConfig.title}</h3>
+
+                <div className="mt-6">
+                  {!isInputStep && "options" in stepConfig && stepConfig.options ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {stepConfig.options.map((opt) => {
+                        const active = value === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setData({ ...data, [field]: opt })}
+                            className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                              active
+                                ? "border-orange-500 bg-orange-500/15 text-white"
+                                : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-orange-500/40"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Input
+                      type={step === 1 ? "email" : "text"}
+                      placeholder={"placeholder" in stepConfig ? stepConfig.placeholder : ""}
+                      value={value}
+                      onChange={(e) => setData({ ...data, [field]: e.target.value })}
+                      className="h-14 border-white/10 bg-white/[0.04] text-base text-white placeholder:text-zinc-500"
+                      autoFocus
+                    />
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-white/5">
+              <motion.div
+                className="h-full bg-gradient-to-r from-orange-500 to-rose-500"
+                initial={false}
+                animate={{ width: `${((step + 1) / t.wizard.steps.length) * 100}%` }}
+                transition={{ ease: [0.16, 1, 0.3, 1] }}
+              />
+            </div>
+
+            <div className="mt-6 flex justify-between gap-3">
+              <Button variant="ghost" onClick={handlePrev} disabled={step === 0} className="text-zinc-400">
+                {t.wizard.back}
+              </Button>
+              <Button
+                onClick={handleNext}
+                disabled={!canAdvance || loading}
+                className="bg-gradient-to-r from-orange-500 to-rose-500 px-6 py-5 font-black text-white"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : step === t.wizard.steps.length - 1 ? t.wizard.generate : t.wizard.next}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {isPreview && preview && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-500/20 text-orange-300">
+                <PartyPopper className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-300">{t.wizard.preview}</p>
+                <p className="text-xs text-zinc-500">{preview.provider}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {previewImageUrl ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="overflow-hidden rounded-2xl border border-white/10"
+                >
+                  <img src={previewImageUrl} alt="Preview" className="h-full w-full object-cover" />
+                </motion.div>
+              ) : (
+                <div className="flex aspect-square items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                  <ImageIcon className="h-12 w-12 text-zinc-600" />
+                </div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{t.wizard.name}</p>
+                  <p className="text-2xl font-black text-white">{preview.name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{t.wizard.concept}</p>
+                  <p className="text-sm text-zinc-200">{preview.description}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{t.wizard.single}</p>
+                  <p className="text-sm text-zinc-200">{preview.singleIdea}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{t.wizard.videoConcept}</p>
+                  <p className="text-sm text-zinc-200">{preview.videoConcept}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-rose-500/5 p-5">
+              <p className="text-sm font-bold text-white">{t.wizard.previewWarn}</p>
+              <Button
+                onClick={onCheckout}
+                disabled={checkoutLoading}
+                className="mt-4 w-full bg-gradient-to-r from-orange-500 to-rose-500 py-6 font-black text-white"
+              >
+                {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t.wizard.activate(product?.priceUsd || 500)}
+                {!checkoutLoading && <ArrowRight className="ml-2 h-5 w-5" />}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}

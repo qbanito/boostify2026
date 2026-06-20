@@ -1,0 +1,149 @@
+# 🚀 BOOSTIFY PLATFORM PROMO
+# 
+# Promotes Boostify's key features to artists and industry contacts.
+# 5 email templates, rotated automatically on schedule.
+#
+# Smart Limits:
+#   - Brevo: safe max 200/day (300 limit → 33% buffer)
+#   - Each run sends max 40 emails
+#   - Scheduled: Mon + Wed + Fri at 2pm UTC (6 email runs/week)
+#
+# Reply-to: convoycubano@gmail.com (responses come to your inbox)
+
+name: 🚀 Boostify Platform Promo (5 Templates)
+
+on:
+  workflow_dispatch:
+    inputs:
+      template_id:
+        description: 'Email template to send'
+        required: true
+        default: 'platform_intro'
+        type: choice
+        options:
+          - 'platform_intro'      # 1 — What is Boostify?
+          - 'ai_tools_showcase'   # 2 — 12 AI tools showcase
+          - 'distribution_cta'    # 3 — Distribution + keep 100% royalties
+          - 'community_social'    # 4 — BoostiSwap + social feed
+          - 'last_chance_cta'     # 5 — Urgency final CTA
+      target:
+        description: 'Audience target'
+        required: false
+        default: 'artists'
+        type: choice
+        options:
+          - 'artists'
+          - 'industry'
+      max_emails:
+        description: 'Max emails to send (safe limit: 40)'
+        required: false
+        default: '40'
+        type: string
+      preview_mode:
+        description: 'Preview mode → sends only to convoycubano@gmail.com'
+        required: false
+        default: 'true'
+        type: boolean
+
+  schedule:
+    # Monday 2pm UTC    → platform_intro (template rotated via script)
+    - cron: '0 14 * * 1'
+    # Wednesday 2pm UTC → ai_tools_showcase
+    - cron: '0 14 * * 3'
+    # Friday 2pm UTC    → community_social
+    - cron: '0 14 * * 5'
+
+jobs:
+  send-promo:
+    name: '🚀 Boostify Promo — ${{ github.event.inputs.template_id || "auto" }}'
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      # Resend accounts for artist rotation (4 accounts × 70/day safe limit = 280/day)
+      RESEND_API_ARTISTS_1: ${{ secrets.RESEND_API_ARTISTS_1 }}
+      RESEND_API_ARTISTS_2: ${{ secrets.RESEND_API_ARTISTS_2 }}
+      RESEND_API_ARTISTS_3: ${{ secrets.RESEND_API_ARTISTS_3 }}
+      RESEND_API_ARTISTS_4: ${{ secrets.RESEND_API_ARTISTS_4 }}
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🎯 Select template for scheduled run
+        id: pick_template
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "template=${{ github.event.inputs.template_id }}" >> $GITHUB_OUTPUT
+            echo "target=${{ github.event.inputs.target || 'artists' }}" >> $GITHUB_OUTPUT
+            echo "max=${{ github.event.inputs.max_emails || '40' }}" >> $GITHUB_OUTPUT
+            echo "preview=${{ github.event.inputs.preview_mode || 'true' }}" >> $GITHUB_OUTPUT
+          else
+            # Auto-rotate templates on schedule based on week number
+            WEEK=$(date +%V)
+            MOD=$((WEEK % 5))
+            case $MOD in
+              0) TMPL="platform_intro" ;;
+              1) TMPL="ai_tools_showcase" ;;
+              2) TMPL="distribution_cta" ;;
+              3) TMPL="community_social" ;;
+              4) TMPL="last_chance_cta" ;;
+            esac
+            echo "template=$TMPL" >> $GITHUB_OUTPUT
+            echo "target=artists" >> $GITHUB_OUTPUT
+            echo "max=40" >> $GITHUB_OUTPUT
+            echo "preview=false" >> $GITHUB_OUTPUT
+            echo "🗓️ Auto-selected template: $TMPL (week $WEEK, mod $MOD)"
+          fi
+
+      - name: 📊 Display Configuration
+        run: |
+          echo "══════════════════════════════════════════════════════════════"
+          echo "🚀 BOOSTIFY PLATFORM PROMO"
+          echo "══════════════════════════════════════════════════════════════"
+          echo "📧 Template:   ${{ steps.pick_template.outputs.template }}"
+          echo "🎯 Target:     ${{ steps.pick_template.outputs.target }}"
+          echo "📊 Max emails: ${{ steps.pick_template.outputs.max }}"
+          echo "🔄 Preview:    ${{ steps.pick_template.outputs.preview }}"
+          echo "📬 Reply-to:   convoycubano@gmail.com"
+          echo "🌐 Domain:     boostifymusic.com"
+          echo "⏰ Time (UTC): $(date -u +'%Y-%m-%d %H:%M')"
+          echo "══════════════════════════════════════════════════════════════"
+
+      - name: 🚀 Send Platform Promo Email
+        run: |
+          node scripts/boostify-promo-sender.cjs \
+            --template=${{ steps.pick_template.outputs.template }} \
+            --target=${{ steps.pick_template.outputs.target }} \
+            --max=${{ steps.pick_template.outputs.max }} \
+            --preview=${{ steps.pick_template.outputs.preview }}
+
+      - name: ✅ Campaign Complete
+        run: |
+          echo ""
+          echo "══════════════════════════════════════════════════════════════"
+          echo "✅ PROMO CAMPAIGN COMPLETE"
+          echo "══════════════════════════════════════════════════════════════"
+          echo ""
+          echo "📧 Template sent: ${{ steps.pick_template.outputs.template }}"
+          echo "📬 Replies go to: convoycubano@gmail.com"
+          echo ""
+          echo "📋 All 5 Promo Templates:"
+          echo "   1️⃣  platform_intro     — What is Boostify?"
+          echo "   2️⃣  ai_tools_showcase  — 12 AI tools"
+          echo "   3️⃣  distribution_cta  — Keep 100% royalties"
+          echo "   4️⃣  community_social   — BoostiSwap + community"
+          echo "   5️⃣  last_chance_cta   — Final urgency push"
+          echo ""
+          echo "🌐 Platform: https://boostifymusic.com"

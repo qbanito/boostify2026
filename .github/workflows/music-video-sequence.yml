@@ -1,0 +1,121 @@
+# 🎬 MUSIC VIDEO CREATOR - 5 EMAIL SEQUENCE
+# 
+# Automated email campaign to promote the AI Music Video Creator
+# "The world's first platform trained by legendary directors"
+#
+# Usage:
+#   - Manual trigger with sequence number selection
+#   - Preview mode to test emails before production sends
+
+name: Music Video Creator Sequence (5 Emails)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sequence_number:
+        description: 'Sequence Email Number (1-5)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+      max_emails:
+        description: 'Maximum number of emails to send (Brevo safe max: 40/run)'
+        required: false
+        default: '40'
+        type: string
+      preview_mode:
+        description: 'Preview mode (sends to test email only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+  schedule:
+    # Send sequence emails every Monday and Thursday at 3pm UTC
+    - cron: '0 15 * * 1,4'
+
+jobs:
+  send-music-video-sequence:
+    name: '🎬 Music Video Sequence Email #${{ github.event.inputs.sequence_number || 1 }}'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📚 Install Dependencies
+        run: |
+          npm install pg resend dotenv
+
+      - name: �️ Pick sequence number for scheduled run
+        id: pick_seq
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "seq=${{ github.event.inputs.sequence_number }}" >> $GITHUB_OUTPUT
+            echo "max=${{ github.event.inputs.max_emails || '40' }}" >> $GITHUB_OUTPUT
+            echo "preview=${{ github.event.inputs.preview_mode || 'false' }}" >> $GITHUB_OUTPUT
+          else
+            # Auto-rotate sequences 1-5 based on week number
+            WEEK=$(date +%V)
+            SEQ=$(( (WEEK % 5) + 1 ))
+            echo "seq=$SEQ" >> $GITHUB_OUTPUT
+            echo "max=40" >> $GITHUB_OUTPUT
+            echo "preview=false" >> $GITHUB_OUTPUT
+            echo "🗓️ Scheduled run — week $WEEK → sequence #$SEQ"
+          fi
+
+      - name: 📧 Send Music Video Sequence Email
+        run: |
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "║   🎬 MUSIC VIDEO CREATOR - EMAIL SEQUENCE                   ║"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "📧 Sequence Number: ${{ steps.pick_seq.outputs.seq }}"
+          echo "📊 Max Emails: ${{ steps.pick_seq.outputs.max }}"
+          echo "🔄 Preview Mode: ${{ steps.pick_seq.outputs.preview }}"
+          echo "───────────────────────────────────────────────────────────────"
+          
+          node scripts/music-video-sequence-sender.cjs \
+            --sequence=${{ steps.pick_seq.outputs.seq }} \
+            --max=${{ steps.pick_seq.outputs.max }} \
+            --preview=${{ steps.pick_seq.outputs.preview }}
+        env:
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          # Reply-to: convoycubano@gmail.com (via smart router)
+          RESEND_API_ARTISTS_1: ${{ secrets.RESEND_API_ARTISTS_1 }}
+          RESEND_API_ARTISTS_2: ${{ secrets.RESEND_API_ARTISTS_2 }}
+          RESEND_API_ARTISTS_3: ${{ secrets.RESEND_API_ARTISTS_3 }}
+          RESEND_API_ARTISTS_4: ${{ secrets.RESEND_API_ARTISTS_4 }}
+          PREVIEW_MODE: ${{ steps.pick_seq.outputs.preview }}
+
+      - name: ✅ Sequence Complete
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "║   ✅ MUSIC VIDEO SEQUENCE EMAIL SENT SUCCESSFULLY           ║"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo ""
+          echo "📧 Email: #${{ steps.pick_seq.outputs.seq }} of 5"
+          echo "🎬 Focus: AI Music Video Creator (trained by legendary directors)"
+          echo "🔗 CTA: https://boostifymusic.com/music-video-creator"
+          echo ""
+          echo "📋 Sequence Overview:"
+          echo "   1️⃣  The Reveal - Introducing AI Directors"
+          echo "   2️⃣  Behind the Magic - How AI Learned from Legends"
+          echo "   3️⃣  The Process - 3 Simple Steps"
+          echo "   4️⃣  Social Proof - Artists Already Creating"
+          echo "   5️⃣  Final Push - FREE Video Offer"
+          echo ""

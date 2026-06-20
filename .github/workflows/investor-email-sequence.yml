@@ -1,0 +1,105 @@
+name: 💼 Investor/Industry Email Sequence (13+ Templates)
+
+# Solo se activa manualmente - TÚ decides cuándo
+on:
+  workflow_dispatch:
+    inputs:
+      template_id:
+        description: 'Template de email a usar'
+        required: true
+        default: 'cold_outreach_direct'
+        type: choice
+        options:
+          # Cold Outreach (5 variantes A/B testing)
+          - 'cold_outreach_direct'      # A - Direct Pitch
+          - 'cold_outreach_problem'     # B - Problem First
+          - 'cold_outreach_revenue'     # C - Revenue Projections
+          - 'cold_outreach_social'      # D - Social Proof
+          - 'cold_outreach_urgency'     # E - Limited Opportunity
+          # Warm Intro
+          - 'warm_vc_intro'             # VC/Angel Introduction
+          - 'record_label_exec'         # Record Label Executive
+          # Follow-ups
+          - 'follow_up_3d'              # 3 Days Follow-up
+          - 'follow_up_7d'              # 7 Days Follow-up
+          - 'follow_up_10d'             # 10 Days Value Add
+          - 'follow_up_14d'             # 14 Days Breakup
+          - 'follow_up_21d'             # 21 Days Hail Mary
+      max_emails:
+        description: 'Máximo de emails a enviar (Brevo safe limit: 40/run, 200/day)'
+        required: false
+        default: '40'
+        type: string
+      preview_mode:
+        description: 'Modo preview (solo a convoycubano@gmail.com)'
+        required: false
+        default: 'true'
+        type: boolean
+      target_segment:
+        description: 'Segmento objetivo'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'vc_fund'
+          - 'record_label'
+          - 'angel_investor'
+          - 'music_tech_investor'
+          - 'industry_consultant'
+
+jobs:
+  send-investor-sequence:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      # Reply-to replies go to convoycubano@gmail.com automatically
+      # Brevo: 300/day limit → safe max 200/day (default 40/run)
+      APIFY_API_INDUSTRY: ${{ secrets.APIFY_API_INDUSTRY }}
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: 📦 Install dependencies
+      run: npm ci
+
+    - name: 🎯 Display configuration
+      run: |
+        echo "═══════════════════════════════════════════════════════════"
+        echo "💼 INVESTOR/INDUSTRY EMAIL SEQUENCE"
+        echo "═══════════════════════════════════════════════════════════"
+        echo "📧 Template: ${{ github.event.inputs.template_id }}"
+        echo "📊 Máximo emails: ${{ github.event.inputs.max_emails }}"
+        echo "🎯 Segmento: ${{ github.event.inputs.target_segment }}"
+        echo "🔄 Preview mode: ${{ github.event.inputs.preview_mode }}"
+        echo "═══════════════════════════════════════════════════════════"
+
+    - name: 📊 Check investor lead statistics
+      run: node scripts/check-leads.cjs
+
+    - name: 💼 Send Investor Email - ${{ github.event.inputs.template_id }}
+      run: |
+        node scripts/investor-sequence-sender.cjs \
+          --template=${{ github.event.inputs.template_id }} \
+          --max=${{ github.event.inputs.max_emails }} \
+          --segment=${{ github.event.inputs.target_segment }} \
+          --preview=${{ github.event.inputs.preview_mode }}
+      continue-on-error: true
+
+    - name: 📈 Final statistics
+      run: |
+        echo "═══════════════════════════════════════════════════════════"
+        echo "📊 CAMPAÑA COMPLETADA"
+        echo "═══════════════════════════════════════════════════════════"
+        node scripts/check-leads.cjs

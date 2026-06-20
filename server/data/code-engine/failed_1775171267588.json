@@ -1,0 +1,13 @@
+{
+  "id": "failed_1775171267588",
+  "timestamp": "2026-04-02T23:07:47.588Z",
+  "pageId": "education",
+  "task": "Add certificate generation",
+  "status": "rolled-back",
+  "model": "n/a",
+  "provider": "n/a",
+  "filesChanged": [
+    "client/src/pages/education.tsx"
+  ],
+  "error": "spawnSync C:\\WINDOWS\\system32\\cmd.exe ETIMEDOUT"
+}

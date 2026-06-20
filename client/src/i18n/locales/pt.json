@@ -1,0 +1,167 @@
+{
+  "app": {
+    "title": "Criador de Videoclipes com IA",
+    "description": "Crie videoclipes profissionais com IA"
+  },
+  "payment": {
+    "freePreview": "Prévia Gratuita",
+    "tryBeforePay": "Experimente antes de pagar",
+    "tenSecondPreview": "Prévia de 10 segundos",
+    "testScenes": "3 a 5 cenas de teste",
+    "standardQuality": "Qualidade padrão",
+    "premiumFullVideo": "Vídeo Completo Premium",
+    "professionalGrade": "Videoclipe completo de qualidade profissional",
+    "thirtyScenes": "30 cenas cinematográficas",
+    "fullVideo": "Vídeo completo ({{duration}}s)",
+    "professionalQuality": "Qualidade profissional com o modelo selecionado",
+    "priceLabel": "US$ 199,00",
+    "unlockFullVideo": "Desbloquear Vídeo Completo",
+    "payWith": "Pagar com",
+    "processing": "Processando...",
+    "securePayment": "Pagamento seguro com Stripe",
+    "fullVideoUnlocked": "Vídeo Completo Desbloqueado",
+    "paidForComplete": "Você pagou pelo videoclipe completo",
+    "paymentError": "Erro no pagamento",
+    "couldNotInitiate": "Não foi possível iniciar o processo de pagamento"
+  },
+  "videos": {
+    "myGeneratedVideos": "Meus Vídeos Gerados",
+    "allYourVideos": "Todos os seus videoclipes gerados com IA",
+    "loadingVideos": "Carregando vídeos...",
+    "noVideos": "Ainda não há vídeos",
+    "startCreating": "Comece a criar seu primeiro videoclipe com IA",
+    "model": "Modelo",
+    "duration": "Duração",
+    "seconds": "{{count}}s",
+    "preview": "Prévia",
+    "fullVideo": "Vídeo Completo",
+    "paid": "Pago: US$ {{amount}}",
+    "watch": "Assistir",
+    "download": "Baixar",
+    "delete": "Excluir",
+    "completed": "Concluído",
+    "generating": "Gerando",
+    "failed": "Falhou",
+    "deleteVideo": "Excluir Vídeo",
+    "deleteConfirm": "Tem certeza de que deseja excluir \"{{name}}\"? Esta ação não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "videoDeleted": "Vídeo excluído",
+    "deletedSuccessfully": "O vídeo foi excluído com sucesso",
+    "errorDeleting": "Erro ao excluir o vídeo",
+    "downloadStarted": "Download iniciado",
+    "downloadingVideo": "Baixando seu vídeo..."
+  },
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "warning": "Aviso",
+    "info": "Informação",
+    "yes": "Sim",
+    "no": "Não",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar"
+  },
+  "profile": {
+    "followers": "Seguidores",
+    "following": "Seguindo",
+    "follow": "Seguir",
+    "unfollow": "Deixar de seguir",
+    "editProfile": "Editar Perfil",
+    "share": "Compartilhar",
+    "shareProfile": "Compartilhar Perfil",
+    "copyLink": "Copiar Link",
+    "linkCopied": "Link copiado!",
+    "downloadQR": "Baixar QR",
+    "qrDownloaded": "QR baixado com sucesso",
+    "sections": {
+      "music": "Música",
+      "videos": "Vídeos",
+      "merchandise": "Loja",
+      "shows": "Shows",
+      "galleries": "Galerias",
+      "analytics": "Análise de Atividade",
+      "monetize": "Monetize Seu Talento",
+      "news": "Notícias",
+      "socialPosts": "Posts Sociais",
+      "socialHub": "Central Social",
+      "tokenization": "Tokenização",
+      "crowdfunding": "Financiamento Coletivo",
+      "monetizeCTA": "Monetize Seu Talento"
+    },
+    "analytics": {
+      "title": "Análise de Atividade",
+      "lastSevenDays": "Atividade dos últimos 7 dias",
+      "totalPlays": "Total de Reproduções",
+      "totalViews": "Total de Visualizações",
+      "plays": "Reproduções",
+      "views": "Visualizações",
+      "profileCompletion": "Perfil Completo",
+      "complete": "Completo"
+    },
+    "earnings": {
+      "title": "Ganhos",
+      "totalEarnings": "Ganhos Totais",
+      "monthlyEarnings": "Ganhos Mensais",
+      "withdrawn": "Sacado"
+    },
+    "monetize": {
+      "title": "Monetize Seu Talento",
+      "description": "Você é músico ou produtor? Venda seus serviços profissionais e transforme sua paixão em renda",
+      "cta": "Descubra as Ferramentas para Produtores"
+    },
+    "artistCard": {
+      "title": "Cartão de Artista",
+      "description": "Compartilhe seu perfil de artista",
+      "scanQR": "Escaneie o código QR para ver meu perfil",
+      "platform": "Plataforma Musical"
+    },
+    "info": {
+      "title": "Informações",
+      "genre": "Gênero",
+      "location": "Localização",
+      "memberSince": "Membro desde",
+      "languages": "Idiomas",
+      "website": "Site",
+      "email": "E-mail"
+    },
+    "services": {
+      "beats": "Beats",
+      "mixing": "Mixagem",
+      "mastering": "Masterização"
+    },
+    "social": {
+      "title": "Redes Sociais",
+      "follow": "Siga-me"
+    },
+    "spotify": {
+      "title": "Spotify",
+      "listen": "Ouvir no Spotify",
+      "monthlyListeners": "Ouvintes mensais",
+      "topTracks": "Faixas Populares"
+    },
+    "shows": {
+      "title": "Próximos Shows",
+      "tickets": "Ingressos",
+      "noShows": "Nenhum show agendado"
+    },
+    "cta": {
+      "title": "Impulsione sua carreira musical",
+      "description": "Junte-se a milhares de artistas que já usam o Boostify para gerenciar sua música, conectar-se com fãs e expandir seu público",
+      "button": "Criar Meu Perfil Grátis",
+      "subtitle": "Sem cartão de crédito • Configuração em 2 minutos"
+    },
+    "footer": {
+      "poweredBy": "Desenvolvido por"
+    },
+    "days": {
+      "mon": "Seg",
+      "tue": "Ter",
+      "wed": "Qua",
+      "thu": "Qui",
+      "fri": "Sex",
+      "sat": "Sáb",
+      "sun": "Dom"
+    }
+  }
+}

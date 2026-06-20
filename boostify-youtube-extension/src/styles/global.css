@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --boostify-orange: #f97316;
+  --boostify-orange-dark: #ea580c;
+  --boostify-bg: #0a0a0a;
+  --boostify-surface: #141414;
+  --boostify-surface-2: #1a1a1a;
+  --boostify-border: #2a2a2a;
+  --boostify-text: #e5e5e5;
+  --boostify-text-muted: #888;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--boostify-bg);
+  color: var(--boostify-text);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}

@@ -1,0 +1,123 @@
+{
+  "id": "tarantino-style",
+  "name": "Tarantino Editor Style",
+  "title": "Stylized Bold Editing",
+  "bio": "Represents bold, style-forward editing with creative transitions, match cuts, and visual storytelling. References cinema history in editing choices.",
+  "famous_directors": ["Tarantino film editors"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Multiple artists",
+      "title": "Tarantino-inspired music videos",
+      "year": 2010,
+      "signature_technique": "Match cuts, bold transitions, cinematic framing, color-motivated editing"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Bold, cinematic editing with match cuts, creative transitions, and stylized visual language",
+    "pace": "moderate",
+    "cut_frequency": "2-3 second average, longer when building tension",
+    "dominant_technique": "Match cuts and purposeful compositional editing",
+    "music_sync_philosophy": "Edit serves visual style and story equally, rhythm follows but doesn't dictate"
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Loose, using rhythm to accentuate story",
+      "cut_style": "Match cuts, creative transitions",
+      "emphasis": ["Narrative moments", "Visual style", "Dialogue/lyric synchronization"]
+    },
+    "pop": {
+      "beat_sync_approach": "Moderate, emphasizing chorus moments",
+      "cut_style": "Mix of match cuts and creative transitions",
+      "emphasis": ["Visual storytelling", "Performance moments", "Style consistency"]
+    },
+    "rock": {
+      "beat_sync_approach": "Energy-matched, following song intensity",
+      "cut_style": "Bold transitions, cinematic framing",
+      "emphasis": ["Narrative arc", "Visual impact", "Cinematic quality"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Creative interpretation",
+      "cut_style": "Experimental match cuts, bold transitions",
+      "emphasis": ["Visual innovation", "Style consistency", "Conceptual editing"]
+    },
+    "indie": {
+      "beat_sync_approach": "Emotional and lyrical sync",
+      "cut_style": "Thoughtful, purposeful match cuts",
+      "emphasis": ["Emotional narrative", "Visual poetry", "Style coherence"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "Emphasize important moments, show impact",
+      "frequency": "Selective, meaningful",
+      "duration": "0.2-0.4 seconds"
+    },
+    "speed_ramps": {
+      "usage": "Drama and style emphasis",
+      "speed_ranges": ["0.5x slow-motion", "1x normal", "1.5x fast"],
+      "moments": "Impact moments, transitions, dramatic beats"
+    },
+    "whip_transitions": {
+      "usage": "Creative scene changes",
+      "speed": "Medium to fast 0.3-0.5 seconds",
+      "effect_style": "Stylized, cinematic"
+    },
+    "jump_cuts": {
+      "usage": "Purposeful, often as match cuts",
+      "style": "Hard cuts serving visual or narrative logic",
+      "rhythm_sync": "Synchronized to emotional beats and impacts"
+    },
+    "match_cuts": {
+      "usage": "Frequent, defining technique",
+      "technique": "Shape, color, movement, composition matching",
+      "impact": "Creates visual continuity and style coherence"
+    },
+    "crossfades": {
+      "usage": "Occasional, for soften transitions",
+      "speed": "Medium 0.4-0.8 seconds",
+      "color_treatment": "Cinematic, mood-driven"
+    },
+    "flash_frames": {
+      "usage": "Stylistic punctuation",
+      "color": "Often bold, contrasting",
+      "duration": "0.05-0.2 seconds"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "Style and substance are inseparable. Every edit is purposeful.",
+    "emotion_first": true,
+    "rhythm_obsessed": false,
+    "storytelling_vs_style": "equal",
+    "performance_vs_broll": "50/50 balance for storytelling"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Match cuts where possible",
+      "Purposeful transitions",
+      "Visual style consistency",
+      "Cinematic framing",
+      "Narrative coherence"
+    ],
+    "avoid": [
+      "Random transitions",
+      "Meaningless quick cuts",
+      "Style without substance",
+      "Flat compositions"
+    ],
+    "emphasis_on": [
+      "Creative match cuts",
+      "Visual style",
+      "Narrative clarity",
+      "Cinematic quality",
+      "Purposeful editing"
+    ],
+    "rhythm_keywords": ["impact", "transition", "moment", "build", "climax", "reveal", "story"],
+    "visual_keywords": ["cinematic", "bold", "creative", "stylized", "purposeful", "artistic", "polished"]
+  }
+}

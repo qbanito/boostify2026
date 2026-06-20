@@ -1,0 +1,46 @@
+{
+  "include": [
+    "client/src/**/*",
+    "db/**/*",
+    "server/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "**/*.test.ts"
+  ],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
+    "noEmit": true,
+    "module": "ESNext",
+    "strict": true,
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ],
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "ignoreDeprecations": "5.0",
+    "baseUrl": ".",
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@db": [
+        "./db/index.ts"
+      ],
+      "@db/*": [
+        "./db/*"
+      ],
+      "@/*": [
+        "./client/src/*"
+      ]
+    }
+  }
+}

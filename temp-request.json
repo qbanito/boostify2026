@@ -1,0 +1,393 @@
+{
+  "song": {
+    "title": "Night Drive",
+    "artistName": "Boostify Demo",
+    "genre": "synthwave",
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+  },
+  "analysisSummary": {
+    "bpm": 120,
+    "genre": "Unknown",
+    "mood": [
+      "neutral"
+    ],
+    "duration": 24,
+    "sections": 3,
+    "keyMoments": 12
+  },
+  "directorApplied": {
+    "name": "Spike Jonze",
+    "cinematographer": "Emmanuel Lubezki"
+  },
+  "stats": {
+    "avgSceneDuration": 1885,
+    "avgVariationsPerScene": 1,
+    "sectionDistribution": {
+      "intro": 1,
+      "verse": 5,
+      "chorus": 7
+    },
+    "energyDistribution": {
+      "medium": 1,
+      "high": 5,
+      "peak": 7
+    },
+    "keyMomentsCount": 1,
+    "transitionCounts": {
+      "fade": 1,
+      "cut": 12
+    }
+  },
+  "masterJSON": {
+    "projectId": "demo-1773682216309",
+    "title": "Night Drive - Boostify Demo",
+    "bpm": 120,
+    "beatDuration": 500,
+    "genre": "synthwave",
+    "genreProfile": "edm",
+    "totalDuration": 24000,
+    "totalScenes": 13,
+    "totalVariations": 13,
+    "generatedAt": "2026-03-16T17:30:16.311Z",
+    "scenes": [
+      {
+        "id": "scene_1",
+        "sceneNumber": 1,
+        "startTime": 0,
+        "endTime": 6500,
+        "duration": 6500,
+        "beatStart": 0,
+        "beatEnd": 13,
+        "section": "intro",
+        "energy": "medium",
+        "transition": "fade",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_1_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 0,
+            "endTime": 6500,
+            "duration": 6500,
+            "beatStart": 0,
+            "beatEnd": 13
+          }
+        ]
+      },
+      {
+        "id": "scene_2",
+        "sceneNumber": 2,
+        "startTime": 6500,
+        "endTime": 8000,
+        "duration": 1500,
+        "beatStart": 13,
+        "beatEnd": 16,
+        "section": "verse",
+        "energy": "high",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_2_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 6500,
+            "endTime": 8000,
+            "duration": 1500,
+            "beatStart": 13,
+            "beatEnd": 16
+          }
+        ]
+      },
+      {
+        "id": "scene_3",
+        "sceneNumber": 3,
+        "startTime": 8000,
+        "endTime": 9500,
+        "duration": 1500,
+        "beatStart": 16,
+        "beatEnd": 19,
+        "section": "verse",
+        "energy": "high",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_3_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 8000,
+            "endTime": 9500,
+            "duration": 1500,
+            "beatStart": 16,
+            "beatEnd": 19
+          }
+        ]
+      },
+      {
+        "id": "scene_4",
+        "sceneNumber": 4,
+        "startTime": 9500,
+        "endTime": 11000,
+        "duration": 1500,
+        "beatStart": 19,
+        "beatEnd": 22,
+        "section": "verse",
+        "energy": "high",
+        "transition": "cut",
+        "isKeyMoment": true,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_4_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 9500,
+            "endTime": 11000,
+            "duration": 1500,
+            "beatStart": 19,
+            "beatEnd": 22
+          }
+        ]
+      },
+      {
+        "id": "scene_5",
+        "sceneNumber": 5,
+        "startTime": 11000,
+        "endTime": 12500,
+        "duration": 1500,
+        "beatStart": 22,
+        "beatEnd": 25,
+        "section": "verse",
+        "energy": "high",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_5_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 11000,
+            "endTime": 12500,
+            "duration": 1500,
+            "beatStart": 22,
+            "beatEnd": 25
+          }
+        ]
+      },
+      {
+        "id": "scene_6",
+        "sceneNumber": 6,
+        "startTime": 12500,
+        "endTime": 14000,
+        "duration": 1500,
+        "beatStart": 25,
+        "beatEnd": 28,
+        "section": "verse",
+        "energy": "high",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_6_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 12500,
+            "endTime": 14000,
+            "duration": 1500,
+            "beatStart": 25,
+            "beatEnd": 28
+          }
+        ]
+      },
+      {
+        "id": "scene_7",
+        "sceneNumber": 7,
+        "startTime": 14000,
+        "endTime": 15500,
+        "duration": 1500,
+        "beatStart": 28,
+        "beatEnd": 31,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_7_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 14000,
+            "endTime": 15500,
+            "duration": 1500,
+            "beatStart": 28,
+            "beatEnd": 31
+          }
+        ]
+      },
+      {
+        "id": "scene_8",
+        "sceneNumber": 8,
+        "startTime": 15500,
+        "endTime": 17000,
+        "duration": 1500,
+        "beatStart": 31,
+        "beatEnd": 34,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_8_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 15500,
+            "endTime": 17000,
+            "duration": 1500,
+            "beatStart": 31,
+            "beatEnd": 34
+          }
+        ]
+      },
+      {
+        "id": "scene_9",
+        "sceneNumber": 9,
+        "startTime": 17000,
+        "endTime": 18500,
+        "duration": 1500,
+        "beatStart": 34,
+        "beatEnd": 37,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_9_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 17000,
+            "endTime": 18500,
+            "duration": 1500,
+            "beatStart": 34,
+            "beatEnd": 37
+          }
+        ]
+      },
+      {
+        "id": "scene_10",
+        "sceneNumber": 10,
+        "startTime": 18500,
+        "endTime": 20000,
+        "duration": 1500,
+        "beatStart": 37,
+        "beatEnd": 40,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_10_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 18500,
+            "endTime": 20000,
+            "duration": 1500,
+            "beatStart": 37,
+            "beatEnd": 40
+          }
+        ]
+      },
+      {
+        "id": "scene_11",
+        "sceneNumber": 11,
+        "startTime": 20000,
+        "endTime": 21500,
+        "duration": 1500,
+        "beatStart": 40,
+        "beatEnd": 43,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_11_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 20000,
+            "endTime": 21500,
+            "duration": 1500,
+            "beatStart": 40,
+            "beatEnd": 43
+          }
+        ]
+      },
+      {
+        "id": "scene_12",
+        "sceneNumber": 12,
+        "startTime": 21500,
+        "endTime": 23000,
+        "duration": 1500,
+        "beatStart": 43,
+        "beatEnd": 46,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_12_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 21500,
+            "endTime": 23000,
+            "duration": 1500,
+            "beatStart": 43,
+            "beatEnd": 46
+          }
+        ]
+      },
+      {
+        "id": "scene_13",
+        "sceneNumber": 13,
+        "startTime": 23000,
+        "endTime": 24500,
+        "duration": 1500,
+        "beatStart": 46,
+        "beatEnd": 49,
+        "section": "chorus",
+        "energy": "peak",
+        "transition": "cut",
+        "isKeyMoment": false,
+        "baseImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+        "variations": [
+          {
+            "id": "scene_13_var_1",
+            "imageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1600&q=80",
+            "shotType": "original",
+            "startTime": 23000,
+            "endTime": 24500,
+            "duration": 1500,
+            "beatStart": 46,
+            "beatEnd": 49
+          }
+        ]
+      }
+    ]
+  }
+}

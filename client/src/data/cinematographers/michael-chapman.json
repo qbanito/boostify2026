@@ -1,0 +1,113 @@
+{
+  "id": "michael-chapman",
+  "name": "Michael Chapman",
+  "title": "Director of Photography",
+  "bio": "Oscar-winning pioneer. Known for gritty urban cinematography and psychological depth. Worked with legendary directors including Martin Scorsese. Defined the look of 1970s-80s American cinema.",
+  "famous_directors_worked_with": ["Martin Scorsese", "Michael Cimino", "Ridley Scott"],
+  
+  "iconic_films": [
+    {
+      "title": "Taxi Driver",
+      "director": "Martin Scorsese",
+      "year": 1976,
+      "awards": ["Academy Award Nomination"]
+    },
+    {
+      "title": "Raging Bull",
+      "director": "Martin Scorsese",
+      "year": 1980,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "The Deer Hunter",
+      "director": "Michael Cimino",
+      "year": 1978,
+      "awards": ["Academy Award Nomination"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Gritty, raw urban realism with psychological intensity. High contrast black and white sensibilities in color. Stark lighting that creates mood through shadow. Naturalistic yet psychologically charged cinematography.",
+    "key_characteristic": "Urban grittiness as psychological landscape. Every shadow conveys meaning. Cinematography expresses moral and psychological state.",
+    "legendary_technique": "Pioneer of high-contrast urban cinematography; master of using lighting to externalize character psychology"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Panavision Millennium",
+        "format": "35mm anamorphic",
+        "sensor": "Classic cinema format",
+        "use_case": "Character-driven urban narratives"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "Panavision Lenses",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "75mm", "100mm"],
+        "characteristics": ["Gritty rendering", "High contrast", "Urban character"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 500T - High Contrast",
+        "iso": 500,
+        "characteristics": "High contrast, gritty grain, desaturated with mood accents",
+        "mood": "Gritty, psychological, noir, urban"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "High contrast with motivated sources. Strong shadows as character device. Practical urban lighting. Psychological lighting that reflects character state.",
+    "color_science": "Desaturated urban palette. High contrast between light and shadow. Colors that feel naturalistic yet emotionally charged.",
+    "exposure_philosophy": "Expose for skin tones, let shadows fall dark. Use highlights strategically. Grain as psychological texture.",
+    "dynamic_range_preference": "High contrast, crushed blacks acceptable",
+    "frame_rate_preference": ["24fps for gritty realism"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Direct, gritty collaboration. Focuses on psychological truth over technical beauty.",
+    "strengths_with_narrative": "Externalizes character psychology through lighting. Makes audiences feel urban danger and moral complexity through visual language.",
+    "best_for_genres": ["Urban drama", "Psychological thriller", "Crime", "Character study", "Noir-influenced narratives"],
+    "complements_directors": ["Scorsese (perfect match)", "Cimino (epic scale)", "Character-focused directors"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "High contrast lighting",
+      "Gritty urban aesthetic",
+      "Desaturated color palette",
+      "Psychological shadow placement",
+      "Naturalistic urban locations",
+      "Stark cinematic language"
+    ],
+    "technical_mandates": [
+      "35mm anamorphic format",
+      "Panavision lenses",
+      "High contrast lighting design",
+      "Kodak film stock emulation with contrast",
+      "Strong shadows and highlights",
+      "Urban practical lighting sources"
+    ],
+    "avoid": [
+      "Bright, cheerful lighting",
+      "Saturated color palettes",
+      "Soft, diffused cinematography",
+      "Suburban or rural aesthetics",
+      "Clean, polished look"
+    ],
+    "emphasis_on": [
+      "Psychological depth through lighting",
+      "Urban grit and realism",
+      "High contrast imagery",
+      "Shadow as psychological character",
+      "Naturalistic yet intense cinematography",
+      "Moral complexity in visual language"
+    ]
+  }
+}

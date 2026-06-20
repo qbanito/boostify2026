@@ -1,0 +1,1212 @@
+/**
+ * ECONOMIC ENGINE DASHBOARD — Layer 3 Control Panel
+ * Beautiful animated widget for the artist profile right column
+ * Shows real-time agent status, market data, and toggle controls
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Activity, Shield, Zap, Brain, TrendingUp, DollarSign,
+  Power, ChevronRight, BarChart3, Lock, Unlock, AlertTriangle,
+  Satellite, Cpu, Layers, ArrowUpRight, ArrowDownRight,
+  Eye, EyeOff, Settings, RefreshCw, Circle, Wallet, Send, CheckCircle2, Loader2, ExternalLink
+} from 'lucide-react';
+import { useToast } from '../../hooks/use-toast';
+
+// ═══════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════
+
+interface AgentNode {
+  id: string;
+  name: string;
+  icon: typeof Activity;
+  status: 'active' | 'idle' | 'frozen' | 'alert';
+  description: string;
+  allocation: number;
+  color: string;
+}
+
+interface DashboardProps {
+  artistId: number | string;
+  colors: {
+    hexAccent: string;
+    hexPrimary: string;
+    hexBorder: string;
+  };
+  isAdmin?: boolean;
+}
+
+// ═══════════════════════════════════════════
+// ANIMATED PARTICLES (Background decoration)
+// ═══════════════════════════════════════════
+
+function FloatingParticles({ color, count = 12 }: { color: string; count?: number }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {Array.from({ length: count }).map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            width: Math.random() * 3 + 1,
+            height: Math.random() * 3 + 1,
+            background: color,
+            opacity: 0.15 + Math.random() * 0.2,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+          }}
+          animate={{
+            y: [0, -20 - Math.random() * 30, 0],
+            x: [0, Math.random() * 20 - 10, 0],
+            opacity: [0.1, 0.35, 0.1],
+          }}
+          transition={{
+            duration: 3 + Math.random() * 4,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: Math.random() * 3,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// NEURAL NETWORK VISUALIZATION
+// ═══════════════════════════════════════════
+
+function NeuralNetworkGraph({ agents, accent, primary }: {
+  agents: AgentNode[];
+  accent: string;
+  primary: string;
+}) {
+  const centerX = 120;
+  const centerY = 75;
+  const radius = 55;
+
+  const positions = agents.map((_, i) => {
+    const angle = (i / agents.length) * Math.PI * 2 - Math.PI / 2;
+    return {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    };
+  });
+
+  return (
+    <svg viewBox="0 0 240 150" className="w-full h-auto" style={{ maxHeight: 165 }}>
+      <defs>
+        <radialGradient id="neural-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={accent} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={accent} stopOpacity="0" />
+        </radialGradient>
+        <filter id="neural-blur">
+          <feGaussianBlur stdDeviation="2" />
+        </filter>
+        <linearGradient id="line-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={primary} stopOpacity="0.6" />
+          <stop offset="100%" stopColor={accent} stopOpacity="0.6" />
+        </linearGradient>
+      </defs>
+
+      {/* Central glow */}
+      <circle cx={centerX} cy={centerY} r="35" fill="url(#neural-glow)" />
+
+      {/* Connection lines from center to each agent */}
+      {positions.map((pos, i) => (
+        <motion.line
+          key={`line-${i}`}
+          x1={centerX}
+          y1={centerY}
+          x2={pos.x}
+          y2={pos.y}
+          stroke="url(#line-gradient)"
+          strokeWidth="1"
+          strokeDasharray="4 3"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.5, delay: i * 0.2 }}
+        />
+      ))}
+
+      {/* Data flow pulses along connections */}
+      {positions.map((pos, i) => {
+        const agent = agents[i];
+        if (agent.status !== 'active') return null;
+        return (
+          <motion.circle
+            key={`pulse-${i}`}
+            r="2"
+            fill={accent}
+            filter="url(#neural-blur)"
+            animate={{
+              cx: [centerX, pos.x],
+              cy: [centerY, pos.y],
+              opacity: [0.8, 0],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              delay: i * 0.7,
+              ease: 'easeOut',
+            }}
+          />
+        );
+      })}
+
+      {/* Cross-connections between adjacent agents */}
+      {positions.map((pos, i) => {
+        const next = positions[(i + 1) % positions.length];
+        return (
+          <motion.line
+            key={`cross-${i}`}
+            x1={pos.x}
+            y1={pos.y}
+            x2={next.x}
+            y2={next.y}
+            stroke={primary}
+            strokeWidth="0.5"
+            strokeOpacity="0.2"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 2, delay: 1 + i * 0.15 }}
+          />
+        );
+      })}
+
+      {/* Center brain node */}
+      <motion.circle
+        cx={centerX}
+        cy={centerY}
+        r="14"
+        fill="none"
+        stroke={accent}
+        strokeWidth="1.5"
+        animate={{ strokeOpacity: [0.5, 1, 0.5] }}
+        transition={{ duration: 2, repeat: Infinity }}
+      />
+      <motion.circle
+        cx={centerX}
+        cy={centerY}
+        r="8"
+        fill={`${accent}30`}
+        stroke={accent}
+        strokeWidth="0.5"
+        animate={{ r: [7, 9, 7] }}
+        transition={{ duration: 3, repeat: Infinity }}
+      />
+      <text x={centerX} y={centerY + 1} textAnchor="middle" dominantBaseline="middle"
+        fill={accent} fontSize="7" fontWeight="700" fontFamily="monospace">
+        L3
+      </text>
+
+      {/* Agent nodes */}
+      {positions.map((pos, i) => {
+        const agent = agents[i];
+        const statusColor =
+          agent.status === 'active' ? '#22c55e' :
+          agent.status === 'alert' ? '#f59e0b' :
+          agent.status === 'frozen' ? '#6b7280' : '#3b82f6';
+        return (
+          <g key={`node-${i}`}>
+            <motion.circle
+              cx={pos.x}
+              cy={pos.y}
+              r="16"
+              fill={`${agent.color}15`}
+              stroke={agent.color}
+              strokeWidth="1"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', delay: 0.3 + i * 0.15 }}
+            />
+            {/* Status indicator dot */}
+            <motion.circle
+              cx={pos.x + 11}
+              cy={pos.y - 11}
+              r="3"
+              fill={statusColor}
+              animate={agent.status === 'active' ? {
+                r: [2.5, 3.5, 2.5],
+                opacity: [0.8, 1, 0.8],
+              } : {}}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+            {/* Agent label */}
+            <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
+              fill="white" fontSize="6" fontWeight="600" fontFamily="system-ui">
+              {agent.id.split('_').map(w => w[0]?.toUpperCase()).join('')}
+            </text>
+            {/* Agent name below */}
+            <text x={pos.x} y={pos.y + 26} textAnchor="middle"
+              fill="white" fontSize="5" fontWeight="400" opacity="0.6">
+              {agent.name}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ═══════════════════════════════════════════
+// AGENT ROW COMPONENT
+// ═══════════════════════════════════════════
+
+function AgentRow({ agent, accent, onToggle }: {
+  agent: AgentNode;
+  accent: string;
+  onToggle?: () => void;
+}) {
+  const Icon = agent.icon;
+  const statusColors = {
+    active: '#22c55e',
+    idle: '#3b82f6',
+    frozen: '#6b7280',
+    alert: '#f59e0b',
+  };
+  const statusLabels = {
+    active: 'Active',
+    idle: 'Idle',
+    frozen: 'Frozen',
+    alert: 'Alert',
+  };
+
+  return (
+    <motion.div
+      className="flex items-center gap-3 p-2.5 rounded-lg border transition-colors hover:bg-white/[0.03]"
+      style={{ borderColor: `${accent}20` }}
+      whileHover={{ x: 2 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="relative flex-shrink-0">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: `${agent.color}20` }}
+        >
+          <Icon className="w-4 h-4" style={{ color: agent.color }} />
+        </div>
+        <motion.div
+          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
+          style={{ background: statusColors[agent.status] }}
+          animate={agent.status === 'active' ? { scale: [1, 1.3, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-white truncate">{agent.name}</span>
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{
+              background: `${statusColors[agent.status]}20`,
+              color: statusColors[agent.status],
+            }}
+          >
+            {statusLabels[agent.status]}
+          </span>
+        </div>
+        <div className="text-[10px] text-gray-500 truncate">{agent.description}</div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-[10px] text-gray-500 font-mono">{agent.allocation}%</span>
+        {onToggle && (
+          <button onClick={onToggle} className="p-1 rounded transition-colors hover:bg-white/10">
+            {agent.status === 'frozen' ? (
+              <Lock className="w-3 h-3 text-gray-500" />
+            ) : (
+              <Unlock className="w-3 h-3" style={{ color: statusColors[agent.status] }} />
+            )}
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// METRIC PILL
+// ═══════════════════════════════════════════
+
+function MetricPill({ label, value, icon: Icon, trend, accentColor }: {
+  label: string;
+  value: string;
+  icon: typeof Activity;
+  trend?: 'up' | 'down' | 'neutral';
+  accentColor: string;
+}) {
+  return (
+    <motion.div
+      className="flex items-center gap-2 px-3 py-2 rounded-lg border"
+      style={{ borderColor: `${accentColor}20`, background: `${accentColor}08` }}
+      whileHover={{ scale: 1.02 }}
+    >
+      <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[9px] text-gray-500 uppercase tracking-wider">{label}</div>
+        <div className="text-xs font-bold text-white flex items-center gap-1">
+          {value}
+          {trend === 'up' && <ArrowUpRight className="w-3 h-3 text-green-400" />}
+          {trend === 'down' && <ArrowDownRight className="w-3 h-3 text-red-400" />}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// OPERATING MODE SELECTOR
+// ═══════════════════════════════════════════
+
+const MODES = [
+  { id: 'survival', label: 'Survival', color: '#ef4444', icon: AlertTriangle, desc: 'Capital preservation' },
+  { id: 'defense', label: 'Defense', color: '#f59e0b', icon: Shield, desc: 'Reduce risk exposure' },
+  { id: 'stable', label: 'Stable', color: '#3b82f6', icon: Activity, desc: 'Balanced growth' },
+  { id: 'expansion', label: 'Expansion', color: '#22c55e', icon: TrendingUp, desc: 'Growth focused' },
+  { id: 'aggressive', label: 'Aggressive', color: '#a855f7', icon: Zap, desc: 'Max yield hunting' },
+] as const;
+
+function ModeSelector({ currentMode, accent, onChange, disabled }: {
+  currentMode: string;
+  accent: string;
+  onChange: (mode: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {MODES.map((mode) => {
+        const isActive = currentMode === mode.id;
+        const Icon = mode.icon;
+        return (
+          <motion.button
+            key={mode.id}
+            onClick={() => !disabled && onChange(mode.id)}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all border ${
+              disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            }`}
+            style={{
+              borderColor: isActive ? mode.color : 'rgba(255,255,255,0.08)',
+              background: isActive ? `${mode.color}20` : 'transparent',
+              color: isActive ? mode.color : '#9ca3af',
+            }}
+            whileHover={!disabled ? { scale: 1.05 } : {}}
+            whileTap={!disabled ? { scale: 0.95 } : {}}
+          >
+            <Icon className="w-3 h-3" />
+            {mode.label}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// ANIMATED RING CHART (Mini)
+// ═══════════════════════════════════════════
+
+function MiniRingChart({ value, max, label, color }: {
+  value: number;
+  max: number;
+  label: string;
+  color: string;
+}) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const circumference = 2 * Math.PI * 18;
+  const offset = circumference - (pct / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+        <motion.circle
+          cx="24" cy="24" r="18"
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.5, ease: 'easeOut' }}
+          transform="rotate(-90 24 24)"
+        />
+        <text x="24" y="24" textAnchor="middle" dominantBaseline="middle"
+          fill="white" fontSize="10" fontWeight="700">
+          {Math.round(pct)}
+        </text>
+      </svg>
+      <span className="text-[9px] text-gray-500 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// METAMASK FUND VAULT
+// ═══════════════════════════════════════════
+
+const POLYGON_CHAIN_ID = '0x89'; // 137 in hex
+
+function FundVaultPanel({ artistId, accent, onDeposit }: {
+  artistId: number | string;
+  accent: string;
+  onDeposit?: () => void;
+}) {
+  const { toast } = useToast();
+  const [step, setStep] = useState<'idle' | 'connecting' | 'amount' | 'sending' | 'confirming' | 'done'>('idle');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [treasuryAddress, setTreasuryAddress] = useState('');
+  const [amount, setAmount] = useState('');
+  const [selectedToken, setSelectedToken] = useState<'MATIC' | 'USDC'>('MATIC');
+  const [txHash, setTxHash] = useState('');
+  const [error, setError] = useState('');
+
+  const USDC_ADDRESS = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+  const USDC_DECIMALS = 6;
+
+  // Fetch treasury address
+  useEffect(() => {
+    fetch('/api/economic-engine/wallet/treasury-address')
+      .then(r => r.json())
+      .then(d => { if (d.success) setTreasuryAddress(d.address); })
+      .catch(() => {});
+  }, []);
+
+  const connectMetaMask = async () => {
+    setError('');
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) {
+      setError('MetaMask not installed. Please install MetaMask to fund your vault.');
+      return;
+    }
+    try {
+      setStep('connecting');
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      setWalletAddress(accounts[0]);
+
+      // Switch to Polygon
+      try {
+        await ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: POLYGON_CHAIN_ID }],
+        });
+      } catch (switchErr: any) {
+        if (switchErr.code === 4902) {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: POLYGON_CHAIN_ID,
+              chainName: 'Polygon Mainnet',
+              nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+              rpcUrls: ['https://polygon-rpc.com'],
+              blockExplorerUrls: ['https://polygonscan.com'],
+            }],
+          });
+        }
+      }
+      setStep('amount');
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect MetaMask');
+      setStep('idle');
+    }
+  };
+
+  const sendTransaction = async () => {
+    const ethereum = (window as any).ethereum;
+    if (!ethereum || !walletAddress) return;
+    if (!treasuryAddress) {
+      setError('Treasury wallet not configured. Contact admin to set TREASURY_WALLET_ADDRESS.');
+      return;
+    }
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setError('Enter a valid amount');
+      return;
+    }
+    setError('');
+    setStep('sending');
+
+    try {
+      let hash: string;
+
+      if (selectedToken === 'MATIC') {
+        // Native MATIC transfer
+        const weiValue = '0x' + BigInt(Math.floor(numAmount * 1e18)).toString(16);
+        hash = await ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: walletAddress,
+            to: treasuryAddress,
+            value: weiValue,
+          }],
+        });
+      } else {
+        // USDC ERC-20 transfer
+        const usdcAmount = BigInt(Math.floor(numAmount * 10 ** USDC_DECIMALS));
+        const transferData = '0xa9059cbb' +
+          treasuryAddress.slice(2).padStart(64, '0') +
+          usdcAmount.toString(16).padStart(64, '0');
+
+        hash = await ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: walletAddress,
+            to: USDC_ADDRESS,
+            data: transferData,
+          }],
+        });
+      }
+
+      setTxHash(hash);
+      setStep('confirming');
+
+      // Record deposit on backend
+      const res = await fetch(`/api/economic-engine/wallet/record-deposit/${artistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          txHash: hash,
+          amount: numAmount.toString(),
+          token: selectedToken,
+          senderAddress: walletAddress,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setStep('done');
+        toast({
+          title: 'Deposit Recorded',
+          description: `$${numAmount.toFixed(2)} ${selectedToken} deposited into vault`,
+        });
+        onDeposit?.();
+      } else {
+        setError(data.message || 'Failed to record deposit');
+        setStep('amount');
+      }
+    } catch (err: any) {
+      if (err.code === 4001) {
+        setError('Transaction rejected by user');
+      } else {
+        setError(err.message || 'Transaction failed');
+      }
+      setStep('amount');
+    }
+  };
+
+  const reset = () => {
+    setStep('idle');
+    setAmount('');
+    setTxHash('');
+    setError('');
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border overflow-hidden" style={{ borderColor: `${accent}20`, background: 'rgba(0,0,0,0.25)' }}>
+      <div className="px-3 py-2.5">
+        <div className="flex items-center gap-2 mb-2">
+          <Wallet className="w-3.5 h-3.5" style={{ color: accent }} />
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Fund Vault via MetaMask</span>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {/* IDLE — Connect button */}
+          {step === 'idle' && (
+            <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.button
+                onClick={connectMetaMask}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold text-white transition-all"
+                style={{ background: `linear-gradient(135deg, ${accent}30, ${accent}15)`, border: `1px solid ${accent}40` }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Wallet className="w-4 h-4" />
+                Connect MetaMask
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* CONNECTING */}
+          {step === 'connecting' && (
+            <motion.div key="connecting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex items-center justify-center gap-2 py-3 text-xs text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" style={{ color: accent }} />
+              Connecting to MetaMask...
+            </motion.div>
+          )}
+
+          {/* AMOUNT — Enter amount */}
+          {step === 'amount' && (
+            <motion.div key="amount" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                <span className="ml-auto px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono text-[9px]">Polygon</span>
+              </div>
+
+              {/* Token selector */}
+              <div className="flex gap-1.5">
+                {(['MATIC', 'USDC'] as const).map(token => (
+                  <button
+                    key={token}
+                    onClick={() => setSelectedToken(token)}
+                    className="flex-1 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all border"
+                    style={{
+                      borderColor: selectedToken === token ? accent : 'rgba(255,255,255,0.08)',
+                      background: selectedToken === token ? `${accent}15` : 'transparent',
+                      color: selectedToken === token ? accent : '#9ca3af',
+                    }}
+                  >
+                    {token}
+                  </button>
+                ))}
+              </div>
+
+              {/* Amount input */}
+              <div className="relative">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder={`Amount in ${selectedToken}`}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-black/30 border rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none"
+                  style={{ borderColor: `${accent}30` }}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold" style={{ color: accent }}>
+                  {selectedToken}
+                </span>
+              </div>
+
+              {/* Send button */}
+              <motion.button
+                onClick={sendTransaction}
+                disabled={!amount || parseFloat(amount) <= 0}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold text-white transition-all disabled:opacity-40"
+                style={{ background: `linear-gradient(135deg, #22c55e40, #22c55e20)`, border: '1px solid rgba(34,197,94,0.4)' }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Send className="w-3.5 h-3.5" />
+                Send {amount ? `${amount} ${selectedToken}` : 'Funds'}
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* SENDING */}
+          {step === 'sending' && (
+            <motion.div key="sending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-2 py-4">
+              <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
+              <span className="text-xs text-gray-400">Confirm in MetaMask...</span>
+            </motion.div>
+          )}
+
+          {/* CONFIRMING */}
+          {step === 'confirming' && (
+            <motion.div key="confirming" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-2 py-4">
+              <Loader2 className="w-6 h-6 animate-spin" style={{ color: accent }} />
+              <span className="text-xs text-gray-400">Recording deposit...</span>
+              {txHash && (
+                <a
+                  href={`https://polygonscan.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] hover:underline"
+                  style={{ color: accent }}
+                >
+                  View on PolygonScan <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </motion.div>
+          )}
+
+          {/* DONE */}
+          {step === 'done' && (
+            <motion.div key="done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-2 py-3">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500 }}
+              >
+                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              </motion.div>
+              <span className="text-xs font-bold text-green-400">Deposit Successful!</span>
+              <span className="text-[10px] text-gray-500">{amount} {selectedToken} added to vault</span>
+              {txHash && (
+                <a
+                  href={`https://polygonscan.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] hover:underline"
+                  style={{ color: accent }}
+                >
+                  View transaction <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              <button onClick={reset} className="text-[10px] mt-1 px-3 py-1 rounded-md hover:bg-white/5 text-gray-400">
+                Fund Again
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Error display */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mt-2 px-2 py-1.5 rounded text-[10px] text-red-400 bg-red-500/10 border border-red-500/20"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {/* Treasury address (collapsed) */}
+        {treasuryAddress && step === 'idle' && (
+          <div className="mt-2 text-[9px] text-gray-600 text-center font-mono truncate">
+            Treasury: {treasuryAddress.slice(0, 10)}...{treasuryAddress.slice(-6)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// MAIN DASHBOARD COMPONENT
+// ═══════════════════════════════════════════
+
+export function EconomicEngineDashboard({ artistId, colors, isAdmin }: DashboardProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showDetails, setShowDetails] = useState(false);
+  const [localMode, setLocalMode] = useState('stable');
+
+  // Fetch engine status
+  const { data: statusData, isLoading: statusLoading } = useQuery({
+    queryKey: ['economic-engine-status', artistId],
+    queryFn: async () => {
+      const res = await fetch(`/api/economic-engine/agents/${artistId}/status`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
+  // Fetch vault data
+  const { data: vaultData } = useQuery({
+    queryKey: ['economic-engine-vault', artistId],
+    queryFn: async () => {
+      const res = await fetch(`/api/economic-engine/vault/${artistId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
+  // Fetch risk state
+  const { data: riskData } = useQuery({
+    queryKey: ['economic-engine-risk', artistId],
+    queryFn: async () => {
+      const res = await fetch(`/api/economic-engine/risk/${artistId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
+  // Fetch recent agent actions
+  const { data: actionsData } = useQuery({
+    queryKey: ['economic-engine-actions', artistId],
+    queryFn: async () => {
+      const res = await fetch(`/api/economic-engine/agents/${artistId}/actions?limit=5`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 60000,
+    retry: 1,
+  });
+
+  // Fetch blockchain status (admin only)
+  const { data: blockchainData } = useQuery({
+    queryKey: ['economic-engine-blockchain'],
+    queryFn: async () => {
+      const res = await fetch('/api/economic-engine/blockchain/status');
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!isAdmin,
+    refetchInterval: 60000,
+    retry: 1,
+  });
+
+  // Mode change mutation
+  const modeMutation = useMutation({
+    mutationFn: async (mode: string) => {
+      const res = await fetch(`/api/economic-engine/admin/set-mode/${artistId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, reason: 'Dashboard mode change' }),
+      });
+      if (!res.ok) throw new Error('Failed to change mode');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['economic-engine-status', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['economic-engine-risk', artistId] });
+      toast({ title: 'Mode updated', description: `Operating mode changed to ${localMode}` });
+    },
+  });
+
+  // Toggle engine mutation
+  const toggleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/economic-engine/admin/toggle/${artistId}`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Failed to toggle engine');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['economic-engine-status', artistId] });
+      toast({
+        title: data.isEnabled ? 'Engine Activated' : 'Engine Deactivated',
+        description: data.isEnabled
+          ? 'Economic Engine is now managing your treasury'
+          : 'Economic Engine paused — funds are safe',
+      });
+    },
+  });
+
+  // Extract data
+  const vault = vaultData?.vault;
+  const risk = riskData?.riskState;
+  const engineEnabled = statusData?.isEnabled ?? false;
+  const currentMode = statusData?.currentMode || risk?.currentMode || 'stable';
+
+  useEffect(() => {
+    setLocalMode(currentMode);
+  }, [currentMode]);
+
+  // Build agent nodes for visualization
+  const agents: AgentNode[] = [
+    {
+      id: 'capital_keeper',
+      name: 'Capital Keeper',
+      icon: Shield,
+      status: !engineEnabled ? 'idle' : (risk?.shieldVetoActive ? 'alert' : 'active'),
+      description: 'Treasury preservation & Aave V3 lending',
+      allocation: 40,
+      color: '#3b82f6',
+    },
+    {
+      id: 'flow_maker',
+      name: 'Flow Maker',
+      icon: Activity,
+      status: !engineEnabled ? 'idle' : 'active',
+      description: 'Yield farming & Uniswap V3 LP',
+      allocation: 30,
+      color: '#22c55e',
+    },
+    {
+      id: 'alpha_hunter',
+      name: 'Alpha Hunter',
+      icon: Zap,
+      status: !engineEnabled ? 'idle' :
+        (currentMode === 'survival' || currentMode === 'defense') ? 'frozen' :
+        (risk?.shieldVetoActive ? 'frozen' : 'active'),
+      description: '1inch arbitrage & tactical alpha',
+      allocation: 10,
+      color: '#a855f7',
+    },
+    {
+      id: 'shield_node',
+      name: 'Shield Node',
+      icon: Shield,
+      status: !engineEnabled ? 'idle' : (risk?.shieldVetoActive ? 'alert' : 'active'),
+      description: 'Risk monitoring & circuit breaker',
+      allocation: 20,
+      color: '#f59e0b',
+    },
+  ];
+
+  // Vault totals
+  const totalVault =
+    parseFloat(vault?.operationBalance || '0') +
+    parseFloat(vault?.reserveBalance || '0') +
+    parseFloat(vault?.growthBalance || '0') +
+    parseFloat(vault?.defiBalance || '0');
+  const defiBalance = parseFloat(vault?.defiBalance || '0');
+  const reserveBalance = parseFloat(vault?.reserveBalance || '0');
+  const totalProfit = parseFloat(vault?.totalDefiProfit || '0');
+  const drawdown = parseFloat(vault?.currentDrawdown || '0');
+  const healthScore = parseFloat(risk?.healthScore || '85');
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border" style={{ borderColor: colors.hexBorder, background: 'rgba(0,0,0,0.4)' }}>
+      <FloatingParticles color={colors.hexAccent} />
+
+      {/* ── Header ── */}
+      <div className="relative z-10 px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <motion.div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: `${colors.hexAccent}20` }}
+              animate={{ rotate: engineEnabled ? [0, 5, -5, 0] : 0 }}
+              transition={{ duration: 4, repeat: Infinity }}
+            >
+              <Cpu className="w-4 h-4" style={{ color: colors.hexAccent }} />
+            </motion.div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                Economic Engine
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono" style={{
+                  background: engineEnabled ? 'rgba(34,197,94,0.15)' : 'rgba(107,114,128,0.15)',
+                  color: engineEnabled ? '#22c55e' : '#6b7280',
+                }}>
+                  {engineEnabled ? 'LIVE' : 'OFF'}
+                </span>
+              </h3>
+              <p className="text-[10px] text-gray-500">Layer 3 — Autonomous Treasury</p>
+            </div>
+          </div>
+
+          {isAdmin && (
+            <motion.button
+              onClick={() => toggleMutation.mutate()}
+              className="relative w-10 h-5 rounded-full transition-colors"
+              style={{ background: engineEnabled ? `${colors.hexAccent}40` : 'rgba(107,114,128,0.3)' }}
+              whileTap={{ scale: 0.95 }}
+              disabled={toggleMutation.isPending}
+            >
+              <motion.div
+                className="absolute top-0.5 w-4 h-4 rounded-full"
+                style={{ background: engineEnabled ? colors.hexAccent : '#6b7280' }}
+                animate={{ left: engineEnabled ? 22 : 2 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              />
+            </motion.button>
+          )}
+        </div>
+
+        {/* ── Neural Network Visualization ── */}
+        <motion.div
+          className="relative rounded-xl overflow-hidden mb-3"
+          style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${colors.hexBorder}` }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <NeuralNetworkGraph
+            agents={agents}
+            accent={colors.hexAccent}
+            primary={colors.hexPrimary}
+          />
+        </motion.div>
+
+        {/* ── Quick Metrics ── */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <MetricPill
+            label="Treasury"
+            value={`$${totalVault.toFixed(0)}`}
+            icon={DollarSign}
+            trend={totalProfit > 0 ? 'up' : totalProfit < 0 ? 'down' : 'neutral'}
+            accentColor={colors.hexAccent}
+          />
+          <MetricPill
+            label="DeFi Motor"
+            value={`$${defiBalance.toFixed(0)}`}
+            icon={BarChart3}
+            trend={totalProfit > 0 ? 'up' : 'neutral'}
+            accentColor={colors.hexPrimary}
+          />
+          <MetricPill
+            label="Reserve"
+            value={`$${reserveBalance.toFixed(0)}`}
+            icon={Shield}
+            accentColor="#3b82f6"
+          />
+          <MetricPill
+            label="Health"
+            value={`${healthScore.toFixed(0)}%`}
+            icon={Activity}
+            trend={healthScore > 70 ? 'up' : 'down'}
+            accentColor={healthScore > 70 ? '#22c55e' : '#ef4444'}
+          />
+        </div>
+
+        {/* ── Mini Ring Charts ── */}
+        <div className="flex justify-around mb-3 py-2 rounded-lg" style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <MiniRingChart value={healthScore} max={100} label="Health" color="#22c55e" />
+          <MiniRingChart value={100 - drawdown} max={100} label="Stability" color={colors.hexAccent} />
+          <MiniRingChart value={totalProfit} max={Math.max(totalVault, 1)} label="ROI" color="#a855f7" />
+          <MiniRingChart
+            value={agents.filter(a => a.status === 'active').length}
+            max={agents.length}
+            label="Agents"
+            color="#3b82f6"
+          />
+        </div>
+
+        {/* ── Fund Vault via MetaMask ── */}
+        {isAdmin && (
+          <FundVaultPanel
+            artistId={artistId}
+            accent={colors.hexAccent}
+            onDeposit={() => {
+              queryClient.invalidateQueries({ queryKey: ['economic-engine-vault', artistId] });
+              queryClient.invalidateQueries({ queryKey: ['economic-engine-status', artistId] });
+            }}
+          />
+        )}
+
+        {/* ── Expand/Collapse Details ── */}
+        <motion.button
+          onClick={() => setShowDetails(!showDetails)}
+          className="w-full flex items-center justify-center gap-1 py-1.5 text-[10px] font-semibold rounded-lg transition-colors hover:bg-white/5"
+          style={{ color: colors.hexAccent }}
+        >
+          {showDetails ? 'Hide Details' : 'Show Agent Controls'}
+          <motion.div animate={{ rotate: showDetails ? 90 : 0 }}>
+            <ChevronRight className="w-3 h-3" />
+          </motion.div>
+        </motion.button>
+      </div>
+
+      {/* ── Expanded Details ── */}
+      <AnimatePresence>
+        {showDetails && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-3">
+              {/* Operating Mode */}
+              {isAdmin && (
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 font-semibold">Operating Mode</div>
+                  <ModeSelector
+                    currentMode={localMode}
+                    accent={colors.hexAccent}
+                    onChange={(mode) => {
+                      setLocalMode(mode);
+                      modeMutation.mutate(mode);
+                    }}
+                    disabled={!engineEnabled || modeMutation.isPending}
+                  />
+                </div>
+              )}
+
+              {/* Current mode display (non-admin) */}
+              {!isAdmin && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ borderColor: `${colors.hexAccent}20` }}>
+                  <div className="text-[10px] text-gray-500">Mode:</div>
+                  <span className="text-xs font-bold capitalize" style={{
+                    color: MODES.find(m => m.id === currentMode)?.color || colors.hexAccent
+                  }}>
+                    {currentMode}
+                  </span>
+                </div>
+              )}
+
+              {/* Agent List */}
+              <div>
+                <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 font-semibold">DeFi Agents</div>
+                <div className="space-y-1.5">
+                  {agents.map((agent) => (
+                    <AgentRow
+                      key={agent.id}
+                      agent={agent}
+                      accent={colors.hexAccent}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Actions */}
+              {actionsData?.actions && actionsData.actions.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5 font-semibold">Recent Activity</div>
+                  <div className="space-y-1">
+                    {actionsData.actions.slice(0, 4).map((action: any, idx: number) => (
+                      <motion.div
+                        key={action.id || idx}
+                        className="flex items-start gap-2 px-2 py-1.5 rounded text-[10px]"
+                        style={{ background: 'rgba(255,255,255,0.02)' }}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                      >
+                        <Circle
+                          className="w-1.5 h-1.5 mt-1 flex-shrink-0"
+                          style={{
+                            color: action.outcome === 'success' ? '#22c55e' : '#ef4444',
+                            fill: action.outcome === 'success' ? '#22c55e' : '#ef4444',
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-400 truncate block">{action.reason}</span>
+                        </div>
+                        <span className="text-gray-600 flex-shrink-0 font-mono">
+                          {action.agentType?.replace('_', ' ').split(' ').map((w: string) => w[0]?.toUpperCase()).join('')}
+                        </span>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Shield Veto Warning */}
+              {risk?.shieldVetoActive && (
+                <motion.div
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10"
+                  animate={{ opacity: [0.8, 1, 0.8] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <AlertTriangle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                  <div className="text-[10px] text-yellow-400">
+                    <span className="font-bold">Shield Veto Active</span>
+                    <span className="block text-yellow-500/70">{risk.shieldVetoReason || 'Risk threshold exceeded'}</span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Blockchain Status (admin) */}
+              {isAdmin && blockchainData && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                  <Satellite className="w-3.5 h-3.5" style={{ color: blockchainData.blockchain?.alchemyConfigured ? '#22c55e' : '#6b7280' }} />
+                  <span className="text-[10px] text-gray-400">
+                    Polygon {blockchainData.blockchain?.alchemyConfigured ? '· Connected' : '· Not configured'}
+                  </span>
+                  {blockchainData.intelligence?.llmConfigured && (
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 font-mono">
+                      {blockchainData.intelligence.model}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

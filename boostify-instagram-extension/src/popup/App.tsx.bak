@@ -1,0 +1,496 @@
+import { useState, useEffect } from 'react';
+import { getConnectionInfo, saveConnectionInfo, clearConnectionInfo } from '../shared/storage';
+import { validateConnectToken } from '../shared/api-client';
+import { EXTENSION_ID } from '../shared/constants';
+import type { ConnectionInfo } from '../shared/types';
+
+type Tool = { id: string; icon: string; label: string; desc: string };
+
+const tools: Tool[] = [
+  { id: 'captions', icon: '✍️', label: 'Captions', desc: 'AI viral captions' },
+  { id: 'hashtags', icon: '#️⃣', label: 'Hashtags', desc: '30 trending tags' },
+  { id: 'ideas',    icon: '💡', label: 'Ideas', desc: 'Content calendar' },
+  { id: 'bio',      icon: '✨', label: 'Bio', desc: 'Optimize your bio' },
+  { id: 'timing',   icon: '⏰', label: 'Best Times', desc: 'When to post' },
+  { id: 'audit',    icon: '📊', label: 'Audit', desc: 'Full account review' },
+];
+
+const extractTools: Tool[] = [
+  { id: 'followers', icon: '👥', label: 'Followers', desc: 'Extract follower list' },
+  { id: 'hashtag',   icon: '#️⃣', label: 'Hashtag Users', desc: 'Users from hashtag' },
+  { id: 'likers',    icon: '❤️', label: 'Likers', desc: 'Who liked a post' },
+  { id: 'commenters',icon: '💬', label: 'Commenters', desc: 'Who commented' },
+];
+
+export default function App() {
+  const [connection, setConnection] = useState<ConnectionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tokenInput, setTokenInput] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [toolResult, setToolResult] = useState<string>('');
+  const [toolLoading, setToolLoading] = useState(false);
+  const [view, setView] = useState<'home' | 'tools' | 'extract'>('home');
+  const [detectedUser, setDetectedUser] = useState<{ username: string; profilePic: string } | null>(null);
+  const [isOnInstagram, setIsOnInstagram] = useState(false);
+  const [currentPageInfo, setCurrentPageInfo] = useState('');
+
+  useEffect(() => { loadConnection(); detectCurrentTab(); }, []);
+
+  async function detectCurrentTab() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.url?.includes('instagram.com')) {
+        setIsOnInstagram(true);
+        // Get page context from URL
+        const url = new URL(tab.url);
+        const segments = url.pathname.split('/').filter(Boolean);
+        if (segments.length === 1 && !['explore', 'reels', 'direct', 'stories', 'p', 'accounts'].includes(segments[0])) {
+          setCurrentPageInfo(`Viewing @${segments[0]}`);
+        } else if (url.pathname.startsWith('/explore/tags/')) {
+          setCurrentPageInfo(`Exploring #${segments[2] || ''}`);
+        } else if (url.pathname === '/' || url.pathname === '') {
+          setCurrentPageInfo('Home Feed');
+        } else {
+          setCurrentPageInfo('Instagram');
+        }
+      }
+      // Also try to get the detected logged-in user from background
+      const result = await chrome.runtime.sendMessage({ type: 'GET_LOGGED_IN_USER' });
+      if (result?.user) {
+        setDetectedUser(result.user);
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function loadConnection() {
+    setLoading(true);
+    const conn = await getConnectionInfo();
+    setConnection(conn);
+    setLastSync(conn?.lastSyncAt || null);
+    setLoading(false);
+  }
+
+  async function handleConnect() {
+    if (!tokenInput.trim()) return;
+    setConnecting(true);
+    setError('');
+    try {
+      // Try to get username from detected user, active tab, or fallback
+      let instagramUsername = detectedUser?.username || '';
+      let profileUrl = '';
+
+      if (!instagramUsername) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.url?.includes('instagram.com')) {
+          const url = new URL(tab.url);
+          const segments = url.pathname.split('/').filter(Boolean);
+          if (segments.length >= 1 && !['p', 'reel', 'explore', 'direct', 'stories'].includes(segments[0])) {
+            instagramUsername = segments[0];
+            profileUrl = tab.url;
+          }
+        }
+      }
+      if (!instagramUsername) instagramUsername = 'unknown';
+      const result = await validateConnectToken({
+        connectToken: tokenInput.trim(),
+        extensionId: EXTENSION_ID,
+        instagramUsername,
+        profileUrl,
+        displayName: instagramUsername,
+      });
+      if (result.success) {
+        const connInfo: ConnectionInfo = {
+          connectionId: result.connectionId,
+          userId: result.userId,
+          syncToken: result.syncToken,
+          instagramUsername: result.instagramUsername,
+          displayName: result.instagramUsername,
+          status: 'active',
+        };
+        await saveConnectionInfo(connInfo);
+        setConnection(connInfo);
+        setTokenInput('');
+        chrome.runtime.sendMessage({ type: 'SYNC_NOW' });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    chrome.runtime.sendMessage({ type: 'DISCONNECT' });
+    await clearConnectionInfo();
+    setConnection(null);
+    setView('home');
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      await chrome.runtime.sendMessage({ type: 'SYNC_NOW' });
+      setLastSync(new Date().toISOString());
+    } catch { /* ignore */ }
+    setSyncing(false);
+  }
+
+  async function runTool(toolId: string) {
+    setActiveTool(toolId);
+    setToolLoading(true);
+    setToolResult('');
+    try {
+      // Send tool command to content script via background
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) throw new Error('No active tab');
+
+      // Tell content script to execute the tool and show result overlay
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'RUN_BOOSTIFY_TOOL',
+        toolId,
+        artistName: connection?.instagramUsername || '',
+      });
+      setToolResult(`✅ ${toolId} tool launched on Instagram page. Check the overlay.`);
+    } catch (err: any) {
+      // Fallback: open Boostify dashboard tool
+      const toolMap: Record<string, string> = {
+        captions: 'ai-tools',
+        hashtags: 'ai-tools',
+        ideas: 'ai-tools',
+        bio: 'ai-tools',
+        timing: 'ai-tools',
+        audit: 'ai-tools',
+      };
+      const tabName = toolMap[toolId] || 'ai-tools';
+      chrome.tabs.create({ url: `http://localhost:5000/instagram-boost?tab=${tabName}&tool=${toolId}` });
+      setToolResult(`🔗 Opened ${toolId} in Boostify dashboard`);
+    }
+    setToolLoading(false);
+  }
+
+  async function runExtract(extractType: string) {
+    setActiveTool(extractType);
+    setToolLoading(true);
+    setToolResult('');
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id || !tab.url?.includes('instagram.com')) {
+        throw new Error('Open Instagram first');
+      }
+      // Send extraction command to background → content script
+      const result = await chrome.runtime.sendMessage({
+        type: 'START_EXTRACTION',
+        extractType,
+        maxUsers: 200,
+        sortMode: 'recent',
+      });
+      if (result?.error) throw new Error(result.error);
+      setToolResult(`⏳ Extracting ${extractType}... Check the Instagram page for progress.`);
+    } catch (err: any) {
+      setToolResult(`❌ ${err.message}`);
+    }
+    setToolLoading(false);
+  }
+
+  function openDashboard() {
+    chrome.tabs.create({ url: 'http://localhost:5000/instagram-boost' });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[400px] bg-[#0a0a0f]">
+        <div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-[380px] min-h-[500px] bg-[#0a0a0f] text-white">
+      {/* Header */}
+      <div className="relative overflow-hidden p-4 bg-gradient-to-br from-purple-600/30 via-pink-600/20 to-orange-600/20">
+        <div className="relative z-10 flex items-center gap-3">
+          {detectedUser?.profilePic ? (
+            <img src={detectedUser.profilePic} className="w-10 h-10 rounded-xl border-2 border-pink-500/40 object-cover" />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+          )}
+          <div className="flex-1">
+            <h1 className="text-base font-bold">
+              {detectedUser ? `@${detectedUser.username}` : 'Boostify Instagram'}
+            </h1>
+            <p className="text-[11px] text-white/50">
+              {isOnInstagram ? currentPageInfo : 'Open Instagram to use tools'}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {connection && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[9px] text-green-400 font-medium">Synced</span>
+              </div>
+            )}
+            {isOnInstagram && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                <span className="text-[9px] text-purple-400 font-medium">Active</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {!connection ? (
+        /* ===== NOT CONNECTED ===== */
+        <div className="p-4 space-y-4">
+          <div className="text-center py-5">
+            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-pink-400">
+                <rect x="2" y="2" width="20" height="20" rx="5" />
+                <circle cx="12" cy="12" r="5" />
+                <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold mb-1">Connect to Boostify</h3>
+            <p className="text-xs text-white/40 max-w-[280px] mx-auto">
+              Generate a token in your Boostify dashboard and paste it below
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="Paste connection token..."
+              className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm placeholder:text-white/25 focus:outline-none focus:border-pink-500/50"
+              onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+            />
+            {error && <p className="text-red-400 text-xs px-1">{error}</p>}
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !tokenInput.trim()}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 font-semibold text-sm transition-all disabled:opacity-50"
+            >
+              {connecting ? '⟳ Connecting...' : '🔗 Connect'}
+            </button>
+            <button onClick={openDashboard} className="w-full text-center text-xs text-pink-400 hover:text-pink-300 py-1">
+              Need a token? → Open Boostify Dashboard
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ===== CONNECTED ===== */
+        <div className="flex flex-col" style={{ height: 'calc(500px - 64px)' }}>
+          {/* Navigation tabs */}
+          <div className="flex border-b border-white/[0.06] px-2">
+            {[
+              { id: 'home', icon: '🏠', label: 'Home' },
+              { id: 'tools', icon: '⚡', label: 'AI Tools' },
+              { id: 'extract', icon: '📥', label: 'Extract' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => { setView(tab.id as any); setActiveTool(null); setToolResult(''); }}
+                className={`flex-1 py-2.5 text-center text-xs font-medium transition-all border-b-2 ${
+                  view === tab.id
+                    ? 'border-pink-500 text-pink-400'
+                    : 'border-transparent text-white/40 hover:text-white/60'
+                }`}
+              >
+                <span className="block text-base">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {view === 'home' && (
+              <>
+                {/* Instagram account card */}
+                <div className="rounded-xl bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-orange-500/5 border border-white/[0.08] p-4">
+                  <div className="flex items-center gap-3">
+                    {detectedUser?.profilePic ? (
+                      <img src={detectedUser.profilePic} className="w-12 h-12 rounded-full border-2 border-pink-500/30 object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30">
+                          <rect x="2" y="2" width="20" height="20" rx="5" />
+                          <circle cx="12" cy="12" r="5" />
+                          <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-bold">
+                        {detectedUser ? `@${detectedUser.username}` : (connection ? `@${connection.instagramUsername}` : 'No account detected')}
+                      </p>
+                      <p className="text-[10px] text-white/40">
+                        {isOnInstagram ? '✓ Instagram tab detected' : 'Open Instagram to interact'}
+                      </p>
+                    </div>
+                    {isOnInstagram && (
+                      <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                        <span className="text-green-400 text-sm">✓</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick status */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 text-center">
+                    <p className="text-lg font-bold">{connection ? '🔗' : '⚡'}</p>
+                    <p className="text-[10px] text-white/40">{connection ? 'Boostify Linked' : 'Not Linked'}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-3 text-center">
+                    <p className="text-lg font-bold">{lastSync ? '✅' : '⏳'}</p>
+                    <p className="text-[10px] text-white/40">{lastSync ? 'Data Synced' : 'Pending Sync'}</p>
+                  </div>
+                </div>
+
+                {/* Quick actions */}
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 font-semibold text-sm transition-all disabled:opacity-50"
+                >
+                  {syncing ? '⟳ Syncing...' : '🔄 Sync Now'}
+                </button>
+
+                <button onClick={openDashboard} className="w-full py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] font-medium text-sm">
+                  📊 Open Full Dashboard
+                </button>
+
+                {/* Quick tool shortcuts */}
+                <p className="text-[10px] text-white/30 uppercase tracking-wider pt-1">Quick Tools</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {tools.slice(0, 3).map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setView('tools'); runTool(t.id); }}
+                      className="rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] p-3 text-center transition-all"
+                    >
+                      <span className="text-xl block">{t.icon}</span>
+                      <span className="text-[10px] text-white/60 mt-1 block">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={handleDisconnect} className="w-full py-2 text-red-400/60 hover:text-red-400 text-xs">
+                  Disconnect
+                </button>
+              </>
+            )}
+
+            {view === 'tools' && (
+              <>
+                {!isOnInstagram && (
+                  <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="text-xs font-medium text-yellow-400">Open Instagram first</p>
+                      <p className="text-[10px] text-yellow-400/50">Tools run directly on the Instagram page</p>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-white/50">
+                  {isOnInstagram 
+                    ? `Click a tool to run it on ${currentPageInfo || 'the current page'}:` 
+                    : 'These tools will open in the Boostify dashboard:'}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {tools.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => runTool(t.id)}
+                      disabled={toolLoading}
+                      className={`rounded-xl border p-3 text-left transition-all ${
+                        activeTool === t.id
+                          ? 'bg-pink-500/10 border-pink-500/30'
+                          : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05]'
+                      } disabled:opacity-50`}
+                    >
+                      <span className="text-xl">{t.icon}</span>
+                      <p className="text-xs font-semibold mt-1">{t.label}</p>
+                      <p className="text-[10px] text-white/40">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {toolLoading && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                    <div className="animate-spin w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full" />
+                    <span className="text-xs text-purple-300">Running tool...</span>
+                  </div>
+                )}
+
+                {toolResult && !toolLoading && (
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-white/70 whitespace-pre-wrap">
+                    {toolResult}
+                  </div>
+                )}
+              </>
+            )}
+
+            {view === 'extract' && (
+              <>
+                <p className="text-xs text-white/50">Extract user data from the current Instagram page:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {extractTools.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => runExtract(t.id)}
+                      disabled={toolLoading}
+                      className={`rounded-xl border p-3 text-left transition-all ${
+                        activeTool === t.id
+                          ? 'bg-blue-500/10 border-blue-500/30'
+                          : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05]'
+                      } disabled:opacity-50`}
+                    >
+                      <span className="text-xl">{t.icon}</span>
+                      <p className="text-xs font-semibold mt-1">{t.label}</p>
+                      <p className="text-[10px] text-white/40">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {toolLoading && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <div className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full" />
+                    <span className="text-xs text-blue-300">Starting extraction...</span>
+                  </div>
+                )}
+
+                {toolResult && !toolLoading && (
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-white/70 whitespace-pre-wrap">
+                    {toolResult}
+                  </div>
+                )}
+
+                <div className="p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/10">
+                  <p className="text-[10px] text-yellow-400/70">
+                    ⚠️ You must be on an Instagram profile or post page for extraction to work. Navigate to the target page first.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex-shrink-0 px-3 py-2 border-t border-white/[0.06] text-center">
+            <p className="text-[10px] text-white/20">Boostify v1.0.0</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

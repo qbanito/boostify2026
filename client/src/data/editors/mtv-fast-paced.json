@@ -1,0 +1,123 @@
+{
+  "id": "mtv-fast-paced",
+  "name": "MTV Fast-Paced Style",
+  "title": "High-Energy Pop Music Editor",
+  "bio": "Represents the MTV editing aesthetic - fast cuts, frequent transitions, synchronized to pop beats, emphasizing performance and spectacle.",
+  "famous_directors": ["Multiple MTV era editors"],
+  
+  "iconic_edits": [
+    {
+      "artist": "Britney Spears",
+      "title": "Toxic",
+      "year": 2004,
+      "signature_technique": "Fast cuts, perfect beat synchronization, colorful transitions, performance focus"
+    }
+  ],
+  
+  "signature_style": {
+    "description": "Fast-paced pop editing with perfect beat synchronization, colorful transitions, and performance emphasis",
+    "pace": "fast",
+    "cut_frequency": "Every 1-2 seconds on average",
+    "dominant_technique": "Beat-synchronized cuts, colorful transitions, performance focus",
+    "music_sync_philosophy": "Every hook gets visual emphasis. Cuts follow the pop beat structure."
+  },
+  
+  "genre_specialties": {
+    "hip_hop": {
+      "beat_sync_approach": "Fast synchronization to rap rhythm",
+      "cut_style": "Quick cuts, occasional slow-motion for emphasis",
+      "emphasis": ["Rap flow cuts", "Hook moments", "Ad-lib visual hits"]
+    },
+    "pop": {
+      "beat_sync_approach": "Obsessive hook synchronization",
+      "cut_style": "Fast cuts on chorus, moderate on verse",
+      "emphasis": ["Hook visual moments", "Performance sections", "Choreography highlights"]
+    },
+    "rock": {
+      "beat_sync_approach": "Synchronized to drum beat and guitar hits",
+      "cut_style": "Dynamic between fast and moderate",
+      "emphasis": ["Guitar solos", "Vocal power moments", "Chorus peaks"]
+    },
+    "electronic": {
+      "beat_sync_approach": "Synchronized to synthesizer and bass",
+      "cut_style": "Fast on drops, varied on builds",
+      "emphasis": ["Drop moments", "Build-up crescendos", "Bass impacts"]
+    },
+    "indie": {
+      "beat_sync_approach": "Moderate synchronization with emphasis",
+      "cut_style": "Mix of fast and thoughtful cuts",
+      "emphasis": ["Lyrical moments", "Emotional peaks", "Chorus hits"]
+    }
+  },
+  
+  "micro_edit_techniques": {
+    "freeze_frames": {
+      "usage": "On hook moments, beat drops, performance peaks",
+      "frequency": "Regular, every 15-30 seconds",
+      "duration": "0.1-0.2 seconds (quick emphasis)"
+    },
+    "speed_ramps": {
+      "usage": "On performance moments and transitions",
+      "speed_ranges": ["0.5x slow-motion", "1x normal", "2x fast"],
+      "moments": "Hook moments, transitions, performance emphasis"
+    },
+    "whip_transitions": {
+      "usage": "Scene transitions with energy",
+      "speed": "Fast 0.3-0.4 second whips",
+      "effect_style": "Colorful, matching video aesthetic"
+    },
+    "jump_cuts": {
+      "usage": "Primary technique between quick cuts",
+      "style": "Hard cuts with visual continuity",
+      "rhythm_sync": "Synchronized to beat, especially on percussion hits"
+    },
+    "match_cuts": {
+      "usage": "Visual continuity within fast pacing",
+      "technique": "Match color, shape, movement",
+      "impact": "Seamless quick cutting"
+    },
+    "crossfades": {
+      "usage": "Quick transitions between sections",
+      "speed": "Fast 0.2-0.3 second fades",
+      "color_treatment": "Often colorful, matching mood"
+    },
+    "flash_frames": {
+      "usage": "Visual punctuation and emphasis",
+      "color": "Bright, colorful, matching aesthetic",
+      "duration": "0.05-0.1 seconds"
+    }
+  },
+  
+  "editing_philosophy": {
+    "core_principle": "Energy, pace, and performance. Every frame should excite.",
+    "emotion_first": false,
+    "rhythm_obsessed": true,
+    "storytelling_vs_style": "style-obsessed",
+    "performance_vs_broll": "80% performance, 20% B-roll for context"
+  },
+  
+  "ai_editing_guidelines": {
+    "must_haves": [
+      "Fast pacing throughout",
+      "Beat synchronization especially on hooks",
+      "Performance emphasis",
+      "Colorful, energetic feel",
+      "Clear section changes"
+    ],
+    "avoid": [
+      "Slow, contemplative pacing",
+      "Conceptual over performance",
+      "Subtle, understated transitions",
+      "Low energy feel"
+    ],
+    "emphasis_on": [
+      "Performance moments",
+      "Hook synchronization",
+      "Fast pacing",
+      "Energetic transitions",
+      "Visual spectacle"
+    ],
+    "rhythm_keywords": ["hook", "beat", "drop", "chorus", "verse", "percussion", "fast"],
+    "visual_keywords": ["performance", "energetic", "colorful", "fast", "exciting", "spectacular", "glossy"]
+  }
+}

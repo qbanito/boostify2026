@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Boostify Instagram Sync",
+  "version": "1.0.0",
+  "description": "Sync Instagram with Boostify AI: caption generation, hashtag optimization, content ideas & analytics.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "cookies"
+  ],
+  "optional_permissions": [
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://www.instagram.com/*",
+    "https://i.instagram.com/*",
+    "https://boostifymusic.com/*",
+    "http://localhost:5000/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["src/content/instagram-main.ts"],
+      "css": ["assets/boostify-overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://boostifymusic.com/*",
+      "http://localhost:5000/*"
+    ]
+  }
+}

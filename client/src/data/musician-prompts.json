@@ -1,0 +1,38 @@
+{
+  "Guitar": {
+    "prompt": "Professional portrait photograph of a guitarist in a modern recording studio, sitting with acoustic/electric guitar, warm studio lighting creating soft shadows, shallow depth of field with blurred studio equipment in background, natural relaxed pose, professional musician headshot, photorealistic DSLR quality, detailed facial features, contemporary casual-professional clothing, warm color tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed hands, extra fingers, bad anatomy, multiple guitars, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, overexposed, harsh shadows"
+  },
+  "Drums": {
+    "prompt": "Professional portrait photograph of a drummer seated behind a professional drum kit in a modern recording studio, natural relaxed pose with drumsticks, warm studio lighting creating cinematic atmosphere, shallow depth of field with drum kit visible, professional musician headshot, photorealistic DSLR quality, detailed facial features, casual-professional attire, warm tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed, bad anatomy, multiple people, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, overexposed"
+  },
+  "Piano": {
+    "prompt": "Professional portrait photograph of a pianist at a grand piano in an elegant studio setting, hands positioned on piano keys, warm natural lighting creating sophisticated atmosphere, shallow depth of field with piano visible in frame, professional musician headshot, photorealistic DSLR quality, detailed facial features, elegant attire, refined color tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed hands, bad anatomy, multiple pianos, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, harsh lighting"
+  },
+  "Vocals": {
+    "prompt": "Professional portrait photograph of a vocalist in a professional recording booth, standing near vintage studio microphone, warm studio lighting creating intimate atmosphere, shallow depth of field with recording equipment softly blurred in background, professional singer headshot, photorealistic DSLR quality, detailed facial features, contemporary stylish clothing, warm color palette, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed, bad anatomy, multiple people, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, overexposed"
+  },
+  "Bass": {
+    "prompt": "Professional portrait photograph of a bass guitarist in a modern recording studio, holding/playing bass guitar, warm studio lighting creating depth, shallow depth of field with studio gear visible in background, natural confident pose, professional musician headshot, photorealistic DSLR quality, detailed facial features, contemporary musician clothing, rich warm tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed hands, extra fingers, bad anatomy, multiple people, crowd, poor lighting, distorted face, low quality, blurry, unrealistic"
+  },
+  "Production": {
+    "prompt": "Professional portrait photograph of a music producer in a modern recording studio control room, seated at mixing console with multiple screens and equipment visible, warm studio lighting creating professional atmosphere, shallow depth of field focusing on producer, professional headshot, photorealistic DSLR quality, detailed facial features, contemporary professional attire, sophisticated color tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed, bad anatomy, multiple people, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, messy background"
+  },
+  "Brass": {
+    "prompt": "Professional portrait photograph of a brass musician (trumpet/saxophone/trombone player) in a recording studio, holding their instrument, warm studio lighting creating jazz-club atmosphere, shallow depth of field with studio background softly blurred, professional musician headshot, photorealistic DSLR quality, detailed facial features, elegant jazz-style clothing, warm golden tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed, bad anatomy, multiple instruments, multiple people, crowd, poor lighting, distorted face, low quality, blurry"
+  },
+  "Strings": {
+    "prompt": "Professional portrait photograph of a string musician (violin/cello/viola player) in an elegant recording studio, holding/playing their instrument, soft warm lighting creating classical atmosphere, shallow depth of field with concert hall aesthetic, professional musician headshot, photorealistic DSLR quality, detailed facial features, classical elegant attire, refined color palette, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed hands, bad anatomy, multiple instruments, multiple people, crowd, poor lighting, distorted face, low quality, blurry"
+  },
+  "Other": {
+    "prompt": "Professional portrait photograph of a musician in a contemporary recording studio setting, warm studio lighting creating professional atmosphere, shallow depth of field with musical equipment softly visible in background, natural confident pose, professional musician headshot, photorealistic DSLR quality, detailed facial features, modern musician styling, balanced warm tones, 4K high resolution",
+    "negativePrompt": "cartoon, anime, illustration, deformed, bad anatomy, multiple people, crowd, poor lighting, distorted face, low quality, blurry, unrealistic, poor composition"
+  }
+}

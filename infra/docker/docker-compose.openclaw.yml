@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  openclaw-gateway:
+    build:
+      context: ../../services/openclaw-gateway
+      dockerfile: ../../infra/docker/openclaw.Dockerfile
+    container_name: boostify-openclaw
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18789:18789" # Only accessible from localhost
+    volumes:
+      - openclaw-data:/root/.openclaw
+      - openclaw-workspace:/root/.openclaw/workspace
+    environment:
+      - OPENCLAW_PORT=18789
+      - OPENCLAW_BIND=127.0.0.1
+      - NODE_ENV=production
+    env_file:
+      - ../../.env
+    networks:
+      - boostify-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18789/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+
+volumes:
+  openclaw-data:
+  openclaw-workspace:
+
+networks:
+  boostify-internal:
+    driver: bridge

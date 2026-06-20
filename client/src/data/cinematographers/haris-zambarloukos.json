@@ -1,0 +1,120 @@
+{
+  "id": "haris-zambarloukos",
+  "name": "Haris Zambarloukos",
+  "title": "Director of Photography",
+  "bio": "Modern cinematographer specializing in high-energy action and contemporary visual narratives. Known for vibrant color palettes, dynamic camera movement, and seamless integration of practical effects. Created visual language for modern blockbusters.",
+  "famous_directors_worked_with": ["Chloe Zhao", "Destin Daniel Cretton", "Rawson Marshall Thurber"],
+  
+  "iconic_films": [
+    {
+      "title": "Black Widow",
+      "director": "Cate Shortland",
+      "year": 2021,
+      "awards": ["Visual excellence in action cinema"]
+    },
+    {
+      "title": "Eternals",
+      "director": "Chloe Zhao",
+      "year": 2021,
+      "awards": ["Innovative visual language"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Fast-paced, vibrant cinematography with sophisticated color grading. Neon accents against natural locations. Dynamic steadicam and drone work. High-energy performance capture.",
+    "key_characteristic": "Modern urban energy with cinema-quality execution. Practical effects integrated seamlessly with digital precision.",
+    "legendary_technique": "Master of steadicam in action sequences; pioneered neon-practical hybrid lighting for urban scenes"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Alexa Mini LF",
+        "format": "Large format digital",
+        "sensor": "40.96mm x 21.6mm, 14+ stops",
+        "use_case": "Fast-paced action, dynamic movement"
+      },
+      {
+        "name": "Panavision System LF",
+        "format": "8.8K Digital Large Format",
+        "sensor": "Max sensor, extreme resolution",
+        "use_case": "Premium action sequences, VFX integration"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "Primo Zoom",
+        "focal_lengths": ["48-130mm variable focal length"],
+        "characteristics": ["Fast zoom during shot", "T2.8 throughout", "Perfect for action"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Zeiss",
+        "series": "Master Prime",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Backup/precision lenses", "Instant focus capability"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Kodak Vision3 500T with modern LUT",
+        "iso": 500,
+        "characteristics": "Fast film stock for speed, warm grain, modern color science",
+        "mood": "Fast-paced, energetic, contemporary"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Hybrid approach: strong practical LED lighting with tungsten key lights. Neon practicals as color elements. Fast setup for dynamic scenes.",
+    "color_science": "Vibrant saturation with selective desaturation. Neon accents (purples, teals, pinks) against natural skin tones. Modern color grading.",
+    "exposure_philosophy": "Expose for action clarity. Maintain skin tone detail while allowing neon practicals to glow.",
+    "dynamic_range_preference": "14+ stops, balance between dark and bright",
+    "frame_rate_preference": ["24fps standard", "48fps for slow-motion impact moments", "High frame rate capable"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Fast, responsive collaboration. Adapts to day-to-day changes. Technical problem-solver with creative vision.",
+    "strengths_with_narrative": "Energizes contemporary narratives. Makes action feel impactful and kinetic. Integrates performance with technical precision.",
+    "best_for_genres": ["Action", "Contemporary drama", "Urban stories", "Superhero narratives", "High-energy performances"],
+    "complements_directors": ["Zhao (intimate modern)", "Thurber (action mastery)", "Contemporary blockbuster directors"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Fast-paced, energetic visual rhythm",
+      "Vibrant color saturation with neon accents",
+      "Practical LED and practical light integration",
+      "Dynamic camera movement (steadicam/drone ready)",
+      "Urban contemporary aesthetic",
+      "High technical execution quality"
+    ],
+    "technical_mandates": [
+      "Large format digital camera (Alexa Mini LF minimum)",
+      "Panavision Primo Zoom for flexibility",
+      "LED and practical neon lighting setup",
+      "Fast film stock emulation (ISO 500+)",
+      "High frame rate capability (48fps minimum)",
+      "VFX-friendly color space"
+    ],
+    "avoid": [
+      "Desaturated or muted colors without purpose",
+      "Slow contemplative pacing",
+      "Static camera setup (unless dramatic pause)",
+      "Natural lighting only (needs contrast)",
+      "Weak practicals"
+    ],
+    "emphasis_on": [
+      "Dynamic camera movement and energy",
+      "Vibrant color as visual language",
+      "Fast-paced rhythmic editing compatibility",
+      "Modern urban aesthetic",
+      "Practical effects integration",
+      "High-energy performance capture"
+    ]
+  }
+}

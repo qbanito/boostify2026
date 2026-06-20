@@ -1,0 +1,1635 @@
+/**
+ * Theme Preset CSS Overrides
+ * 
+ * These classes are toggled on <html> by the ThemeEngineProvider.
+ * They add preset-specific refinements (button styling, transitions, etc.)
+ * WITHOUT modifying any shadcn/ui component files.
+ */
+
+/* ─── MINIMAL: Apple.com design language ─── */
+/* All detailed styling is in layered sections below. */
+
+/* Kill all glow effects — Apple never glows */
+.theme-minimal .glow-on-hover:hover {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Kill all decorative animations — Apple is calm */
+.theme-minimal .animate-gradient-x,
+.theme-minimal .animate-float,
+.theme-minimal .animate-float-delay,
+.theme-minimal .animate-pulse-slow {
+  animation-duration: 25s;
+  animation-timing-function: ease;
+}
+
+/* ─── NEON: Cyberpunk glow effects ─── */
+.theme-neon button[class*="bg-"],
+.theme-neon [role="button"][class*="bg-"] {
+  text-shadow: 0 0 10px currentColor;
+  transition: all 0.15s ease;
+}
+
+.theme-neon button:hover,
+.theme-neon [role="button"]:hover {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.35);
+}
+
+.theme-neon .glow-on-hover:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+}
+
+/* Neon border glow on cards */
+.theme-neon .card:hover,
+.theme-neon [class*="Card"]:hover {
+  border-color: hsl(187 92% 43% / 0.3);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.15);
+}
+
+/* ─── VIBRANT: Enhanced hover effects ─── */
+.theme-vibrant button:hover,
+.theme-vibrant [role="button"]:hover {
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.theme-vibrant .glow-on-hover:hover {
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.5);
+}
+
+/* ─── EARTH: Soft transitions, rounded feel ─── */
+.theme-earth button,
+.theme-earth [role="button"] {
+  transition: all 0.3s ease;
+}
+
+.theme-earth .glow-on-hover:hover {
+  box-shadow: 0 0 12px rgba(217, 119, 6, 0.35);
+}
+
+/* ─── MONOCHROME: Sharp, no effects ─── */
+.theme-monochrome button:hover,
+.theme-monochrome [role="button"]:hover {
+  opacity: 0.85;
+}
+
+.theme-monochrome .glow-on-hover:hover {
+  box-shadow: none;
+}
+
+.theme-monochrome .animate-gradient-x,
+.theme-monochrome .animate-float,
+.theme-monochrome .animate-float-delay,
+.theme-monochrome .animate-pulse-slow {
+  animation: none;
+}
+
+/* Custom scrollbar colors per theme */
+.theme-minimal .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c7c7cc;
+  border-radius: 4px;
+}
+.theme-minimal .custom-scrollbar {
+  scrollbar-color: #c7c7cc transparent;
+}
+.theme-minimal .custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.theme-minimal .custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.theme-vibrant .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #22c55e;
+}
+.theme-vibrant .custom-scrollbar {
+  scrollbar-color: #22c55e transparent;
+}
+
+.theme-neon .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #06b6d4;
+}
+.theme-neon .custom-scrollbar {
+  scrollbar-color: #06b6d4 transparent;
+}
+
+.theme-earth .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d97706;
+}
+.theme-earth .custom-scrollbar {
+  scrollbar-color: #d97706 transparent;
+}
+
+.theme-monochrome .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #71717a;
+}
+.theme-monochrome .custom-scrollbar {
+  scrollbar-color: #71717a transparent;
+}
+
+/* ─── MOON (Lado Oculto): Ethereal, dreamy transitions ─── */
+.theme-moon button,
+.theme-moon [role="button"] {
+  font-weight: 400;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-moon button:hover,
+.theme-moon [role="button"]:hover {
+  box-shadow: 0 0 12px rgba(161, 127, 141, 0.3);
+}
+
+.theme-moon button:active,
+.theme-moon [role="button"]:active {
+  box-shadow: 0 0 6px rgba(161, 127, 141, 0.15);
+}
+
+/* Moon cards: soft plum glow on hover */
+.theme-moon .card,
+.theme-moon [class*="Card"] {
+  border-width: 1px;
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.theme-moon .card:hover,
+.theme-moon [class*="Card"]:hover {
+  border-color: rgba(193, 171, 186, 0.25);
+  box-shadow: 0 0 14px rgba(161, 127, 141, 0.12);
+}
+
+.theme-moon .glow-on-hover:hover {
+  box-shadow: 0 0 16px rgba(161, 127, 141, 0.4);
+}
+
+/* Gentle animations like moonlight */
+.theme-moon .animate-gradient-x,
+.theme-moon .animate-float,
+.theme-moon .animate-float-delay,
+.theme-moon .animate-pulse-slow {
+  animation-duration: 14s;
+}
+
+.theme-moon .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #A17F8D;
+}
+.theme-moon .custom-scrollbar {
+  scrollbar-color: #A17F8D rgba(13, 6, 10, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DYNAMIC COLOR REMAPPING
+ * ───────────────────────────────────────────────────────────────────────────
+ * When ANY non-default theme is active (html has a theme-* class), remap
+ * hardcoded Tailwind color utilities to the theme's CSS variables.
+ *
+ * Default theme is UNAFFECTED — no theme-* class = no overrides = zero breakage.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── PURPLE → Primary (most used accent across the platform) ─── */
+
+/* Solid backgrounds */
+html[class*="theme-"] [class*="bg-purple-5"]:not([class*="bg-purple-5/"]),
+html[class*="theme-"] [class*="bg-purple-6"]:not([class*="bg-purple-6/"]),
+html[class*="theme-"] [class*="bg-purple-7"]:not([class*="bg-purple-7/"]) {
+  background-color: hsl(var(--primary)) !important;
+}
+
+/* Transparent purple backgrounds (badges, subtle fills) */
+html[class*="theme-"] [class*="bg-purple-"][class*="/"] {
+  background-color: hsl(var(--primary) / 0.15) !important;
+}
+
+/* Purple text */
+html[class*="theme-"] [class*="text-purple-"] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Purple borders (solid & transparent) */
+html[class*="theme-"] [class*="border-purple-"] {
+  border-color: hsl(var(--primary) / 0.3) !important;
+}
+
+/* Purple shadows/rings */
+html[class*="theme-"] [class*="shadow-purple-"],
+html[class*="theme-"] [class*="ring-purple-"] {
+  --tw-ring-color: hsl(var(--primary) / 0.3);
+  --tw-shadow-color: hsl(var(--primary) / 0.15);
+}
+
+/* Hover states for purple buttons */
+html[class*="theme-"] [class*="hover\:bg-purple-"]:hover {
+  background-color: hsl(var(--primary) / 0.85) !important;
+}
+html[class*="theme-"] [class*="hover\:border-purple-"]:hover {
+  border-color: hsl(var(--primary) / 0.5) !important;
+}
+
+/* Data-state active tabs with purple */
+html[class*="theme-"] [class*="data-"][class*="bg-purple-"][data-state="active"] {
+  background-color: hsl(var(--primary) / 0.2) !important;
+}
+
+/* ─── VIOLET → Primary (similar to purple, used in gradients) ─── */
+
+html[class*="theme-"] [class*="bg-violet-"][class*="/"] {
+  background-color: hsl(var(--primary) / 0.12) !important;
+}
+html[class*="theme-"] [class*="text-violet-"] {
+  color: hsl(var(--primary) / 0.9) !important;
+}
+
+/* ─── PINK → Accent/Ring (gradient endpoint, CTA) ─── */
+
+html[class*="theme-"] [class*="bg-pink-5"],
+html[class*="theme-"] [class*="bg-pink-6"] {
+  background-color: hsl(var(--ring)) !important;
+}
+html[class*="theme-"] [class*="bg-pink-"][class*="/"] {
+  background-color: hsl(var(--ring) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-pink-"] {
+  color: hsl(var(--ring)) !important;
+}
+
+/* ─── SLATE → Background/Card (structural backgrounds) ─── */
+
+html[class*="theme-"] [class*="bg-slate-9"]:not([class*="/"]),
+html[class*="theme-"] [class*="bg-slate-950"] {
+  background-color: hsl(var(--background)) !important;
+}
+html[class*="theme-"] [class*="bg-slate-9"][class*="/"] {
+  background-color: hsl(var(--card) / 0.5) !important;
+}
+html[class*="theme-"] [class*="bg-slate-8"]:not([class*="/"]) {
+  background-color: hsl(var(--card)) !important;
+}
+html[class*="theme-"] [class*="bg-slate-8"][class*="/"] {
+  background-color: hsl(var(--card) / 0.5) !important;
+}
+html[class*="theme-"] [class*="border-slate-"] {
+  border-color: hsl(var(--border)) !important;
+}
+html[class*="theme-"] [class*="text-slate-3"],
+html[class*="theme-"] [class*="text-slate-4"] {
+  color: hsl(var(--foreground) / 0.7) !important;
+}
+
+/* ─── GRAY → Muted (secondary backgrounds, text) ─── */
+
+html[class*="theme-"] [class*="bg-gray-8"]:not([class*="/"]),
+html[class*="theme-"] [class*="bg-gray-7"]:not([class*="/"]) {
+  background-color: hsl(var(--muted)) !important;
+}
+html[class*="theme-"] [class*="bg-gray-8"][class*="/"],
+html[class*="theme-"] [class*="bg-gray-7"][class*="/"] {
+  background-color: hsl(var(--muted) / 0.5) !important;
+}
+html[class*="theme-"] [class*="bg-gray-6"]:not([class*="/"]) {
+  background-color: hsl(var(--muted)) !important;
+}
+html[class*="theme-"] [class*="bg-gray-5"][class*="/"] {
+  background-color: hsl(var(--muted-foreground) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-gray-4"],
+html[class*="theme-"] [class*="text-gray-5"] {
+  color: hsl(var(--muted-foreground)) !important;
+}
+html[class*="theme-"] [class*="border-gray-"] {
+  border-color: hsl(var(--border)) !important;
+}
+html[class*="theme-"] [class*="hover\:bg-gray-"]:hover {
+  background-color: hsl(var(--muted) / 0.8) !important;
+}
+
+/* ─── BLUE → Chart-2 (info, links, secondary accent) ─── */
+
+html[class*="theme-"] [class*="bg-blue-5"]:not([class*="/"]),
+html[class*="theme-"] [class*="bg-blue-6"]:not([class*="/"]) {
+  background-color: hsl(var(--chart-2)) !important;
+}
+html[class*="theme-"] [class*="bg-blue-"][class*="/"] {
+  background-color: hsl(var(--chart-2) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-blue-4"],
+html[class*="theme-"] [class*="text-blue-5"] {
+  color: hsl(var(--chart-2)) !important;
+}
+html[class*="theme-"] [class*="border-blue-"] {
+  border-color: hsl(var(--chart-2) / 0.3) !important;
+}
+
+/* ─── INDIGO → Chart-2 (used in some components) ─── */
+
+html[class*="theme-"] [class*="bg-indigo-"][class*="/"] {
+  background-color: hsl(var(--chart-2) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-indigo-"] {
+  color: hsl(var(--chart-2)) !important;
+}
+
+/* ─── CYAN → Chart-2 variant ─── */
+
+html[class*="theme-"] [class*="bg-cyan-"][class*="/"] {
+  background-color: hsl(var(--chart-2) / 0.12) !important;
+}
+html[class*="theme-"] [class*="text-cyan-"] {
+  color: hsl(var(--chart-2) / 0.85) !important;
+}
+
+/* ─── GRADIENTS → Remap to theme colors ─── */
+
+/* Purple → Pink gradients (most common CTA gradient) */
+html[class*="theme-"] [class*="from-purple-"][class*="to-pink-"] {
+  background-image: linear-gradient(to right, hsl(var(--primary)), hsl(var(--ring))) !important;
+}
+
+/* Purple → Violet gradients */
+html[class*="theme-"] [class*="from-purple-"][class*="to-violet-"] {
+  background-image: linear-gradient(to bottom right, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.08)) !important;
+}
+
+/* Transparent purple → pink gradients (section backgrounds) */
+html[class*="theme-"] [class*="from-purple-"][class*="/"][class*="to-pink-"][class*="/"],
+html[class*="theme-"] [class*="from-purple-"][class*="/"][class*="to-transparent"] {
+  background-image: linear-gradient(to bottom right, hsl(var(--primary) / 0.15), hsl(var(--ring) / 0.1)) !important;
+}
+
+/* Blue → Cyan gradients */
+html[class*="theme-"] [class*="from-blue-"][class*="to-cyan-"] {
+  background-image: linear-gradient(to right, hsl(var(--chart-2)), hsl(var(--chart-2) / 0.7)) !important;
+}
+
+/* Transparent blue → cyan gradients */
+html[class*="theme-"] [class*="from-blue-"][class*="/"][class*="to-cyan-"][class*="/"] {
+  background-image: linear-gradient(to bottom right, hsl(var(--chart-2) / 0.15), hsl(var(--chart-2) / 0.08)) !important;
+}
+
+/* Blue → Indigo gradients */
+html[class*="theme-"] [class*="from-blue-"][class*="to-indigo-"] {
+  background-image: linear-gradient(to right, hsl(var(--chart-2)), hsl(var(--primary))) !important;
+}
+
+/* Blue → Purple gradients */
+html[class*="theme-"] [class*="from-blue-"][class*="to-purple-"] {
+  background-image: linear-gradient(to right, hsl(var(--chart-2)), hsl(var(--primary))) !important;
+}
+
+/* Slate structural gradients */
+html[class*="theme-"] [class*="from-slate-9"][class*="to-black"],
+html[class*="theme-"] [class*="from-slate-9"][class*="to-slate-"],
+html[class*="theme-"] [class*="from-slate-8"][class*="to-slate-"] {
+  background-image: linear-gradient(to bottom, hsl(var(--background)), hsl(var(--card))) !important;
+}
+
+/* Orange → Purple gradients (brand-specific) */
+html[class*="theme-"] [class*="from-orange-"][class*="to-purple-"] {
+  background-image: linear-gradient(to right, hsl(var(--chart-1)), hsl(var(--primary))) !important;
+}
+html[class*="theme-"] [class*="from-orange-"][class*="/"] {
+  background-color: hsl(var(--chart-1) / 0.15) !important;
+}
+
+/* Black → purple gradients (card backgrounds) */
+html[class*="theme-"] [class*="from-black"][class*="to-purple-"] {
+  background-image: linear-gradient(to bottom right, hsl(var(--background)), hsl(var(--primary) / 0.15)) !important;
+}
+
+/* ─── GRADIENT TEXT (bg-clip-text) ─── */
+
+html[class*="theme-"] [class*="bg-clip-text"][class*="from-purple-"] {
+  background-image: linear-gradient(to right, hsl(var(--primary)), hsl(var(--ring))) !important;
+}
+html[class*="theme-"] [class*="bg-clip-text"][class*="from-blue-"] {
+  background-image: linear-gradient(to right, hsl(var(--chart-2)), hsl(var(--primary))) !important;
+}
+
+/* ─── EMERALD/GREEN → Chart-3 (success states) ─── */
+
+html[class*="theme-"] [class*="bg-emerald-"][class*="/"],
+html[class*="theme-"] [class*="bg-green-"][class*="/"] {
+  background-color: hsl(var(--chart-3) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-emerald-"],
+html[class*="theme-"] [class*="text-green-4"],
+html[class*="theme-"] [class*="text-green-5"] {
+  color: hsl(var(--chart-3)) !important;
+}
+
+/* ─── YELLOW/AMBER → Chart-4 (warning states) ─── */
+
+html[class*="theme-"] [class*="bg-yellow-"][class*="/"],
+html[class*="theme-"] [class*="bg-amber-"][class*="/"] {
+  background-color: hsl(var(--chart-4) / 0.15) !important;
+}
+html[class*="theme-"] [class*="text-yellow-"],
+html[class*="theme-"] [class*="text-amber-"] {
+  color: hsl(var(--chart-4)) !important;
+}
+
+/* ─── GLOW EFFECT → Primary color ─── */
+
+html[class*="theme-"] .glow-on-hover:hover {
+  box-shadow: 0 0 15px hsl(var(--primary) / 0.5) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 1 — TYPOGRAPHY (font-family, weight, spacing per preset)
+ * ───────────────────────────────────────────────────────────────────────────
+ * Default theme = NO class = original Inter/system font = ZERO breakage.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple SF Pro–inspired typography via Inter ── */
+.theme-minimal {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.theme-minimal h1 {
+  font-weight: 600;
+  letter-spacing: -0.032em;
+  line-height: 1.07;
+}
+.theme-minimal h2 {
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.1;
+}
+.theme-minimal h3,
+.theme-minimal [class*="CardTitle"] {
+  font-weight: 600;
+  letter-spacing: -0.021em;
+  line-height: 1.14;
+}
+.theme-minimal h4 {
+  font-weight: 600;
+  letter-spacing: -0.016em;
+  line-height: 1.19;
+}
+.theme-minimal p {
+  font-weight: 400;
+  line-height: 1.47;
+  letter-spacing: -0.011em;
+}
+.theme-minimal span, .theme-minimal label {
+  font-weight: 400;
+  letter-spacing: -0.011em;
+}
+
+/* ── VIBRANT: Modern, Spotify energy ── */
+.theme-vibrant {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  letter-spacing: 0;
+}
+.theme-vibrant h1, .theme-vibrant h2, .theme-vibrant h3 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.theme-vibrant h4, .theme-vibrant [class*="CardTitle"] {
+  font-weight: 700;
+}
+
+/* ── NEON: Cyberpunk, technical ── */
+.theme-neon {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+}
+.theme-neon h1, .theme-neon h2, .theme-neon h3 {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.theme-neon code, .theme-neon [class*="Badge"],
+.theme-neon [class*="mono"] {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ── EARTH: Warm, editorial serif headings ── */
+.theme-earth {
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+.theme-earth h1, .theme-earth h2, .theme-earth h3 {
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.theme-earth h4, .theme-earth [class*="CardTitle"] {
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 500;
+}
+.theme-earth p {
+  line-height: 1.7;
+}
+
+/* ── MONOCHROME: Developer/editorial mono ── */
+.theme-monochrome {
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  letter-spacing: 0;
+  font-size: 0.95em;
+}
+.theme-monochrome h1, .theme-monochrome h2, .theme-monochrome h3 {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── MOON: Ethereal, literary ── */
+.theme-moon {
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+.theme-moon h1, .theme-moon h2, .theme-moon h3 {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-style: normal;
+}
+.theme-moon h4, .theme-moon [class*="CardTitle"] {
+  font-family: 'Cormorant Garamond', 'Georgia', serif;
+  font-weight: 600;
+}
+.theme-moon p {
+  line-height: 1.75;
+  font-weight: 300;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 2 — BUTTONS (shape, weight, padding, effects)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple buttons — no bounce, no glow, opacity hover ── */
+.theme-minimal button,
+.theme-minimal [role="button"],
+.theme-minimal a[class*="Button"] {
+  border-radius: 0.625rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.011em;
+  transition: opacity 0.3s ease, background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.theme-minimal button:hover,
+.theme-minimal [role="button"]:hover {
+  opacity: 0.88;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.theme-minimal button:active,
+.theme-minimal [role="button"]:active {
+  opacity: 0.76;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── VIBRANT: Pill shape, bold, energetic ── */
+.theme-vibrant button,
+.theme-vibrant [role="button"],
+.theme-vibrant a[class*="Button"] {
+  border-radius: 9999px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  transition: all 0.2s ease;
+}
+.theme-vibrant button:hover,
+.theme-vibrant [role="button"]:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 16px hsl(var(--primary) / 0.3);
+}
+
+/* ── NEON: Sharp edges, glow border, cyber ── */
+.theme-neon button,
+.theme-neon [role="button"],
+.theme-neon a[class*="Button"] {
+  border-radius: 2px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.82em;
+  font-family: 'Space Grotesk', sans-serif;
+  border: 1px solid hsl(var(--primary) / 0.3) !important;
+  transition: all 0.12s ease;
+}
+.theme-neon button:hover,
+.theme-neon [role="button"]:hover {
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.4), inset 0 0 20px hsl(var(--primary) / 0.05);
+  border-color: hsl(var(--primary) / 0.6) !important;
+  text-shadow: 0 0 8px currentColor;
+}
+
+/* ── EARTH: Soft rounded, warm, relaxed ── */
+.theme-earth button,
+.theme-earth [role="button"],
+.theme-earth a[class*="Button"] {
+  border-radius: 1rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.02em;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+  transition: all 0.35s ease;
+}
+.theme-earth button:hover,
+.theme-earth [role="button"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px hsl(var(--primary) / 0.2);
+}
+
+/* ── MONOCHROME: Squared, solid border, strict ── */
+.theme-monochrome button,
+.theme-monochrome [role="button"],
+.theme-monochrome a[class*="Button"] {
+  border-radius: 0 !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.85em;
+  border: 2px solid hsl(var(--foreground) / 0.2) !important;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: all 0.1s ease;
+}
+.theme-monochrome button:hover,
+.theme-monochrome [role="button"]:hover {
+  background-color: hsl(var(--foreground) / 0.1) !important;
+  border-color: hsl(var(--foreground) / 0.4) !important;
+}
+
+/* ── MOON: Glass feel, semi-transparent, dreamy ── */
+.theme-moon button,
+.theme-moon [role="button"],
+.theme-moon a[class*="Button"] {
+  border-radius: 0.625rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.theme-moon button:hover,
+.theme-moon [role="button"]:hover {
+  box-shadow: 0 0 16px hsl(var(--primary) / 0.25);
+  backdrop-filter: blur(12px);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 3 — CARDS & CONTAINERS (shadow, border, radius, padding)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple cards — borderless, shadow-based depth ── */
+.theme-minimal .card,
+.theme-minimal [class*="Card"],
+.theme-minimal [data-slot="card"] {
+  border-radius: 1.125rem !important;
+  border: none !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03) !important;
+  background-color: hsl(var(--card)) !important;
+  transition: box-shadow 0.3s ease;
+}
+.theme-minimal .card:hover,
+.theme-minimal [class*="Card"]:hover {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+  transform: none !important;
+}
+
+/* ── VIBRANT: Colored shadow, punchy ── */
+.theme-vibrant .card,
+.theme-vibrant [class*="Card"],
+.theme-vibrant [data-slot="card"] {
+  border-radius: 1rem !important;
+  border: 1px solid hsl(var(--primary) / 0.1) !important;
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.06);
+}
+.theme-vibrant .card:hover,
+.theme-vibrant [class*="Card"]:hover {
+  border-color: hsl(var(--primary) / 0.25) !important;
+  box-shadow: 0 8px 24px hsl(var(--primary) / 0.12) !important;
+  transform: translateY(-2px);
+}
+
+/* ── NEON: Glow border, dark bg ── */
+.theme-neon .card,
+.theme-neon [class*="Card"],
+.theme-neon [data-slot="card"] {
+  border-radius: 4px !important;
+  border: 1px solid hsl(var(--primary) / 0.15) !important;
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.05);
+}
+.theme-neon .card:hover,
+.theme-neon [class*="Card"]:hover {
+  border-color: hsl(var(--primary) / 0.4) !important;
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.1), 0 0 0 1px hsl(var(--primary) / 0.2) !important;
+}
+
+/* ── EARTH: Warm shadow, very rounded ── */
+.theme-earth .card,
+.theme-earth [class*="Card"],
+.theme-earth [data-slot="card"] {
+  border-radius: 1.25rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 1px 4px hsl(30 20% 10% / 0.08);
+}
+.theme-earth .card:hover,
+.theme-earth [class*="Card"]:hover {
+  box-shadow: 0 4px 16px hsl(30 20% 10% / 0.12) !important;
+}
+
+/* ── MONOCHROME: No radius, solid border, stark ── */
+.theme-monochrome .card,
+.theme-monochrome [class*="Card"],
+.theme-monochrome [data-slot="card"] {
+  border-radius: 0 !important;
+  border: 1px solid hsl(var(--foreground) / 0.12) !important;
+  box-shadow: none !important;
+}
+.theme-monochrome .card:hover,
+.theme-monochrome [class*="Card"]:hover {
+  border-color: hsl(var(--foreground) / 0.25) !important;
+}
+
+/* ── MOON: Glassmorphism, frosted glass effect ── */
+.theme-moon .card,
+.theme-moon [class*="Card"],
+.theme-moon [data-slot="card"] {
+  border-radius: 0.875rem !important;
+  border: 1px solid hsl(var(--primary) / 0.1) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background-color: hsl(var(--card) / 0.7) !important;
+  box-shadow: 0 2px 16px hsl(var(--primary) / 0.04);
+}
+.theme-moon .card:hover,
+.theme-moon [class*="Card"]:hover {
+  border-color: hsl(var(--primary) / 0.2) !important;
+  box-shadow: 0 4px 24px hsl(var(--primary) / 0.08) !important;
+  background-color: hsl(var(--card) / 0.85) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 4 — INPUTS & FORMS (border, radius, focus rings)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple inputs — subtle, precise focus ring ── */
+.theme-minimal input,
+.theme-minimal textarea,
+.theme-minimal select,
+.theme-minimal [class*="Input"],
+.theme-minimal [class*="Textarea"],
+.theme-minimal [class*="Select"] {
+  border-radius: 0.5rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--card)) !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.theme-minimal input:focus,
+.theme-minimal textarea:focus {
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.12) !important;
+  border-color: hsl(var(--primary) / 0.5) !important;
+  outline: none !important;
+}
+
+/* ── VIBRANT ── */
+.theme-vibrant input,
+.theme-vibrant textarea,
+.theme-vibrant select {
+  border-radius: 9999px !important;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.theme-vibrant textarea {
+  border-radius: 1rem !important;
+}
+.theme-vibrant input:focus,
+.theme-vibrant textarea:focus {
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15) !important;
+  border-color: hsl(var(--primary)) !important;
+}
+
+/* ── NEON ── */
+.theme-neon input,
+.theme-neon textarea,
+.theme-neon select {
+  border-radius: 2px !important;
+  border: 1px solid hsl(var(--primary) / 0.2) !important;
+  font-family: 'Space Grotesk', sans-serif;
+}
+.theme-neon input:focus,
+.theme-neon textarea:focus {
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.2) !important;
+  border-color: hsl(var(--primary) / 0.6) !important;
+}
+
+/* ── EARTH ── */
+.theme-earth input,
+.theme-earth textarea,
+.theme-earth select {
+  border-radius: 0.75rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+.theme-earth input:focus,
+.theme-earth textarea:focus {
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary) / 0.5) !important;
+}
+
+/* ── MONOCHROME ── */
+.theme-monochrome input,
+.theme-monochrome textarea,
+.theme-monochrome select {
+  border-radius: 0 !important;
+  border: 2px solid hsl(var(--foreground) / 0.15) !important;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.theme-monochrome input:focus,
+.theme-monochrome textarea:focus {
+  border-color: hsl(var(--foreground) / 0.5) !important;
+  box-shadow: none !important;
+}
+
+/* ── MOON ── */
+.theme-moon input,
+.theme-moon textarea,
+.theme-moon select {
+  border-radius: 0.5rem !important;
+  border: 1px solid hsl(var(--primary) / 0.15) !important;
+  backdrop-filter: blur(8px);
+  background-color: hsl(var(--card) / 0.5) !important;
+}
+.theme-moon input:focus,
+.theme-moon textarea:focus {
+  box-shadow: 0 0 16px hsl(var(--primary) / 0.1) !important;
+  border-color: hsl(var(--primary) / 0.3) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 5 — BADGES & TAGS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple badges — soft pill, no border ── */
+.theme-minimal [class*="Badge"] {
+  border-radius: 9999px !important;
+  font-weight: 500;
+  font-size: 0.75em;
+  letter-spacing: 0;
+  border: none !important;
+  padding: 0.2em 0.65em;
+}
+
+/* ── VIBRANT: Bold pill, slightly larger ── */
+.theme-vibrant [class*="Badge"] {
+  border-radius: 9999px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7em;
+}
+
+/* ── NEON: Squared, glowing ── */
+.theme-neon [class*="Badge"] {
+  border-radius: 2px !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid hsl(var(--primary) / 0.3) !important;
+}
+
+/* ── EARTH: Soft rounded ── */
+.theme-earth [class*="Badge"] {
+  border-radius: 0.5rem !important;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ── MONOCHROME: Squared, outlined ── */
+.theme-monochrome [class*="Badge"] {
+  border-radius: 0 !important;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7em;
+  border: 1px solid hsl(var(--foreground) / 0.2) !important;
+  background-color: transparent !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* ── MOON: Ghost pill, ethereal ── */
+.theme-moon [class*="Badge"] {
+  border-radius: 9999px !important;
+  font-weight: 400;
+  border: 1px solid hsl(var(--primary) / 0.15) !important;
+  backdrop-filter: blur(4px);
+  background-color: hsl(var(--primary) / 0.08) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 6 — SPACING & DENSITY (via CSS custom properties)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple spacious — generous whitespace ── */
+.theme-minimal .card,
+.theme-minimal [class*="Card"],
+.theme-minimal [data-slot="card"] {
+  padding: 1.5rem;
+}
+.theme-minimal [class*="CardHeader"] {
+  padding-bottom: 0.75rem;
+}
+.theme-minimal [class*="CardContent"] {
+  gap: 0.875rem;
+}
+
+/* ── VIBRANT: Slightly compact (-5%) ── */
+.theme-vibrant [class*="CardContent"] {
+  gap: 0.75rem;
+}
+
+/* ── NEON: Dense, compact ── */
+.theme-neon .card,
+.theme-neon [class*="Card"],
+.theme-neon [data-slot="card"] {
+  padding: 1rem;
+}
+.theme-neon [class*="CardHeader"] {
+  padding-bottom: 0.5rem;
+}
+
+/* ── EARTH: Relaxed (+15%) ── */
+.theme-earth .card,
+.theme-earth [class*="Card"],
+.theme-earth [data-slot="card"] {
+  padding: 1.5rem;
+}
+.theme-earth [class*="CardContent"] {
+  gap: 1rem;
+}
+
+/* ── MONOCHROME: Grid-strict ── */
+.theme-monochrome .card,
+.theme-monochrome [class*="Card"],
+.theme-monochrome [data-slot="card"] {
+  padding: 1.25rem;
+}
+
+/* ── MOON: Airy, wide padding ── */
+.theme-moon .card,
+.theme-moon [class*="Card"],
+.theme-moon [data-slot="card"] {
+  padding: 1.75rem;
+}
+.theme-moon [class*="CardContent"] {
+  gap: 1.25rem;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER 7 — GLOBAL TRANSITIONS & MICRO-ANIMATIONS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── MINIMAL: Apple ease — smooth, no bounce, no scale ── */
+.theme-minimal .card,
+.theme-minimal [class*="Card"],
+.theme-minimal input,
+.theme-minimal textarea,
+.theme-minimal select,
+.theme-minimal a {
+  transition-timing-function: ease;
+  transition-duration: 0.3s;
+}
+.theme-minimal .animate-gradient-x,
+.theme-minimal .animate-float,
+.theme-minimal .animate-float-delay,
+.theme-minimal .animate-pulse-slow {
+  animation-duration: 25s;
+}
+
+/* ── VIBRANT: Snappy with bounce ── */
+.theme-vibrant .card,
+.theme-vibrant [class*="Card"],
+.theme-vibrant button,
+.theme-vibrant [role="button"] {
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── NEON: Instant, sharp ── */
+.theme-neon .card,
+.theme-neon [class*="Card"],
+.theme-neon button,
+.theme-neon [role="button"] {
+  transition-duration: 0.1s;
+  transition-timing-function: ease;
+}
+/* Neon ambient glow pulse on primary elements */
+@keyframes neon-pulse {
+  0%, 100% { box-shadow: 0 0 4px hsl(var(--primary) / 0.15); }
+  50% { box-shadow: 0 0 12px hsl(var(--primary) / 0.25); }
+}
+.theme-neon button[class*="bg-primary"],
+.theme-neon [role="button"][class*="bg-primary"] {
+  animation: neon-pulse 3s ease-in-out infinite;
+}
+
+/* ── EARTH: Slow, organic ── */
+.theme-earth .card,
+.theme-earth [class*="Card"],
+.theme-earth button,
+.theme-earth [role="button"] {
+  transition-duration: 0.4s;
+  transition-timing-function: ease;
+}
+.theme-earth .animate-gradient-x,
+.theme-earth .animate-float {
+  animation-duration: 16s;
+}
+
+/* ── MONOCHROME: No animations, instant ── */
+.theme-monochrome .animate-gradient-x,
+.theme-monochrome .animate-float,
+.theme-monochrome .animate-float-delay,
+.theme-monochrome .animate-pulse-slow,
+.theme-monochrome .animate-spin {
+  animation: none !important;
+}
+.theme-monochrome * {
+  transition-duration: 0.08s !important;
+}
+
+/* ── MOON: Dreamy, slow ── */
+.theme-moon * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.theme-moon .card,
+.theme-moon [class*="Card"],
+.theme-moon button,
+.theme-moon [role="button"] {
+  transition-duration: 0.5s;
+}
+.theme-moon .animate-gradient-x,
+.theme-moon .animate-float,
+.theme-moon .animate-float-delay,
+.theme-moon .animate-pulse-slow {
+  animation-duration: 20s;
+}
+
+/* ================================================================
+   LAYER 8: DENSITY — Hide decorative sections in clean/minimal modes
+   ================================================================ */
+
+/* ── density-clean: hide heavy decorations, keep content ── */
+html.density-clean [class*="blur-3xl"],
+html.density-clean [class*="blur-2xl"],
+html.density-clean .animate-float,
+html.density-clean .animate-float-delay {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ── density-minimal: aggressive simplification ── */
+html.density-minimal [class*="blur-3xl"],
+html.density-minimal [class*="blur-2xl"],
+html.density-minimal [class*="blur-xl"],
+html.density-minimal .animate-float,
+html.density-minimal .animate-float-delay,
+html.density-minimal .animate-pulse-slow,
+html.density-minimal .animate-gradient-x {
+  display: none !important;
+}
+
+/* Hide decorative gradient orbs/blobs */
+html.density-minimal div[class*="absolute"][class*="rounded-full"][class*="opacity-"],
+html.density-minimal div[class*="absolute"][class*="bg-gradient"] {
+  display: none !important;
+}
+
+/* Simplify card hover effects in minimal density — but preserve Apple shadow-based cards */
+html.density-minimal .card:hover,
+html.density-minimal [class*="Card"]:hover {
+  transform: none !important;
+}
+/* Only kill shadows for non-Apple presets (Minimal relies on shadows for card edges) */
+html.density-minimal:not(.theme-minimal) .card:hover,
+html.density-minimal:not(.theme-minimal) [class*="Card"]:hover {
+  box-shadow: none !important;
+}
+
+/* ================================================================
+   LAYER 9: LIGHT-MODE OVERRIDES for presets with forceMode: "light"
+   Scoped so they only apply when the dark class is absent
+   ================================================================ */
+
+/* ── When NOT .dark (light mode active via preset) — fix hardcoded dark classes ── */
+
+/* text-white → foreground for ALL light-mode presets (prevents invisible text) */
+html:not(.dark)[class*="theme-"] [class*="text-white"] {
+  color: hsl(var(--foreground)) !important;
+}
+/* Exception: keep text white/light inside primary-bg buttons */
+html:not(.dark)[class*="theme-"] [class*="bg-primary"] [class*="text-white"],
+html:not(.dark)[class*="theme-"] [class*="bg-primary"][class*="text-white"],
+html:not(.dark)[class*="theme-"] button[class*="bg-"][class*="text-white"]:not([class*="bg-card"]):not([class*="bg-secondary"]):not([class*="bg-muted"]),
+html:not(.dark)[class*="theme-"] [class*="bg-green-"][class*="text-white"],
+html:not(.dark)[class*="theme-"] [class*="bg-red-"][class*="text-white"],
+html:not(.dark)[class*="theme-"] [class*="bg-blue-"][class*="text-white"],
+html:not(.dark)[class*="theme-"] [class*="bg-emerald-"][class*="text-white"],
+html:not(.dark)[class*="theme-"] [class*="bg-destructive"][class*="text-white"] {
+  color: white !important;
+}
+
+/* text-gray-100, text-slate-100 → foreground */
+html:not(.dark)[class*="theme-"] [class*="text-gray-100"],
+html:not(.dark)[class*="theme-"] [class*="text-slate-100"],
+html:not(.dark)[class*="theme-"] [class*="text-zinc-100"],
+html:not(.dark)[class*="theme-"] [class*="text-neutral-100"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* text-gray-200, text-slate-200, text-gray-300 → foreground at 80% */
+html:not(.dark)[class*="theme-"] [class*="text-gray-200"],
+html:not(.dark)[class*="theme-"] [class*="text-slate-200"],
+html:not(.dark)[class*="theme-"] [class*="text-zinc-200"],
+html:not(.dark)[class*="theme-"] [class*="text-gray-300"],
+html:not(.dark)[class*="theme-"] [class*="text-slate-300"],
+html:not(.dark)[class*="theme-"] [class*="text-zinc-300"] {
+  color: hsl(var(--foreground) / 0.8) !important;
+}
+
+/* Dark solid backgrounds → use theme background (NOT overlays) */
+html:not(.dark)[class*="theme-"] [class*="bg-black"]:not([class*="bg-black/"]):not([class*="backdrop-blur"]) {
+  background-color: hsl(var(--background)) !important;
+}
+/* Semi-transparent dark overlays → keep semi-transparent but use theme background color */
+html:not(.dark)[class*="theme-"] [class*="bg-black/"] {
+  background-color: hsl(var(--foreground) / var(--tw-bg-opacity, 0.5)) !important;
+}
+
+html:not(.dark)[class*="theme-"] [class*="bg-slate-900"]:not([class*="bg-slate-900/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-gray-900"]:not([class*="bg-gray-900/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-900"]:not([class*="bg-zinc-900/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-neutral-900"]:not([class*="bg-neutral-900/"]) {
+  background-color: hsl(var(--background)) !important;
+}
+
+/* Semi-transparent dark backgrounds → use card with opacity */
+html:not(.dark)[class*="theme-"] [class*="bg-slate-900/"],
+html:not(.dark)[class*="theme-"] [class*="bg-gray-900/"],
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-900/"],
+html:not(.dark)[class*="theme-"] [class*="bg-neutral-900/"] {
+  background-color: hsl(var(--card) / var(--tw-bg-opacity, 0.5)) !important;
+}
+
+/* Hex dark backgrounds → theme background */
+html:not(.dark)[class*="theme-"] [class*="bg-\[#0"]:not([class*="backdrop-blur"]),
+html:not(.dark)[class*="theme-"] [class*="bg-\[#1"]:not([class*="backdrop-blur"]) {
+  background-color: hsl(var(--card)) !important;
+}
+
+/* Light-mode presets: borders should use var(--border) */
+html:not(.dark)[class*="theme-"] [class*="border-slate-"],
+html:not(.dark)[class*="theme-"] [class*="border-gray-"],
+html:not(.dark)[class*="theme-"] [class*="border-zinc-"],
+html:not(.dark)[class*="theme-"] [class*="border-neutral-"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Light-mode presets: muted text should use var(--muted-foreground) */
+html:not(.dark)[class*="theme-"] [class*="text-slate-400"],
+html:not(.dark)[class*="theme-"] [class*="text-gray-400"],
+html:not(.dark)[class*="theme-"] [class*="text-zinc-400"],
+html:not(.dark)[class*="theme-"] [class*="text-neutral-400"],
+html:not(.dark)[class*="theme-"] [class*="text-slate-500"],
+html:not(.dark)[class*="theme-"] [class*="text-gray-500"],
+html:not(.dark)[class*="theme-"] [class*="text-zinc-500"],
+html:not(.dark)[class*="theme-"] [class*="text-slate-600"],
+html:not(.dark)[class*="theme-"] [class*="text-gray-600"] {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Light-mode: purple/violet/indigo solid bg → primary */
+html:not(.dark)[class*="theme-"] [class*="bg-purple-"]:not([class*="bg-purple-/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-violet-"]:not([class*="bg-violet-/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-indigo-"]:not([class*="bg-indigo-/"]) {
+  background-color: hsl(var(--primary)) !important;
+}
+/* Light-mode: purple/violet/indigo transparent bg → primary/15 */
+html:not(.dark)[class*="theme-"] [class*="bg-purple-/"],
+html:not(.dark)[class*="theme-"] [class*="bg-violet-/"],
+html:not(.dark)[class*="theme-"] [class*="bg-indigo-/"] {
+  background-color: hsl(var(--primary) / 0.1) !important;
+}
+
+html:not(.dark)[class*="theme-"] [class*="text-purple-"],
+html:not(.dark)[class*="theme-"] [class*="text-violet-"],
+html:not(.dark)[class*="theme-"] [class*="text-indigo-"] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Light-mode: orange accents → primary */
+html:not(.dark)[class*="theme-"] [class*="bg-orange-"]:not([class*="bg-orange-/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-amber-"]:not([class*="bg-amber-/"]) {
+  background-color: hsl(var(--primary)) !important;
+}
+html:not(.dark)[class*="theme-"] [class*="bg-orange-/"],
+html:not(.dark)[class*="theme-"] [class*="bg-amber-/"] {
+  background-color: hsl(var(--primary) / 0.1) !important;
+}
+
+html:not(.dark)[class*="theme-"] [class*="text-orange-"],
+html:not(.dark)[class*="theme-"] [class*="text-amber-"] {
+  color: hsl(var(--primary)) !important;
+}
+
+/* Light-mode: card backgrounds */
+html:not(.dark)[class*="theme-"] [class*="bg-slate-800"]:not([class*="/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-gray-800"]:not([class*="/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-800"]:not([class*="/"]),
+html:not(.dark)[class*="theme-"] [class*="bg-neutral-800"]:not([class*="/"]) {
+  background-color: hsl(var(--card)) !important;
+}
+html:not(.dark)[class*="theme-"] [class*="bg-slate-800/"],
+html:not(.dark)[class*="theme-"] [class*="bg-gray-800/"],
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-800/"],
+html:not(.dark)[class*="theme-"] [class*="bg-neutral-800/"] {
+  background-color: hsl(var(--card) / var(--tw-bg-opacity, 0.5)) !important;
+}
+
+/* Light-mode: 950 backgrounds → background */
+html:not(.dark)[class*="theme-"] [class*="bg-slate-950"],
+html:not(.dark)[class*="theme-"] [class*="bg-gray-950"],
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-950"],
+html:not(.dark)[class*="theme-"] [class*="bg-neutral-950"] {
+  background-color: hsl(var(--background)) !important;
+}
+
+/* Light-mode: 700 backgrounds → muted */
+html:not(.dark)[class*="theme-"] [class*="bg-slate-700"],
+html:not(.dark)[class*="theme-"] [class*="bg-gray-700"],
+html:not(.dark)[class*="theme-"] [class*="bg-zinc-700"] {
+  background-color: hsl(var(--muted)) !important;
+}
+
+/* Light-mode: fix from/to/via gradient stops */
+html:not(.dark)[class*="theme-"] [class*="from-slate-900"],
+html:not(.dark)[class*="theme-"] [class*="from-gray-900"],
+html:not(.dark)[class*="theme-"] [class*="from-zinc-900"],
+html:not(.dark)[class*="theme-"] [class*="from-black"] {
+  --tw-gradient-from: hsl(var(--background)) var(--tw-gradient-from-position) !important;
+}
+
+html:not(.dark)[class*="theme-"] [class*="via-slate-900"],
+html:not(.dark)[class*="theme-"] [class*="via-gray-900"],
+html:not(.dark)[class*="theme-"] [class*="via-zinc-900"],
+html:not(.dark)[class*="theme-"] [class*="via-gray-950"],
+html:not(.dark)[class*="theme-"] [class*="via-slate-950"],
+html:not(.dark)[class*="theme-"] [class*="via-zinc-950"],
+html:not(.dark)[class*="theme-"] [class*="via-black"] {
+  --tw-gradient-via: hsl(var(--background)) var(--tw-gradient-via-position) !important;
+}
+
+html:not(.dark)[class*="theme-"] [class*="to-slate-900"],
+html:not(.dark)[class*="theme-"] [class*="to-gray-900"],
+html:not(.dark)[class*="theme-"] [class*="to-zinc-900"],
+html:not(.dark)[class*="theme-"] [class*="to-black"] {
+  --tw-gradient-to: hsl(var(--background)) var(--tw-gradient-to-position) !important;
+}
+
+/* Colored gradient endpoints: orange/purple/pink → theme primary */
+html:not(.dark)[class*="theme-"] [class*="from-orange-"],
+html:not(.dark)[class*="theme-"] [class*="from-purple-"],
+html:not(.dark)[class*="theme-"] [class*="from-violet-"] {
+  --tw-gradient-from: hsl(var(--primary) / 0.15) var(--tw-gradient-from-position) !important;
+}
+html:not(.dark)[class*="theme-"] [class*="to-orange-"],
+html:not(.dark)[class*="theme-"] [class*="to-purple-"],
+html:not(.dark)[class*="theme-"] [class*="to-pink-"] {
+  --tw-gradient-to: hsl(var(--primary) / 0.05) var(--tw-gradient-to-position) !important;
+}
+html:not(.dark)[class*="theme-"] [class*="via-purple-"],
+html:not(.dark)[class*="theme-"] [class*="via-orange-"] {
+  --tw-gradient-via: hsl(var(--primary) / 0.1) var(--tw-gradient-via-position) !important;
+}
+
+/* Light-mode: scrollbar & selection styling */
+html:not(.dark)[class*="theme-"]::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}
+
+html:not(.dark)[class*="theme-"] ::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+html:not(.dark)[class*="theme-"] ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+}
+
+/* Light-mode: neutralize prose-invert (prevents white text on light bg) */
+html:not(.dark)[class*="theme-"] .prose-invert {
+  --tw-prose-body: hsl(var(--foreground)) !important;
+  --tw-prose-headings: hsl(var(--foreground)) !important;
+  --tw-prose-lead: hsl(var(--muted-foreground)) !important;
+  --tw-prose-links: hsl(var(--primary)) !important;
+  --tw-prose-bold: hsl(var(--foreground)) !important;
+  --tw-prose-counters: hsl(var(--muted-foreground)) !important;
+  --tw-prose-bullets: hsl(var(--muted-foreground)) !important;
+  --tw-prose-hr: hsl(var(--border)) !important;
+  --tw-prose-quotes: hsl(var(--foreground)) !important;
+  --tw-prose-quote-borders: hsl(var(--border)) !important;
+  --tw-prose-captions: hsl(var(--muted-foreground)) !important;
+  --tw-prose-code: hsl(var(--primary)) !important;
+  --tw-prose-pre-code: hsl(var(--foreground)) !important;
+  --tw-prose-pre-bg: hsl(var(--muted)) !important;
+  --tw-prose-th-borders: hsl(var(--border)) !important;
+  --tw-prose-td-borders: hsl(var(--border)) !important;
+}
+
+/* Light-mode: placeholder text should be visible */
+html:not(.dark)[class*="theme-"] ::placeholder {
+  color: hsl(var(--muted-foreground)) !important;
+  opacity: 0.7;
+}
+
+/* Light-mode: ring/outline on focus */
+html:not(.dark)[class*="theme-"] [class*="ring-white"] {
+  --tw-ring-color: hsl(var(--primary) / 0.3) !important;
+}
+
+/* Light-mode: divide colors */
+html:not(.dark)[class*="theme-"] [class*="divide-slate-"],
+html:not(.dark)[class*="theme-"] [class*="divide-gray-"],
+html:not(.dark)[class*="theme-"] [class*="divide-zinc-"],
+html:not(.dark)[class*="theme-"] [class*="divide-neutral-"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Light-mode: shadow-lg/xl should use soft shadows, not dark ones */
+html:not(.dark)[class*="theme-"] [class*="shadow-lg"],
+html:not(.dark)[class*="theme-"] [class*="shadow-xl"],
+html:not(.dark)[class*="theme-"] [class*="shadow-2xl"] {
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Moon shimmer on glass cards */
+@keyframes moon-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.theme-moon .card::before,
+.theme-moon [class*="Card"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    hsl(var(--primary) / 0.2),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: moon-shimmer 8s ease-in-out infinite;
+  pointer-events: none;
+}
+.theme-moon .card,
+.theme-moon [class*="Card"] {
+  position: relative;
+  overflow: hidden;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAYER EXTRA — TABS, DIALOGS, POPOVERS per preset
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tabs */
+.theme-minimal [class*="TabsTrigger"] {
+  border-radius: 0.375rem !important;
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.theme-vibrant [class*="TabsTrigger"] {
+  border-radius: 9999px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8em;
+}
+.theme-neon [class*="TabsTrigger"] {
+  border-radius: 0 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: 'Space Grotesk', sans-serif;
+}
+.theme-earth [class*="TabsTrigger"] {
+  border-radius: 0.75rem !important;
+}
+.theme-monochrome [class*="TabsTrigger"] {
+  border-radius: 0 !important;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8em;
+}
+.theme-moon [class*="TabsTrigger"] {
+  border-radius: 0.5rem !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Dialogs / Modals */
+.theme-minimal [class*="DialogContent"],
+.theme-minimal [role="dialog"] {
+  border-radius: 1.375rem !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+  border: none !important;
+}
+.theme-vibrant [class*="DialogContent"],
+.theme-vibrant [role="dialog"] {
+  border-radius: 1.5rem !important;
+}
+.theme-neon [class*="DialogContent"],
+.theme-neon [role="dialog"] {
+  border-radius: 4px !important;
+  border: 1px solid hsl(var(--primary) / 0.2) !important;
+  box-shadow: 0 0 30px hsl(var(--primary) / 0.1) !important;
+}
+.theme-earth [class*="DialogContent"],
+.theme-earth [role="dialog"] {
+  border-radius: 1.25rem !important;
+}
+.theme-monochrome [class*="DialogContent"],
+.theme-monochrome [role="dialog"] {
+  border-radius: 0 !important;
+  border: 2px solid hsl(var(--foreground) / 0.15) !important;
+}
+.theme-moon [class*="DialogContent"],
+.theme-moon [role="dialog"] {
+  border-radius: 1rem !important;
+  backdrop-filter: blur(20px) !important;
+  background-color: hsl(var(--card) / 0.8) !important;
+}
+
+/* Popovers / Dropdowns */
+.theme-minimal [class*="PopoverContent"],
+.theme-minimal [class*="DropdownMenuContent"] {
+  border-radius: 0.875rem !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+.theme-vibrant [class*="PopoverContent"],
+.theme-vibrant [class*="DropdownMenuContent"] {
+  border-radius: 1rem !important;
+}
+.theme-neon [class*="PopoverContent"],
+.theme-neon [class*="DropdownMenuContent"] {
+  border-radius: 2px !important;
+  border: 1px solid hsl(var(--primary) / 0.2) !important;
+}
+.theme-earth [class*="PopoverContent"],
+.theme-earth [class*="DropdownMenuContent"] {
+  border-radius: 1rem !important;
+}
+.theme-monochrome [class*="PopoverContent"],
+.theme-monochrome [class*="DropdownMenuContent"] {
+  border-radius: 0 !important;
+}
+.theme-moon [class*="PopoverContent"],
+.theme-moon [class*="DropdownMenuContent"] {
+  border-radius: 0.75rem !important;
+  backdrop-filter: blur(16px);
+  background-color: hsl(var(--card) / 0.85) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SAFETY: Ensure scrollbars/pickers/tooltips remain functional
+ * ═══════════════════════════════════════════════════════════════════════════ */
+html[class*="theme-"] input[type="color"],
+html[class*="theme-"] input[type="range"],
+html[class*="theme-"] input[type="file"] {
+  border-radius: revert !important;
+  backdrop-filter: none !important;
+  background-color: revert !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * MINIMAL PRESET — APPLE REFINEMENTS
+ * Additional polish for true Apple.com fidelity
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Selection color — Apple blue highlight */
+.theme-minimal ::selection {
+  background-color: hsl(211 100% 45% / 0.2);
+  color: hsl(var(--foreground));
+}
+
+/* Links — Apple blue, underline on hover only */
+.theme-minimal a:not([class*="Button"]):not([role="button"]) {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+.theme-minimal a:not([class*="Button"]):not([role="button"]):hover {
+  opacity: 0.75;
+}
+
+/* Tooltips — Apple style */
+.theme-minimal [class*="Tooltip"],
+.theme-minimal [role="tooltip"] {
+  border-radius: 0.5rem !important;
+  font-size: 0.8125rem;
+  letter-spacing: -0.011em;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Separators — nearly invisible */
+.theme-minimal [class*="Separator"],
+.theme-minimal hr {
+  opacity: 0.5;
+}
+
+/* Avatar — perfectly round */
+.theme-minimal [class*="Avatar"] {
+  border: none !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Toast / notifications — Apple style */
+.theme-minimal [class*="Toast"],
+.theme-minimal [data-sonner-toast] {
+  border-radius: 1rem !important;
+  border: none !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Skeleton loaders — subtle pulse */
+.theme-minimal [class*="Skeleton"] {
+  border-radius: 0.5rem !important;
+  opacity: 0.6;
+}
+
+/* Switch / Toggle — Apple-style */
+.theme-minimal [class*="Switch"] {
+  border-radius: 9999px !important;
+}
+
+/* Checkbox — subtle rounded */
+.theme-minimal [class*="Checkbox"] {
+  border-radius: 0.375rem !important;
+}
+
+/* Progress bars — Apple thin, rounded */
+.theme-minimal [class*="Progress"] {
+  border-radius: 9999px !important;
+  height: 4px !important;
+}
+
+/* Slider — Apple thin track */
+.theme-minimal [class*="Slider"] [class*="Track"] {
+  height: 4px !important;
+  border-radius: 9999px !important;
+}
+.theme-minimal [class*="Slider"] [class*="Thumb"] {
+  border-radius: 9999px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+  border: none !important;
+}
+
+/* Table rows — subtle dividers */
+.theme-minimal table tr {
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+}
+.theme-minimal table th {
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+}
+
+/* Focus-visible accessibility ring — Apple blue */
+.theme-minimal :focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2) !important;
+}
+
+/* Scrollbar on the page itself (not just custom-scrollbar) */
+.theme-minimal::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.theme-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.theme-minimal::-webkit-scrollbar-thumb {
+  background: #c7c7cc;
+  border-radius: 4px;
+}
+.theme-minimal::-webkit-scrollbar-thumb:hover {
+  background: #a8a8ad;
+}

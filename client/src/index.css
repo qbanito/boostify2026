@@ -1,0 +1,816 @@
+/* Import mobile optimizations */
+@import './styles/mobile-optimization.css';
+/* Import theme fonts (Google Fonts for non-default presets) */
+@import './styles/theme-fonts.css';
+/* Import theme preset overrides (button styles, glow effects per preset) */
+@import './styles/theme-presets.css';
+
+/* React Flow — AgentCommandNode: remove default white wrapper */
+.react-flow__node-agentCommand {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+@tailwind base;
+
+/* Hide scrollbar for horizontal scrolling elements */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ocultar widget de calificación de Google Translate */
+.goog-te-banner-frame,
+.skiptranslate iframe,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+div#goog-gt-,
+.goog-tooltip,
+.goog-tooltip:hover,
+.goog-text-highlight,
+.goog-te-menu-value span:first-child::after {
+  display: none !important;
+}
+
+body {
+  top: 0 !important;
+}
+@tailwind components;
+@tailwind utilities;
+
+/* Animación para el gradiente de texto */
+@keyframes gradient-x {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 8s ease infinite;
+}
+
+/* Animación de pulso sutil para el nombre del artista */
+@keyframes subtle-pulse {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 20px currentColor);
+  }
+  50% {
+    filter: brightness(1.1) drop-shadow(0 0 30px currentColor);
+  }
+}
+
+/* Animación para partículas flotantes */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-40px) translateX(-10px);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-20px) translateX(15px);
+    opacity: 0.5;
+  }
+}
+
+/* Glow pulse for monetize-cta section */
+@keyframes pulseGlow {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* Animación de grid en movimiento */
+@keyframes grid-move {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(50px);
+  }
+}
+
+/* Animación de brillo de texto */
+@keyframes text-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 30px currentColor) drop-shadow(0 10px 20px rgba(0,0,0,0.9));
+  }
+  50% {
+    filter: drop-shadow(0 0 50px currentColor) drop-shadow(0 10px 20px rgba(0,0,0,0.9));
+  }
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 6s ease infinite;
+}
+
+/* Animaciones de tarjetas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Lightweight card entrance used by my-artists grid/list */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Timeline: shimmer para barra de progreso de generación */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.card-animate-enter {
+  opacity: 0;
+  transform: scale(0.95) translateY(10px);
+}
+
+.card-animate-enter-active {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Efectos de hover para tarjetas */
+.advisor-card {
+  transition: all 0.3s ease;
+}
+
+.advisor-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Efecto de brillo en hover */
+.glow-on-hover:hover {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.7);
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 24 96% 53%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 24 96% 53%;
+    --radius: 0.5rem;
+    
+    /* Variables para los gráficos */
+    --chart-1: 24 96% 53%;
+    --chart-2: 245 58% 51%;
+    --chart-3: 120 100% 31%;
+    --chart-4: 340 82% 52%;
+    --chart-5: 291 64% 42%;
+    
+    /* Variables para el sidebar */
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 25 95% 53%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 20% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 12% 20%;
+    --sidebar-ring: 25 95% 53%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 24 96% 53%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 24 96% 53%;
+    
+    /* Variables para los gráficos */
+    --chart-1: 24 96% 53%;
+    --chart-2: 245 58% 51%;
+    --chart-3: 120 100% 31%;
+    --chart-4: 340 82% 52%;
+    --chart-5: 291 64% 42%;
+    
+    /* Variables para el sidebar */
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 25 95% 53%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 20% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 12% 20%;
+    --sidebar-ring: 25 95% 53%;
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.delay-700 {
+  animation-delay: 0.7s;
+}
+
+.delay-1000 {
+  animation-delay: 1s;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes float-delay {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delay {
+  animation: float-delay 7s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+/* Patrón de cuadrícula para fondos */
+.bg-grid-pattern-light {
+  background-size: 20px 20px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+}
+
+@layer components {
+  .bg-background {
+    background-color: hsl(var(--background));
+  }
+  
+  /* Asegúrate de que estos estilos se apliquen en toda la aplicación */
+  .bg-card {
+    background-color: hsl(var(--card));
+  }
+  
+  .bg-popover {
+    background-color: hsl(var(--popover));
+  }
+  
+  .bg-primary {
+    background-color: hsl(var(--primary));
+  }
+  
+  .bg-secondary {
+    background-color: hsl(var(--secondary));
+  }
+  
+  .bg-muted {
+    background-color: hsl(var(--muted));
+  }
+  
+  .bg-accent {
+    background-color: hsl(var(--accent));
+  }
+  
+  .text-foreground {
+    color: hsl(var(--foreground));
+  }
+  
+  .text-primary {
+    color: hsl(var(--primary));
+  }
+  
+  .text-primary-foreground {
+    color: hsl(var(--primary-foreground));
+  }
+  
+  .text-secondary {
+    color: hsl(var(--secondary));
+  }
+  
+  .text-secondary-foreground {
+    color: hsl(var(--secondary-foreground));
+  }
+  
+  .text-muted-foreground {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .text-accent-foreground {
+    color: hsl(var(--accent-foreground));
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    font-family: sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  
+  /* Hide any yellow banner notifications */
+  div[role="alert"].bg-yellow-50,
+  div[role="alert"].bg-yellow-100,
+  div[role="alert"].bg-amber-50,
+  div[role="alert"].bg-amber-100,
+  div[role="alert"].bg-orange-50,
+  div[role="alert"].bg-orange-100,
+  div[role="alert"].bg-orange-500,
+  div[role="alert"].border-yellow-500,
+  div[role="alert"].border-orange-500,
+  div[class*="banner"],
+  div[class*="announcement"],
+  [data-banner="beta"],
+  [data-banner="announcement"],
+  div.bg-yellow-500,
+  .bg-amber-500,
+  .bg-yellow-400,
+  .bg-amber-400,
+  div.text-yellow-900,
+  header + div.bg-amber-100,
+  header + div.bg-yellow-100,
+  .virtual-record-label-banner {
+    display: none !important;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  /* Estilos personalizados para scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #f97316;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #e84a0a;
+  }
+
+  /* Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #f97316 rgba(0, 0, 0, 0.2);
+  }
+
+  /* Hide scrollbar pero mostrar al hacer hover */
+  .hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar:hover::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 6px;
+  }
+
+  .hide-scrollbar:hover {
+    scrollbar-width: thin;
+  }
+
+  /* Estilos para el slider de posición del banner */
+  input[type="range"].slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 5px;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  input[type="range"].slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+  }
+
+  input[type="range"].slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 12px rgba(249, 115, 22, 0.5);
+  }
+
+  input[type="range"].slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+  }
+
+  input[type="range"].slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 3px 12px rgba(249, 115, 22, 0.5);
+  }
+}
+
+/* ========================================
+   CLERK AUTH MOBILE OPTIMIZATIONS
+   ======================================== */
+@layer components {
+  /* Fix Clerk modal/form overflow on mobile */
+  .cl-rootBox,
+  .cl-card,
+  .cl-main,
+  .cl-form {
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+  
+  /* Ensure Clerk inputs don't overflow */
+  .cl-formFieldInput,
+  .cl-phoneInputBox,
+  .cl-selectButton {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Fix Clerk button widths */
+  .cl-formButtonPrimary,
+  .cl-socialButtonsBlockButton,
+  .cl-alternativeMethodsBlockButton {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  
+  /* Fix OTP code field on mobile */
+  .cl-otpCodeField {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  
+  /* Smaller OTP inputs on very small screens */
+  @media (max-width: 350px) {
+    .cl-otpCodeFieldInput {
+      width: 36px !important;
+      height: 40px !important;
+      font-size: 16px !important;
+    }
+  }
+  
+  /* Fix social buttons text wrapping */
+  .cl-socialButtonsBlockButtonText {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  /* Mobile-specific Clerk modal */
+  @media (max-width: 640px) {
+    .cl-modalContent {
+      width: 95vw !important;
+      max-width: 95vw !important;
+      margin: 10px !important;
+      padding: 16px !important;
+    }
+    
+    .cl-card {
+      padding: 0 !important;
+    }
+    
+    .cl-formFieldRow {
+      margin-bottom: 8px !important;
+    }
+    
+    .cl-dividerRow {
+      margin: 8px 0 !important;
+    }
+  }
+}
+
+/* ============================
+   BOOSTIFY GLASSMORPHISM SYSTEM
+   ============================ */
+
+/* Glass card utility */
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.glass-card-hover:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Animated gradient border */
+@keyframes border-glow {
+  0%, 100% { border-color: rgba(139, 92, 246, 0.2); }
+  33% { border-color: rgba(16, 185, 129, 0.2); }
+  66% { border-color: rgba(59, 130, 246, 0.2); }
+}
+
+.animate-border-glow {
+  animation: border-glow 6s ease-in-out infinite;
+}
+
+/* Orb floating animation */
+@keyframes orb-float-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -50px) scale(1.1); }
+  50% { transform: translate(-20px, -100px) scale(0.95); }
+  75% { transform: translate(50px, -30px) scale(1.05); }
+}
+
+@keyframes orb-float-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-40px, 30px) scale(1.05); }
+  50% { transform: translate(60px, -20px) scale(0.9); }
+  75% { transform: translate(-20px, -60px) scale(1.1); }
+}
+
+/* ── Timeline Fullscreen Mode ── */
+/* When native fullscreen is active, hide everything except the timeline */
+.timeline-fullscreen-active > header,
+.timeline-fullscreen-active > nav,
+.timeline-fullscreen-active header:first-of-type {
+  display: none !important;
+}
+
+/* Native fullscreen: the timeline container fills the whole screen */
+div:fullscreen {
+  background: #0a0a0a;
+  width: 100vw;
+  height: 100vh;
+}
+
+div:-webkit-full-screen {
+  background: #0a0a0a;
+  width: 100vw;
+  height: 100vh;
+}
+
+@keyframes orb-float-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, 40px) scale(1.15); }
+  66% { transform: translate(-50px, 20px) scale(0.9); }
+}
+
+.animate-orb-1 { animation: orb-float-1 20s ease-in-out infinite; }
+.animate-orb-2 { animation: orb-float-2 25s ease-in-out infinite; }
+.animate-orb-3 { animation: orb-float-3 18s ease-in-out infinite; }
+
+/* Shimmer glow on buttons */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.3); }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Subtle infinite gradient shift */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Smooth scale on hover */
+.glass-hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.glass-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Grid pattern overlay */
+.grid-overlay {
+  background-image: 
+    linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 100%);
+}
+
+/* Tab pill active state glow */
+.tab-pill-active {
+  position: relative;
+}
+.tab-pill-active::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.3));
+  z-index: -1;
+  filter: blur(8px);
+}
+
+/* Trading Ticker Animation */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker {
+  animation: ticker-scroll 30s linear infinite;
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CrowdSync DJ — futuristic UI utilities
+   ════════════════════════════════════════════════════════════════ */
+
+/* Neon scanline sweep across a surface */
+@keyframes cs-scan {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+.cs-scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255,160,60,0.12) 45%, rgba(255,255,255,0.18) 50%, rgba(255,160,60,0.12) 55%, transparent 100%);
+  transform: translateX(-120%);
+  animation: cs-scan 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Animated conic gradient ring (futuristic avatar / cover frame) */
+@keyframes cs-spin {
+  to { transform: rotate(360deg); }
+}
+.cs-ring {
+  position: relative;
+}
+.cs-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from 0deg, #f97316, #a855f7, #22d3ee, #f97316);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: cs-spin 6s linear infinite;
+  opacity: 0.9;
+}
+
+/* Pulsing live dot */
+@keyframes cs-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(52,211,153,0); }
+}
+.cs-live-dot { animation: cs-pulse-dot 2s ease-in-out infinite; }
+
+/* Equalizer bars (now playing indicator) */
+@keyframes cs-eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.cs-eq-bar { transform-origin: bottom; animation: cs-eq 0.9s ease-in-out infinite; }
+
+/* Soft entrance for panels */
+@keyframes cs-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cs-rise { animation: cs-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Holographic moving gradient backdrop */
+@keyframes cs-holo {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.cs-holo {
+  background: linear-gradient(120deg, rgba(249,115,22,0.18), rgba(168,85,247,0.16), rgba(34,211,238,0.16), rgba(249,115,22,0.18));
+  background-size: 300% 300%;
+  animation: cs-holo 10s ease infinite;
+}

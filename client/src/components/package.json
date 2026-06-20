@@ -1,0 +1,7 @@
+{
+  "name": "@/components",
+  "version": "1.0.0",
+  "main": "/home/runner/workspace/client/src/components/index.js",
+  "module": "/home/runner/workspace/client/src/components/index.js",
+  "types": "/home/runner/workspace/client/src/components/index.d.ts"
+}

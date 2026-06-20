@@ -1,0 +1,103 @@
+{
+  "profile": {
+    "followers": "Seguidores",
+    "following": "Siguiendo",
+    "follow": "Seguir",
+    "unfollow": "Dejar de seguir",
+    "editProfile": "Editar Perfil",
+    "share": "Compartir",
+    "shareProfile": "Compartir Perfil",
+    "copyLink": "Copiar Enlace",
+    "linkCopied": "¡Enlace copiado!",
+    "downloadQR": "Descargar QR",
+    "qrDownloaded": "QR descargado exitosamente",
+    
+    "sections": {
+      "music": "Música",
+      "videos": "Videos",
+      "merchandise": "Merch",
+      "shows": "Shows",
+      "analytics": "Análisis de Actividad",
+      "monetize": "Monetiza Tu Talento"
+    },
+    
+    "analytics": {
+      "title": "Análisis de Actividad",
+      "lastSevenDays": "Actividad de los últimos 7 días",
+      "totalPlays": "Total Plays",
+      "totalViews": "Total Views",
+      "plays": "Reproducciones",
+      "views": "Vistas",
+      "profileCompletion": "Perfil Completo",
+      "complete": "Completo"
+    },
+    
+    "monetize": {
+      "title": "Monetiza Tu Talento",
+      "description": "¿Eres músico o productor? Vende tus servicios profesionales y convierte tu pasión en ingresos",
+      "cta": "Descubre Producer Tools"
+    },
+    
+    "artistCard": {
+      "title": "Tarjeta de Artista",
+      "description": "Comparte tu perfil de artista",
+      "scanQR": "Escanea el código QR para ver mi perfil",
+      "platform": "Plataforma Musical"
+    },
+    
+    "info": {
+      "title": "Información",
+      "genre": "Género",
+      "location": "Ubicación",
+      "memberSince": "Miembro desde",
+      "languages": "Idiomas",
+      "website": "Sitio Web",
+      "email": "Email"
+    },
+    
+    "services": {
+      "beats": "Beats",
+      "mixing": "Mezclas",
+      "mastering": "Master"
+    },
+    
+    "social": {
+      "title": "Redes Sociales",
+      "follow": "Sígueme"
+    },
+    
+    "spotify": {
+      "title": "Spotify",
+      "listen": "Escucha en Spotify",
+      "monthlyListeners": "Oyentes mensuales",
+      "topTracks": "Top Tracks"
+    },
+    
+    "shows": {
+      "title": "Próximos Shows",
+      "tickets": "Tickets",
+      "noShows": "No upcoming shows"
+    },
+    
+    "cta": {
+      "title": "Impulsa tu carrera musical",
+      "description": "Únete a miles de artistas que ya están usando Boostify para gestionar su música, conectar con fans y hacer crecer su audiencia",
+      "button": "Crear Mi Perfil Gratis",
+      "subtitle": "Sin tarjeta de crédito • Configuración en 2 minutos"
+    },
+    
+    "footer": {
+      "poweredBy": "Powered by"
+    },
+    
+    "days": {
+      "mon": "Lun",
+      "tue": "Mar",
+      "wed": "Mié",
+      "thu": "Jue",
+      "fri": "Vie",
+      "sat": "Sáb",
+      "sun": "Dom"
+    }
+  }
+}

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boostify Music - Videos Musicales con IA | Desde $999</title>
+  <meta name="description" content="Creamos videos musicales profesionales con inteligencia artificial y producción real. Desde $999. Entrega en 7-14 días. Landing page de artista GRATIS." />
+
+  <!-- Open Graph / WhatsApp / Social -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Boostify Music - Videos Musicales con IA | Desde $999" />
+  <meta property="og:description" content="Videos musicales profesionales con IA de última generación. Desde $999. Entrega en 7-14 días. +80 artistas confían en nosotros." />
+  <meta property="og:image" content="https://boostifymusic.com/og-preview.jpg" />
+  <meta property="og:url" content="https://boostifymusic.com/videoservice" />
+  <meta property="og:site_name" content="Boostify Music" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Boostify Music - Videos Musicales con IA" />
+  <meta name="twitter:description" content="Videos musicales profesionales con IA. Desde $999. Landing page GRATIS." />
+  <meta name="twitter:image" content="https://boostifymusic.com/og-preview.jpg" />
+
+  <!-- Firebase App Check - reCAPTCHA Enterprise -->
+  <script src="https://www.google.com/recaptcha/enterprise.js?render=6LeloAssAAAAAG7GWlxW1QGReAw_2y-bYSVmmH3K"></script>
+  
+  <style>
+    body { 
+      font-family: system-ui, sans-serif; 
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a2e;
+      color: #e6e6e6;
+    }
+    #root {
+      min-height: 100vh;
+    }
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      padding: 0 20px;
+    }
+    .logo { 
+      font-size: 32px; 
+      font-weight: bold;
+      color: #f97316;
+      margin-bottom: 20px;
+    }
+    h1 { 
+      color: #f97316; 
+      margin-bottom: 30px;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid rgba(249, 115, 22, 0.3);
+      border-radius: 50%;
+      border-top-color: #f97316;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .links {
+      margin-top: 30px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #f97316;
+      color: white;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+      transition: background-color 0.3s;
+      margin: 10px;
+    }
+    .button:hover {
+      background-color: #ea580c;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="loading">
+      <div class="logo">Boostify Music</div>
+      <h1>Cargando la aplicación</h1>
+      <div class="spinner"></div>
+      <p>La aplicación está cargando el componente HomePage desde src/pages/home.tsx</p>
+      <div class="links">
+        <a href="/src/pages/home.tsx" class="button">Ver código fuente de home.tsx</a>
+        <a href="/health" class="button">Verificar estado del servidor</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

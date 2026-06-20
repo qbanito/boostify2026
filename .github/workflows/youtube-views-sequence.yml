@@ -1,0 +1,104 @@
+# 📺 YOUTUBE VIEWS - 5 EMAIL SEQUENCE
+# 
+# Automated email campaign to promote YouTube Views:
+# "10+ AI tools to grow your YouTube channel faster"
+#
+# Usage:
+#   - Manual trigger with sequence number selection
+#   - Preview mode to test emails before production sends
+
+name: YouTube Views Sequence (5 Emails)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sequence_number:
+        description: 'Sequence Email Number (1-5)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+      max_emails:
+        description: 'Maximum number of emails to send (Brevo safe max: 40/run)'
+        required: false
+        default: '40'
+        type: string
+      preview_mode:
+        description: 'Preview mode (sends to test email only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+  schedule:
+    # Send sequence emails every Wednesday and Saturday at 3pm UTC
+    - cron: '0 15 * * 3,6'
+
+jobs:
+  send-youtube-views-sequence:
+    name: '📺 YouTube Views Sequence Email #${{ github.event.inputs.sequence_number || 1 }}'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📚 Install Dependencies
+        run: |
+          npm install pg resend dotenv
+
+      - name: 📧 Send YouTube Views Sequence Email
+        run: |
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "║   📺 YOUTUBE VIEWS - EMAIL SEQUENCE                         ║"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "📧 Sequence Number: ${{ github.event.inputs.sequence_number || '1' }}"
+          echo "📊 Max Emails: ${{ github.event.inputs.max_emails || '40' }}"
+          echo "🔄 Preview Mode: ${{ github.event.inputs.preview_mode || 'false' }}"
+          echo "───────────────────────────────────────────────────────────────"
+          
+          node scripts/youtube-views-sequence-sender.cjs \
+            --sequence=${{ github.event.inputs.sequence_number || '1' }} \
+            --max=${{ github.event.inputs.max_emails || '40' }} \
+            --preview=${{ github.event.inputs.preview_mode || 'false' }}
+        env:
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          # Reply-to: convoycubano@gmail.com (via smart router)
+          RESEND_API_ARTISTS_1: ${{ secrets.RESEND_API_ARTISTS_1 }}
+          RESEND_API_ARTISTS_2: ${{ secrets.RESEND_API_ARTISTS_2 }}
+          RESEND_API_ARTISTS_3: ${{ secrets.RESEND_API_ARTISTS_3 }}
+          RESEND_API_ARTISTS_4: ${{ secrets.RESEND_API_ARTISTS_4 }}
+          PREVIEW_MODE: ${{ github.event.inputs.preview_mode || 'false' }}
+
+      - name: ✅ Sequence Complete
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "║   ✅ YOUTUBE VIEWS SEQUENCE EMAIL SENT SUCCESSFULLY         ║"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo ""
+          echo "📧 Email: #${{ github.event.inputs.sequence_number || '1' }} of 5"
+          echo "📺 Focus: YouTube Views AI Growth Tools"
+          echo "🔗 CTA: https://boostifymusic.com/youtube-views"
+          echo ""
+          echo "📋 Sequence Overview:"
+          echo "   1️⃣  The Problem & Solution - Why Videos Fail"
+          echo "   2️⃣  The Tools - 10+ AI Growth Tools"
+          echo "   3️⃣  Pre-Launch Score - Predict Before Publishing"
+          echo "   4️⃣  Success Stories - Real Creator Results"
+          echo "   5️⃣  Final Push - FREE Forever Access"
+          echo ""

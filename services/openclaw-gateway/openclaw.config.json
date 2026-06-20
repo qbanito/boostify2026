@@ -1,0 +1,16 @@
+{
+  "agent": {
+    "model": "anthropic/claude-opus-4-6"
+  },
+  "gateway": {
+    "port": 18789,
+    "bind": "loopback",
+    "auth": {
+      "mode": "password"
+    }
+  },
+  "channels": {},
+  "browser": {
+    "enabled": false
+  }
+}

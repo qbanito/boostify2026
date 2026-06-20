@@ -1,0 +1,14 @@
+﻿import "dotenv/config";
+import pkg from "pg";
+const { Client } = pkg;
+const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+await client.connect();
+const q1 = "CREATE TABLE IF NOT EXISTS newsletter_outreach_log (id SERIAL PRIMARY KEY, email VARCHAR(320) NOT NULL, first_name TEXT, last_name TEXT, company TEXT, job_title TEXT, article_id INTEGER REFERENCES news_articles(id) ON DELETE SET NULL, article_title TEXT, status VARCHAR(32) DEFAULT ''sent'', provider VARCHAR(32), error_message TEXT, sent_at TIMESTAMP DEFAULT NOW() NOT NULL)";
+await client.query(q1);
+await client.query("CREATE INDEX IF NOT EXISTS idx_outreach_email ON newsletter_outreach_log(email)");
+await client.query("CREATE INDEX IF NOT EXISTS idx_outreach_article ON newsletter_outreach_log(article_id)");
+await client.query("CREATE INDEX IF NOT EXISTS idx_outreach_sent_at ON newsletter_outreach_log(sent_at)");
+const check = await client.query("SELECT count(*) FROM newsletter_outreach_log");
+console.log("Table created OK rows:", check.rows[0].count);
+await client.end();
+process.exit(0);

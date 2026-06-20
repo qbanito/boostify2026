@@ -1,0 +1,7 @@
+{
+  "name": "@/firebase",
+  "version": "1.0.0",
+  "main": "/home/runner/workspace/client/src/firebase/index.js",
+  "module": "/home/runner/workspace/client/src/firebase/index.js",
+  "types": "/home/runner/workspace/client/src/firebase/index.d.ts"
+}

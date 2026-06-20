@@ -1,0 +1,126 @@
+{
+  "id": "roger-deakins",
+  "name": "Roger Deakins",
+  "title": "Director of Photography",
+  "bio": "14-time Oscar nominee, 2-time winner. Modern master of visual storytelling. Known for meticulous shot composition, innovative lighting solutions, and collaborations with visionary directors. Pioneer of digital cinematography at the highest level.",
+  "famous_directors_worked_with": ["Coen Brothers", "Denis Villeneuve", "Sam Mendes", "Ridley Scott"],
+  
+  "iconic_films": [
+    {
+      "title": "Blade Runner 2049",
+      "director": "Denis Villeneuve",
+      "year": 2017,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "1917",
+      "director": "Sam Mendes",
+      "year": 2019,
+      "awards": ["Academy Award for Best Cinematography"]
+    },
+    {
+      "title": "No Country for Old Men",
+      "director": "Coen Brothers",
+      "year": 2007,
+      "awards": ["Academy Award Nomination"]
+    }
+  ],
+  
+  "signature_look": {
+    "description": "Immaculate composition with innovative use of color and negative space. Cool color palettes with warm human moments. Complex lighting that appears deceptively simple. Otherworldly yet grounded cinematography.",
+    "key_characteristic": "Obsessive attention to composition and color as narrative tools. Every frame could be a painting.",
+    "legendary_technique": "Pioneered real-time digital color grading for cinema; master of color as psychological language"
+  },
+  
+  "camera_arsenal": {
+    "primary_cameras": [
+      {
+        "name": "Alexa 65",
+        "format": "Digital 65mm",
+        "sensor": "54mm x 30.2mm, 14+ stops",
+        "use_case": "Large-scale cinematography with immense detail"
+      },
+      {
+        "name": "Alexa Mini",
+        "format": "35mm digital",
+        "sensor": "23.76mm x 13.3mm, 14+ stops",
+        "use_case": "Intimate scenes, handheld work, flexibility"
+      }
+    ],
+    
+    "lens_packages": [
+      {
+        "manufacturer": "Panavision",
+        "series": "Master Primes",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Precise optical formula", "Neutral color", "T1.3 speed", "Renowned for sharpness"],
+        "cost_tier": "Premium"
+      },
+      {
+        "manufacturer": "Zeiss",
+        "series": "Master Prime",
+        "focal_lengths": ["14mm", "21mm", "32mm", "50mm", "85mm", "135mm"],
+        "characteristics": ["Exceptional contrast", "Clean bokeh", "Consistent color"],
+        "cost_tier": "Premium"
+      }
+    ],
+    
+    "film_stock_emulation": [
+      {
+        "name": "Digital hybrid - cool color science",
+        "iso": 800,
+        "characteristics": "Cool precision with warm highlights, minimal grain",
+        "mood": "Cinematic, professional, otherworldly"
+      }
+    ]
+  },
+  
+  "technical_specialties": {
+    "lighting_approach": "Complex but purposeful lighting. Often uses color-specific lighting (cool practicals with warm key lights). Creates depth through sophisticated light separation.",
+    "color_science": "Cool primary palette with warm human moments. Desaturated yet vibrant. Color used as psychological language.",
+    "exposure_philosophy": "Precise exposure with full dynamic range utilization. Highlights and shadows contain information.",
+    "dynamic_range_preference": "14+ stops, maximize color information",
+    "frame_rate_preference": ["24fps standard", "Real-time color monitoring during capture"]
+  },
+  
+  "director_collaboration": {
+    "communication_style": "Meticulous, precise collaboration. Brings visual solutions to thematic challenges. Speaks through images.",
+    "strengths_with_narrative": "Translates complex ideas into visual language. Creates visual metaphors that deepen meaning. Makes audiences think visually.",
+    "best_for_genres": ["Sci-fi", "Psychological drama", "Action", "Contemporary narrative", "Experimental cinema"],
+    "complements_directors": ["Villeneuve (perfect match)", "Coen Brothers (visual mastery)", "Mendes (visual precision)"]
+  },
+  
+  "generation_priorities": {
+    "must_have_characteristics": [
+      "Impeccable composition with negative space",
+      "Cool color palette with selective warm moments",
+      "Complex but purposeful lighting",
+      "Cinematic depth and dimensionality",
+      "Color as narrative language",
+      "Precision in every frame"
+    ],
+    "technical_mandates": [
+      "Alexa digital cinema format (minimum)",
+      "Panavision or Zeiss Master Primes",
+      "Cool color temperature as default with warm accents",
+      "Complex multi-layered lighting design",
+      "Full dynamic range utilization",
+      "Real-time color precision"
+    ],
+    "avoid": [
+      "Random or unmotivated lighting",
+      "Warm-dominated color palette without purpose",
+      "Flat composition without depth",
+      "Overexposed or underexposed areas",
+      "Unintentional color casts"
+    ],
+    "emphasis_on": [
+      "Composition as visual storytelling",
+      "Color as psychological and thematic language",
+      "Technical mastery in service of emotion",
+      "Visual complexity that rewards study",
+      "Cinematic depth and dimensionality",
+      "Precision in execution"
+    ]
+  }
+}
