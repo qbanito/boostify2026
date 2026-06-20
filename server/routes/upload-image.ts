@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
 import { storage } from '../firebase';
 import crypto from 'crypto';
+import { fingerprintAndScan } from '../services/file-fingerprint';
 
 const router = Router();
 
@@ -117,10 +118,31 @@ router.post('/upload-image', authenticate, async (req: Request, res: Response) =
     // Firebase Storage download URL (works with the token regardless of bucket ACL).
     const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${downloadToken}`;
 
+    // Register a legal fingerprint (SHA-256/MD5 + scan + evidence chain).
+    let fingerprintUuid: string | null = null;
+    try {
+      const ownerIdNum = Number((req as any).user?.id);
+      const { fingerprint } = await fingerprintAndScan({
+        buffer,
+        fileName: String(fileName),
+        mimeType,
+        fileUrl: publicUrl,
+        ownerId: Number.isFinite(ownerIdNum) ? ownerIdNum : null,
+        ownerEmail: (req as any).user?.email || null,
+        uploadIp: ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() || req.ip || null,
+        userAgent: (req.headers['user-agent'] as string) || null,
+        consentId: req.body?.consentId ? Number(req.body.consentId) : null,
+      });
+      fingerprintUuid = fingerprint.uuid;
+    } catch (fpErr) {
+      console.warn('[upload-image] fingerprint failed (non-fatal):', (fpErr as Error)?.message);
+    }
+
     return res.json({
       success: true,
       imageUrl: publicUrl,
       path: objectPath,
+      fingerprintUuid,
     });
   } catch (error: any) {
     console.error('Error uploading image:', error);

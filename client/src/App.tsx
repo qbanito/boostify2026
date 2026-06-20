@@ -146,6 +146,15 @@ const ArtistGrowthEngineDashboardPage = lazy(() => import("./pages/artist-growth
 const PRPage = lazy(() => import("./pages/pr"));
 const PrivacyPage = lazy(() => import("./pages/privacy"));
 const PrivacyExtensionPage = lazy(() => import("./pages/privacy-extension"));
+// Legal / DMCA / Copyright protection system
+const LegalCenterPage = lazy(() => import("./pages/legal-center"));
+const DmcaPolicyPage = lazy(() => import("./pages/dmca-policy"));
+const CopyrightPolicyPage = lazy(() => import("./pages/copyright-policy"));
+const AiPolicyPage = lazy(() => import("./pages/ai-policy"));
+const ProhibitedContentPage = lazy(() => import("./pages/prohibited-content"));
+const TransparencyPage = lazy(() => import("./pages/transparency"));
+const LegalClaimsPage = lazy(() => import("./pages/legal-claims"));
+const AdminLegalPanelPage = lazy(() => import("./pages/admin-legal-panel"));
 const ProducerToolsPage = lazy(() => import("./pages/producer-tools"));
 const MiniStudioPage = lazy(() => import("./pages/mini-studio"));
 const PromotionPage = lazy(() => import("./pages/promotion"));
@@ -448,6 +457,14 @@ const Router = () => {
   const WrappedPrivacyPage = withPageWrapper(PrivacyPage);
   const WrappedPrivacyExtensionPage = withPageWrapper(PrivacyExtensionPage);
   const WrappedCookiesPage = withPageWrapper(CookiesPage);
+  const WrappedLegalCenterPage = withPageWrapper(LegalCenterPage);
+  const WrappedDmcaPolicyPage = withPageWrapper(DmcaPolicyPage);
+  const WrappedCopyrightPolicyPage = withPageWrapper(CopyrightPolicyPage);
+  const WrappedAiPolicyPage = withPageWrapper(AiPolicyPage);
+  const WrappedProhibitedContentPage = withPageWrapper(ProhibitedContentPage);
+  const WrappedTransparencyPage = withPageWrapper(TransparencyPage);
+  const WrappedLegalClaimsPage = withPageWrapper(LegalClaimsPage);
+  const WrappedAdminLegalPanelPage = withPageWrapper(AdminLegalPanelPage);
   const WrappedProfilePage = withPageWrapper(ProfilePage);
   const WrappedArtistProfilePage = withPageWrapper(ArtistProfilePage);
   const WrappedArtistBlueprintPage = withPageWrapper(ArtistBlueprintPage);
@@ -600,6 +617,15 @@ const Router = () => {
           {getRouteComponent("/privacy", WrappedPrivacyPage, null)}
           {getRouteComponent("/privacy/extension", WrappedPrivacyExtensionPage, null)}
           {getRouteComponent("/cookies", WrappedCookiesPage, null)}
+          {/* Legal / DMCA / Copyright protection system */}
+          {getRouteComponent("/legal", WrappedLegalCenterPage, null)}
+          {getRouteComponent("/legal/dmca", WrappedDmcaPolicyPage, null)}
+          {getRouteComponent("/legal/copyright", WrappedCopyrightPolicyPage, null)}
+          {getRouteComponent("/legal/ai-content", WrappedAiPolicyPage, null)}
+          {getRouteComponent("/legal/prohibited", WrappedProhibitedContentPage, null)}
+          {getRouteComponent("/legal/transparency", WrappedTransparencyPage, null)}
+          {getRouteComponent("/legal/my-claims", WrappedLegalClaimsPage, null)}
+          {getRouteComponent("/admin/legal", WrappedAdminLegalPanelPage, null)}
           {getRouteComponent("/gig-rules", WrappedGigMarketplaceRulesPage, null)}
           {getRouteComponent("/article/:id", WrappedArticlePage, null)}
           {getRouteComponent("/song/:id", WrappedSongSharePage, null)}

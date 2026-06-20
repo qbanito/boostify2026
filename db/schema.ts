@@ -11870,3 +11870,191 @@ export const motionCaptureTakes = pgTable("motion_capture_takes", {
 
 export type InsertMotionCaptureTake = typeof motionCaptureTakes.$inferInsert;
 export type SelectMotionCaptureTake = typeof motionCaptureTakes.$inferSelect;
+
+// ========================================
+// LEGAL / DMCA / COPYRIGHT PROTECTION SYSTEM
+// Safe-harbor infrastructure: fingerprints, consents, notices,
+// counter-notices, strikes, artist verification, audit log.
+// ========================================
+
+// 4) Digital fingerprint of every uploaded file (evidence chain)
+export const fileFingerprints = pgTable("file_fingerprints", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").defaultRandom().notNull().unique(),     // public reference id
+  ownerId: integer("owner_id").references(() => users.id, { onDelete: "set null" }),
+  ownerEmail: text("owner_email"),
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url"),                                 // stored location (Firebase)
+  mimeType: text("mime_type"),
+  fileType: text("file_type"),                               // image | audio | video | document | other
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  sha256: text("sha256").notNull(),                          // primary content hash
+  md5: text("md5"),                                          // secondary hash
+  perceptualHash: text("perceptual_hash"),                   // optional pHash for media dedupe
+  uploadIp: text("upload_ip"),
+  userAgent: text("user_agent"),
+  scanStatus: text("scan_status", { enum: ["pending", "clean", "flagged", "rejected"] }).default("pending").notNull(),
+  scanReport: jsonb("scan_report"),                          // {malware,corrupt,format,duplicateOf,metadata,...}
+  isDuplicateOf: integer("is_duplicate_of"),                 // references another fingerprint id
+  consentId: integer("consent_id"),                          // upload_consents.id
+  status: text("status", { enum: ["active", "disabled", "removed"] }).default("active").notNull(),
+  history: jsonb("history").default(sql`'[]'::jsonb`),       // [{action,at,by,note}]
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_fingerprints_owner").on(table.ownerId),
+  index("idx_fingerprints_sha256").on(table.sha256),
+  index("idx_fingerprints_status").on(table.status),
+]);
+export type InsertFileFingerprint = typeof fileFingerprints.$inferInsert;
+export type SelectFileFingerprint = typeof fileFingerprints.$inferSelect;
+
+// 3) Mandatory consent captured before each upload (rights, no false claims,
+//    storage/distribution authorization, DMCA/ToS acceptance)
+export const uploadConsents = pgTable("upload_consents", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  userEmail: text("user_email"),
+  ownsRights: boolean("owns_rights").notNull().default(false),
+  noFalseDeclaration: boolean("no_false_declaration").notNull().default(false),
+  authorizesStorageDistribution: boolean("authorizes_storage_distribution").notNull().default(false),
+  acceptsDmcaTos: boolean("accepts_dmca_tos").notNull().default(false),
+  contentType: text("content_type"),                         // upload | song | image | video | avatar | etc.
+  contextRef: text("context_ref"),                           // free-form reference (page/module)
+  consentIp: text("consent_ip"),
+  userAgent: text("user_agent"),
+  consentVersion: text("consent_version").default("1.0").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_consents_user").on(table.userId),
+]);
+export type InsertUploadConsent = typeof uploadConsents.$inferInsert;
+export type SelectUploadConsent = typeof uploadConsents.$inferSelect;
+
+// 2) DMCA Notice & Takedown — incoming infringement claims
+export const dmcaTakedowns = pgTable("dmca_takedowns", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").defaultRandom().notNull().unique(),     // case number reference
+  // Complainant (rights holder)
+  claimantName: text("claimant_name").notNull(),
+  claimantEmail: text("claimant_email").notNull(),
+  claimantOrg: text("claimant_org"),
+  claimantAddress: text("claimant_address"),
+  claimantPhone: text("claimant_phone"),
+  // Subject of the claim
+  targetUserId: integer("target_user_id").references(() => users.id, { onDelete: "set null" }),
+  targetUrl: text("target_url"),                             // allegedly infringing URL on platform
+  fingerprintId: integer("fingerprint_id").references(() => fileFingerprints.id, { onDelete: "set null" }),
+  workDescription: text("work_description").notNull(),       // the copyrighted work
+  infringementDescription: text("infringement_description").notNull(),
+  // Sworn statements (17 U.S.C. §512(c)(3))
+  goodFaithStatement: boolean("good_faith_statement").notNull().default(false),
+  accuracyStatement: boolean("accuracy_statement").notNull().default(false),
+  authorizedSignature: text("authorized_signature").notNull(),  // electronic signature
+  evidenceUrls: jsonb("evidence_urls").default(sql`'[]'::jsonb`),
+  // Workflow
+  status: text("status", {
+    enum: ["received", "under_review", "content_disabled", "counter_received", "reinstated", "rejected", "resolved"]
+  }).default("received").notNull(),
+  contentDisabledAt: timestamp("content_disabled_at"),
+  assignedTo: integer("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  resolutionNote: text("resolution_note"),
+  submitterIp: text("submitter_ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_dmca_status").on(table.status),
+  index("idx_dmca_target_user").on(table.targetUserId),
+  index("idx_dmca_email").on(table.claimantEmail),
+]);
+export type InsertDmcaTakedown = typeof dmcaTakedowns.$inferInsert;
+export type SelectDmcaTakedown = typeof dmcaTakedowns.$inferSelect;
+
+// 2b) Counter-notification from the affected user (17 U.S.C. §512(g))
+export const dmcaCounterNotices = pgTable("dmca_counter_notices", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").defaultRandom().notNull().unique(),
+  takedownId: integer("takedown_id").references(() => dmcaTakedowns.id, { onDelete: "cascade" }).notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  address: text("address").notNull(),
+  phone: text("phone"),
+  statementUnderPenalty: boolean("statement_under_penalty").notNull().default(false),
+  consentToJurisdiction: boolean("consent_to_jurisdiction").notNull().default(false),
+  explanation: text("explanation").notNull(),
+  signature: text("signature").notNull(),
+  status: text("status", { enum: ["received", "forwarded", "reinstated", "rejected"] }).default("received").notNull(),
+  submitterIp: text("submitter_ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_counter_takedown").on(table.takedownId),
+  index("idx_counter_user").on(table.userId),
+]);
+export type InsertDmcaCounterNotice = typeof dmcaCounterNotices.$inferInsert;
+export type SelectDmcaCounterNotice = typeof dmcaCounterNotices.$inferSelect;
+
+// 5b) Strike scoring per user (repeat-infringer policy → auto-suspend at 3)
+export const artistStrikes = pgTable("artist_strikes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  strikeCount: integer("strike_count").notNull().default(0),
+  totalClaims: integer("total_claims").notNull().default(0),
+  counterClaims: integer("counter_claims").notNull().default(0),
+  resolvedClaims: integer("resolved_claims").notNull().default(0),
+  pendingClaims: integer("pending_claims").notNull().default(0),
+  suspended: boolean("suspended").notNull().default(false),
+  suspendedAt: timestamp("suspended_at"),
+  lastStrikeAt: timestamp("last_strike_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_strikes_user").on(table.userId),
+]);
+export type InsertArtistStrike = typeof artistStrikes.$inferInsert;
+export type SelectArtistStrike = typeof artistStrikes.$inferSelect;
+
+// 9) Artist verification levels
+//   verified(🟢) | label(🔵) | distributor(🟠) | company(🟣) | rights_admin(🔴)
+export const artistVerifications = pgTable("artist_verifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  level: text("level", {
+    enum: ["none", "verified", "label", "distributor", "company", "rights_admin"]
+  }).default("none").notNull(),
+  legalName: text("legal_name"),
+  organization: text("organization"),
+  taxId: text("tax_id"),
+  documentsUrls: jsonb("documents_urls").default(sql`'[]'::jsonb`),
+  status: text("status", { enum: ["pending", "approved", "rejected"] }).default("pending").notNull(),
+  reviewedBy: integer("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewNote: text("review_note"),
+  verifiedAt: timestamp("verified_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_verifications_user").on(table.userId),
+  index("idx_verifications_status").on(table.status),
+]);
+export type InsertArtistVerification = typeof artistVerifications.$inferInsert;
+export type SelectArtistVerification = typeof artistVerifications.$inferSelect;
+
+// 2/10) Immutable audit log for every legal action (evidence for safe harbor)
+export const legalAuditLog = pgTable("legal_audit_log", {
+  id: serial("id").primaryKey(),
+  actorId: integer("actor_id").references(() => users.id, { onDelete: "set null" }),
+  actorEmail: text("actor_email"),
+  action: text("action").notNull(),                          // e.g. takedown.received, content.disabled, content.reinstated
+  entityType: text("entity_type"),                           // dmca | counter | fingerprint | verification | strike
+  entityId: integer("entity_id"),
+  detail: jsonb("detail"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_action").on(table.action),
+  index("idx_audit_entity").on(table.entityType, table.entityId),
+  index("idx_audit_created").on(table.createdAt),
+]);
+export type InsertLegalAuditLog = typeof legalAuditLog.$inferInsert;
+export type SelectLegalAuditLog = typeof legalAuditLog.$inferSelect;

@@ -34,6 +34,7 @@ import artistGeneratorRouter from './routes/artist-generator'; // Added import
 import artistBlueprintRouter from './routes/artist-blueprint'; // Superstar Blueprint routes
 import emotionalStudioRouter from './routes/emotional-studio'; // Emotional Studio routes
 import marketingContextRouter from './routes/marketing-context'; // Marketing Context & Skills API
+import legalRouter from './routes/legal'; // Legal / DMCA / Copyright protection system
 import artistFanLeadsRouter from './routes/artist-fan-leads';
 import fanClubRouter from './routes/fan-club'; // Fan Email Capture & Nurture
 import artistDomainRouter from './routes/artist-domain'; // Artist Domain Manager routes
@@ -489,6 +490,9 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
 
   // Register Marketing Context & Skills API (powers ai-skills-injector across all modules)
   app.use('/api/marketing-context', marketingContextRouter);
+
+  // Register Legal / DMCA / Copyright protection system (safe-harbor infrastructure)
+  app.use('/api/legal', legalRouter);
 
   // Register Artist Domain Manager routes (owner-authenticated)
   app.use('/api/artist-domain', artistDomainRouter);
