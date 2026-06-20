@@ -13,15 +13,17 @@
  */
 import { createTrackedOpenAI } from '../../utils/tracked-openai';
 import { PRIMARY_MODEL } from '../../utils/ai-config';
-import { generateMasterDesign } from '../fal-service';
+import { generateMasterDesign, generateMusicWithMiniMax, generateVideoFromImage } from '../fal-service';
 import type { CommandIntent, CommandParams, ParsedCommand } from './intent-router';
 
 export type ModuleKey =
   | 'lyrics'
   | 'music_description'
   | 'music_prompt'
+  | 'music_audio'
   | 'cover'
   | 'video_script'
+  | 'video_clip'
   | 'caption'
   | 'metadata'
   | 'campaign_brief'
@@ -37,10 +39,12 @@ export interface ModuleContext {
 }
 
 export interface ModuleResult {
-  type: 'text' | 'image' | 'json';
+  type: 'text' | 'image' | 'json' | 'audio' | 'video';
   title: string;
   content?: string;       // text/markdown
   imageUrl?: string;      // for image modules
+  audioUrl?: string;      // for audio modules
+  videoUrl?: string;      // for video modules
   data?: any;             // structured json
   provider?: string;
 }
@@ -144,6 +148,55 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
     },
   },
 
+  music_audio: {
+    key: 'music_audio', label: 'Canción (audio real)', icon: 'AudioLines',
+    run: async (ctx) => {
+      // Build a compact style prompt (10-300 chars) — reuse music_prompt if present.
+      let style = String(ctx.prior?.music_prompt?.content || '').replace(/\n+/g, ' ').trim();
+      if (style.length < 10) {
+        style = [
+          ctx.params.genre || ctx.genre || 'pop',
+          ctx.params.mood || 'energetic',
+          'modern production, catchy hooks, professional vocals',
+        ].filter(Boolean).join(', ');
+      }
+      style = style.slice(0, 290);
+
+      // Lyrics (10-3000 chars) — reuse the lyrics module, else write a short set.
+      let lyrics = String(ctx.prior?.lyrics?.content || '').trim();
+      if (lyrics.length < 10) {
+        lyrics = await llmText(
+          `You are a hit songwriter. Write a SHORT, original song (2 verses + chorus) using [verse] and [chorus] tags. Keep it under 900 characters.`,
+          `Write a short song.\n${ctxBrief(ctx)}`,
+          600,
+        );
+      }
+      lyrics = lyrics.slice(0, 2900);
+
+      try {
+        const result = await generateMusicWithMiniMax(style, lyrics);
+        if (result?.success && result.audioUrl) {
+          return {
+            type: 'audio',
+            title: 'Canción generada',
+            audioUrl: result.audioUrl,
+            content: style,
+            provider: result.provider || 'fal-minimax-music-v2',
+          };
+        }
+        throw new Error(result?.error || 'No se recibió audio');
+      } catch (e: any) {
+        // Never dead-end: deliver the production brief so the artist can still ship.
+        return {
+          type: 'text',
+          title: 'Canción (audio no disponible ahora)',
+          content: `No se pudo generar el audio en este momento (${e?.message || 'error'}).\n\nPrompt de estilo:\n${style}\n\nLetra:\n${lyrics}`,
+          provider: 'prompt-only',
+        };
+      }
+    },
+  },
+
   cover: {
     key: 'cover', label: 'Portada del single', icon: 'Image',
     run: async (ctx) => {
@@ -179,6 +232,48 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         700,
       );
       return { type: 'text', title: 'Guion de video corto', content, provider: 'openrouter' };
+    },
+  },
+
+  video_clip: {
+    key: 'video_clip', label: 'Video clip (real)', icon: 'Video',
+    run: async (ctx) => {
+      // Animate the freshly-generated cover, else the artist photo.
+      const sourceImage = String(ctx.prior?.cover?.imageUrl || ctx.artistImageUrl || '').trim();
+      if (!sourceImage || !/^https?:\/\//.test(sourceImage)) {
+        return {
+          type: 'text',
+          title: 'Video clip (sin imagen base)',
+          content: 'No hay portada ni imagen del artista para animar. Genera primero una portada o añade una foto al perfil.',
+          provider: 'prompt-only',
+        };
+      }
+      const genre = ctx.params.genre || ctx.genre || 'pop';
+      const motion = `${ctx.artistName} performing ${genre}, cinematic camera movement, dynamic stage lighting, music-video aesthetic, subtle realistic motion`;
+      const aspectRatio: '16:9' | '9:16' =
+        ctx.params.format && /(horizontal|16:9|youtube|landscape)/i.test(String(ctx.params.format)) ? '16:9' : '9:16';
+      const duration = ctx.params.durationSeconds && ctx.params.durationSeconds >= 3 && ctx.params.durationSeconds <= 6
+        ? ctx.params.durationSeconds : 6;
+      try {
+        const result = await generateVideoFromImage(sourceImage, motion, { aspectRatio, duration, resolution: '720p' });
+        if (result?.success && result.videoUrl) {
+          return {
+            type: 'video',
+            title: 'Video clip generado',
+            videoUrl: result.videoUrl,
+            content: motion,
+            provider: result.provider || 'fal-grok-image-to-video',
+          };
+        }
+        throw new Error(result?.error || 'No se recibió video');
+      } catch (e: any) {
+        return {
+          type: 'text',
+          title: 'Video clip (no disponible ahora)',
+          content: `No se pudo generar el video en este momento (${e?.message || 'error'}).\n\nIdea de plano:\n${motion}`,
+          provider: 'prompt-only',
+        };
+      }
     },
   },
 
@@ -239,15 +334,16 @@ export function planModules(parsed: ParsedCommand): ModuleKey[] {
 
   switch (parsed.intent) {
     case 'create_song':
-      plan.push('lyrics', 'music_description', 'music_prompt');
+      plan.push('lyrics', 'music_description', 'music_prompt', 'music_audio');
       if (extras.has('cover')) plan.push('cover');
-      if (extras.has('short-video')) plan.push('video_script');
+      if (extras.has('short-video')) {
+        if (!plan.includes('cover')) plan.push('cover'); // need a source frame
+        plan.push('video_script', 'video_clip');
+      }
       plan.push('caption', 'metadata');
       break;
     case 'create_video':
-      plan.push('video_script');
-      if (extras.has('cover')) plan.push('cover');
-      plan.push('caption');
+      plan.push('cover', 'video_script', 'video_clip', 'caption');
       break;
     case 'create_campaign':
       plan.push('campaign_brief', 'caption', 'metadata');
@@ -256,7 +352,7 @@ export function planModules(parsed: ParsedCommand): ModuleKey[] {
       plan.push('cover', 'caption');
       break;
     case 'publish_teaser':
-      plan.push('teaser_script', 'caption');
+      plan.push('cover', 'teaser_script', 'video_clip', 'caption');
       break;
     default:
       // Unknown → best-effort small pack so the user still gets value.

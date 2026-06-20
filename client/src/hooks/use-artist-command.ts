@@ -6,10 +6,12 @@ export type CommandStatus = 'idle' | 'pending' | 'running' | 'completed' | 'fail
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface ModuleResult {
-  type: 'text' | 'image' | 'json';
+  type: 'text' | 'image' | 'json' | 'audio' | 'video';
   title: string;
   content?: string;
   imageUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
   data?: any;
   provider?: string;
 }

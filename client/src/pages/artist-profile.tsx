@@ -6,6 +6,7 @@ import { CrowdfundingButton } from "../components/crowdfunding/crowdfunding-butt
 import { MyUniverseModule } from "../components/artist/my-universe-module";
 import { ArtistCommandEngine } from "../components/artist/command-engine/ArtistCommandEngine";
 import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
+import { Command } from "lucide-react";
 import { Head } from "../components/ui/head";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase";
@@ -314,6 +315,30 @@ export default function ArtistProfilePage() {
       />
       {/* Offline mode indicator */}
       <OfflineIndicator isOnline={pwa.isOnline} />
+      {/* Owner-only quick launcher → Artist Command Engine */}
+      {isOwnProfile && artistId && (
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() =>
+            document
+              .getElementById("artist-command-engine")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          aria-label="Abrir Artist Command Engine"
+          title="Artist Command Engine"
+          className="fixed bottom-24 left-4 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-orange-500/40 bg-gradient-to-br from-orange-500 to-orange-600 text-black shadow-[0_0_24px_rgba(249,115,22,0.45)]"
+        >
+          <Command className="h-5 w-5" />
+          <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-300 opacity-70" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-orange-200" />
+          </span>
+        </motion.button>
+      )}
       <div className="min-h-screen bg-black overflow-x-hidden relative scroll-smooth">
         <ProfileParallaxBackdrop
           imageUrl={
@@ -353,7 +378,7 @@ export default function ArtistProfilePage() {
 
           {/* Artist Command Engine — owner-only voice/text command surface */}
           {isOwnProfile && artistId && (
-            <div className="max-w-2xl mx-auto px-4 pb-8">
+            <div id="artist-command-engine" className="max-w-2xl mx-auto px-4 pb-8 scroll-mt-24">
               <ArtistCommandEngine
                 artistId={artistId}
                 artistName={artistName}

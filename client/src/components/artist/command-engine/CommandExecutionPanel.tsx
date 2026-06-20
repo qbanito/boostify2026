@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   PenLine, Music2, Wand2, Image as ImageIcon, Clapperboard, Hash, ListMusic,
   Megaphone, Film, Sparkles, Check, X, Loader2, Clock, ChevronDown, Copy, CheckCheck,
+  AudioLines, Video,
 } from 'lucide-react';
 import type { CommandTask } from '../../../hooks/use-artist-command';
 
 const ICONS: Record<string, any> = {
   PenLine, Music2, Wand2, Image: ImageIcon, Clapperboard, Hash, ListMusic, Megaphone, Film, Sparkles,
+  AudioLines, Video,
 };
 
 function StatusBadge({ status }: { status: CommandTask['status'] }) {
@@ -37,6 +39,43 @@ function ResultBody({ task }: { task: CommandTask }) {
   if (out.type === 'image' && out.imageUrl) {
     return (
       <img src={out.imageUrl} alt={out.title} className="w-full rounded-lg border border-white/10 object-cover" />
+    );
+  }
+
+  if (out.type === 'audio' && out.audioUrl) {
+    return (
+      <div className="space-y-2">
+        <audio controls src={out.audioUrl} className="w-full" />
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={out.audioUrl}
+            target="_blank"
+            rel="noreferrer"
+            download
+            className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[11px] text-white/60 transition hover:bg-white/10 hover:text-orange-300"
+          >
+            <AudioLines className="h-3 w-3" /> Descargar audio
+          </a>
+        </div>
+        {out.content && <p className="text-[11px] text-white/40">Estilo: {out.content}</p>}
+      </div>
+    );
+  }
+
+  if (out.type === 'video' && out.videoUrl) {
+    return (
+      <div className="space-y-2">
+        <video controls playsInline src={out.videoUrl} className="w-full rounded-lg border border-white/10" />
+        <a
+          href={out.videoUrl}
+          target="_blank"
+          rel="noreferrer"
+          download
+          className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[11px] text-white/60 transition hover:bg-white/10 hover:text-orange-300"
+        >
+          <Video className="h-3 w-3" /> Descargar video
+        </a>
+      </div>
     );
   }
 

@@ -7,6 +7,7 @@ interface CommandInputProps {
   artistName: string;
   disabled?: boolean;
   isSubmitting?: boolean;
+  initialText?: string;
   onSubmit: (command: string, source: 'text' | 'voice') => void;
 }
 
@@ -30,12 +31,20 @@ function getRecognition(): SpeechRecognition | null {
   return rec;
 }
 
-export function CommandInput({ artistName, disabled, isSubmitting, onSubmit }: CommandInputProps) {
+export function CommandInput({ artistName, disabled, isSubmitting, initialText, onSubmit }: CommandInputProps) {
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const sourceRef = useRef<'text' | 'voice'>('text');
+
+  // Allow the parent ("Editar") to pre-fill the box for a quick refine.
+  useEffect(() => {
+    if (initialText && initialText.trim()) {
+      setText(initialText);
+      sourceRef.current = 'text';
+    }
+  }, [initialText]);
 
   useEffect(() => {
     const w = window as any;
