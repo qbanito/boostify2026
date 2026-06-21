@@ -16,6 +16,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAudioPlayer } from "../../contexts/audio-player-context";
+import { db } from "../../firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 interface ListeningExperienceProps {
   /** Artist brand primary color (hex). */
@@ -25,6 +27,11 @@ interface ListeningExperienceProps {
   artistName?: string;
   /** Circular artist image shown at the center. */
   artistImageUrl?: string;
+  /** Looping background video (e.g. artist.loopVideoUrl), shown blurred behind the effect. */
+  videoUrl?: string;
+  /** Artist ids used to lazily load gallery images for the blurred backdrop. */
+  pgId?: string | number;
+  artistId?: string | number;
   /** Seconds of playback before the experience triggers. */
   triggerSeconds?: number;
   /** Auto-dismiss after this many ms (0 = stays until the user taps). */
@@ -68,6 +75,9 @@ export function ListeningExperience({
   accent = "#22D3EE",
   artistName = "",
   artistImageUrl,
+  videoUrl,
+  pgId,
+  artistId,
   triggerSeconds = 60,
   autoDismissMs = 0,
 }: ListeningExperienceProps) {
@@ -82,8 +92,7 @@ export function ListeningExperience({
   const avatarRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // ── Real-time audio analysis (silent proxied copy of the track) ──────────
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  // ── Real-time audio analysis (decoded copy of the track, silent) ─────────
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const freqRef = useRef<Uint8Array | null>(null);
@@ -101,6 +110,86 @@ export function ListeningExperience({
   colorsRef.current = { primaryRgb, accentRgb };
 
   const trackId = currentTrack ? String(currentTrack.id) : null;
+
+  // ── Blurred media backdrop (loop video base → gallery images over it) ─────
+  const isMobileLayout =
+    typeof window !== "undefined" && window.innerWidth < 768;
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [bgIndex, setBgIndex] = useState(0);
+  // When a loop video exists it stays ALWAYS playing as the base layer and the
+  // gallery images fade in/out on top of it (so the video stays visible
+  // between images). Without a video the gallery just cross-fades continuously.
+  const [galleryVisible, setGalleryVisible] = useState(false);
+
+  // Lazily pull the artist's gallery images from Firestore the first time the
+  // experience opens, so the backdrop can slowly cross-fade through them.
+  useEffect(() => {
+    if (!active || galleryImages.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = new Set<string | number>();
+        [pgId, artistId].forEach((v) => {
+          if (v === undefined || v === null) return;
+          ids.add(String(v));
+          const n = Number(v);
+          if (!Number.isNaN(n)) ids.add(n);
+        });
+        if (!ids.size) return;
+        const ref = collection(db, "image_galleries");
+        const urls: string[] = [];
+        for (const uid of ids) {
+          const snap = await getDocs(query(ref, where("userId", "==", uid)));
+          snap.docs.forEach((d) => {
+            const data = d.data() as any;
+            (data?.generatedImages || []).forEach((g: any) => {
+              if (g && !g.isVideo && typeof g.url === "string") urls.push(g.url);
+            });
+          });
+          if (urls.length) break;
+        }
+        if (!cancelled && urls.length) setGalleryImages(urls.slice(0, 12));
+      } catch {
+        /* gallery is optional decoration — ignore failures */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [active, pgId, artistId, galleryImages.length]);
+
+  // Drive the gallery overlay while the experience is open.
+  useEffect(() => {
+    if (!active) {
+      setBgIndex(0);
+      setGalleryVisible(false);
+      return;
+    }
+    if (galleryImages.length === 0) {
+      setGalleryVisible(false);
+      return;
+    }
+    if (!videoUrl) {
+      // No video → keep the gallery on screen and cross-fade through it.
+      setGalleryVisible(true);
+      if (galleryImages.length <= 1) return;
+      const id = setInterval(
+        () => setBgIndex((i) => (i + 1) % galleryImages.length),
+        7000,
+      );
+      return () => clearInterval(id);
+    }
+    // With a video base → alternate: show an image, then fade it out so the
+    // loop video shows through, then bring in the next image.
+    setGalleryVisible(true);
+    let visible = true;
+    const id = setInterval(() => {
+      visible = !visible;
+      setGalleryVisible(visible);
+      if (visible) setBgIndex((i) => (i + 1) % galleryImages.length);
+    }, 4500);
+    return () => clearInterval(id);
+  }, [active, videoUrl, galleryImages.length]);
 
   const clearDismissTimer = () => {
     if (dismissTimerRef.current) {
@@ -154,74 +243,102 @@ export function ListeningExperience({
   }, [active]);
 
   // ── Real audio frequency analysis ────────────────────────────────────────
-  // Loads a SILENT, proxied copy of the playing track through Web Audio so we
-  // can read live frequency data without ever touching (or muting) the main
-  // global player. Kept loosely in sync with the player's position.
+  // Fetches a copy of the playing track (through the same-origin proxy),
+  // decodes it and plays it SILENTLY (gain 0) through an AnalyserNode so we can
+  // read live frequency data without ever touching/muting the main global
+  // player. Using fetch + AbortController (instead of an <audio> element) means
+  // cleanup aborts are caught explicitly and never surface as runtime errors.
   useEffect(() => {
     if (!active || !audioUrl) return;
     let cancelled = false;
-    let el: HTMLAudioElement | null = null;
+    const controller = new AbortController();
     let ctx: AudioContext | null = null;
-    try {
-      const AC: typeof AudioContext | undefined =
-        window.AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return;
-      ctx = new AC();
-      el = new Audio();
-      el.crossOrigin = "anonymous";
-      el.preload = "auto";
-      el.src = proxiedAudio(audioUrl);
+    let analyser: AnalyserNode | null = null;
+    let buffer: AudioBuffer | null = null;
+    let srcNode: AudioBufferSourceNode | null = null;
+    let startCtxTime = 0;
+    let startOffset = 0;
+    let syncTimer: ReturnType<typeof setInterval> | null = null;
 
-      const source = ctx.createMediaElementSource(el);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.82;
-      // Route through a zero-gain node so the graph stays live but inaudible
-      // (the main player provides the actual sound).
-      const silent = ctx.createGain();
-      silent.gain.value = 0;
-      source.connect(analyser);
-      analyser.connect(silent);
-      silent.connect(ctx.destination);
+    const startSource = (offset: number) => {
+      if (!ctx || !buffer || !analyser) return;
+      try {
+        if (srcNode) {
+          srcNode.stop();
+          srcNode.disconnect();
+        }
+      } catch {}
+      const node = ctx.createBufferSource();
+      node.buffer = buffer;
+      node.connect(analyser);
+      const off = Math.max(0, Math.min(offset, buffer.duration - 0.05));
+      startCtxTime = ctx.currentTime;
+      startOffset = off;
+      try {
+        node.start(0, off);
+      } catch {}
+      srcNode = node;
+    };
 
-      analyserRef.current = analyser;
-      freqRef.current = new Uint8Array(analyser.frequencyBinCount);
-      audioCtxRef.current = ctx;
-      audioElRef.current = el;
+    (async () => {
+      try {
+        const AC: typeof AudioContext | undefined =
+          window.AudioContext || (window as any).webkitAudioContext;
+        if (!AC) return;
+        ctx = new AC();
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.82;
+        const silent = ctx.createGain();
+        silent.gain.value = 0;
+        analyser.connect(silent);
+        silent.connect(ctx.destination);
+        analyserRef.current = analyser;
+        freqRef.current = new Uint8Array(analyser.frequencyBinCount);
+        audioCtxRef.current = ctx;
 
-      const startPlayback = async () => {
-        if (cancelled || !el || !ctx) return;
+        const res = await fetch(proxiedAudio(audioUrl), { signal: controller.signal });
+        if (cancelled || !res.ok) return;
+        const arr = await res.arrayBuffer();
+        if (cancelled) return;
+        buffer = await ctx.decodeAudioData(arr);
+        if (cancelled) return;
         try {
           if (ctx.state === "suspended") await ctx.resume();
         } catch {}
-        try {
-          const target = progressRef.current || 0;
-          if (target > 0 && Number.isFinite(el.duration) && target < el.duration) {
-            el.currentTime = target;
+        startSource(progressRef.current || 0);
+        // Keep the silent analysis copy aligned with the real player position.
+        syncTimer = setInterval(() => {
+          if (cancelled || !ctx || !buffer) return;
+          const pos = startOffset + (ctx.currentTime - startCtxTime);
+          if (
+            Math.abs(progressRef.current - pos) > 0.6 &&
+            progressRef.current < buffer.duration
+          ) {
+            startSource(progressRef.current);
           }
-        } catch {}
-        try {
-          await el.play();
-        } catch {}
-      };
-      el.addEventListener("canplay", startPlayback, { once: true });
-    } catch {
-      // Visuals fall back to the synthetic beat envelope.
-    }
+        }, 1000);
+      } catch {
+        // AbortError on cleanup / decode failure → visuals fall back to the
+        // synthetic beat envelope. Never throws to the host.
+      }
+    })();
 
     return () => {
       cancelled = true;
+      try {
+        controller.abort();
+      } catch {}
+      if (syncTimer) clearInterval(syncTimer);
       analyserRef.current = null;
       freqRef.current = null;
-      audioElRef.current = null;
       audioCtxRef.current = null;
       energyRef.current = { bass: 0, mid: 0, treble: 0, overall: 0 };
       beatAvgRef.current = 0;
       try {
-        if (el) {
-          el.pause();
-          el.src = "";
-          el.load?.();
+        if (srcNode) {
+          srcNode.stop();
+          srcNode.disconnect();
         }
       } catch {}
       try {
@@ -242,11 +359,19 @@ export function ListeningExperience({
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+    // Mobile devices choke on the full effect, so we run lighter: fewer
+    // particles, a lower pixel ratio and a ~30fps cap. Combined with the
+    // delta-time motion below this stops animations from "piling up".
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.innerWidth < 768 ||
+        !!window.matchMedia?.("(pointer: coarse)").matches);
+
     let w = 0;
     let h = 0;
     let dpr = 1;
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.4 : 2);
       w = window.innerWidth;
       h = window.innerHeight;
       canvas.width = Math.floor(w * dpr);
@@ -260,6 +385,8 @@ export function ListeningExperience({
 
     const BPM = 120;
     const start = performance.now();
+    let lastFrame = start; // for delta-time + fps cap
+    const minDelta = isMobile ? 32 : 0; // ~30fps on mobile
 
     // Persistent particle systems.
     interface Spark {
@@ -281,7 +408,7 @@ export function ListeningExperience({
     const rings: Ring[] = [];
     let lastBeat = -1;
 
-    const sparkCount = reduceMotion ? 0 : 70;
+    const sparkCount = reduceMotion ? 0 : isMobile ? 26 : 70;
     for (let i = 0; i < sparkCount; i++) {
       sparks.push({
         x: Math.random() * w,
@@ -296,6 +423,15 @@ export function ListeningExperience({
     }
 
     const draw = (now: number) => {
+      // Frame-rate cap (mobile) + delta-time so motion is independent of fps.
+      const elapsed = now - lastFrame;
+      if (elapsed < minDelta) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+      const dt = Math.min(0.05, elapsed / 1000); // clamp big gaps (tab switch)
+      const dtScale = dt * 60; // 1.0 at 60fps
+      lastFrame = now;
       const t = (now - start) / 1000; // seconds since open
       const { primaryRgb: P, accentRgb: A } = colorsRef.current;
       const cx = w / 2;
@@ -332,17 +468,6 @@ export function ListeningExperience({
         }
       }
 
-      // Keep the silent analysis copy aligned with the real player position.
-      const ael = audioElRef.current;
-      if (ael && !ael.paused && Number.isFinite(ael.duration)) {
-        const drift = Math.abs(ael.currentTime - progressRef.current);
-        if (drift > 0.6 && progressRef.current < ael.duration) {
-          try {
-            ael.currentTime = progressRef.current;
-          } catch {}
-        }
-      }
-
       // Beat envelope: real bass energy when available, else a synthetic BPM pulse.
       const beatPos = (t * BPM) / 60;
       const beatIndex = Math.floor(beatPos);
@@ -359,7 +484,8 @@ export function ListeningExperience({
           lastAudioBeatRef.current = t;
           rings.push({ r: 0, life: 0, maxLife: e.bass > 0.5 ? 1.4 : 1.0 });
           if (!reduceMotion && e.bass > 0.42) {
-            for (let i = 0; i < 16; i++) {
+            const burst = isMobile ? 8 : 16;
+            for (let i = 0; i < burst; i++) {
               const ang = Math.random() * Math.PI * 2;
               const spd = 2 + Math.random() * 4;
               sparks.push({
@@ -382,7 +508,8 @@ export function ListeningExperience({
         const downbeat = beatIndex % 4 === 0;
         rings.push({ r: 0, life: 0, maxLife: downbeat ? 1.4 : 1.0 });
         if (!reduceMotion && downbeat) {
-          for (let i = 0; i < 16; i++) {
+          const burst = isMobile ? 8 : 16;
+          for (let i = 0; i < burst; i++) {
             const ang = Math.random() * Math.PI * 2;
             const spd = 2 + Math.random() * 4;
             sparks.push({
@@ -400,21 +527,28 @@ export function ListeningExperience({
         }
       }
 
-      // 1) Base wash — dark, faintly tinted.
+      // 1) Base wash — clear, then lay a translucent dark veil so the blurred
+      //    media backdrop behind the canvas stays faintly visible.
       ctx.globalCompositeOperation = "source-over";
+      ctx.clearRect(0, 0, w, h);
       const base = ctx.createLinearGradient(0, 0, 0, h);
-      base.addColorStop(0, `rgba(6,6,12,0.92)`);
-      base.addColorStop(1, `rgba(2,2,6,0.96)`);
+      base.addColorStop(0, `rgba(6,6,12,0.42)`);
+      base.addColorStop(1, `rgba(2,2,6,0.54)`);
       ctx.fillStyle = base;
       ctx.fillRect(0, 0, w, h);
 
       // 2) Aurora blobs — large soft radial gradients drifting (screen blend).
       ctx.globalCompositeOperation = "screen";
-      const blobs = [
-        { c: P, ph: 0 },
-        { c: A, ph: 2.1 },
-        { c: P, ph: 4.2 },
-      ];
+      const blobs = isMobile
+        ? [
+            { c: P, ph: 0 },
+            { c: A, ph: 2.1 },
+          ]
+        : [
+            { c: P, ph: 0 },
+            { c: A, ph: 2.1 },
+            { c: P, ph: 4.2 },
+          ];
       blobs.forEach((b, i) => {
         const bx = cx + Math.cos(t * 0.25 + b.ph) * w * 0.28;
         const by = cy + Math.sin(t * 0.31 + b.ph * 1.3) * h * 0.26;
@@ -429,7 +563,7 @@ export function ListeningExperience({
 
       // 3) Hyperspace warp lines from center.
       if (!reduceMotion) {
-        const spokes = 64;
+        const spokes = isMobile ? 30 : 64;
         const maxLen = Math.hypot(cx, cy);
         ctx.lineCap = "round";
         for (let i = 0; i < spokes; i++) {
@@ -456,7 +590,7 @@ export function ListeningExperience({
       // 4) Shockwave rings.
       for (let i = rings.length - 1; i >= 0; i--) {
         const r = rings[i];
-        r.life += 1 / 60;
+        r.life += dt;
         const p = r.life / r.maxLife;
         if (p >= 1) {
           rings.splice(i, 1);
@@ -495,7 +629,7 @@ export function ListeningExperience({
 
       // 5b) Circular frequency spectrum hugging the artist avatar.
       if (an && fr && audioActive) {
-        const bars = 80;
+        const bars = isMobile ? 40 : 80;
         const n = fr.length;
         const baseR = 104; // just outside the 176px avatar circle
         ctx.globalCompositeOperation = "lighter";
@@ -522,11 +656,11 @@ export function ListeningExperience({
       // 6) Sparks.
       for (let i = sparks.length - 1; i >= 0; i--) {
         const s = sparks[i];
-        s.life += 1 / 60 / s.maxLife;
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vx *= 0.99;
-        s.vy = s.vy * 0.99 - 0.01; // slight upward drift
+        s.life += dt / s.maxLife;
+        s.x += s.vx * dtScale;
+        s.y += s.vy * dtScale;
+        s.vx *= Math.pow(0.99, dtScale);
+        s.vy = s.vy * Math.pow(0.99, dtScale) - 0.01 * dtScale; // slight upward drift
         if (s.life >= 1 || s.x < -20 || s.x > w + 20 || s.y < -20) {
           // Recycle ambient sparks, drop burst sparks.
           if (i < sparkCount) {
@@ -552,7 +686,7 @@ export function ListeningExperience({
       ctx.globalCompositeOperation = "source-over";
       const vig = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.2, cx, cy, Math.max(w, h) * 0.75);
       vig.addColorStop(0, "rgba(0,0,0,0)");
-      vig.addColorStop(1, "rgba(0,0,0,0.55)");
+      vig.addColorStop(1, "rgba(0,0,0,0.4)");
       ctx.fillStyle = vig;
       ctx.fillRect(0, 0, w, h);
 
@@ -572,7 +706,7 @@ export function ListeningExperience({
       {active && (
         <motion.div
           key="listening-experience"
-          className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden cursor-pointer select-none"
+          className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden cursor-pointer select-none bg-[#05060a]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 0.45 } }}
@@ -581,6 +715,57 @@ export function ListeningExperience({
           role="button"
           aria-label="Cerrar experiencia de escucha"
         >
+          {/* Blurred media backdrop: the loop video stays playing as the base
+              layer and gallery images fade in/out over it, so the video keeps
+              showing through without breaking the animation style. */}
+          {(videoUrl || galleryImages.length > 0) && (
+            <div className="absolute inset-0 overflow-hidden">
+              {videoUrl && (
+                <video
+                  src={videoUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover"
+                  style={{
+                    opacity: 0.72,
+                    transform: "scale(1.1)",
+                    filter: `blur(${isMobileLayout ? 10 : 16}px)`,
+                  }}
+                />
+              )}
+              {galleryImages.length > 0 && (
+                <AnimatePresence>
+                  {galleryVisible && (
+                    <motion.img
+                      key={bgIndex}
+                      src={galleryImages[bgIndex % galleryImages.length]}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ filter: `blur(${isMobileLayout ? 14 : 24}px)` }}
+                      initial={{ opacity: 0, scale: 1.05 }}
+                      animate={{ opacity: 0.42, scale: 1.13 }}
+                      exit={{ opacity: 0 }}
+                      transition={{
+                        opacity: { duration: 1.5, ease: "easeInOut" },
+                        scale: { duration: 6, ease: "linear" },
+                      }}
+                    />
+                  )}
+                </AnimatePresence>
+              )}
+              {/* Dark veil keeps the neon visuals readable over the media. */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "radial-gradient(circle at 50% 45%, rgba(4,4,10,0.18), rgba(2,2,6,0.7))",
+                }}
+              />
+            </div>
+          )}
+
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
           {/* Center content */}

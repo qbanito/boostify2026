@@ -6407,6 +6407,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       accent={colors.hexAccent}
       artistName={(artist as any)?.artistName || artist?.name || 'Artist'}
       artistImageUrl={artist?.profileImage}
+      videoUrl={artist?.loopVideoUrl}
+      pgId={artist?.pgId}
+      artistId={artistId}
     />
     <DragDropContext onDragEnd={handleDragEnd}>
     <div
