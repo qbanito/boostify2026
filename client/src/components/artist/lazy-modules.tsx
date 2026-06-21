@@ -92,6 +92,27 @@ export const WhatsAppCommandCenter = withLazy(
     "WhatsAppCommandCenter",
   ),
 );
+export const TelegramCommandCenter = withLazy(
+  "telegram-command-center",
+  named(
+    () => import("./telegram-command-center/TelegramCommandCenter"),
+    "TelegramCommandCenter",
+  ),
+);
+export const RedditIntelligenceCenter = withLazy(
+  "reddit-intelligence-center",
+  named(
+    () => import("./reddit-intelligence-center/RedditIntelligenceCenter"),
+    "RedditIntelligenceCenter",
+  ),
+);
+export const DiscordFanNation = withLazy(
+  "discord-fan-nation",
+  named(
+    () => import("./discord-fan-nation/DiscordFanNation"),
+    "DiscordFanNation",
+  ),
+);
 export const ArtistPromoClipsModule = withLazy("promo-clips", () =>
   import("./promo-clips/ArtistPromoClipsModule"),
 );

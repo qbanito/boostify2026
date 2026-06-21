@@ -1,0 +1,16 @@
+{
+  "name": "boostify-whatsapp-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenWA gateway that implements the exact REST contract Boostify's openwa.adapter.ts expects (real WhatsApp number via QR).",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@open-wa/wa-automate": "^4.79.0",
+    "axios": "^1.7.7",
+    "express": "^4.21.0"
+  }
+}

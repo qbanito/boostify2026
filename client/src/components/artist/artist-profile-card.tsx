@@ -32,7 +32,8 @@ import {
   HermesAgentPanel, AgentGatewayPanel, AgentConsole, HologramProjectPanel, RenaissanceStudioSection,
   ObservationEnginePanel, DeepBriefPanel, EmotionalStudioPanel, ArtistPromoClipsModule, AIVideoStudio,
   AdsCampaignManager, GammaPresentationsModule, KaraokeModule, KaraokePlayer, LyricsVideoModule,
-  ConcertCommandCenter, BoostifyLiveStage, WhatsAppCommandCenter,
+  ConcertCommandCenter, BoostifyLiveStage, WhatsAppCommandCenter, TelegramCommandCenter,
+  RedditIntelligenceCenter, DiscordFanNation,
 } from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
@@ -2638,6 +2639,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'electronic-press-kit': { label: 'Business', color: '#f97316' },
     'my-universe':          { label: 'Content',   color: '#6366f1' },
     'whatsapp-command-center': { label: 'Community', color: '#25d366' },
+    'telegram-command-center': { label: 'Community', color: '#229ED9' },
+    'reddit-intelligence-center': { label: 'Intelligence', color: '#FF4500' },
+    'discord-fan-nation': { label: 'Community', color: '#5865F2' },
   };
 
   const allSections = {
@@ -2686,6 +2690,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'avatar-talk': { name: 'Avatar Talk', icon: Bot, isOwnerOnly: false },
     'talk-to-me': { name: 'Talk To Me', icon: MessageCircle, isOwnerOnly: false },
     'whatsapp-command-center': { name: 'WhatsApp Command Center', icon: MessageCircle, isOwnerOnly: true },
+    'telegram-command-center': { name: 'Telegram Command Center', icon: Send, isOwnerOnly: true },
+    'reddit-intelligence-center': { name: 'Reddit Intelligence Center', icon: Flame, isOwnerOnly: true },
+    'discord-fan-nation': { name: 'Discord Fan Nation', icon: MessageCircle, isOwnerOnly: true },
     'my-universe': { name: 'My Universe', icon: Globe, isOwnerOnly: false },
     'vinyl-records': { name: 'Vinyl Records', icon: Disc3, isOwnerOnly: false },
     'vinyl-editions': { name: 'Vinyl Tokens', icon: Disc3, isOwnerOnly: true },
@@ -2729,7 +2736,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2832,6 +2839,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'avatar-talk': false,
     'talk-to-me': false,
     'whatsapp-command-center': false,
+    'telegram-command-center': false,
+    'reddit-intelligence-center': false,
+    'discord-fan-nation': false,
     'hermes-agent': false,
     'vinyl-records': false,
     'vinyl-editions': false,
@@ -10637,6 +10647,30 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       } else if (sectionId === 'whatsapp-command-center' && isOwnProfile) {
                         sectionElement = (
                           <WhatsAppCommandCenter
+                            artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistImageUrl={artist?.profileImage || userProfile?.profileImage}
+                          />
+                        );
+                      } else if (sectionId === 'telegram-command-center' && isOwnProfile) {
+                        sectionElement = (
+                          <TelegramCommandCenter
+                            artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistImageUrl={artist?.profileImage || userProfile?.profileImage}
+                          />
+                        );
+                      } else if (sectionId === 'reddit-intelligence-center' && isOwnProfile) {
+                        sectionElement = (
+                          <RedditIntelligenceCenter
+                            artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistImageUrl={artist?.profileImage || userProfile?.profileImage}
+                          />
+                        );
+                      } else if (sectionId === 'discord-fan-nation' && isOwnProfile) {
+                        sectionElement = (
+                          <DiscordFanNation
                             artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
                             artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
                             artistImageUrl={artist?.profileImage || userProfile?.profileImage}

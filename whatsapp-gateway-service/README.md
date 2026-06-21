@@ -91,33 +91,49 @@ map them in a thin proxy or adjust `OpenWaAdapter` — that class is the only th
    ```bash
    OPENWA_BASE_URL=http://localhost:8002   # empty = simulation mode
    OPENWA_API_KEY=<a-strong-shared-secret>
-   BOOSTIFY_API_URL=http://localhost:3000
+   BOOSTIFY_API_URL=http://localhost:5001
    # Reused from existing config: OPENAI_API_KEY, GEMINI_API_KEY, FIREBASE_*,
    # BTF_TOKEN_CONTRACT, STRIPE_SECRET_KEY
    ```
 
-2. **Run the gateway** (Docker):
+   > The gateway in this folder (`server.js`) already implements the exact REST
+   > contract above — no proxy/mapping needed. It connects a **real** number.
+
+2. **Run the gateway.** Two options — pick one.
+
+   **A) Node (simplest on macOS — no Docker):**
 
    ```bash
-   OPENWA_API_KEY=... BOOSTIFY_API_URL=http://localhost:3000 \
-     docker compose -f whatsapp-gateway-service/docker-compose.yml up -d
+   cd whatsapp-gateway-service
+   npm install
+   OPENWA_API_KEY="<same-secret-as-.env>" \
+   BOOSTIFY_API_URL="http://localhost:5001" \
+     npm start
    ```
 
-   Or with Node (any OpenWA build that satisfies the contract above), e.g.:
+   First run downloads a headless Chromium (~1 min). Leave it running.
+
+   **B) Docker:**
 
    ```bash
-   npx @open-wa/wa-automate --api-host 0.0.0.0 --api-port 8002 \
-     --key "$OPENWA_API_KEY" \
-     --webhook "$BOOSTIFY_API_URL/api/whatsapp/webhook" --webhook-secret "$OPENWA_API_KEY"
+   OPENWA_API_KEY="<same-secret>" BOOSTIFY_API_URL="http://host.docker.internal:5001" \
+     docker compose -f whatsapp-gateway-service/docker-compose.yml up -d --build
    ```
+
+   > ⚠️ `OPENWA_API_KEY` here MUST be **identical** to the one in Boostify's `.env`
+   > (it's the shared secret for both the API header and the inbound webhook).
 
 3. **Deploy Firestore rules**: `firebase deploy --only firestore:rules`.
 
-4. **Start Boostify** (`npm run dev`). Open an artist profile you own → the
-   **WhatsApp Command Center** card appears under the Artist Command Engine.
+4. **Restart Boostify** (`npm run dev`) so it picks up `OPENWA_BASE_URL`. On boot the
+   server log should say `using live OpenWA gateway at http://localhost:8002` (NOT
+   "SIMULATION mode"). Open an artist profile **you own** → enable the **WhatsApp
+   Command Center** module in *Customize Layout*.
 
-5. **Connect** → tab *Connect* → **Connect WhatsApp** → scan the QR. Status flips to
-   🟢 *Conectado* and the other tabs unlock.
+5. **Connect** → tab *Connect* → **Connect WhatsApp** → a real WhatsApp QR appears.
+   On your phone: WhatsApp → **Settings → Linked devices → Link a device** → scan it.
+   Status flips to 🟢 *Conectado*, your number shows, and the other tabs unlock. The
+   linked session is saved in `./_sessions` so you won't re-scan on restart.
 
 ---
 

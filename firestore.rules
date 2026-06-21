@@ -279,6 +279,47 @@ service cloud.firestore {
     match /artists/{artistId}/aiCommands/{commandId} { allow read, write: if false; }
     match /artists/{artistId}/whatsappSales/{saleId} { allow read, write: if false; }
     match /artists/{artistId}/whatsappAuditLog/{logId} { allow read, write: if false; }
+
+    // ── Telegram Artist Command Center ───────────────────────────────────────
+    // All Telegram data lives under artists/{artistId}/telegram* subcollections
+    // and is ONLY ever read/written by the Boostify backend via the Admin SDK
+    // (which bypasses these rules). Direct client access is denied so bot
+    // tokens, subscribers and messages can never be touched from the browser.
+    // Routes: /api/telegram/*.
+    match /artists/{artistId}/telegramBots/{botId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramUsers/{userId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramMessages/{messageId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramCampaigns/{campaignId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramCommunities/{communityId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramAICommands/{commandId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramSales/{saleId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramAuditLog/{logId} { allow read, write: if false; }
+
+    // Reddit Artist Intelligence Center — READ-ONLY market intelligence written
+    // ONLY by the Boostify backend (Admin SDK). No tokens are stored (app-level
+    // OAuth), but config/intel/reports are denied to direct client access so
+    // strategy data and audit trails stay server-authoritative. Routes: /api/reddit/*.
+    match /artists/{artistId}/redditConfig/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/redditIntel/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/redditReports/{reportId} { allow read, write: if false; }
+    match /artists/{artistId}/redditAuditLog/{logId} { allow read, write: if false; }
+
+    // Discord Fan Nation — community hub written ONLY by the Boostify backend
+    // (Admin SDK). Per-artist OAuth tokens are AES-256-GCM encrypted; bot token
+    // is app-level and never stored here. All client access denied so member
+    // data, gating rules and audit trails stay server-authoritative.
+    // Routes: /api/discord/*.
+    match /artists/{artistId}/discordGuilds/{guildId} { allow read, write: if false; }
+    match /artists/{artistId}/discordConfig/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordChannels/{channelId} { allow read, write: if false; }
+    match /artists/{artistId}/discordRoles/{roleId} { allow read, write: if false; }
+    match /artists/{artistId}/discordMembers/{memberId} { allow read, write: if false; }
+    match /artists/{artistId}/discordCampaigns/{campaignId} { allow read, write: if false; }
+    match /artists/{artistId}/discordEvents/{eventId} { allow read, write: if false; }
+    match /artists/{artistId}/discordRewards/{rewardId} { allow read, write: if false; }
+    match /artists/{artistId}/discordAICommands/{cmdId} { allow read, write: if false; }
+    match /artists/{artistId}/discordModeration/{modId} { allow read, write: if false; }
+    match /artists/{artistId}/discordAuditLog/{logId} { allow read, write: if false; }
     
     match /{document=**} {
       allow read: if true;
