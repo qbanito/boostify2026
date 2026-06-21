@@ -167,6 +167,7 @@ import { getPageModeConfig, getSectionLabel, getWidgetLabel, getDefaultVisibilit
 import { useAudioPlayer, type AudioTrack, getAutoplayPreference } from "../../contexts/audio-player-context";
 import { SongCoverGenerateDialog } from "./SongCoverGenerateDialog";
 import { ProfileSectionErrorBoundary } from "./profile-section-error-boundary";
+import { ListeningExperience } from "./ListeningExperience";
 import LanguageSwitcher from "./LanguageSwitcher";
 import useModuleAccess from "../../hooks/use-module-access";
 import { getModule } from "../../../../shared/module-catalog";
@@ -6401,6 +6402,11 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
   return (
     <>
+    <ListeningExperience
+      primary={colors.hexPrimary}
+      accent={colors.hexAccent}
+      artistName={(artist as any)?.artistName || artist?.name || 'Artist'}
+    />
     <DragDropContext onDragEnd={handleDragEnd}>
     <div
       className={`min-h-screen text-white transition-colors duration-500 overflow-x-hidden ${colors.bgGradient}${selectedFont !== 'default' && !isPhotoHarmony ? ' artist-profile-font-scope' : ''}`}
