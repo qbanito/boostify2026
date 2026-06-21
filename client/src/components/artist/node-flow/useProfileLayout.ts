@@ -66,6 +66,7 @@ const DEFAULT_VISIBILITY: Record<string, boolean> = {
   'agent-gateway':      false,
   'hologram':           false,
   'talk-to-me':         false,
+  'whatsapp-command-center': false,
   'ads-campaigns':      false,
   'gamma-presentations': false,
   'renaissance-studio': false,

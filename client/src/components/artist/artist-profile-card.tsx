@@ -32,7 +32,7 @@ import {
   HermesAgentPanel, AgentGatewayPanel, AgentConsole, HologramProjectPanel, RenaissanceStudioSection,
   ObservationEnginePanel, DeepBriefPanel, EmotionalStudioPanel, ArtistPromoClipsModule, AIVideoStudio,
   AdsCampaignManager, GammaPresentationsModule, KaraokeModule, KaraokePlayer, LyricsVideoModule,
-  ConcertCommandCenter, BoostifyLiveStage,
+  ConcertCommandCenter, BoostifyLiveStage, WhatsAppCommandCenter,
 } from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
@@ -2637,6 +2637,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'artist-domain':      { label: 'Business',   color: '#f97316' },
     'electronic-press-kit': { label: 'Business', color: '#f97316' },
     'my-universe':          { label: 'Content',   color: '#6366f1' },
+    'whatsapp-command-center': { label: 'Community', color: '#25d366' },
   };
 
   const allSections = {
@@ -2684,6 +2685,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'lyrics-video': { name: 'Lyrics Video', icon: Clapperboard, isOwnerOnly: true },
     'avatar-talk': { name: 'Avatar Talk', icon: Bot, isOwnerOnly: false },
     'talk-to-me': { name: 'Talk To Me', icon: MessageCircle, isOwnerOnly: false },
+    'whatsapp-command-center': { name: 'WhatsApp Command Center', icon: MessageCircle, isOwnerOnly: true },
     'my-universe': { name: 'My Universe', icon: Globe, isOwnerOnly: false },
     'vinyl-records': { name: 'Vinyl Records', icon: Disc3, isOwnerOnly: false },
     'vinyl-editions': { name: 'Vinyl Tokens', icon: Disc3, isOwnerOnly: true },
@@ -2727,7 +2729,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2829,6 +2831,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'lyrics-video': false,
     'avatar-talk': false,
     'talk-to-me': false,
+    'whatsapp-command-center': false,
     'hermes-agent': false,
     'vinyl-records': false,
     'vinyl-editions': false,
@@ -10629,6 +10632,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             colors={colors}
                             isExpanded={!!sectionExpanded[sectionId]}
                             onToggleExpand={() => setSectionExpanded(prev => ({ ...prev, [sectionId]: !prev[sectionId] }))}
+                          />
+                        );
+                      } else if (sectionId === 'whatsapp-command-center' && isOwnProfile) {
+                        sectionElement = (
+                          <WhatsAppCommandCenter
+                            artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistImageUrl={artist?.profileImage || userProfile?.profileImage}
                           />
                         );
                       } else if (sectionId === 'amazon-picks') {

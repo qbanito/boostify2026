@@ -266,6 +266,20 @@ service cloud.firestore {
       );
     }
     
+    // ── WhatsApp Artist Command Center ───────────────────────────────────────
+    // All WhatsApp data lives under artists/{artistId}/whatsapp* subcollections
+    // and is ONLY ever read/written by the Boostify backend via the Admin SDK
+    // (which bypasses these rules). Direct client access is denied so OpenWA
+    // sessions, tokens, contacts and messages can never be touched from the
+    // browser. Routes: /api/whatsapp/*.
+    match /artists/{artistId}/whatsappSessions/{sessionId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappContacts/{contactId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappMessages/{messageId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappCampaigns/{campaignId} { allow read, write: if false; }
+    match /artists/{artistId}/aiCommands/{commandId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappSales/{saleId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappAuditLog/{logId} { allow read, write: if false; }
+    
     match /{document=**} {
       allow read: if true;
       allow write: if isAuthenticated();

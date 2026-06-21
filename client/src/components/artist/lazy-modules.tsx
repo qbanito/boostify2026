@@ -85,6 +85,13 @@ export const TalkToMeModule = withLazy(
   "talk-to-me",
   named(() => import("../artist-profile/talk-to-me-module"), "TalkToMeModule"),
 );
+export const WhatsAppCommandCenter = withLazy(
+  "whatsapp-command-center",
+  named(
+    () => import("./whatsapp-command-center/WhatsAppCommandCenter"),
+    "WhatsAppCommandCenter",
+  ),
+);
 export const ArtistPromoClipsModule = withLazy("promo-clips", () =>
   import("./promo-clips/ArtistPromoClipsModule"),
 );

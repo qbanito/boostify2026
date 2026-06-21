@@ -246,6 +246,7 @@ import influencerContentRouter from './routes/influencer-content'; // Influencer
 import { startInfluencerContentScheduler } from './services/influencer-content-scheduler'; // Influencer auto-generation scheduler
 import promoClipsRouter from './routes/promo-clips'; // Promo Clips — Song-to-Visual Lipsync Engine (FAL OmniHuman + Sync-3)
 import artistCommandRouter from './routes/artist-command'; // Artist Command Engine — voice/text commands → AI module orchestration
+import whatsappRouter from './routes/whatsapp'; // WhatsApp Artist Command Center — OpenWA gateway, fans, campaigns, AI agent
 import adsCampaignsRouter from './routes/ads-campaigns'; // Ads Campaign Manager — Facebook, Instagram, TikTok paid ads
 import contentEngineRouter from './routes/content-engine'; // Artist Content Engine - unified assets + orchestration plans
 import gammaPresentationsRouter from './routes/gamma-presentations'; // Gamma AI Presentations — slide decks from artist context
@@ -802,6 +803,10 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Artist Command Engine — "Hey <artist>, crea una canción…" → intent router + module orchestrator
   app.use('/api/artist-command', artistCommandRouter);
   console.log('🎙️ Artist Command Engine registered at /api/artist-command');
+
+  // WhatsApp Artist Command Center — OpenWA gateway (sessions, fans, campaigns, tickets, merch, AI agent)
+  app.use('/api/whatsapp', whatsappRouter);
+  console.log('💬 WhatsApp Artist Command Center registered at /api/whatsapp');
 
   // Ads Campaign Manager — Multi-platform paid ads (Facebook, Instagram, TikTok)
   app.use('/api/ads-campaigns', adsCampaignsRouter);

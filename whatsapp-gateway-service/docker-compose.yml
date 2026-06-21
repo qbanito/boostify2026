@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# whatsapp-gateway-service — OpenWA gateway for Boostify Music
+#
+# Runs OpenWA (open-wa / wa-automate) as a SEPARATE service. Boostify never
+# imports the OpenWA core; it only talks to this container over the REST
+# contract documented in README.md, through server/services/whatsapp-gateway/
+# openwa.adapter.ts.
+#
+# ⚠️ OpenWA is NOT the official Meta WhatsApp API. Use for support / concierge /
+# controlled automations only — never for spam.
+#
+# Start:   docker compose -f whatsapp-gateway-service/docker-compose.yml up -d
+# Logs:    docker compose -f whatsapp-gateway-service/docker-compose.yml logs -f
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  whatsapp-gateway:
+    image: openwa/wa-automate:latest
+    container_name: boostify-whatsapp-gateway
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      # Shared secret — MUST match OPENWA_API_KEY in Boostify's .env
+      - PORT=8002
+    # The wa-automate easy-api server. Adjust flags to your build of the gateway.
+    # --api-host 0.0.0.0 exposes the REST API; --key protects it with OPENWA_API_KEY;
+    # --webhook posts inbound messages back to Boostify.
+    command: >
+      --api-host 0.0.0.0
+      --api-port 8002
+      --key ${OPENWA_API_KEY}
+      --webhook ${BOOSTIFY_API_URL}/api/whatsapp/webhook
+      --webhook-secret ${OPENWA_API_KEY}
+      --session-data-only
+      --skip-broken-methods-check
+    volumes:
+      # Persist the linked-device session so reconnects don't require re-scanning.
+      - ./_sessions:/sessions
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8002/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
