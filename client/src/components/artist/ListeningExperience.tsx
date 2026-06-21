@@ -23,9 +23,11 @@ interface ListeningExperienceProps {
   /** Artist brand accent color (hex). */
   accent?: string;
   artistName?: string;
+  /** Circular artist image shown at the center. */
+  artistImageUrl?: string;
   /** Seconds of playback before the experience triggers. */
   triggerSeconds?: number;
-  /** Auto-dismiss after this many ms (0 = never). */
+  /** Auto-dismiss after this many ms (0 = stays until the user taps). */
   autoDismissMs?: number;
 }
 
@@ -47,12 +49,27 @@ function fmtClock(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Route remote audio through the same-origin proxy so we can tap it with
+ * Web Audio (cross-origin Firebase/CDN audio without CORS would taint the
+ * AnalyserNode and produce silence/zeros). The proxy adds ACAO:* + Content-Length.
+ */
+function proxiedAudio(url?: string): string {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  if (/^https?:\/\//i.test(url)) {
+    return `/api/proxy/firebase-file?url=${encodeURIComponent(url)}`;
+  }
+  return url; // relative / same-origin
+}
+
 export function ListeningExperience({
   primary = "#7C3AED",
   accent = "#22D3EE",
   artistName = "",
+  artistImageUrl,
   triggerSeconds = 60,
-  autoDismissMs = 11000,
+  autoDismissMs = 0,
 }: ListeningExperienceProps) {
   const player = useAudioPlayer();
   const { currentTrack, isPlaying, progress, duration } = player;
@@ -62,7 +79,20 @@ export function ListeningExperience({
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  // ── Real-time audio analysis (silent proxied copy of the track) ──────────
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const freqRef = useRef<Uint8Array | null>(null);
+  const energyRef = useRef({ bass: 0, mid: 0, treble: 0, overall: 0 });
+  const beatAvgRef = useRef(0);
+  const lastAudioBeatRef = useRef(0);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const audioUrl = currentTrack?.audioUrl || "";
 
   // Keep latest colors in refs so the animation loop doesn't restart on change.
   const primaryRgb = useMemo(() => hexToRgb(primary), [primary]);
@@ -98,11 +128,13 @@ export function ListeningExperience({
 
   // Hide when the song changes.
   useEffect(() => {
-    setActive(false);
-    clearDismissTimer();
-  }, [trackId]);
+    if (autoDismissMs > 0) {
+      setActive(false);
+      clearDismissTimer();
+    }
+  }, [trackId, autoDismissMs]);
 
-  // Arm auto-dismiss whenever it becomes active.
+  // Arm auto-dismiss whenever it becomes active (only when enabled).
   useEffect(() => {
     if (!active) return;
     if (autoDismissMs > 0) {
@@ -120,6 +152,83 @@ export function ListeningExperience({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active]);
+
+  // ── Real audio frequency analysis ────────────────────────────────────────
+  // Loads a SILENT, proxied copy of the playing track through Web Audio so we
+  // can read live frequency data without ever touching (or muting) the main
+  // global player. Kept loosely in sync with the player's position.
+  useEffect(() => {
+    if (!active || !audioUrl) return;
+    let cancelled = false;
+    let el: HTMLAudioElement | null = null;
+    let ctx: AudioContext | null = null;
+    try {
+      const AC: typeof AudioContext | undefined =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      ctx = new AC();
+      el = new Audio();
+      el.crossOrigin = "anonymous";
+      el.preload = "auto";
+      el.src = proxiedAudio(audioUrl);
+
+      const source = ctx.createMediaElementSource(el);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.82;
+      // Route through a zero-gain node so the graph stays live but inaudible
+      // (the main player provides the actual sound).
+      const silent = ctx.createGain();
+      silent.gain.value = 0;
+      source.connect(analyser);
+      analyser.connect(silent);
+      silent.connect(ctx.destination);
+
+      analyserRef.current = analyser;
+      freqRef.current = new Uint8Array(analyser.frequencyBinCount);
+      audioCtxRef.current = ctx;
+      audioElRef.current = el;
+
+      const startPlayback = async () => {
+        if (cancelled || !el || !ctx) return;
+        try {
+          if (ctx.state === "suspended") await ctx.resume();
+        } catch {}
+        try {
+          const target = progressRef.current || 0;
+          if (target > 0 && Number.isFinite(el.duration) && target < el.duration) {
+            el.currentTime = target;
+          }
+        } catch {}
+        try {
+          await el.play();
+        } catch {}
+      };
+      el.addEventListener("canplay", startPlayback, { once: true });
+    } catch {
+      // Visuals fall back to the synthetic beat envelope.
+    }
+
+    return () => {
+      cancelled = true;
+      analyserRef.current = null;
+      freqRef.current = null;
+      audioElRef.current = null;
+      audioCtxRef.current = null;
+      energyRef.current = { bass: 0, mid: 0, treble: 0, overall: 0 };
+      beatAvgRef.current = 0;
+      try {
+        if (el) {
+          el.pause();
+          el.src = "";
+          el.load?.();
+        }
+      } catch {}
+      try {
+        ctx?.close();
+      } catch {}
+    };
+  }, [active, audioUrl]);
 
   // ── Canvas animation ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -192,16 +301,86 @@ export function ListeningExperience({
       const cx = w / 2;
       const cy = h / 2;
 
-      // Beat envelope: sharp decaying pulse on each beat.
+      // ── Read live audio frequency data (if the analyser is ready) ─────────
+      const an = analyserRef.current;
+      const fr = freqRef.current;
+      let audioActive = false;
+      if (an && fr) {
+        an.getByteFrequencyData(fr as Uint8Array<ArrayBuffer>);
+        const n = fr.length;
+        const bassEnd = Math.max(2, Math.floor(n * 0.1));
+        const midEnd = Math.floor(n * 0.45);
+        let bs = 0, ms = 0, ts = 0, all = 0;
+        for (let i = 0; i < n; i++) {
+          const v = fr[i];
+          all += v;
+          if (i < bassEnd) bs += v;
+          else if (i < midEnd) ms += v;
+          else ts += v;
+        }
+        const bass = bs / (bassEnd * 255);
+        const mid = ms / ((midEnd - bassEnd) * 255);
+        const treble = ts / ((n - midEnd) * 255);
+        const overall = all / (n * 255);
+        if (overall > 0.0015) {
+          audioActive = true;
+          const e = energyRef.current;
+          e.bass = e.bass * 0.65 + bass * 0.35;
+          e.mid = e.mid * 0.65 + mid * 0.35;
+          e.treble = e.treble * 0.65 + treble * 0.35;
+          e.overall = e.overall * 0.65 + overall * 0.35;
+        }
+      }
+
+      // Keep the silent analysis copy aligned with the real player position.
+      const ael = audioElRef.current;
+      if (ael && !ael.paused && Number.isFinite(ael.duration)) {
+        const drift = Math.abs(ael.currentTime - progressRef.current);
+        if (drift > 0.6 && progressRef.current < ael.duration) {
+          try {
+            ael.currentTime = progressRef.current;
+          } catch {}
+        }
+      }
+
+      // Beat envelope: real bass energy when available, else a synthetic BPM pulse.
       const beatPos = (t * BPM) / 60;
       const beatIndex = Math.floor(beatPos);
       const beatFrac = beatPos - beatIndex;
-      const pulse = Math.pow(1 - beatFrac, 3); // 1 -> 0 each beat
-      const downbeat = beatIndex % 4 === 0;
-      if (beatIndex !== lastBeat) {
+      const syntheticPulse = Math.pow(1 - beatFrac, 3);
+      const e = energyRef.current;
+      const pulse = audioActive ? Math.min(1, e.bass * 1.7) : syntheticPulse;
+
+      if (audioActive) {
+        // Onset detection on the bass band → shockwave rings + spark bursts.
+        beatAvgRef.current = beatAvgRef.current * 0.92 + e.bass * 0.08;
+        const since = t - lastAudioBeatRef.current;
+        if (e.bass > beatAvgRef.current * 1.3 && e.bass > 0.26 && since > 0.16) {
+          lastAudioBeatRef.current = t;
+          rings.push({ r: 0, life: 0, maxLife: e.bass > 0.5 ? 1.4 : 1.0 });
+          if (!reduceMotion && e.bass > 0.42) {
+            for (let i = 0; i < 16; i++) {
+              const ang = Math.random() * Math.PI * 2;
+              const spd = 2 + Math.random() * 4;
+              sparks.push({
+                x: cx,
+                y: cy,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                life: 0,
+                maxLife: 0.9 + Math.random() * 0.6,
+                size: 1 + Math.random() * 2,
+                hueMix: Math.random(),
+              });
+              if (sparks.length > 220) sparks.shift();
+            }
+          }
+        }
+      } else if (beatIndex !== lastBeat) {
+        // Fallback: synthetic metronome.
         lastBeat = beatIndex;
+        const downbeat = beatIndex % 4 === 0;
         rings.push({ r: 0, life: 0, maxLife: downbeat ? 1.4 : 1.0 });
-        // Emit a burst of sparks from center on downbeats.
         if (!reduceMotion && downbeat) {
           for (let i = 0; i < 16; i++) {
             const ang = Math.random() * Math.PI * 2;
@@ -293,16 +472,52 @@ export function ListeningExperience({
         ctx.stroke();
       }
 
-      // 5) Central pulsing core.
+      // 5) Central glow halo behind the artist avatar.
       const coreR = Math.min(w, h) * (0.05 + pulse * 0.035);
-      const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 4);
-      core.addColorStop(0, `rgba(255,255,255,${0.5 + pulse * 0.4})`);
-      core.addColorStop(0.25, `rgba(${A[0]},${A[1]},${A[2]},0.55)`);
-      core.addColorStop(1, `rgba(${A[0]},${A[1]},${A[2]},0)`);
+      const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 5);
+      core.addColorStop(0, `rgba(${A[0]},${A[1]},${A[2]},${0.28 + pulse * 0.3})`);
+      core.addColorStop(0.4, `rgba(${P[0]},${P[1]},${P[2]},0.18)`);
+      core.addColorStop(1, `rgba(${P[0]},${P[1]},${P[2]},0)`);
       ctx.fillStyle = core;
       ctx.beginPath();
-      ctx.arc(cx, cy, coreR * 4, 0, Math.PI * 2);
+      ctx.arc(cx, cy, coreR * 5, 0, Math.PI * 2);
       ctx.fill();
+
+      // Drive the HTML avatar pulse in sync with the same beat.
+      const av = avatarRef.current;
+      if (av) {
+        const s = 1 + pulse * 0.07 + 0.02 * Math.sin(t * 1.6);
+        av.style.transform = `scale(${s.toFixed(3)})`;
+        av.style.boxShadow = `0 0 ${24 + pulse * 60}px ${Math.round(
+          6 + pulse * 14,
+        )}px rgba(${A[0]},${A[1]},${A[2]},${(0.25 + pulse * 0.45).toFixed(3)})`;
+      }
+
+      // 5b) Circular frequency spectrum hugging the artist avatar.
+      if (an && fr && audioActive) {
+        const bars = 80;
+        const n = fr.length;
+        const baseR = 104; // just outside the 176px avatar circle
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        for (let i = 0; i < bars; i++) {
+          // Mirror the spectrum across the vertical axis for symmetry.
+          const half = i < bars / 2 ? i : bars - 1 - i;
+          const bin = Math.floor((half / (bars / 2)) * (n * 0.62));
+          const v = fr[bin] / 255;
+          const ang = (i / bars) * Math.PI * 2 - Math.PI / 2 + t * 0.05;
+          const r0 = baseR + 4;
+          const r1 = r0 + 6 + v * v * 90;
+          const col = v > 0.55 ? A : P;
+          ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.12 + v * 0.6})`;
+          ctx.lineWidth = 2 + v * 2.5;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+          ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+          ctx.stroke();
+        }
+        ctx.globalCompositeOperation = "source-over";
+      }
 
       // 6) Sparks.
       for (let i = sparks.length - 1; i >= 0; i--) {
@@ -352,9 +567,6 @@ export function ListeningExperience({
     };
   }, [active]);
 
-  const title = currentTrack?.title || "";
-  const subtitle = currentTrack?.artist || artistName || "";
-
   return (
     <AnimatePresence>
       {active && (
@@ -378,48 +590,77 @@ export function ListeningExperience({
             animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.1, ease: "easeOut" }}
           >
+            {/* Circular artist avatar with rotating brand ring, pulsing to the beat */}
+            <div className="relative mb-9 flex items-center justify-center">
+              {/* Rotating conic ring */}
+              <motion.div
+                className="absolute rounded-full"
+                style={{
+                  width: 192,
+                  height: 192,
+                  background: `conic-gradient(from 0deg, ${primary}, ${accent}, ${primary})`,
+                  filter: "blur(2px)",
+                  opacity: 0.85,
+                }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
+              />
+              {/* Avatar (scaled/glowed each frame by the canvas loop) */}
+              <div
+                ref={avatarRef}
+                className="relative h-44 w-44 overflow-hidden rounded-full border border-white/20 bg-black/40 will-change-transform"
+                style={{ transformOrigin: "center" }}
+              >
+                {artistImageUrl ? (
+                  <img
+                    src={artistImageUrl}
+                    alt={artistName}
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                ) : (
+                  <div
+                    className="flex h-full w-full items-center justify-center text-5xl font-light text-white/80"
+                    style={{ background: `linear-gradient(135deg, ${primary}33, ${accent}33)` }}
+                  >
+                    {(artistName || "♪").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                {/* subtle inner sheen */}
+                <div className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/10" />
+              </div>
+            </div>
+
+            {/* Elegant counter */}
             <div
-              className="mb-3 text-[11px] font-semibold uppercase tracking-[0.5em]"
-              style={{ color: accent, textShadow: `0 0 18px ${accent}` }}
+              className="text-[10px] font-medium uppercase tracking-[0.55em]"
+              style={{ color: accent }}
             >
               En vivo
             </div>
-
             <div
-              className="font-mono text-6xl font-black tabular-nums leading-none sm:text-8xl"
+              className="mt-3 font-extralight tabular-nums leading-none"
               style={{
+                fontSize: "clamp(2.75rem, 9vw, 5rem)",
+                letterSpacing: "0.08em",
                 color: "#fff",
-                textShadow: `0 0 30px ${primary}, 0 0 60px ${accent}55`,
+                textShadow: `0 0 26px ${accent}66`,
               }}
             >
               {fmtClock(progress)}
             </div>
-
-            <div
-              className="mt-2 text-[11px] font-medium uppercase tracking-[0.4em] text-white/60"
-            >
-              Escuchando
+            <div className="mt-4 flex items-center gap-3">
+              <span className="h-px w-8" style={{ background: `${accent}66` }} />
+              <span className="text-[10px] font-medium uppercase tracking-[0.45em] text-white/55">
+                Escuchando
+              </span>
+              <span className="h-px w-8" style={{ background: `${accent}66` }} />
             </div>
 
-            {title && (
-              <motion.div
-                className="mt-8 max-w-[90vw]"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.35 }}
-              >
-                <div
-                  className="truncate text-xl font-bold text-white sm:text-3xl"
-                  style={{ textShadow: `0 0 22px ${primary}88` }}
-                >
-                  {title}
-                </div>
-                {subtitle && (
-                  <div className="mt-1 truncate text-sm text-white/65 sm:text-base">
-                    {subtitle}
-                  </div>
-                )}
-              </motion.div>
+            {artistName && (
+              <div className="mt-5 text-sm font-light uppercase tracking-[0.3em] text-white/70">
+                {artistName}
+              </div>
             )}
 
             <motion.div
