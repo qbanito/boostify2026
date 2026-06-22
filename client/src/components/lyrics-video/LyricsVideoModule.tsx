@@ -185,12 +185,12 @@ function useRenderStatus(jobId: number | null, enabled: boolean) {
 const STEPS = ['Configure', 'Preview', 'Render & Export'];
 
 const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
-  <div className="flex items-center gap-2 mb-8">
+  <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8">
     {STEPS.map((label, i) => (
       <React.Fragment key={i}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 shrink-0 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-all ${
               i < current
                 ? 'bg-violet-600 text-white'
                 : i === current
@@ -201,7 +201,9 @@ const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
             {i < current ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
           </div>
           <span
-            className={`text-sm font-medium ${
+            className={`text-xs sm:text-sm font-medium truncate ${
+              i === current ? 'inline' : 'hidden sm:inline'
+            } ${
               i === current ? 'text-white' : i < current ? 'text-violet-400' : 'text-zinc-500'
             }`}
           >
@@ -209,7 +211,7 @@ const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
           </span>
         </div>
         {i < STEPS.length - 1 && (
-          <div className={`flex-1 h-px mx-1 ${i < current ? 'bg-violet-600' : 'bg-zinc-700'}`} />
+          <div className={`flex-1 h-px mx-0.5 sm:mx-1 ${i < current ? 'bg-violet-600' : 'bg-zinc-700'}`} />
         )}
       </React.Fragment>
     ))}
@@ -449,7 +451,7 @@ const Step2Preview: React.FC<Step2Props> = ({
       </div>
 
       {/* Style controls */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {/* Theme */}
         <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700">
           <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">Theme</label>

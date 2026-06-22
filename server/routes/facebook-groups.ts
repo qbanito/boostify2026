@@ -160,7 +160,7 @@ router.delete('/:artistId/groups/:groupId', authenticate, async (req: Request, r
 // ─────────────────────────── CONTENT POOL ───────────────────────────────────
 
 export type PromotableItem = {
-  contentType: 'song' | 'merch' | 'social_post' | 'concert' | 'photo';
+  contentType: 'song' | 'merch' | 'social_post' | 'concert' | 'photo' | 'lyric_video';
   contentId: string;
   title: string;
   subtitle?: string | null;
@@ -298,6 +298,31 @@ export async function aggregatePromotableContent(artistPk: number): Promise<{
     }
   } catch (e: any) { logger.warn('[fb-groups] gallery query:', e?.message); }
 
+  // Lyric videos (rendered) — promote with their YouTube link (or the profile page).
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, song_title, youtube_url, output_url, thumbnail_url, cover_art_url
+       FROM lyrics_video_jobs
+       WHERE artist_id = $1 AND status = 'done'
+         AND (youtube_url IS NOT NULL OR output_url IS NOT NULL)
+       ORDER BY (youtube_url IS NOT NULL) DESC, created_at DESC
+       LIMIT 24`,
+      [artistPk],
+    );
+    for (const r of rows) {
+      // Prefer the YouTube link so the post promotes the video where fans watch + the channel grows.
+      const watchLink = r.youtube_url || r.output_url || (linkBase ? `${linkBase}#lyrics-video` : null);
+      items.push({
+        contentType: 'lyric_video',
+        contentId: String(r.id),
+        title: r.song_title || 'Lyric Video',
+        subtitle: r.youtube_url ? 'Official Lyric Video · YouTube' : 'Official Lyric Video',
+        imageUrl: r.thumbnail_url || r.cover_art_url || null,
+        link: watchLink,
+      });
+    }
+  } catch (e: any) { logger.warn('[fb-groups] lyric videos query:', e?.message); }
+
   return { artistName: u.artist_name || u.username, items };
 }
 
@@ -334,6 +359,7 @@ export async function buildGroupCaption(opts: {
     social_post: 'a social update',
     concert: 'a live concert / event',
     photo: 'an artist photo / moment',
+    lyric_video: 'an official lyric video (watch on YouTube)',
   };
   const sys = `You write short, authentic posts to share inside OPEN Facebook fan/music groups. Rules:
 - Write in ${lang}, ${tone} but genuine tone (no corporate spam, no clickbait).

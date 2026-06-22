@@ -25,6 +25,7 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { isAuthenticated, getUserId } from '../middleware/clerk-auth';
 import { db, FieldValue } from '../firebase';
+import { pool } from '../db';
 
 const router = Router();
 
@@ -36,6 +37,8 @@ const LEDGER_COL = 'live_stage_transactions';
 const FANS_COL = 'live_stage_fans';
 const PAYOUTS_COL = 'live_stage_payouts';
 const PAYMENTS_COL = 'live_stage_payments';
+const EVENTS_COL = 'live_stage_events';
+const TICKETS_COL = 'live_stage_event_tickets';
 
 /* ------------------------------ economy -------------------------------- */
 /** 1 credit = $0.01  →  100 credits = $1.00 */
@@ -43,6 +46,21 @@ export const CREDIT_USD_VALUE = 0.01;
 const ARTIST_SHARE = 0.75;
 const PLATFORM_SHARE = 0.20;
 const REWARD_SHARE = 0.05; // remainder, burn / treasury / reward pool
+
+/* ---------------------- paid live events economy ----------------------- */
+/** Ticketed live events (courses, podcasts, masterclasses): 70% creator / 30% platform. */
+const EVENT_CREATOR_SHARE = 0.70;
+const EVENT_PLATFORM_SHARE = 0.30;
+
+export const EVENT_TYPES = [
+  { id: 'live_course', name: 'Live Course', emoji: '🎓', desc: 'Teach a class live, lesson by lesson' },
+  { id: 'live_podcast', name: 'Live Podcast', emoji: '🎙️', desc: 'Host a live show with your audience' },
+  { id: 'masterclass', name: 'Masterclass', emoji: '✨', desc: 'A premium deep-dive session' },
+  { id: 'workshop', name: 'Workshop', emoji: '🛠️', desc: 'Hands-on, interactive session' },
+  { id: 'qa', name: 'Live Q&A', emoji: '💬', desc: 'Answer your community live' },
+  { id: 'performance', name: 'Exclusive Performance', emoji: '🎤', desc: 'A ticketed live show' },
+] as const;
+const EVENT_TYPE_IDS = new Set(EVENT_TYPES.map((t) => t.id));
 
 /* ----------------------------- gift catalog ---------------------------- */
 interface GiftDef {
@@ -1005,6 +1023,11 @@ router.post('/webhook', async (req: Request, res: Response) => {
             await payRef.set({ status: 'completed', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
           }
         }
+      } else if (session.metadata?.type === 'live_stage_event_ticket') {
+        const ticketId = session.metadata.ticketId;
+        if (ticketId && db) {
+          await settleEventTicket(ticketId);
+        }
       }
     }
   } catch (err: any) {
@@ -1036,6 +1059,52 @@ async function grantCredits(userId: string, credits: number, reason: string, pac
   await writeLedger({ type: 'credit_purchase', senderId: userId, credits, packageId, reason } as any);
 }
 
+/**
+ * Settle a paid event ticket (idempotent): mark it paid, bump the event's
+ * sales counters and pay the creator their 70% share into the artist wallet
+ * (in credits, so the existing KYC payout flow handles cash-out). 30% stays
+ * with the platform.
+ */
+async function settleEventTicket(ticketId: string): Promise<boolean> {
+  const ticketRef = db.collection(TICKETS_COL).doc(ticketId);
+  const snap = await ticketRef.get();
+  if (!snap.exists) return false;
+  const t = snap.data() as any;
+  if (t.status === 'paid') return true; // already settled
+
+  const creatorUsd = Number(t.creatorShareUsd || 0);
+  const creatorCredits = Math.round(creatorUsd * 100); // 1 credit = $0.01
+
+  await ticketRef.set({ status: 'paid', paidAt: FieldValue.serverTimestamp() }, { merge: true });
+
+  // event sales counters
+  if (t.eventId) {
+    await db.collection(EVENTS_COL).doc(String(t.eventId)).set({
+      soldCount: FieldValue.increment(1),
+      revenueUsd: FieldValue.increment(Number(t.amountUsd || 0)),
+      creatorEarnedUsd: FieldValue.increment(creatorUsd),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  // pay the creator
+  if (t.artistId && creatorCredits > 0) {
+    await ensureWallet(String(t.artistId), t.artistName, t.ownerId);
+    await db.collection(WALLETS_COL).doc(String(t.artistId)).set({
+      creditsBalance: FieldValue.increment(creatorCredits),
+      lifetimeCredits: FieldValue.increment(creatorCredits),
+      lifetimeUsd: FieldValue.increment(creatorUsd),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await writeLedger({
+      type: 'event_sale', artistId: String(t.artistId), eventId: t.eventId,
+      senderId: t.buyerId, credits: creatorCredits, usd: creatorUsd,
+      platformUsd: Number(t.platformShareUsd || 0), reason: 'event_ticket',
+    });
+  }
+  return true;
+}
+
 async function writeLedger(entry: Record<string, any>) {
   const id = shortId('tx');
   await db.collection(LEDGER_COL).doc(id).set(clean({ id, ...entry, createdAt: FieldValue.serverTimestamp() }));
@@ -1065,5 +1134,597 @@ async function bumpFan(
     updatedAt: FieldValue.serverTimestamp(),
   }), { merge: true });
 }
+
+/* =======================================================================
+ *  WEBRTC SIGNALING  (real broadcaster → viewer video)
+ *  One-to-many mesh negotiated over HTTP/Firestore polling. The owner is
+ *  the broadcaster (publishes their camera tracks); each viewer opens a
+ *  recv-only RTCPeerConnection. The viewer creates the OFFER, the owner
+ *  answers per viewer. ICE candidates are relayed through the peer doc.
+ *  Subcollection: live_stage_sessions/{id}/rtc_peers/{viewerId}
+ * ===================================================================== */
+
+/** ICE servers (STUN always; TURN if configured) so NAT traversal works. */
+router.get('/rtc/ice-servers', (_req: Request, res: Response) => {
+  const iceServers: any[] = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ];
+  const turnUrl = process.env.LIVE_STAGE_TURN_URL || process.env.TURN_URL;
+  if (turnUrl) {
+    iceServers.push(clean({
+      urls: turnUrl.split(',').map((u) => u.trim()).filter(Boolean),
+      username: process.env.LIVE_STAGE_TURN_USERNAME || process.env.TURN_USERNAME || undefined,
+      credential: process.env.LIVE_STAGE_TURN_CREDENTIAL || process.env.TURN_CREDENTIAL || undefined,
+    }));
+  }
+  res.json({ success: true, iceServers });
+});
+
+async function loadLiveSession(res: Response, sessionId: string) {
+  const ref = db.collection(SESSIONS_COL).doc(sessionId);
+  const snap = await ref.get();
+  if (!snap.exists) { res.status(404).json({ success: false, error: 'not_found' }); return null; }
+  return { ref, data: snap.data() as any };
+}
+
+/** Viewer publishes its SDP offer (creates/refreshes its peer slot). */
+router.post('/sessions/:id/rtc/offer', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const sessionId = String(req.params.id);
+    const loaded = await loadLiveSession(res, sessionId);
+    if (!loaded) return;
+    if (loaded.data.status !== 'live') return res.status(409).json({ success: false, error: 'not_live' });
+
+    const viewerId = String(req.body?.viewerId || '').slice(0, 80);
+    const sdp = req.body?.sdp;
+    if (!viewerId || !sdp || typeof sdp !== 'object') return res.status(400).json({ success: false, error: 'invalid' });
+
+    await loaded.ref.collection('rtc_peers').doc(viewerId).set({
+      viewerId,
+      offer: sdp,
+      answer: null,
+      ownerCandidates: [],
+      viewerCandidates: [],
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: false });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Viewer polls its peer slot for the owner's answer + owner ICE candidates. */
+router.get('/sessions/:id/rtc/peer', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const sessionId = String(req.params.id);
+    const viewerId = String(req.query.viewerId || '').slice(0, 80);
+    if (!viewerId) return res.status(400).json({ success: false, error: 'viewerId required' });
+    const snap = await db.collection(SESSIONS_COL).doc(sessionId).collection('rtc_peers').doc(viewerId).get();
+    if (!snap.exists) return res.json({ success: true, status: 'gone', answer: null, ownerCandidates: [] });
+    const p = snap.data() as any;
+    res.json({ success: true, status: p.status || 'pending', answer: p.answer || null, ownerCandidates: p.ownerCandidates || [] });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Owner polls for viewer peers (offers to answer + their ICE candidates). */
+router.get('/sessions/:id/rtc/peers', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const userId = currentUser(req, res); if (!userId) return;
+    const sessionId = String(req.params.id);
+    const loaded = await loadLiveSession(res, sessionId);
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    const snap = await loaded.ref.collection('rtc_peers').orderBy('createdAt', 'desc').limit(40).get();
+    const peers = snap.docs.map((d) => {
+      const p = d.data() as any;
+      return { viewerId: p.viewerId, offer: p.offer || null, status: p.status || 'pending', viewerCandidates: p.viewerCandidates || [] };
+    });
+    res.json({ success: true, peers });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Owner posts its SDP answer for a specific viewer. */
+router.post('/sessions/:id/rtc/answer', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const userId = currentUser(req, res); if (!userId) return;
+    const sessionId = String(req.params.id);
+    const loaded = await loadLiveSession(res, sessionId);
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    const viewerId = String(req.body?.viewerId || '').slice(0, 80);
+    const sdp = req.body?.sdp;
+    if (!viewerId || !sdp) return res.status(400).json({ success: false, error: 'invalid' });
+    const peerRef = loaded.ref.collection('rtc_peers').doc(viewerId);
+    if (!(await peerRef.get()).exists) return res.status(404).json({ success: false, error: 'peer_gone' });
+    await peerRef.set({ answer: sdp, status: 'answered', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Both sides trickle ICE candidates into the peer slot. role = owner|viewer. */
+router.post('/sessions/:id/rtc/candidate', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const sessionId = String(req.params.id);
+    const viewerId = String(req.body?.viewerId || '').slice(0, 80);
+    const role = req.body?.role === 'owner' ? 'owner' : 'viewer';
+    const candidate = req.body?.candidate;
+    if (!viewerId || !candidate) return res.status(400).json({ success: false, error: 'invalid' });
+    const peerRef = db.collection(SESSIONS_COL).doc(sessionId).collection('rtc_peers').doc(viewerId);
+    if (!(await peerRef.get()).exists) return res.json({ success: true, dropped: true });
+    const field = role === 'owner' ? 'ownerCandidates' : 'viewerCandidates';
+    await peerRef.set({ [field]: FieldValue.arrayUnion(candidate), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Viewer leaves → drop its peer slot so the owner stops sending to it. */
+router.post('/sessions/:id/rtc/leave', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const sessionId = String(req.params.id);
+    const viewerId = String(req.body?.viewerId || '').slice(0, 80);
+    if (viewerId) await db.collection(SESSIONS_COL).doc(sessionId).collection('rtc_peers').doc(viewerId).delete().catch(() => {});
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/* ====================================================================== */
+/*  PAID LIVE EVENTS — sell live courses, podcasts, masterclasses          */
+/*  Creators publish a ticketed event, share a promo link and sell it on   */
+/*  the platform. Revenue splits 70% creator / 30% Boostify via Stripe.    */
+/*  Ticket holders get a private messaging/Q&A room for the event.         */
+/* ====================================================================== */
+
+function eventTicketId(eventId: string, userId: string): string {
+  return `${eventId}__${userId}`;
+}
+
+async function loadEvent(res: Response, eventId: string): Promise<{ ref: FirebaseFirestore.DocumentReference; data: any } | null> {
+  const ref = db.collection(EVENTS_COL).doc(eventId);
+  const snap = await ref.get();
+  if (!snap.exists) { res.status(404).json({ success: false, error: 'event_not_found' }); return null; }
+  return { ref, data: { id: snap.id, ...(snap.data() as any) } };
+}
+
+async function hasPaidTicket(eventId: string, userId: string): Promise<boolean> {
+  try {
+    const snap = await db.collection(TICKETS_COL).doc(eventTicketId(eventId, userId)).get();
+    return snap.exists && (snap.data() as any).status === 'paid';
+  } catch { return false; }
+}
+
+/** Public catalog of event formats a creator can launch. */
+router.get('/events/types', (_req: Request, res: Response) => {
+  res.json({ success: true, types: EVENT_TYPES, creatorShare: EVENT_CREATOR_SHARE, platformShare: EVENT_PLATFORM_SHARE });
+});
+
+/** Create a paid live event (draft). */
+router.post('/events', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const b = req.body || {};
+    const title = String(b.title || '').trim().slice(0, 140);
+    const type = String(b.type || '');
+    if (!title) return res.status(400).json({ success: false, error: 'title_required' });
+    if (!EVENT_TYPE_IDS.has(type as any)) return res.status(400).json({ success: false, error: 'invalid_type' });
+    const priceUsd = Math.max(0, Math.min(100000, Number(b.priceUsd) || 0));
+    const id = shortId('evt');
+    const shareSlug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'event'}-${Math.random().toString(36).slice(2, 7)}`;
+    const doc = clean({
+      id, ownerId: userId, artistId: String(b.artistId || userId),
+      artistName: b.artistName ? String(b.artistName).slice(0, 120) : currentName(req),
+      title, type, description: b.description ? String(b.description).slice(0, 4000) : null,
+      coverImage: b.coverImage ? String(b.coverImage).slice(0, 1000) : null,
+      priceUsd, currency: 'usd',
+      scheduledAt: b.scheduledAt ? new Date(b.scheduledAt) : null,
+      durationMinutes: b.durationMinutes ? Math.max(0, Math.min(1440, Number(b.durationMinutes))) : null,
+      maxSeats: b.maxSeats ? Math.max(0, Math.min(100000, Number(b.maxSeats))) : null,
+      soldCount: 0, revenueUsd: 0, creatorEarnedUsd: 0,
+      status: 'draft', shareSlug, sessionId: null,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    await db.collection(EVENTS_COL).doc(id).set(doc);
+    res.json({ success: true, event: serialize({ ...doc, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** A creator's own events (any status). */
+router.get('/events/mine', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const snap = await db.collection(EVENTS_COL).where('ownerId', '==', userId).limit(100).get();
+    const events = snap.docs.map(docData).sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    res.json({ success: true, events });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Public list of an artist's published / live events (for promo + marketplace). */
+router.get('/artist/:artistId/events', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const artistId = String(req.params.artistId);
+    const snap = await db.collection(EVENTS_COL).where('artistId', '==', artistId).limit(100).get();
+    const events = snap.docs.map(docData)
+      .filter((e: any) => ['published', 'live'].includes(e.status))
+      .sort((a: any, b: any) => String(a.scheduledAt || a.createdAt || '').localeCompare(String(b.scheduledAt || b.createdAt || '')));
+    res.json({ success: true, events });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Resolve a promo link slug → event id. */
+router.get('/events/slug/:slug', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const snap = await db.collection(EVENTS_COL).where('shareSlug', '==', String(req.params.slug)).limit(1).get();
+    if (snap.empty) return res.status(404).json({ success: false, error: 'event_not_found' });
+    res.json({ success: true, event: docData(snap.docs[0]) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Event detail (public). Adds the caller's ticket + ownership when authed. */
+router.get('/events/:id', async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    const me = optionalUser(req);
+    let myTicket: any = null; let isOwner = false;
+    if (me) {
+      isOwner = loaded.data.ownerId === me;
+      const tSnap = await db.collection(TICKETS_COL).doc(eventTicketId(loaded.data.id, me)).get();
+      if (tSnap.exists) myTicket = docData(tSnap);
+    }
+    res.json({ success: true, event: serialize(loaded.data), myTicket, isOwner, hasAccess: isOwner || myTicket?.status === 'paid' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Update / publish / cancel an event (owner only). */
+router.patch('/events/:id', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    const b = req.body || {};
+    const patch: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+    if (b.title !== undefined) patch.title = String(b.title).trim().slice(0, 140);
+    if (b.description !== undefined) patch.description = b.description ? String(b.description).slice(0, 4000) : null;
+    if (b.coverImage !== undefined) patch.coverImage = b.coverImage ? String(b.coverImage).slice(0, 1000) : null;
+    if (b.type !== undefined && EVENT_TYPE_IDS.has(String(b.type) as any)) patch.type = String(b.type);
+    if (b.priceUsd !== undefined) patch.priceUsd = Math.max(0, Math.min(100000, Number(b.priceUsd) || 0));
+    if (b.scheduledAt !== undefined) patch.scheduledAt = b.scheduledAt ? new Date(b.scheduledAt) : null;
+    if (b.durationMinutes !== undefined) patch.durationMinutes = b.durationMinutes ? Math.max(0, Math.min(1440, Number(b.durationMinutes))) : null;
+    if (b.maxSeats !== undefined) patch.maxSeats = b.maxSeats ? Math.max(0, Math.min(100000, Number(b.maxSeats))) : null;
+    if (b.status !== undefined && ['draft', 'published', 'cancelled'].includes(String(b.status))) patch.status = String(b.status);
+    await loaded.ref.set(patch, { merge: true });
+    const after = await loaded.ref.get();
+    res.json({ success: true, event: docData(after) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Buy a ticket. Free → instant; no Stripe → dev grant; else Stripe checkout. */
+router.post('/events/:id/checkout', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    const ev = loaded.data;
+    if (ev.ownerId === userId) return res.status(400).json({ success: false, error: 'cannot_buy_own_event' });
+    if (!['published', 'live'].includes(ev.status)) return res.status(409).json({ success: false, error: 'not_on_sale' });
+    if (ev.maxSeats && Number(ev.soldCount || 0) >= Number(ev.maxSeats)) return res.status(409).json({ success: false, error: 'sold_out' });
+
+    const ticketId = eventTicketId(ev.id, userId);
+    const ticketRef = db.collection(TICKETS_COL).doc(ticketId);
+    const existing = await ticketRef.get();
+    if (existing.exists && (existing.data() as any).status === 'paid') {
+      return res.json({ success: true, alreadyPurchased: true, ticket: docData(existing) });
+    }
+
+    const amountUsd = Math.max(0, Number(ev.priceUsd) || 0);
+    const creatorShareUsd = Math.round(amountUsd * EVENT_CREATOR_SHARE * 100) / 100;
+    const platformShareUsd = Math.round((amountUsd - creatorShareUsd) * 100) / 100;
+    const baseTicket = clean({
+      id: ticketId, eventId: ev.id, ownerId: ev.ownerId, artistId: ev.artistId, artistName: ev.artistName,
+      eventTitle: ev.title, buyerId: userId, buyerName: currentName(req),
+      amountUsd, creatorShareUsd, platformShareUsd, currency: 'usd',
+      status: 'pending', createdAt: FieldValue.serverTimestamp(),
+    });
+
+    // Free event → instant access.
+    if (amountUsd <= 0) {
+      await ticketRef.set({ ...baseTicket, status: 'pending' });
+      await settleEventTicket(ticketId);
+      const t = await ticketRef.get();
+      return res.json({ success: true, free: true, ticket: docData(t) });
+    }
+
+    // No Stripe configured → dev grant so the flow is testable end-to-end.
+    if (!stripe) {
+      await ticketRef.set({ ...baseTicket, status: 'pending' });
+      await settleEventTicket(ticketId);
+      const t = await ticketRef.get();
+      return res.json({ success: true, devGranted: true, ticket: docData(t) });
+    }
+
+    const base = getBaseUrl(req);
+    const returnTo = String(req.body?.returnTo || '/');
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `${ev.title} — ${ev.artistName || 'Live event'}` },
+          unit_amount: Math.round(amountUsd * 100),
+        },
+        quantity: 1,
+      }],
+      success_url: `${base}${returnTo}${returnTo.includes('?') ? '&' : '?'}live_event=success`,
+      cancel_url: `${base}${returnTo}${returnTo.includes('?') ? '&' : '?'}live_event=cancel`,
+      metadata: { type: 'live_stage_event_ticket', ticketId, eventId: ev.id, buyerId: userId },
+    });
+    await ticketRef.set({ ...baseTicket, stripeSessionId: session.id }, { merge: true });
+    res.json({ success: true, checkoutUrl: session.url });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Current user's ticket for an event. */
+router.get('/events/:id/ticket', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const snap = await db.collection(TICKETS_COL).doc(eventTicketId(String(req.params.id), userId)).get();
+    res.json({ success: true, ticket: snap.exists ? docData(snap) : null });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Creator: list buyers of an event. */
+router.get('/events/:id/attendees', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    const snap = await db.collection(TICKETS_COL).where('eventId', '==', loaded.data.id).where('status', '==', 'paid').limit(500).get();
+    res.json({ success: true, attendees: snap.docs.map(docData), count: snap.size });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Owner goes live → mark the event live (optionally link a live session). */
+router.post('/events/:id/start', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    await loaded.ref.set({
+      status: 'live', startedAt: FieldValue.serverTimestamp(),
+      sessionId: req.body?.sessionId ? String(req.body.sessionId) : loaded.data.sessionId || null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const after = await loaded.ref.get();
+    res.json({ success: true, event: docData(after) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Owner ends the event. */
+router.post('/events/:id/end', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    if (loaded.data.ownerId !== userId) return res.status(403).json({ success: false, error: 'forbidden' });
+    await loaded.ref.set({ status: 'ended', endedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const after = await loaded.ref.get();
+    res.json({ success: true, event: docData(after) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/** Private event messaging / Q&A — owner + paid ticket holders only. */
+router.get('/events/:id/messages', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    const allowed = loaded.data.ownerId === userId || await hasPaidTicket(loaded.data.id, userId);
+    if (!allowed) return res.status(403).json({ success: false, error: 'ticket_required' });
+    const snap = await loaded.ref.collection('messages').orderBy('createdAt', 'desc').limit(80).get();
+    const messages = snap.docs.map(docData).reverse();
+    res.json({ success: true, messages });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+router.post('/events/:id/messages', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  const userId = currentUser(req, res);
+  if (!userId) return;
+  try {
+    const loaded = await loadEvent(res, String(req.params.id));
+    if (!loaded) return;
+    const isOwner = loaded.data.ownerId === userId;
+    const allowed = isOwner || await hasPaidTicket(loaded.data.id, userId);
+    if (!allowed) return res.status(403).json({ success: false, error: 'ticket_required' });
+    const mod = moderateMessage(String(req.body?.text || ''));
+    if (!mod.allowed) return res.status(400).json({ success: false, error: 'message_blocked' });
+    const id = shortId('msg');
+    const msg = clean({
+      id, userId, name: currentName(req), text: mod.cleaned,
+      isOwner, createdAt: FieldValue.serverTimestamp(),
+    });
+    await loaded.ref.collection('messages').doc(id).set(msg);
+    res.json({ success: true, message: serialize({ ...msg, createdAt: new Date().toISOString() }) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+/* ====================================================================== */
+/*  MARKETPLACE — public sales feed for the viewer session                */
+/*  An interactive shop the (even logged-out) viewer sees on the stage:    */
+/*  the artist's store, merch, courses and music, each with an affiliate   */
+/*  commission so any fan can promote it and earn (links to /affiliates).  */
+/* ====================================================================== */
+
+/** Affiliate commission rates per item kind (integer percent, mirrors /api/affiliate). */
+const MARKETPLACE_COMMISSIONS: Record<string, number> = {
+  store: 15, merch: 20, course: 25, music: 15, service: 20,
+};
+
+function marketplaceArtistPk(raw: string | number): number | null {
+  const n = parseInt(String(raw), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+router.get('/:artistId/marketplace', async (req: Request, res: Response) => {
+  const empty = { success: true, artistName: null as string | null, artistSlug: null as string | null, storeUrl: null as string | null, affiliateJoinUrl: '/affiliates', items: [] as any[] };
+  try {
+    const pk = marketplaceArtistPk(req.params.artistId);
+    if (!pk) return res.json(empty);
+
+    // Artist identity → links.
+    let artistName: string | null = null;
+    let handle = '';
+    try {
+      const { rows } = await pool.query(
+        'SELECT artist_name, username, slug FROM users WHERE id = $1 LIMIT 1', [pk],
+      );
+      const u: any = rows[0] || {};
+      artistName = u.artist_name || u.username || null;
+      handle = String(u.slug || u.username || '').trim();
+    } catch { /* ignore */ }
+
+    const base = handle ? `/artist/${handle}` : null;
+    const storeUrl = base ? `${base}/store` : null;
+    const items: any[] = [];
+
+    // Featured: the full official store.
+    if (storeUrl) {
+      items.push({
+        kind: 'store', id: 'store', title: `${artistName || 'Official'} Store`,
+        subtitle: 'Browse the full collection', price: null, priceLabel: null,
+        image: null, link: storeUrl, badge: 'Official Store', featured: true,
+        commissionPct: MARKETPLACE_COMMISSIONS.store, affiliate: true,
+      });
+    }
+
+    // Merch (available).
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, name, price, images FROM merchandise
+         WHERE user_id = $1 AND is_available = true
+         ORDER BY created_at DESC LIMIT 24`, [pk],
+      );
+      for (const r of rows as any[]) {
+        const img = Array.isArray(r.images) ? r.images[0] : (typeof r.images === 'string' ? r.images : null);
+        const priceNum = r.price != null ? Number(r.price) : null;
+        items.push({
+          kind: 'merch', id: String(r.id), title: r.name, subtitle: 'Official merch',
+          price: priceNum, priceLabel: priceNum != null ? `$${priceNum.toFixed(2)}` : null,
+          image: img || null, link: storeUrl || (base ? `${base}#merchandise` : null),
+          badge: 'Merch', commissionPct: MARKETPLACE_COMMISSIONS.merch, affiliate: true,
+        });
+      }
+    } catch { /* ignore */ }
+
+    // Courses (published, taught by this artist).
+    try {
+      const { rows } = await pool.query(
+        `SELECT c.id, c.title, c.price, c.thumbnail, c.category, c.level
+         FROM courses c JOIN course_instructors ci ON ci.id = c.instructor_id
+         WHERE ci.user_id = $1 AND c.status = 'published'
+         ORDER BY c.created_at DESC LIMIT 12`, [pk],
+      );
+      for (const r of rows as any[]) {
+        const priceNum = r.price != null ? Number(r.price) : null;
+        items.push({
+          kind: 'course', id: String(r.id), title: r.title,
+          subtitle: [r.category, r.level].filter(Boolean).join(' · ') || 'Online course',
+          price: priceNum, priceLabel: priceNum != null && priceNum > 0 ? `$${priceNum.toFixed(2)}` : 'Free',
+          image: r.thumbnail || null, link: `/course/${r.id}`,
+          badge: 'Course', commissionPct: MARKETPLACE_COMMISSIONS.course, affiliate: true,
+        });
+      }
+    } catch { /* ignore */ }
+
+    // Music (published songs — streamable products).
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, title, genre, cover_art FROM songs
+         WHERE user_id = $1 AND is_published = true
+         ORDER BY created_at DESC LIMIT 16`, [pk],
+      );
+      for (const r of rows as any[]) {
+        items.push({
+          kind: 'music', id: String(r.id), title: r.title, subtitle: r.genre || 'Single',
+          price: null, priceLabel: 'Stream', image: r.cover_art || null,
+          link: base ? `${base}#songs` : null,
+          badge: 'Music', commissionPct: MARKETPLACE_COMMISSIONS.music, affiliate: true,
+        });
+      }
+    } catch { /* ignore */ }
+
+    res.json({ success: true, artistName, artistSlug: handle || null, storeUrl, affiliateJoinUrl: '/affiliates', items });
+  } catch (err: any) {
+    res.json({ ...empty, error: err?.message });
+  }
+});
 
 export default router;

@@ -16,14 +16,17 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Radio, X, Maximize2, Send, Gift, Coins, Crown, Trophy, Users, Heart,
   Sparkles, Video, VideoOff, Mic, Settings, Play, Square, TrendingUp,
   Wallet, Music, Star, Zap, Flame, ShieldCheck, Loader2, Plus, Eye,
+  ShoppingBag, Share2, Store, GraduationCap, Tag, ArrowRight, Check,
 } from 'lucide-react';
 import { apiRequest } from '../../../lib/queryClient';
+import { LiveEventsManager, LiveEventsShowcase } from './LiveEvents';
 
 /* ------------------------------- types --------------------------------- */
 interface BrandColors { primary?: string; secondary?: string; accent?: string }
@@ -234,7 +237,10 @@ function LiveStageExperience({
   return (
     <div className="flex h-full w-full flex-col">
       {/* header */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
+      <div
+        className="flex items-center justify-between border-b border-white/10 px-4 pb-3 sm:px-6"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: `${colors.primary}22` }}>
             <Radio className="h-5 w-5" style={{ color: colors.accent }} />
@@ -316,6 +322,7 @@ function StageRoom({
   const [giftPanel, setGiftPanel] = useState(false);
   const [creditModal, setCreditModal] = useState(false);
   const [songModal, setSongModal] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
   const [animQueue, setAnimQueue] = useState<GiftEvent[]>([]);
   const seenGifts = useRef<Set<string>>(new Set());
 
@@ -356,20 +363,29 @@ function StageRoom({
 
   if (!isLive) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full" style={{ background: `${colors.primary}1f` }}>
-          <Radio className="h-10 w-10" style={{ color: colors.accent }} />
+      <div className="flex h-full flex-col">
+        {/* not-live banner */}
+        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: `${colors.primary}1f` }}>
+            <Radio className="h-4 w-4" style={{ color: colors.accent }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{artistName} isn't live right now</p>
+            <p className="truncate text-[11px] text-white/50">
+              {isOwner ? 'Open the Studio to go live — meanwhile fans can shop below.' : 'Shop the collection below · follow to get notified when they go live.'}
+            </p>
+          </div>
         </div>
-        <h3 className="text-xl font-bold text-white">{artistName} isn't live</h3>
-        <p className="max-w-md text-sm text-white/60">
-          {isOwner ? 'Open the Studio to start or schedule your next live.' : 'Follow the artist to get notified when they go live.'}
-        </p>
+        {/* marketplace fills the rest */}
+        <div className="min-h-0 flex-1">
+          <StageMarketplace artistId={artistId} artistName={artistName} artistAvatar={artistAvatar} colors={colors} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid h-full grid-rows-[1fr_auto] lg:grid-cols-[1fr_360px] lg:grid-rows-1">
+    <div className="relative grid h-full grid-rows-[1fr_auto] lg:grid-cols-[1fr_360px] lg:grid-rows-1">
       {/* video / stage */}
       <div className="relative overflow-hidden bg-black">
         <StageVideo isOwner={isOwner} artistName={artistName} artistAvatar={artistAvatar} colors={colors} sessionId={sessionId!} />
@@ -393,6 +409,15 @@ function StageRoom({
           <span className="flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur"><Star className="h-3 w-3" style={{ color: colors.accent }} />{fmt(live?.qualityScore || 0)}</span>
         </div>
 
+        {/* shop button */}
+        <button
+          onClick={() => setShopOpen(true)}
+          className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold text-black shadow-lg backdrop-blur transition-transform hover:scale-105"
+          style={{ background: colors.accent }}
+        >
+          <ShoppingBag className="h-3.5 w-3.5" /> Shop
+        </button>
+
         {/* floating gift animations */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <AnimatePresence>
@@ -406,7 +431,7 @@ function StageRoom({
         <LiveChat sessionId={sessionId!} colors={colors} chatEnabled={live?.chatEnabled !== false} pinned={live?.pinnedMessage} />
 
         {/* action bar */}
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-white/10 p-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           <div className="mb-2 flex items-center justify-between">
             <button onClick={() => setCreditModal(true)} className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10">
               <Coins className="h-3.5 w-3.5" style={{ color: colors.accent }} />{fmt(balance)} credits
@@ -441,12 +466,464 @@ function StageRoom({
         {songModal && (
           <SongRequestModal sessionId={sessionId!} price={live?.songRequestPriceCredits || 0} colors={colors} onClose={() => setSongModal(false)} onSent={() => balanceQuery.refetch()} />
         )}
+        {shopOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-30 bg-black/95 backdrop-blur-sm"
+          >
+            <StageMarketplace artistId={artistId} artistName={artistName} artistAvatar={artistAvatar} colors={colors} onClose={() => setShopOpen(false)} />
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
 }
 
+/* ====================================================================== */
+/*  MARKETPLACE — interactive sales feed (TikTok-style) for the viewer      */
+/*  Even logged-out fans see the artist's store, merch, courses & music;    */
+/*  every item can be promoted for a commission (links to /affiliates).     */
+/* ====================================================================== */
+interface MarketItem {
+  kind: 'store' | 'merch' | 'course' | 'music' | 'service';
+  id: string; title: string; subtitle?: string | null;
+  price?: number | null; priceLabel?: string | null;
+  image?: string | null; link?: string | null; badge?: string | null;
+  commissionPct?: number; affiliate?: boolean; featured?: boolean;
+}
+interface MarketResponse {
+  success: boolean; artistName?: string | null; artistSlug?: string | null;
+  storeUrl?: string | null; affiliateJoinUrl?: string; items: MarketItem[];
+}
+
+const KIND_META: Record<string, { label: string; icon: any }> = {
+  store: { label: 'Store', icon: Store },
+  merch: { label: 'Merch', icon: ShoppingBag },
+  course: { label: 'Courses', icon: GraduationCap },
+  music: { label: 'Music', icon: Music },
+  service: { label: 'Services', icon: Sparkles },
+};
+
+function StageMarketplace({
+  artistId, artistName, artistAvatar, colors, onClose,
+}: {
+  artistId: string; artistName: string; artistAvatar?: string;
+  colors: ReturnType<typeof useColors>; onClose?: () => void;
+}) {
+  const [, setLocation] = useLocation();
+  const [filter, setFilter] = useState<string>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<MarketResponse>({
+    queryKey: ['live-stage-marketplace', artistId],
+    queryFn: () => apiRequest('GET', `/api/live-stage/${artistId}/marketplace`),
+    staleTime: 5 * 60_000,
+    enabled: !!artistId,
+  });
+
+  const items = data?.items || [];
+  const storeUrl = data?.storeUrl || null;
+  const affiliateUrl = data?.affiliateJoinUrl || '/affiliates';
+
+  const kinds = useMemo(() => {
+    const present: string[] = [];
+    for (const it of items) if (!present.includes(it.kind)) present.push(it.kind);
+    return present;
+  }, [items]);
+
+  const visible = useMemo(
+    () => (filter === 'all' ? items : items.filter((i) => i.kind === filter)),
+    [items, filter],
+  );
+
+  const go = useCallback((href?: string | null) => {
+    if (!href) return;
+    if (/^https?:\/\//i.test(href)) { window.open(href, '_blank', 'noopener'); return; }
+    onClose?.();
+    setLocation(href);
+  }, [onClose, setLocation]);
+
+  const earn = useCallback((it: MarketItem) => {
+    onClose?.();
+    setLocation(`${affiliateUrl}${affiliateUrl.includes('?') ? '&' : '?'}from=stage&item=${it.kind}:${it.id}`);
+  }, [affiliateUrl, onClose, setLocation]);
+
+  const share = useCallback(async (it: MarketItem) => {
+    const url = it.link ? (/^https?:/i.test(it.link) ? it.link : window.location.origin + it.link) : window.location.href;
+    const text = `${it.title} — ${artistName}`;
+    try {
+      if ((navigator as any).share) { await (navigator as any).share({ title: it.title, text, url }); return; }
+    } catch { /* user cancelled */ }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(it.id);
+      setTimeout(() => setCopiedId((c) => (c === it.id ? null : c)), 1800);
+    } catch { /* ignore */ }
+  }, [artistName]);
+
+  return (
+    <div className="flex h-full flex-col bg-gradient-to-b from-black via-[#0b0b12] to-black">
+      {/* header */}
+      <div className="flex items-center justify-between gap-3 px-4 pt-3 sm:px-6">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${colors.primary}22` }}>
+            <ShoppingBag className="h-4 w-4" style={{ color: colors.accent }} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-bold text-white leading-tight">{artistName} · Marketplace</h3>
+            <p className="text-[11px] text-white/45">Shop, support &amp; earn while it grows</p>
+          </div>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* filter chips */}
+      {kinds.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto px-4 py-3 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} colors={colors} label="All" icon={Sparkles} />
+          {kinds.map((k) => {
+            const m = KIND_META[k]; if (!m) return null;
+            return <FilterChip key={k} active={filter === k} onClick={() => setFilter(k)} colors={colors} label={m.label} icon={m.icon} />;
+          })}
+        </div>
+      )}
+
+      {/* feed */}
+      <div className="relative flex-1 overflow-y-auto px-3 pb-28 sm:px-6">
+        <div className="mx-auto max-w-xl">
+          {/* paid live events rail (courses, podcasts, classes) */}
+          {filter === 'all' && <LiveEventsShowcase artistId={artistId} colors={colors} />}
+
+          {isLoading ? (
+            <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-white/40" /></div>
+          ) : visible.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${colors.primary}1f` }}>
+                <ShoppingBag className="h-8 w-8" style={{ color: colors.accent }} />
+              </div>
+              <h3 className="text-lg font-bold text-white">More products coming soon</h3>
+              <p className="max-w-xs text-sm text-white/55">{artistName} is setting up merch, courses and exclusive drops. Check back shortly.</p>
+              {storeUrl && (
+                <button onClick={() => go(storeUrl)} className="mt-1 rounded-full px-5 py-2 text-sm font-bold text-black" style={{ background: colors.accent }}>
+                  Visit the store
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {visible.map((it, idx) => (
+                <MarketCard
+                  key={`${it.kind}-${it.id}`} item={it} colors={colors} index={idx}
+                  copied={copiedId === it.id}
+                  onBuy={() => go(it.link)} onEarn={() => earn(it)} onShare={() => share(it)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* seller banner — connect to the affiliate program */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 sm:p-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+        <button
+          onClick={() => go(affiliateUrl)}
+          className="pointer-events-auto flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 py-3 text-left backdrop-blur-xl transition-transform hover:scale-[1.01]"
+          style={{ background: `linear-gradient(90deg, ${colors.primary}26, ${colors.secondary}26)` }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: colors.accent }}>
+              <Coins className="h-4 w-4 text-black" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-white">Sell these &amp; earn money</p>
+              <p className="truncate text-[11px] text-white/55">Join the affiliate program — promote &amp; get paid</p>
+            </div>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-white/70" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FilterChip({ active, onClick, colors, label, icon: Icon }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${active ? 'text-black border-transparent' : 'border-white/10 text-white/60 hover:text-white'}`}
+      style={active ? { background: colors.accent } : undefined}
+    >
+      <Icon className="h-3.5 w-3.5" /> {label}
+    </button>
+  );
+}
+
+function MarketCard({
+  item, colors, index, copied, onBuy, onEarn, onShare,
+}: {
+  item: MarketItem; colors: ReturnType<typeof useColors>; index: number; copied: boolean;
+  onBuy: () => void; onEarn: () => void; onShare: () => void;
+}) {
+  const meta = KIND_META[item.kind] || KIND_META.merch;
+  const Icon = meta.icon;
+  const buyLabel = item.kind === 'store' ? 'Enter store' : item.kind === 'music' ? 'Listen' : item.kind === 'course' ? 'Enroll' : 'Shop now';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index * 0.04, 0.3) }}
+      className="group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]"
+    >
+      {/* visual */}
+      <button onClick={onBuy} className="relative block aspect-[4/5] w-full overflow-hidden sm:aspect-[16/10]">
+        {item.image ? (
+          <img src={item.image} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center" style={{ background: `linear-gradient(135deg, ${colors.primary}55, ${colors.secondary}55)` }}>
+            <Icon className="h-16 w-16 text-white/80" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+
+        {/* badges */}
+        <div className="absolute left-3 top-3 flex items-center gap-2">
+          <span className="flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white backdrop-blur">
+            <Icon className="h-3 w-3" style={{ color: colors.accent }} /> {item.badge || meta.label}
+          </span>
+          {item.featured && (
+            <span className="rounded-full px-2.5 py-1 text-[10px] font-bold text-black" style={{ background: colors.accent }}>Featured</span>
+          )}
+        </div>
+        {typeof item.commissionPct === 'number' && item.commissionPct > 0 && (
+          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-bold text-black backdrop-blur">
+            <Tag className="h-3 w-3" /> Earn {item.commissionPct}%
+          </span>
+        )}
+
+        {/* title + price */}
+        <div className="absolute inset-x-0 bottom-0 p-4 text-left">
+          <h4 className="line-clamp-2 text-lg font-bold leading-tight text-white drop-shadow">{item.title}</h4>
+          <div className="mt-1 flex items-center gap-2">
+            {item.subtitle && <span className="text-[12px] text-white/65">{item.subtitle}</span>}
+            {item.priceLabel && (
+              <span className="ml-auto rounded-full bg-white/15 px-2.5 py-0.5 text-sm font-bold text-white backdrop-blur">{item.priceLabel}</span>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {/* actions */}
+      <div className="flex items-center gap-2 p-3">
+        <button
+          onClick={onBuy}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold text-black transition-transform hover:scale-[1.02]"
+          style={{ background: `linear-gradient(90deg, ${colors.accent}, ${colors.secondary})` }}
+        >
+          {buyLabel} <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+        {item.affiliate && (
+          <button
+            onClick={onEarn}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-400/20"
+          >
+            <Coins className="h-4 w-4" /> Earn
+          </button>
+        )}
+        <button
+          onClick={onShare}
+          className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+          title="Share"
+        >
+          {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Share2 className="h-4 w-4" />}
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ----------------------------- stage video ----------------------------- */
+
+/** Stable per-tab viewer id so a viewer reuses the same signaling slot. */
+function getViewerId(): string {
+  try {
+    let id = sessionStorage.getItem('ls_viewer_id');
+    if (!id) { id = `v_${Math.random().toString(36).slice(2, 12)}`; sessionStorage.setItem('ls_viewer_id', id); }
+    return id;
+  } catch { return `v_${Math.random().toString(36).slice(2, 12)}`; }
+}
+
+/** Fetch ICE servers (STUN + optional TURN) once; falls back to public STUN. */
+function useIceServers() {
+  const ref = useRef<RTCIceServer[]>([{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]);
+  useEffect(() => {
+    let alive = true;
+    apiRequest('GET', '/api/live-stage/rtc/ice-servers')
+      .then((r: any) => { if (alive && Array.isArray(r?.iceServers) && r.iceServers.length) ref.current = r.iceServers; })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return ref;
+}
+
+/**
+ * Broadcaster (owner): answers every viewer's offer and pushes the local
+ * camera tracks to them over a per-viewer RTCPeerConnection (mesh).
+ */
+function useBroadcaster(sessionId: string | undefined, streamRef: React.MutableRefObject<MediaStream | null>, enabled: boolean) {
+  const iceRef = useIceServers();
+  const [viewerCount, setViewerCount] = useState(0);
+  useEffect(() => {
+    if (!enabled || !sessionId) return;
+    const pcs = new Map<string, RTCPeerConnection>();
+    const candIdx = new Map<string, number>();
+    let busy = false; let stopped = false;
+
+    const poll = async () => {
+      if (busy || stopped) return; busy = true;
+      try {
+        const r: any = await apiRequest('GET', `/api/live-stage/sessions/${sessionId}/rtc/peers`);
+        const peers: any[] = r?.peers || [];
+        const seen = new Set<string>();
+        for (const peer of peers) {
+          seen.add(peer.viewerId);
+          let pc = pcs.get(peer.viewerId);
+          if (!pc && peer.offer && peer.status === 'pending') {
+            pc = new RTCPeerConnection({ iceServers: iceRef.current });
+            pcs.set(peer.viewerId, pc); candIdx.set(peer.viewerId, 0);
+            const stream = streamRef.current;
+            if (stream) stream.getTracks().forEach((t) => pc!.addTrack(t, stream));
+            pc.onicecandidate = (e) => {
+              if (e.candidate) apiRequest('POST', `/api/live-stage/sessions/${sessionId}/rtc/candidate`, { viewerId: peer.viewerId, role: 'owner', candidate: e.candidate.toJSON() }).catch(() => {});
+            };
+            pc.onconnectionstatechange = () => {
+              if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) { pc.close(); pcs.delete(peer.viewerId); candIdx.delete(peer.viewerId); setViewerCount(pcs.size); }
+            };
+            try {
+              await pc.setRemoteDescription(peer.offer);
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await apiRequest('POST', `/api/live-stage/sessions/${sessionId}/rtc/answer`, { viewerId: peer.viewerId, sdp: { type: answer.type, sdp: answer.sdp } });
+            } catch { pc.close(); pcs.delete(peer.viewerId); candIdx.delete(peer.viewerId); }
+          }
+          if (pc && Array.isArray(peer.viewerCandidates)) {
+            const from = candIdx.get(peer.viewerId) || 0;
+            for (let i = from; i < peer.viewerCandidates.length; i++) {
+              try { await pc.addIceCandidate(peer.viewerCandidates[i]); } catch { /* ignore */ }
+            }
+            candIdx.set(peer.viewerId, peer.viewerCandidates.length);
+          }
+        }
+        for (const [vid, pc] of Array.from(pcs.entries())) {
+          if (!seen.has(vid)) { pc.close(); pcs.delete(vid); candIdx.delete(vid); }
+        }
+        setViewerCount(pcs.size);
+      } catch { /* ignore */ } finally { busy = false; }
+    };
+
+    poll();
+    const iv = setInterval(poll, 2200);
+    return () => {
+      stopped = true; clearInterval(iv);
+      for (const pc of Array.from(pcs.values())) pc.close();
+      pcs.clear(); candIdx.clear();
+    };
+  }, [enabled, sessionId, iceRef, streamRef]);
+  return viewerCount;
+}
+
+/**
+ * Viewer: opens a recv-only RTCPeerConnection, offers it to the broadcaster
+ * and renders the incoming live stream.
+ */
+function useViewer(sessionId: string | undefined, enabled: boolean) {
+  const iceRef = useIceServers();
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [state, setState] = useState<'idle' | 'connecting' | 'connected' | 'failed'>('idle');
+  useEffect(() => {
+    if (!enabled || !sessionId) { setRemoteStream(null); setState('idle'); return; }
+    const viewerId = getViewerId();
+    let pc: RTCPeerConnection | null = null;
+    let stopped = false; let answered = false; let candCount = 0; let pollIv: any;
+
+    const poll = async () => {
+      if (stopped || !pc) return;
+      try {
+        const r: any = await apiRequest('GET', `/api/live-stage/sessions/${sessionId}/rtc/peer?viewerId=${encodeURIComponent(viewerId)}`);
+        if (!answered && r?.answer) { answered = true; await pc.setRemoteDescription(r.answer); }
+        if (answered && Array.isArray(r?.ownerCandidates)) {
+          for (let i = candCount; i < r.ownerCandidates.length; i++) {
+            try { await pc.addIceCandidate(r.ownerCandidates[i]); } catch { /* ignore */ }
+          }
+          candCount = r.ownerCandidates.length;
+        }
+      } catch { /* ignore */ }
+    };
+
+    (async () => {
+      try {
+        setState('connecting');
+        pc = new RTCPeerConnection({ iceServers: iceRef.current });
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+        const incoming = new MediaStream();
+        pc.ontrack = (e) => {
+          if (e.streams[0]) e.streams[0].getTracks().forEach((t) => { if (!incoming.getTracks().includes(t)) incoming.addTrack(t); });
+          else incoming.addTrack(e.track);
+          setRemoteStream(incoming);
+        };
+        pc.onicecandidate = (e) => {
+          if (e.candidate) apiRequest('POST', `/api/live-stage/sessions/${sessionId}/rtc/candidate`, { viewerId, role: 'viewer', candidate: e.candidate.toJSON() }).catch(() => {});
+        };
+        pc.onconnectionstatechange = () => {
+          if (!pc) return;
+          if (pc.connectionState === 'connected') setState('connected');
+          else if (pc.connectionState === 'failed') setState('failed');
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await apiRequest('POST', `/api/live-stage/sessions/${sessionId}/rtc/offer`, { viewerId, sdp: { type: offer.type, sdp: offer.sdp } });
+        pollIv = setInterval(poll, 1500);
+        poll();
+      } catch { setState('failed'); }
+    })();
+
+    return () => {
+      stopped = true; clearInterval(pollIv);
+      apiRequest('POST', `/api/live-stage/sessions/${sessionId}/rtc/leave`, { viewerId }).catch(() => {});
+      pc?.close(); pc = null;
+    };
+  }, [enabled, sessionId, iceRef]);
+  return { remoteStream, state };
+}
+
+/** Renders an incoming MediaStream; auto-plays, falls back to muted autoplay. */
+function RemoteVideo({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(false);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.srcObject = stream;
+    el.play().catch(() => { el.muted = true; setMuted(true); el.play().catch(() => {}); });
+  }, [stream]);
+  return (
+    <div className="relative h-full w-full bg-black">
+      <video ref={ref} className="h-full w-full object-cover" autoPlay playsInline />
+      {muted && (
+        <button
+          onClick={() => { const el = ref.current; if (el) { el.muted = false; setMuted(false); el.play().catch(() => {}); } }}
+          className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1.5 text-xs font-bold text-white backdrop-blur"
+        >
+          Tap for sound
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StageVideo({ isOwner, artistName, artistAvatar, colors, sessionId }: {
   isOwner?: boolean; artistName: string; artistAvatar?: string; colors: ReturnType<typeof useColors>; sessionId: string;
 }) {
@@ -502,6 +979,11 @@ function StageVideo({ isOwner, artistName, artistAvatar, colors, sessionId }: {
 
   useEffect(() => () => stopCam(), [stopCam]);
 
+  // Broadcast the local camera to every viewer over WebRTC while live.
+  const liveViewers = useBroadcaster(sessionId, streamRef, !!isOwner && camOn);
+  // Viewers receive the broadcaster's stream over WebRTC.
+  const { remoteStream, state: viewerState } = useViewer(sessionId, !isOwner);
+
   // Owner broadcasting their own camera
   if (isOwner) {
     return (
@@ -528,15 +1010,23 @@ function StageVideo({ isOwner, artistName, artistAvatar, colors, sessionId }: {
           </div>
         )}
         {camOn && (
-          <button onClick={stopCam} className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white" title="Turn off camera">
-            <VideoOff className="h-4 w-4" />
-          </button>
+          <>
+            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+              <Eye className="h-3 w-3" style={{ color: colors.accent }} /> {liveViewers} watching
+            </span>
+            <button onClick={stopCam} className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white" title="Turn off camera">
+              <VideoOff className="h-4 w-4" />
+            </button>
+          </>
         )}
       </div>
     );
   }
 
-  // Viewer placeholder stage (real WebRTC/IVS stream plugs in here)
+  // Viewer: show the real broadcast once it connects, else an animated standby.
+  if (remoteStream) {
+    return <RemoteVideo stream={remoteStream} />;
+  }
   return (
     <div className="relative flex h-full w-full items-center justify-center" style={{ background: `radial-gradient(circle at 50% 35%, ${colors.primary}33, #000 70%)` }}>
       <div className="flex flex-col items-center gap-4">
@@ -551,7 +1041,15 @@ function StageVideo({ isOwner, artistName, artistAvatar, colors, sessionId }: {
           <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">LIVE</span>
         </motion.div>
         <p className="text-lg font-bold text-white">{artistName}</p>
-        <p className="text-xs text-white/50">Live broadcast · Boostify stage</p>
+        <p className="flex items-center gap-1.5 text-xs text-white/50">
+          {viewerState === 'connecting' ? (
+            <><Loader2 className="h-3 w-3 animate-spin" /> Connecting to the live stream…</>
+          ) : viewerState === 'failed' ? (
+            'Waiting for the broadcaster… the video will appear automatically.'
+          ) : (
+            'Live broadcast · Boostify stage'
+          )}
+        </p>
       </div>
     </div>
   );
@@ -854,6 +1352,9 @@ function ArtistStudio({ artistId, artistName, artistAvatar, artistSlug, colors, 
 
         {/* Song requests for owner */}
         {isLive && <SongRequestQueue sessionId={live!.id} colors={colors} />}
+
+        {/* Paid live events — create & sell courses, podcasts, classes */}
+        <LiveEventsManager artistId={artistId} artistName={artistName} artistSlug={artistSlug} colors={colors} />
       </div>
     </div>
   );

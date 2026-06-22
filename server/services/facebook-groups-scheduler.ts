@@ -41,15 +41,22 @@ async function promoteDueItems(artistId: string): Promise<number> {
 async function tick() {
   try {
     // Find artists that have a settings doc with autopilot enabled.
-    // We scan the facebookGroupSettings via a collectionGroup query.
+    // NOTE: a collectionGroup query with a `.where('autopilot','==',true)` filter
+    // requires a single-field COLLECTION_GROUP index exemption to be created in
+    // Firestore (otherwise: FAILED_PRECONDITION). There is exactly ONE settings
+    // doc ('config') per artist, so we instead read the whole (tiny) collection
+    // group WITHOUT a filter — which needs no special index — and filter for
+    // autopilot in memory.
     const settingsSnap = await firestore
       .collectionGroup('facebookGroupSettings')
-      .where('autopilot', '==', true)
       .get();
 
     if (settingsSnap.empty) return;
 
-    for (const settingsDoc of settingsSnap.docs) {
+    const autopilotDocs = settingsSnap.docs.filter((d) => (d.data() as any)?.autopilot === true);
+    if (autopilotDocs.length === 0) return;
+
+    for (const settingsDoc of autopilotDocs) {
       // Path: artists/{artistId}/facebookGroupSettings/config
       const artistRef = settingsDoc.ref.parent.parent;
       if (!artistRef) continue;

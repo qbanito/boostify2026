@@ -5,7 +5,7 @@ import {
   Facebook, ChevronDown, Plus, Trash2, Sparkles, Send, Copy, ExternalLink,
   CheckCircle2, Clock, Settings as SettingsIcon, Layers, Users, Rocket,
   ShieldAlert, RefreshCw, Calendar, Music, ShoppingBag, Image as ImageIcon,
-  Megaphone, X, Power, SkipForward, Search, Compass, Flame,
+  Megaphone, X, Power, SkipForward, Search, Compass, Flame, Youtube,
 } from 'lucide-react';
 import { apiRequest } from '../../../lib/queryClient';
 
@@ -15,7 +15,7 @@ interface Props {
   artistImageUrl?: string | null;
 }
 
-type ContentType = 'song' | 'merch' | 'social_post' | 'concert' | 'photo' | 'custom';
+type ContentType = 'song' | 'merch' | 'social_post' | 'concert' | 'photo' | 'lyric_video' | 'custom';
 
 interface FbGroup {
   id: string; name: string; url?: string | null; memberCount?: number | null;
@@ -49,6 +49,7 @@ const TYPE_META: Record<string, { label: string; icon: any; color: string }> = {
   social_post: { label: 'Post', icon: Megaphone, color: '#ec4899' },
   concert: { label: 'Concert', icon: Calendar, color: '#10b981' },
   photo: { label: 'Photo', icon: ImageIcon, color: '#38bdf8' },
+  lyric_video: { label: 'Lyric Video', icon: Youtube, color: '#ef4444' },
   custom: { label: 'Custom', icon: Layers, color: '#94a3b8' },
 };
 
