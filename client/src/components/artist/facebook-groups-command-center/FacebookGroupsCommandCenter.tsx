@@ -44,21 +44,21 @@ interface DiscoveredGroup {
 }
 
 const TYPE_META: Record<string, { label: string; icon: any; color: string }> = {
-  song: { label: 'Canción', icon: Music, color: '#a855f7' },
+  song: { label: 'Song', icon: Music, color: '#a855f7' },
   merch: { label: 'Merch', icon: ShoppingBag, color: '#f59e0b' },
   social_post: { label: 'Post', icon: Megaphone, color: '#ec4899' },
-  concert: { label: 'Concierto', icon: Calendar, color: '#10b981' },
-  photo: { label: 'Foto', icon: ImageIcon, color: '#38bdf8' },
+  concert: { label: 'Concert', icon: Calendar, color: '#10b981' },
+  photo: { label: 'Photo', icon: ImageIcon, color: '#38bdf8' },
   custom: { label: 'Custom', icon: Layers, color: '#94a3b8' },
 };
 
 const TABS = [
-  { key: 'overview', label: 'Resumen', icon: Rocket },
-  { key: 'discover', label: 'Descubrir', icon: Compass },
-  { key: 'groups', label: 'Grupos', icon: Users },
-  { key: 'content', label: 'Contenido', icon: Layers },
-  { key: 'queue', label: 'Cola / Publicar', icon: Send },
-  { key: 'settings', label: 'Ajustes', icon: SettingsIcon },
+  { key: 'overview', label: 'Overview', icon: Rocket },
+  { key: 'discover', label: 'Discover', icon: Compass },
+  { key: 'groups', label: 'Groups', icon: Users },
+  { key: 'content', label: 'Content', icon: Layers },
+  { key: 'queue', label: 'Queue / Publish', icon: Send },
+  { key: 'settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -66,9 +66,9 @@ const BLUE = '#1877F2';
 
 const TIER_META: Record<SizeTier, { label: string; range: string; color: string; icon: any }> = {
   mega: { label: 'Mega', range: '500k+', color: '#f43f5e', icon: Flame },
-  large: { label: 'Grandes', range: '50k–500k', color: '#f59e0b', icon: Users },
-  mid: { label: 'Medianos', range: '5k–50k', color: '#38bdf8', icon: Users },
-  niche: { label: 'Nicho', range: '<5k', color: '#a855f7', icon: Users },
+  large: { label: 'Large', range: '50k–500k', color: '#f59e0b', icon: Users },
+  mid: { label: 'Mid', range: '5k–50k', color: '#38bdf8', icon: Users },
+  niche: { label: 'Niche', range: '<5k', color: '#a855f7', icon: Users },
 };
 const TIER_ORDER: SizeTier[] = ['mega', 'large', 'mid', 'niche'];
 
@@ -168,12 +168,12 @@ export function FacebookGroupsCommandCenter({ artistId, artistName, artistImageU
             <div className="flex items-center gap-2">
               <h2 className="truncate text-lg font-bold text-white">Facebook Groups Autopilot</h2>
               <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-300">
-                Controlado
+                Controlled
               </span>
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-white/55">
               <Users className="h-3.5 w-3.5" />
-              {stats.activeGroups ?? groups.length ?? 0} grupos · {stats.ready ?? 0} listos para publicar
+              {stats.activeGroups ?? groups.length ?? 0} groups · {stats.ready ?? 0} ready to publish
             </div>
           </div>
           <motion.div animate={{ rotate: open ? 180 : 0 }}>
@@ -209,9 +209,9 @@ export function FacebookGroupsCommandCenter({ artistId, artistName, artistImageU
               <div className="flex items-start gap-2 border-b border-white/5 bg-amber-400/[0.04] px-5 py-2.5 text-[11px] text-amber-200/70">
                 <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Modo <strong>Híbrido (recomendado)</strong>: el motor prepara y agenda todo con captions IA,
-                  pero <strong>tú confirmas cada publicación con un clic</strong>. Respeta las normas de cada grupo
-                  de Facebook — nunca spam. La auto-publicación 100% desatendida no está soportada por seguridad de tu cuenta.
+                  <strong>Hybrid mode (recommended)</strong>: the engine prepares and schedules everything with AI captions,
+                  but <strong>you confirm each publish with one click</strong>. Respect each Facebook group's rules
+                  — never spam. Fully unattended auto-posting is not supported, to keep your account safe.
                 </span>
               </div>
 
@@ -299,10 +299,10 @@ function OverviewTab({ stats, settings, nextReady, groups, onRunAutopilot, runni
   onRunAutopilot: () => void; running: boolean; onGoQueue: () => void; onGoGroups: () => void;
 }) {
   const tiles = [
-    { label: 'Grupos activos', value: stats.activeGroups ?? 0, icon: Users, color: '#38bdf8' },
-    { label: 'Listos para publicar', value: stats.ready ?? 0, icon: Send, color: '#10b981' },
-    { label: 'Agendados', value: stats.scheduled ?? 0, icon: Clock, color: '#f59e0b' },
-    { label: 'Publicados hoy', value: `${stats.publishedToday ?? 0}/${stats.dailyCap ?? 8}`, icon: CheckCircle2, color: '#a855f7' },
+    { label: 'Active groups', value: stats.activeGroups ?? 0, icon: Users, color: '#38bdf8' },
+    { label: 'Ready to publish', value: stats.ready ?? 0, icon: Send, color: '#10b981' },
+    { label: 'Scheduled', value: stats.scheduled ?? 0, icon: Clock, color: '#f59e0b' },
+    { label: 'Published today', value: `${stats.publishedToday ?? 0}/${stats.dailyCap ?? 8}`, icon: CheckCircle2, color: '#a855f7' },
   ];
   return (
     <div className="space-y-5">
@@ -319,11 +319,11 @@ function OverviewTab({ stats, settings, nextReady, groups, onRunAutopilot, runni
       <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/15 bg-blue-500/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Sparkles className="h-4 w-4 text-blue-300" /> Preparar publicaciones ahora
+            <Sparkles className="h-4 w-4 text-blue-300" /> Prepare posts now
           </div>
           <p className="mt-1 text-xs text-white/55">
-            Genera captions IA y arma la cola desde tu contenido (canciones, merch, conciertos, fotos…),
-            respetando tu límite diario de {settings?.dailyCap ?? 8}.
+            Generate AI captions and build the queue from your content (songs, merch, concerts, photos…),
+            respecting your daily limit of {settings?.dailyCap ?? 8}.
           </p>
         </div>
         <button
@@ -332,22 +332,22 @@ function OverviewTab({ stats, settings, nextReady, groups, onRunAutopilot, runni
           className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d5fc4] disabled:opacity-40"
         >
           {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-          {running ? 'Preparando…' : 'Preparar cola'}
+          {running ? 'Preparing…' : 'Prepare queue'}
         </button>
       </div>
 
       {groups.length === 0 && (
         <button onClick={onGoGroups} className="w-full rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-center text-sm text-white/60 transition hover:border-blue-400/40 hover:text-white">
           <Plus className="mx-auto mb-1 h-5 w-5" />
-          Añade tus primeros grupos de Facebook para empezar
+          Add your first Facebook groups to get started
         </button>
       )}
 
       {nextReady.length > 0 && (
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white">Próximos listos</h4>
-            <button onClick={onGoQueue} className="text-xs text-blue-300 hover:underline">Ver cola →</button>
+            <h4 className="text-sm font-semibold text-white">Up next</h4>
+            <button onClick={onGoQueue} className="text-xs text-blue-300 hover:underline">View queue →</button>
           </div>
           <div className="space-y-2">
             {nextReady.slice(0, 3).map((it) => {
@@ -365,7 +365,7 @@ function OverviewTab({ stats, settings, nextReady, groups, onRunAutopilot, runni
                     <div className="truncate text-sm text-white">{it.title}</div>
                     <div className="text-[11px] text-white/45">{meta.label}</div>
                   </div>
-                  <button onClick={onGoQueue} className="rounded-lg bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-200">Publicar</button>
+                  <button onClick={onGoQueue} className="rounded-lg bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-200">Publish</button>
                 </div>
               );
             })}
@@ -422,11 +422,11 @@ function DiscoverTab({ base, existingGroups, onAddGroup, adding }: {
       {/* Search bar */}
       <div className="rounded-2xl border border-blue-500/15 bg-blue-500/[0.04] p-4">
         <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
-          <Compass className="h-4 w-4 text-blue-300" /> Descubridor de grupos por palabra clave
+          <Compass className="h-4 w-4 text-blue-300" /> Keyword group discoverer
         </div>
         <p className="mb-3 text-xs text-white/55">
-          La IA conoce tu género y propone los mejores grupos abiertos, separados por tamaño.
-          Verifica el conteo real en Facebook y añádelos con un clic.
+          The AI knows your genre and suggests the best open groups, separated by size.
+          Verify the real member count on Facebook and add them with one click.
         </p>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -435,20 +435,20 @@ function DiscoverTab({ base, existingGroups, onAddGroup, adding }: {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && run()}
-              placeholder="Ej: rock alternativo, música indie, conciertos CDMX…"
+              placeholder="e.g. alternative rock, indie music, NYC concerts…"
               className="w-full rounded-xl border border-white/10 bg-black/30 pl-9 pr-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
             />
           </div>
           <button onClick={() => run()} disabled={loading || !keyword.trim()}
             className="flex shrink-0 items-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d5fc4] disabled:opacity-40">
             {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {loading ? 'Buscando…' : 'Descubrir'}
+            {loading ? 'Searching…' : 'Discover'}
           </button>
         </div>
       </div>
 
       {loading && !result && (
-        <div className="py-8 text-center text-sm text-white/40">La IA está buscando los mejores grupos…</div>
+        <div className="py-8 text-center text-sm text-white/40">The AI is finding the best groups…</div>
       )}
 
       {result && (
@@ -456,7 +456,7 @@ function DiscoverTab({ base, existingGroups, onAddGroup, adding }: {
           {/* Keyword variations */}
           {result.keywords.length > 0 && (
             <div>
-              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-white/40">Otras búsquedas sugeridas</div>
+              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-white/40">Other suggested searches</div>
               <div className="flex flex-wrap gap-1.5">
                 {result.keywords.map((k) => (
                   <button key={k} onClick={() => run(k)}
@@ -470,7 +470,7 @@ function DiscoverTab({ base, existingGroups, onAddGroup, adding }: {
 
           {/* Tier filter */}
           <div className="flex flex-wrap gap-1.5">
-            <FilterChip active={tierFilter === 'all'} onClick={() => setTierFilter('all')} label={`Todos (${result.groups.length})`} />
+            <FilterChip active={tierFilter === 'all'} onClick={() => setTierFilter('all')} label={`All (${result.groups.length})`} />
             {TIER_ORDER.map((t) => {
               const n = result.byTier?.[t]?.length || result.groups.filter((g) => g.sizeTier === t).length;
               if (!n) return null;
@@ -510,14 +510,14 @@ function DiscoverTab({ base, existingGroups, onAddGroup, adding }: {
                       <div className="mt-2.5 flex flex-wrap gap-1.5">
                         <a href={g.searchUrl} target="_blank" rel="noreferrer"
                           className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/10 hover:text-white">
-                          <ExternalLink className="h-3.5 w-3.5" /> Ver en Facebook
+                          <ExternalLink className="h-3.5 w-3.5" /> View on Facebook
                         </a>
                         <button onClick={() => !isAdded && add(g)} disabled={isAdded || adding}
                           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                             isAdded ? 'bg-emerald-500/15 text-emerald-300' : 'bg-[#1877F2] text-white hover:bg-[#0d5fc4]'
                           }`}>
                           {isAdded ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                          {isAdded ? 'Añadido' : 'Añadir a mis grupos'}
+                          {isAdded ? 'Added' : 'Add to my groups'}
                         </button>
                       </div>
                     </div>
@@ -554,25 +554,25 @@ function GroupsTab({ groups, loading, onAdd, adding, onToggle, onDelete }: {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
-        <div className="mb-3 text-sm font-semibold text-white">Añadir grupo abierto</div>
+        <div className="mb-3 text-sm font-semibold text-white">Add open group</div>
         <div className="grid gap-2.5 sm:grid-cols-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del grupo"
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name"
             className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50" />
-          <input value={members} onChange={(e) => setMembers(e.target.value.replace(/\D/g, ''))} placeholder="Miembros (opcional)"
+          <input value={members} onChange={(e) => setMembers(e.target.value.replace(/\D/g, ''))} placeholder="Members (optional)"
             className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50" />
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://facebook.com/groups/..."
             className="sm:col-span-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50" />
         </div>
         <button onClick={submit} disabled={adding || !name.trim()}
           className="mt-3 flex items-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0d5fc4] disabled:opacity-40">
-          <Plus className="h-4 w-4" /> Añadir grupo
+          <Plus className="h-4 w-4" /> Add group
         </button>
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-white/40">Cargando grupos…</div>
+        <div className="py-8 text-center text-sm text-white/40">Loading groups…</div>
       ) : groups.length === 0 ? (
-        <div className="py-8 text-center text-sm text-white/40">Aún no has añadido grupos.</div>
+        <div className="py-8 text-center text-sm text-white/40">You haven't added any groups yet.</div>
       ) : (
         <div className="space-y-2">
           {groups.map((g) => (
@@ -583,16 +583,16 @@ function GroupsTab({ groups, loading, onAdd, adding, onToggle, onDelete }: {
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-white">{g.name}</div>
                 <div className="flex items-center gap-2 text-[11px] text-white/45">
-                  {g.memberCount ? <span>{g.memberCount.toLocaleString()} miembros</span> : null}
-                  {g.publishCount ? <span>· {g.publishCount} publicados</span> : null}
+                  {g.memberCount ? <span>{g.memberCount.toLocaleString()} members</span> : null}
+                  {g.publishCount ? <span>· {g.publishCount} published</span> : null}
                   {g.url ? (
                     <a href={g.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-blue-300 hover:underline">
-                      Abrir <ExternalLink className="h-3 w-3" />
+                      Open <ExternalLink className="h-3 w-3" />
                     </a>
                   ) : null}
                 </div>
               </div>
-              <button onClick={() => onToggle(g.id, g.active === false)} title={g.active === false ? 'Activar' : 'Pausar'}
+              <button onClick={() => onToggle(g.id, g.active === false)} title={g.active === false ? 'Activate' : 'Pause'}
                 className={`rounded-lg p-2 transition ${g.active === false ? 'text-white/30 hover:text-white/60' : 'text-emerald-300 hover:bg-emerald-500/10'}`}>
                 <Power className="h-4 w-4" />
               </button>
@@ -617,17 +617,17 @@ function ContentTab({ items, loading, groups, base, onEnqueue, enqueuing }: {
   const types = useMemo(() => Array.from(new Set(items.map((i) => i.contentType))), [items]);
   const shown = filter === 'all' ? items : items.filter((i) => i.contentType === filter);
 
-  if (loading) return <div className="py-8 text-center text-sm text-white/40">Cargando contenido…</div>;
+  if (loading) return <div className="py-8 text-center text-sm text-white/40">Loading content…</div>;
   if (items.length === 0) return (
     <div className="py-8 text-center text-sm text-white/40">
-      No hay contenido para promover todavía. Publica canciones, merch, posts o conciertos primero.
+      No content to promote yet. Publish songs, merch, posts or concerts first.
     </div>
   );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1.5">
-        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label={`Todo (${items.length})`} />
+        <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label={`All (${items.length})`} />
         {types.map((t) => {
           const meta = TYPE_META[t] || TYPE_META.custom;
           return <FilterChip key={t} active={filter === t} onClick={() => setFilter(t)} label={meta.label} />;
@@ -718,18 +718,18 @@ function ComposeModal({ item, groups, base, onClose, onEnqueue, enqueuing }: {
             <button onClick={generate} disabled={generating}
               className="flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-200 disabled:opacity-50">
               {generating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              Generar con IA
+              Generate with AI
             </button>
           </div>
           <textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={4}
-            placeholder="Escribe o genera un caption para el grupo…"
+            placeholder="Write or generate a caption for the group…"
             className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50" />
         </div>
 
         <div className="mb-4">
-          <div className="mb-1.5 text-xs font-medium text-white/70">Grupos destino</div>
+          <div className="mb-1.5 text-xs font-medium text-white/70">Target groups</div>
           {groups.length === 0 ? (
-            <div className="text-xs text-white/40">No hay grupos activos. Añádelos en la pestaña Grupos.</div>
+            <div className="text-xs text-white/40">No active groups. Add them in the Groups tab.</div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {groups.map((g) => (
@@ -751,7 +751,7 @@ function ComposeModal({ item, groups, base, onClose, onEnqueue, enqueuing }: {
           })}
           disabled={enqueuing || selectedGroups.length === 0}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d5fc4] disabled:opacity-40">
-          <Send className="h-4 w-4" /> Añadir a la cola
+          <Send className="h-4 w-4" /> Add to queue
         </button>
       </motion.div>
     </motion.div>
@@ -767,10 +767,10 @@ function QueueTab({ items, loading, groups, onPublish, onSkip, onDelete }: {
   const active = items.filter((i) => i.status === 'ready' || i.status === 'scheduled');
   const done = items.filter((i) => i.status === 'published');
 
-  if (loading) return <div className="py-8 text-center text-sm text-white/40">Cargando cola…</div>;
+  if (loading) return <div className="py-8 text-center text-sm text-white/40">Loading queue…</div>;
   if (items.length === 0) return (
     <div className="py-8 text-center text-sm text-white/40">
-      La cola está vacía. Usa "Preparar cola" o añade contenido desde la pestaña Contenido.
+      The queue is empty. Use "Prepare queue" or add content from the Content tab.
     </div>
   );
 
@@ -781,7 +781,7 @@ function QueueTab({ items, loading, groups, onPublish, onSkip, onDelete }: {
       ))}
       {done.length > 0 && (
         <div className="pt-2">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Publicados ({done.length})</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Published ({done.length})</div>
           <div className="space-y-1.5">
             {done.slice(0, 6).map((it) => (
               <div key={it.id} className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.015] px-3 py-2 text-xs text-white/50">
@@ -840,8 +840,8 @@ function QueueCard({ item, groupById, onPublish, onSkip, onDelete }: {
           <div className="mt-1 truncate text-sm font-medium text-white">{item.title}</div>
         </div>
         <div className="flex shrink-0 flex-col gap-1">
-          <button onClick={() => onSkip(item.id)} title="Saltar" className="rounded-lg p-1.5 text-white/30 hover:text-white/60"><SkipForward className="h-4 w-4" /></button>
-          <button onClick={() => onDelete(item.id)} title="Eliminar" className="rounded-lg p-1.5 text-white/30 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
+          <button onClick={() => onSkip(item.id)} title="Skip" className="rounded-lg p-1.5 text-white/30 hover:text-white/60"><SkipForward className="h-4 w-4" /></button>
+          <button onClick={() => onDelete(item.id)} title="Delete" className="rounded-lg p-1.5 text-white/30 hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -850,13 +850,13 @@ function QueueCard({ item, groupById, onPublish, onSkip, onDelete }: {
           <p className="whitespace-pre-wrap text-xs leading-relaxed text-white/75">{item.caption}</p>
           <button onClick={copyCaption} className="flex shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-[10px] text-white/60 hover:text-white">
             {copied ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-            {copied ? 'Copiado' : 'Copiar'}
+            {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
       </div>
 
       <div className="mt-3">
-        <div className="mb-1.5 text-[11px] font-medium text-white/50">Publicar en cada grupo (1 clic — copia caption + abre el grupo):</div>
+        <div className="mb-1.5 text-[11px] font-medium text-white/50">Publish to each group (1 click — copies caption + opens the group):</div>
         <div className="flex flex-wrap gap-1.5">
           {item.groupIds.map((gid) => {
             const g = groupById[gid];
@@ -872,7 +872,7 @@ function QueueCard({ item, groupById, onPublish, onSkip, onDelete }: {
               </button>
             );
           })}
-          {item.groupIds.length === 0 && <span className="text-[11px] text-white/40">Sin grupos asignados.</span>}
+          {item.groupIds.length === 0 && <span className="text-[11px] text-white/40">No groups assigned.</span>}
         </div>
       </div>
     </div>
@@ -890,32 +890,32 @@ function SettingsTab({ settings, groups, onSave, saving }: {
     minIntervalMinutes: settings?.minIntervalMinutes ?? 45,
     rotateContent: settings?.rotateContent ?? true,
     tone: settings?.tone ?? 'energetic',
-    language: settings?.language ?? 'es',
+    language: settings?.language ?? 'en',
     defaultGroupIds: settings?.defaultGroupIds ?? [],
   });
   const set = (k: keyof FbSettings, v: any) => setS((p) => ({ ...p, [k]: v }));
 
   return (
     <div className="space-y-4">
-      <ToggleRow label="Autopilot (preparar cola automáticamente)" hint="El motor arma la cola desde tu contenido cada ~10 min. Sigue siendo híbrido: tú confirmas cada publicación."
+      <ToggleRow label="Autopilot (build the queue automatically)" hint="The engine builds the queue from your content every ~10 min. Still hybrid: you confirm each publish."
         value={s.autopilot} onChange={(v) => set('autopilot', v)} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <NumberField label="Límite diario" value={s.dailyCap} min={1} max={50} onChange={(v) => set('dailyCap', v)} />
-        <NumberField label="Intervalo mínimo (min)" value={s.minIntervalMinutes} min={5} max={720} onChange={(v) => set('minIntervalMinutes', v)} />
+        <NumberField label="Daily limit" value={s.dailyCap} min={1} max={50} onChange={(v) => set('dailyCap', v)} />
+        <NumberField label="Minimum interval (min)" value={s.minIntervalMinutes} min={5} max={720} onChange={(v) => set('minIntervalMinutes', v)} />
       </div>
-      <ToggleRow label="Rotar tipos de contenido" hint="Alterna canciones, merch, conciertos… para que la cola no sea repetitiva."
+      <ToggleRow label="Rotate content types" hint="Alternate songs, merch, concerts… so the queue isn't repetitive."
         value={s.rotateContent} onChange={(v) => set('rotateContent', v)} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <SelectField label="Tono" value={s.tone} onChange={(v) => set('tone', v)}
-          options={[['energetic', 'Enérgico'], ['friendly', 'Cercano'], ['hype', 'Hype'], ['chill', 'Chill'], ['professional', 'Profesional']]} />
-        <SelectField label="Idioma" value={s.language} onChange={(v) => set('language', v)}
-          options={[['es', 'Español'], ['en', 'English']]} />
+        <SelectField label="Tone" value={s.tone} onChange={(v) => set('tone', v)}
+          options={[['energetic', 'Energetic'], ['friendly', 'Friendly'], ['hype', 'Hype'], ['chill', 'Chill'], ['professional', 'Professional']]} />
+        <SelectField label="Language" value={s.language} onChange={(v) => set('language', v)}
+          options={[['es', 'Spanish'], ['en', 'English']]} />
       </div>
 
       <div>
-        <div className="mb-1.5 text-xs font-medium text-white/70">Grupos por defecto (para autopilot)</div>
+        <div className="mb-1.5 text-xs font-medium text-white/70">Default groups (for autopilot)</div>
         {groups.length === 0 ? (
-          <div className="text-xs text-white/40">Añade grupos primero.</div>
+          <div className="text-xs text-white/40">Add groups first.</div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {groups.map((g) => (
@@ -926,12 +926,12 @@ function SettingsTab({ settings, groups, onSave, saving }: {
             ))}
           </div>
         )}
-        <p className="mt-1.5 text-[11px] text-white/40">Si no eliges ninguno, el autopilot usa todos los grupos activos.</p>
+        <p className="mt-1.5 text-[11px] text-white/40">If you don't pick any, autopilot uses all active groups.</p>
       </div>
 
       <button onClick={() => onSave(s)} disabled={saving}
         className="flex items-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d5fc4] disabled:opacity-40">
-        {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Guardar ajustes
+        {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Save settings
       </button>
     </div>
   );

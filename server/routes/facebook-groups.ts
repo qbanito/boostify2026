@@ -63,7 +63,7 @@ const DEFAULT_SETTINGS = {
   minIntervalMinutes: 45,    // min spacing between two ready items
   rotateContent: true,       // cycle through content types so it isn't repetitive
   tone: 'energetic',         // caption tone
-  language: 'es',            // caption language
+  language: 'en',            // caption language
   defaultGroupIds: [] as string[],
 };
 
@@ -420,6 +420,57 @@ function fbGroupSearchUrl(query: string): string {
   return `https://www.facebook.com/search/groups/?q=${encodeURIComponent(query)}`;
 }
 
+/**
+ * Deterministic, AI-free fallback set of group archetypes. Used when the LLM is
+ * slow/unavailable so /discover always returns useful, deep-linkable results
+ * instead of timing out. Genre- and keyword-aware, spread across size tiers.
+ */
+function buildHeuristicGroups(keyword: string, genre: string, lang: string): {
+  groups: DiscoveredGroup[]; keywords: string[];
+} {
+  const kw = keyword.trim();
+  const g = (genre || 'music').trim();
+  const cap = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+  const seeds: Array<{ name: string; query: string; niche: string; sizeTier: DiscoveredGroup['sizeTier']; relevance: string }> = [
+    { name: `${cap(g)} Music Lovers Worldwide`, query: `${g} music lovers`, niche: `${cap(g)} fans`, sizeTier: 'mega', relevance: `Huge audience of ${g} fans to reach with your releases.` },
+    { name: `New Music Discovery & Promotion`, query: `new music discovery promotion`, niche: 'Indie discovery', sizeTier: 'mega', relevance: `Listeners actively looking for new artists like you.` },
+    { name: `Independent & Unsigned Artists`, query: `independent unsigned artists`, niche: 'Indie artists', sizeTier: 'large', relevance: `Peer community for sharing and cross-promotion.` },
+    { name: `${cap(kw)} Community`, query: kw, niche: cap(kw), sizeTier: 'large', relevance: `Directly matches your keyword "${kw}".` },
+    { name: `${cap(g)} Producers & Musicians`, query: `${g} producers musicians`, niche: `${cap(g)} creators`, sizeTier: 'mid', relevance: `Collaborators and fans within the ${g} scene.` },
+    { name: `Spotify Playlist Curators & Submissions`, query: `spotify playlist curators submissions`, niche: 'Playlisting', sizeTier: 'mid', relevance: `Curators who add fresh ${g} tracks to playlists.` },
+    { name: `Support Indie Musicians`, query: `support indie musicians`, niche: 'Fan support', sizeTier: 'mid', relevance: `Fans who champion independent artists.` },
+    { name: `${cap(kw)} Fans & Events`, query: `${kw} events`, niche: 'Local scene', sizeTier: 'niche', relevance: `Tight-knit group around "${kw}" with engaged members.` },
+    { name: `Underground ${cap(g)} Scene`, query: `underground ${g}`, niche: `Underground ${g}`, sizeTier: 'niche', relevance: `Dedicated niche fans of the ${g} underground.` },
+    { name: `Music Promo Exchange`, query: `music promo exchange`, niche: 'Promo swap', sizeTier: 'niche', relevance: `Artists swapping shares and support.` },
+  ];
+  const groups: DiscoveredGroup[] = seeds.map((s) => ({
+    name: s.name.slice(0, 120),
+    query: s.query.slice(0, 80),
+    searchUrl: fbGroupSearchUrl(s.query),
+    niche: s.niche.slice(0, 60),
+    sizeTier: s.sizeTier,
+    estMembers: SIZE_LABEL[s.sizeTier],
+    relevance: s.relevance.slice(0, 240),
+    language: lang === 'English' ? 'en' : 'es',
+  })).sort((a, b) => SIZE_ORDER[a.sizeTier] - SIZE_ORDER[b.sizeTier]);
+
+  const keywords = [
+    kw, `${g} fans`, `${g} new music`, `independent ${g}`, 'new music promotion',
+    'indie music discovery', `${g} community`, 'spotify playlist submission',
+  ].filter((k, i, a) => k && a.indexOf(k) === i).slice(0, 8);
+
+  return { groups, keywords };
+}
+
+/** Resolve a promise but give up after `ms` (returns null on timeout). */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+
 /** Resolve the artist's dominant genre (from their catalog) for relevance. */
 async function resolveArtistGenre(artistPk: number): Promise<string | null> {
   try {
@@ -473,13 +524,14 @@ Propose 10-14 distinct, realistic OPEN Facebook group archetypes worth joining t
 Also include "keywords": an array of 6-8 alternative search keywords/phrases to discover more groups.
 Return JSON exactly: { "keywords": string[], "groups": [ { name, query, niche, sizeTier, estMembers, relevance, language } ] }`;
 
-    const raw = await callAI('analysis', [
+    const raw = await withTimeout(callAI('analysis', [
       { role: 'system', content: sys },
       { role: 'user', content: user },
-    ], { temperature: 0.8, maxTokens: 1600, requireJSON: true, label: 'fb-group-discover' });
+    ], { temperature: 0.8, maxTokens: 1600, requireJSON: true, label: 'fb-group-discover' })
+      .catch((err) => { logger.warn('[fb-groups] discover AI failed:', err?.message); return null; }), 20_000);
 
-    const parsed = safeJsonParse<{ keywords?: string[]; groups?: any[] }>(raw) || {};
-    const groups: DiscoveredGroup[] = (parsed.groups || [])
+    const parsed = (raw && safeJsonParse<{ keywords?: string[]; groups?: any[] }>(raw)) || {};
+    let groups: DiscoveredGroup[] = (parsed.groups || [])
       .filter((g) => g && g.name)
       .map((g) => {
         const tier = ['mega', 'large', 'mid', 'niche'].includes(g.sizeTier) ? g.sizeTier : 'mid';
@@ -497,15 +549,24 @@ Return JSON exactly: { "keywords": string[], "groups": [ { name, query, niche, s
       })
       .sort((a, b) => (SIZE_ORDER[a.sizeTier] - SIZE_ORDER[b.sizeTier]));
 
-    const keywords = Array.isArray(parsed.keywords)
+    let keywords = Array.isArray(parsed.keywords)
       ? parsed.keywords.map((k) => String(k).slice(0, 60)).filter(Boolean).slice(0, 8)
       : [];
+
+    // AI was slow/unavailable or returned nothing usable → deterministic fallback
+    // so the artist always gets deep-linkable, genre-aware suggestions.
+    const usedFallback = groups.length === 0;
+    if (usedFallback) {
+      const fb = buildHeuristicGroups(keyword, effectiveGenre, lang);
+      groups = fb.groups;
+      if (keywords.length === 0) keywords = fb.keywords;
+    }
 
     // Group by tier for the UI.
     const byTier: Record<string, DiscoveredGroup[]> = { mega: [], large: [], mid: [], niche: [] };
     for (const g of groups) byTier[g.sizeTier].push(g);
 
-    await audit(req.params.artistId, 'discover', { keyword, count: groups.length }, uid(req));
+    await audit(req.params.artistId, 'discover', { keyword, count: groups.length, fallback: usedFallback }, uid(req));
     return res.json({
       success: true,
       keyword,
@@ -515,7 +576,7 @@ Return JSON exactly: { "keywords": string[], "groups": [ { name, query, niche, s
       byTier,
       tierLabels: SIZE_LABEL,
       searchUrlFor: fbGroupSearchUrl(keyword),
-      note: 'Los conteos de miembros son estimaciones de IA. Abre el enlace de Facebook para ver el tamaño real y unirte.',
+      note: 'Member counts are AI estimates. Open the Facebook link to see the real size and join.',
     });
   } catch (e: any) {
     logger.error('[fb-groups] discover error:', e?.message);
