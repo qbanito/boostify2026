@@ -69,6 +69,9 @@ async function ensureLyricsVideoJobsTable(): Promise<void> {
   // Persist the Lambda render handle so an in-progress render can be RESUMED
   // after a server restart instead of being lost (the poll loop is in-memory).
   await pool.query(`ALTER TABLE lyrics_video_jobs ADD COLUMN IF NOT EXISTS lambda_handle_json JSONB`);
+  // Dedicated cinematic YouTube thumbnail (Netflix-style poster), kept separate
+  // from cover_art_url so regenerating it never alters the video background.
+  await pool.query(`ALTER TABLE lyrics_video_jobs ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
 }
 
 /**
@@ -856,12 +859,91 @@ router.get('/my-jobs', authenticate, async (req, res) => {
     const userId = (req as any).user?.id as number;
     const { rows } = await pool.query(
       `SELECT id, status, progress, output_url, youtube_url, duration_secs,
-              song_title, artist_name, cover_art_url, theme, accent_color, created_at
+              song_title, artist_name, cover_art_url, thumbnail_url, theme, accent_color, created_at
        FROM lyrics_video_jobs WHERE artist_id=$1 ORDER BY created_at DESC LIMIT 20`,
       [userId]
     );
     return res.json({ jobs: rows });
   } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/lyrics-video/:jobId/thumbnail — (re)generate a cinematic poster
+// thumbnail (Netflix-style key art with the song title + BOOSTIFY, story based
+// on the lyrics) and store it on the job. Used by the "Update thumbnail" button.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/:jobId/thumbnail', authenticate, async (req, res) => {
+  try {
+    const jobId = parseInt(req.params.jobId, 10);
+    const userId = (req as any).user?.id as number;
+    if (!jobId || isNaN(jobId)) return res.status(400).json({ error: 'Invalid job id' });
+
+    const { rows } = await pool.query(
+      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
+      [jobId, userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+    const job = rows[0];
+
+    const ctx = await getArtistMarketingContext(userId);
+    const songTitle = job.song_title || 'Lyric Video';
+    const artistName = ctx.artistName || job.artist_name || 'Artist';
+
+    const thumbnailUrl = await generateYoutubeThumbnail({
+      artistName,
+      songTitle,
+      genre: ctx.genre,
+      profileImageUrl: ctx.profileImageUrl,
+      coverArt: job.cover_art_url || undefined,
+      lyrics: extractLyricsFromJob(job),
+    });
+    if (!thumbnailUrl) {
+      return res.status(502).json({ error: 'Could not generate the thumbnail. Try again.' });
+    }
+    await pool.query(
+      `UPDATE lyrics_video_jobs SET thumbnail_url=$2, updated_at=NOW() WHERE id=$1`,
+      [jobId, thumbnailUrl]
+    );
+    return res.json({ success: true, thumbnailUrl });
+  } catch (err: any) {
+    console.error('[LyricsVideo] /thumbnail error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/lyrics-video/:jobId — delete a rendered video (DB row + best-effort
+// storage cleanup). Scoped to the owner artist.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.delete('/:jobId', authenticate, async (req, res) => {
+  try {
+    const jobId = parseInt(req.params.jobId, 10);
+    const userId = (req as any).user?.id as number;
+    if (!jobId || isNaN(jobId)) return res.status(400).json({ error: 'Invalid job id' });
+
+    const { rows } = await pool.query(
+      `SELECT id FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
+      [jobId, userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+
+    // Best-effort: remove the rendered MP4 folder from Firebase Storage.
+    try {
+      const { getStorage } = await import('firebase-admin/storage');
+      const bucket = getStorage().bucket();
+      await bucket.deleteFiles({ prefix: `lyrics-videos/${jobId}/` });
+    } catch (e: any) {
+      console.warn('[LyricsVideo] storage cleanup failed (non-fatal):', e?.message);
+    }
+
+    await pool.query(`DELETE FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`, [jobId, userId]);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[LyricsVideo] DELETE error:', err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -934,16 +1016,24 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
     description = (description || '').slice(0, 4900);
     tags = (tags || []).slice(0, 30);
 
-    // Miniatura IA con la foto del artista (reemplaza la carátula por defecto).
-    let thumbnailUrl: string | undefined = job.cover_art_url || undefined;
-    if (generateThumbnail) {
+    // Miniatura IA cinematográfica (póster estilo cartel) con la foto del artista.
+    // Reutiliza la ya generada si existe; si no, crea una nueva basada en la letra.
+    let thumbnailUrl: string | undefined = job.thumbnail_url || job.cover_art_url || undefined;
+    if (generateThumbnail && !job.thumbnail_url) {
       thumbnailUrl = await generateYoutubeThumbnail({
         artistName,
         songTitle,
         genre: ctx.genre,
         profileImageUrl: ctx.profileImageUrl,
         coverArt: job.cover_art_url || undefined,
+        lyrics: extractLyricsFromJob(job),
       });
+      if (thumbnailUrl) {
+        await pool.query(
+          `UPDATE lyrics_video_jobs SET thumbnail_url=$2, updated_at=NOW() WHERE id=$1`,
+          [jobId, thumbnailUrl]
+        );
+      }
     }
 
     // Ruta A (común): sin token explícito → usar el servicio con la conexión
@@ -977,7 +1067,7 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
         playlistDescription: `Todas las canciones de ${artistName}. ${ctx.artistUrl}`,
       });
       await pool.query(
-        `UPDATE lyrics_video_jobs SET youtube_url=$2, cover_art_url=COALESCE($3, cover_art_url), updated_at=NOW() WHERE id=$1`,
+        `UPDATE lyrics_video_jobs SET youtube_url=$2, thumbnail_url=COALESCE($3, thumbnail_url), updated_at=NOW() WHERE id=$1`,
         [jobId, up.url, thumbnailUrl || null]
       );
       return res.json({
@@ -1551,16 +1641,27 @@ async function generateYoutubeThumbnail(opts: {
   genre?: string;
   profileImageUrl?: string;
   coverArt?: string;
+  lyrics?: string;
 }): Promise<string | undefined> {
-  const { artistName, songTitle, genre = '', profileImageUrl, coverArt } = opts;
+  const { artistName, songTitle, genre = '', profileImageUrl, coverArt, lyrics = '' } = opts;
   const refs = [profileImageUrl, coverArt].filter((u): u is string => !!u && /^https?:\/\//.test(u));
+  // Distill the lyrics into a short visual brief so the poster tells the song's story.
+  const story = lyrics.replace(/\s+/g, ' ').trim().slice(0, 600);
   const prompt =
-    `Diseña un THUMBNAIL de YouTube ultra llamativo y profesional (formato horizontal 16:9) para el lyric video "${songTitle}" del artista musical` +
-    (genre ? ` de ${genre}` : '') + ` "${artistName}". ` +
-    `Usa la imagen de referencia del artista para conservar su PARECIDO y rostro real como protagonista. ` +
-    `Look cinematográfico premium, alto contraste, iluminación dramática, colores vibrantes que destaquen en el feed, ` +
-    `composición tipo portada de hit musical con energía viral. Deja espacio limpio para un título. ` +
-    `NO incluyas texto, palabras, letras ni logos en la imagen.`;
+    `Diseña un PÓSTER CINEMATOGRÁFICO estilo cartel de película / serie premium (formato horizontal 16:9) ` +
+    `para el lyric video "${songTitle}" del artista musical` + (genre ? ` de ${genre}` : '') + ` "${artistName}". ` +
+    `Es un THUMBNAIL ganador para YouTube: cine de alto presupuesto, iluminación dramática, alto contraste, ` +
+    `colores intensos y atmósfera épica que detenga el scroll. ` +
+    (refs.length
+      ? `Usa la imagen de referencia del artista para conservar su PARECIDO y rostro real como protagonista de la escena. `
+      : `El artista aparece como protagonista heroico de la escena. `) +
+    (story
+      ? `La escena debe contar visualmente la HISTORIA de la canción inspirada en esta letra: "${story}". `
+      : `Construye una escena cinematográfica evocadora acorde al título. `) +
+    `Integra el TÍTULO "${songTitle}" como un TRATAMIENTO TIPOGRÁFICO de título de película grande, dramático y legible (estilo cartel de blockbuster). ` +
+    `Incluye la palabra "BOOSTIFY" como wordmark limpio, pequeño y elegante (créditos superiores o inferiores del cartel). ` +
+    `NO incluyas ningún logo de marca, NO menciones ni representes Netflix ni ninguna plataforma de streaming, ` +
+    `NO añadas marcas de agua. Solo el título de la canción y la palabra BOOSTIFY como texto.`;
   try {
     if (refs.length) {
       const { editImageWithGPTImage1 } = await import('../services/fal-service');
@@ -1750,13 +1851,14 @@ async function processAlbum(albumId: number): Promise<void> {
               storeUrl: ctx.storeUrl,
               products: ctx.products,
             });
-            // Miniatura IA con el rostro del artista (reemplaza la carátula por defecto).
+            // Miniatura IA cinematográfica (póster con título + BOOSTIFY) basada en la letra.
             const thumbnailUrl = await generateYoutubeThumbnail({
               artistName: ctx.artistName || artistName,
               songTitle: song.title,
               genre: ctx.genre,
               profileImageUrl: ctx.profileImageUrl,
               coverArt: song.coverArt || undefined,
+              lyrics,
             });
             const up = await uploadVideoToYoutube({
               userId: artistId,
@@ -1772,7 +1874,7 @@ async function processAlbum(albumId: number): Promise<void> {
             });
             song.youtubeUrl = up.url;
             song.uploadError = undefined;
-            await pool.query(`UPDATE lyrics_video_jobs SET youtube_url=$2, updated_at=NOW() WHERE id=$1`, [song.jobId, up.url]);
+            await pool.query(`UPDATE lyrics_video_jobs SET youtube_url=$2, thumbnail_url=COALESCE($3, thumbnail_url), updated_at=NOW() WHERE id=$1`, [song.jobId, up.url, thumbnailUrl || null]);
             console.log(`[LyricsAlbum] ↑ "${song.title}" subido a YouTube: ${up.url}`);
           } else {
             song.uploadError = 'YouTube no conectado';

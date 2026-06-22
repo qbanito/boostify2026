@@ -6,6 +6,7 @@ import {
   Music, Mic, Play, Pause, Download, Upload, Youtube,
   Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft,
   Sparkles, Settings, Eye, RefreshCw, X, Wand2, Palette,
+  Image as ImageIcon, Trash2,
 } from 'lucide-react';
 import { LyricsVideoComposition } from '../../../../remotion/LyricsVideoComposition';
 import type { LyricsVideoProps, LyricsSegment } from '../../../../remotion/LyricsVideoComposition';
@@ -1261,6 +1262,7 @@ interface MyVideoJob {
   song_title?: string;
   artist_name?: string;
   cover_art_url?: string;
+  thumbnail_url?: string;
   created_at?: string;
 }
 
@@ -1270,6 +1272,8 @@ const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
   const [uploadNotice, setUploadNotice] = useState<string>('');
+  const [thumbingId, setThumbingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<MyVideoJob[]>({
     queryKey: ['lyricsVideoMyJobs', refreshKey],
@@ -1341,6 +1345,49 @@ const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
     }
   };
 
+  // Regenerate a cinematic poster thumbnail (Netflix-style, title + BOOSTIFY).
+  const updateThumbnail = async (jobId: number) => {
+    setThumbingId(jobId);
+    setUploadError('');
+    setUploadNotice('');
+    try {
+      const res = await fetch(`/api/lyrics-video/${jobId}/thumbnail`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const d = await readJsonSafe<any>(res);
+      if (!res.ok || !d?.thumbnailUrl) throw new Error(d?.error || 'Could not update the thumbnail');
+      setUploadNotice('New cinematic thumbnail ready.');
+      queryClient.invalidateQueries({ queryKey: ['lyricsVideoMyJobs'] });
+    } catch (err: any) {
+      setUploadError(err?.message || 'Thumbnail update failed');
+    } finally {
+      setThumbingId(null);
+    }
+  };
+
+  // Delete a rendered video (DB row + storage cleanup).
+  const deleteJob = async (jobId: number) => {
+    if (!window.confirm('Delete this video permanently? This cannot be undone.')) return;
+    setDeletingId(jobId);
+    setUploadError('');
+    setUploadNotice('');
+    try {
+      const res = await fetch(`/api/lyrics-video/${jobId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const d = await readJsonSafe<any>(res);
+      if (!res.ok) throw new Error(d?.error || 'Could not delete the video');
+      queryClient.invalidateQueries({ queryKey: ['lyricsVideoMyJobs'] });
+    } catch (err: any) {
+      setUploadError(err?.message || 'Delete failed');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const done = (data ?? []).filter((j) => j.status === 'done' && j.output_url);
 
   if (isLoading) {
@@ -1401,6 +1448,39 @@ const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
               <span className="text-sm font-semibold text-white truncate">{job.song_title || 'Lyrics Video'}</span>
             </div>
             <video src={job.output_url} controls playsInline className="w-full rounded-lg max-h-52 bg-black" />
+            {/* Cinematic YouTube thumbnail (Netflix-style poster) */}
+            <div className="rounded-lg overflow-hidden border border-white/10 bg-black/40">
+              <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-zinc-400">
+                <ImageIcon className="w-3 h-3 text-fuchsia-400" /> YouTube thumbnail
+              </div>
+              <div className="relative aspect-video bg-zinc-900">
+                {(job.thumbnail_url || job.cover_art_url) ? (
+                  <img
+                    src={job.thumbnail_url || job.cover_art_url}
+                    alt="thumbnail"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-[11px]">
+                    No thumbnail yet
+                  </div>
+                )}
+                {thumbingId === job.id && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-xs gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Generating poster…
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => updateThumbnail(job.id)}
+                disabled={thumbingId === job.id}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-200 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Generate a cinematic poster (title + BOOSTIFY) based on the lyrics"
+              >
+                {thumbingId === job.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                {thumbingId === job.id ? 'Generating…' : (job.thumbnail_url ? 'Update thumbnail' : 'Generate thumbnail')}
+              </button>
+            </div>
             <div className="flex items-center gap-3 text-xs flex-wrap">
               <a href={job.output_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300">
                 <Download className="w-3.5 h-3.5" /> Download
@@ -1413,13 +1493,22 @@ const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
                 <button
                   onClick={() => uploadJob(job.id)}
                   disabled={uploadingId === job.id || !yt?.connected}
-                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
                   title={yt?.connected ? 'Generate SEO + AI thumbnail and upload to your channel' : 'Connect your YouTube channel first'}
                 >
                   {uploadingId === job.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                   {uploadingId === job.id ? 'Uploading…' : 'Upload to YouTube'}
                 </button>
               )}
+              <button
+                onClick={() => deleteJob(job.id)}
+                disabled={deletingId === job.id}
+                className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                title="Delete this video"
+              >
+                {deletingId === job.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Delete
+              </button>
             </div>
             {uploadingId === job.id && (
               <StagedUploadProgress active />
