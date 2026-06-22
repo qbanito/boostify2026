@@ -413,6 +413,12 @@ router.post('/transcribe', authenticate, async (req, res) => {
 
     // Create job row
     const { pgSongId, firestoreSongId } = await resolveSongIds(songId);
+    // Resolver el nombre del artista del PERFIL que se está viendo.
+    // El cliente manda el nombre del perfil (p.ej. "REDWINE CONTROL"), que es
+    // la fuente correcta — el usuario logueado (userId) puede ser un row distinto
+    // sin artist_name. Si el cliente no lo manda, lo buscamos por el id de perfil
+    // (bodyArtistId) y por último por userId.
+    const resolvedArtistName = await resolveProfileArtistName(artistName, bodyArtistId, userId);
     const { rows: [row] } = await pool.query<{ id: number }>(`
       INSERT INTO lyrics_video_jobs
         (artist_id, song_id, firestore_song_id, status, segments_json, words_json, duration_secs,
@@ -427,7 +433,7 @@ router.post('/transcribe', authenticate, async (req, res) => {
       JSON.stringify(result.words),
       result.duration ?? null,
       songTitle ?? null,
-      artistName ?? null,
+      resolvedArtistName,
       coverArtUrl ?? null,
       audioUrl,
     ]);
@@ -544,14 +550,13 @@ router.post('/render', authenticate, async (req, res) => {
     }
 
     // Resolve the lyric style: explicit choice wins, else auto from genre.
+    // Also resolve the real artist name: the job already stored the profile name
+    // at transcribe time; fall back to a profile lookup only if it's missing.
+    const ctx = await getArtistMarketingContext(userId);
+    const resolvedArtistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
     let lyricStyle = lyricStyleInput;
     if (lyricStyle === 'auto') {
-      let genre = '';
-      try {
-        const ctx = await getArtistMarketingContext(userId);
-        genre = ctx.genre || '';
-      } catch { /* genre optional */ }
-      lyricStyle = lyricStyleForGenre(genre);
+      lyricStyle = lyricStyleForGenre(ctx.genre || '');
     }
 
     const durationSecs = Number(job.duration_secs) || 180;
@@ -563,7 +568,7 @@ router.post('/render', authenticate, async (req, res) => {
     const inputProps = {
       audioUrl: job.audio_url,
       coverArt: job.cover_art_url ?? undefined,
-      artistName: job.artist_name ?? 'Artist',
+      artistName: resolvedArtistName,
       songTitle: job.song_title ?? 'Lyrics Video',
       segments,
       theme,
@@ -870,10 +875,49 @@ router.get('/my-jobs', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/lyrics-video/:jobId/thumbnail — (re)generate a cinematic poster
-// thumbnail (Netflix-style key art with the song title + BOOSTIFY, story based
-// on the lyrics) and store it on the job. Used by the "Update thumbnail" button.
+// GET /api/lyrics-video/search-trends — detecta tendencias de búsqueda REALES
+// (autocompletado de YouTube/Google) para el artista/canción/género. Sirve para
+// ver por qué frases busca la gente antes de publicar y elegir keywords.
+// Query: ?artistName=&songTitle=&genre=  (o ?jobId= para tomarlos del job)
 // ─────────────────────────────────────────────────────────────────────────────
+router.get('/search-trends', authenticate, async (req, res) => {
+  try {
+    const userId = (req as any).user?.id as number;
+    let artistName = String(req.query.artistName || '').trim();
+    let songTitle = String(req.query.songTitle || '').trim();
+    let genre = String(req.query.genre || '').trim();
+
+    const jobId = req.query.jobId ? parseInt(String(req.query.jobId), 10) : 0;
+    if (jobId) {
+      const { rows } = await pool.query(
+        `SELECT artist_id, song_title, artist_name FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
+        [jobId, userId]
+      );
+      if (rows[0]) {
+        songTitle = songTitle || rows[0].song_title || '';
+        artistName = artistName || (await resolveProfileArtistName(rows[0].artist_name, rows[0].artist_id, userId));
+      }
+    }
+    if (!artistName && !songTitle && !genre) {
+      const ctx = await getArtistMarketingContext(userId);
+      artistName = ctx.artistName;
+      genre = genre || ctx.genre;
+    }
+    const year = new Date().getFullYear();
+    const trends = await fetchSearchTrends([
+      artistName,
+      songTitle,
+      artistName && songTitle ? `${artistName} ${songTitle}` : '',
+      genre ? `${genre} ${year}` : '',
+      genre ? `${genre} music` : '',
+      genre ? `nuevas canciones ${genre}` : '',
+    ]);
+    return res.json({ success: true, artistName, songTitle, genre, trends });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 
 router.post('/:jobId/thumbnail', authenticate, async (req, res) => {
   try {
@@ -890,7 +934,7 @@ router.post('/:jobId/thumbnail', authenticate, async (req, res) => {
 
     const ctx = await getArtistMarketingContext(userId);
     const songTitle = job.song_title || 'Lyric Video';
-    const artistName = ctx.artistName || job.artist_name || 'Artist';
+    const artistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
 
     const thumbnailUrl = await generateYoutubeThumbnail({
       artistName,
@@ -991,7 +1035,7 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
     // Contexto del artista para SEO competitivo + CTA a su perfil/tienda.
     const ctx = await getArtistMarketingContext(userId);
     const songTitle = job.song_title || 'Lyric Video';
-    const artistName = ctx.artistName || job.artist_name || 'Artist';
+    const artistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
 
     // Resolver metadata: si faltan campos o auto=true → SEO avanzado con GLM-5.2.
     let title = body.title;
@@ -1519,6 +1563,28 @@ async function getArtistMarketingContext(userId: number): Promise<ArtistMarketin
   return { artistName, slug, genre, bio, profileImageUrl, products, artistUrl, storeUrl };
 }
 
+// Resuelve el nombre del artista del PERFIL que se está editando.
+// Prioridad: (1) el nombre que manda el cliente (refleja el perfil visto, p.ej.
+// "REDWINE CONTROL"); (2) el perfil identificado por profileId (pgId del perfil);
+// (3) el usuario logueado; (4) "Artist". Esto evita usar un row de usuario
+// distinto (sin artist_name) cuando el id logueado ≠ id del perfil.
+async function resolveProfileArtistName(
+  clientName?: string,
+  profileId?: number,
+  fallbackUserId?: number,
+): Promise<string> {
+  const fromClient = (clientName || '').trim();
+  if (fromClient && fromClient !== 'Artist') return fromClient;
+  for (const id of [profileId, fallbackUserId]) {
+    if (!id) continue;
+    try {
+      const ctx = await getArtistMarketingContext(id);
+      if (ctx.artistName && ctx.artistName !== 'Artist') return ctx.artistName;
+    } catch { /* perfil opcional */ }
+  }
+  return fromClient || 'Artist';
+}
+
 // Reconstruye la letra a partir de los segmentos/palabras almacenados en el job.
 function extractLyricsFromJob(job: any, maxChars = 1500): string {
   try {
@@ -1536,6 +1602,39 @@ function extractLyricsFromJob(job: any, maxChars = 1500): string {
   }
 }
 
+// Detecta TENDENCIAS DE BÚSQUEDA reales: consulta el autocompletado público de
+// YouTube (ds=yt) y Google (web) — las frases EXACTAS que la gente teclea ahora
+// mismo. Es gratis y sin API key. Best-effort: timeouts cortos y nunca lanza.
+async function fetchSearchTrends(seeds: string[], max = 24): Promise<string[]> {
+  const out = new Set<string>();
+  const clean = Array.from(new Set(seeds.map((s) => (s || '').trim()).filter(Boolean))).slice(0, 6);
+  await Promise.all(
+    clean.map(async (seed) => {
+      for (const ds of ['yt', '']) {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2500);
+          const url =
+            `https://suggestqueries.google.com/complete/search?client=firefox&hl=es` +
+            (ds ? `&ds=${ds}` : '') + `&q=${encodeURIComponent(seed)}`;
+          const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          clearTimeout(timer);
+          if (!r.ok) continue;
+          const data: any = await r.json();
+          const arr: any[] = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
+          for (const s of arr) {
+            const v = String(s).trim();
+            if (v && v.length <= 60) out.add(v);
+          }
+        } catch {
+          /* best-effort: red/timeout/parsing → ignorar */
+        }
+      }
+    })
+  );
+  return Array.from(out).slice(0, max);
+}
+
 // SEO avanzado y competitivo: usa GLM-5.2 para generar título/descripcion/keywords
 // virales y añade de forma DETERMINISTA links al perfil del artista, CTA a sus
 // productos, la letra (si existe) y hashtags. Siempre devuelve algo válido.
@@ -1551,22 +1650,40 @@ async function generateVideoSeoAdvanced(opts: {
   const { songTitle, artistName, genre = '', lyrics = '', artistUrl, storeUrl, products = [] } = opts;
   const cleanTag = (s: string) => s.replace(/[^\p{L}\p{N}]+/gu, '');
 
+  const year = new Date().getFullYear();
+  // Tendencias de búsqueda REALES (lo que la gente teclea hoy) para guiar las
+  // keywords del título/tags y posicionar el video por demanda real.
+  const searchTrends = await fetchSearchTrends([
+    artistName,
+    songTitle,
+    `${artistName} ${songTitle}`,
+    genre ? `${genre} ${year}` : '',
+    genre ? `${genre} music` : '',
+    genre ? `nuevas canciones ${genre}` : '',
+  ]);
   let aiTitle = '';
   let aiDescription = '';
   let aiTags: string[] = [];
+  let aiHook = '';
   try {
     const prompt =
       `Eres el mejor estratega de SEO y marketing viral de YouTube para música` +
       (genre ? ` del género ${genre}` : '') + `. ` +
       `Crea metadata IRRESISTIBLE y COMPETITIVA para el LYRIC VIDEO OFICIAL de "${songTitle}" del artista "${artistName}". ` +
-      `Objetivo: posicionar el video para competir con los mejores artistas del género ${genre || 'urbano'} y maximizar clics y retención. ` +
+      `Objetivo: posicionar el video en la búsqueda de YouTube/Google, competir con los mejores artistas del género ${genre || 'urbano'} y maximizar CTR y retención. ` +
+      (searchTrends.length
+        ? `TENDENCIAS DE BÚSQUEDA REALES ahora mismo (autocompletado de YouTube/Google) — prioriza e incorpora de forma natural estas frases que la gente busca:\n${searchTrends.slice(0, 18).map((t) => `- ${t}`).join('\n')}\n`
+        : '') +
       (lyrics ? `Fragmento de la letra para inspirar el tono y las keywords:\n"""${lyrics.slice(0, 800)}"""\n` : '') +
+      `Reglas del título: empieza con "${artistName} - ${songTitle}", añade un gancho emocional corto entre paréntesis y termina con "(Official Lyric Video)"; máximo 90 caracteres; las keywords más buscadas van al principio. ` +
       `Devuelve SOLO JSON con esta forma exacta: ` +
-      `{"title":"título <=95 caracteres, magnético, incluye el nombre del artista y (Official Lyric Video)",` +
+      `{"title":"título <=90 caracteres siguiendo las reglas",` +
+      `"hook":"1 línea de máximo 100 caracteres, rica en keywords de búsqueda (nombre del artista, título, '${genre} ${year}', letra/lyrics) para los primeros resultados",` +
       `"description":"3-5 líneas en español que enganchen y describan la emoción de la canción, SIN links ni hashtags (los añado yo)",` +
-      `"tags":["18-25 keywords potentes mezclando español e inglés: nombre del artista, título, género ${genre}, y términos por los que la gente busca este estilo de música, SIN #"]}`;
+      `"tags":["20-28 keywords potentes mezclando español e inglés: nombre del artista, título, '${artistName} ${songTitle}', género ${genre}, long-tail como 'mejores canciones ${genre}', 'canciones para...', y términos por los que la gente busca este estilo de música, SIN #"]}`;
     const parsed = await callAdvancedJson(prompt);
     aiTitle = String(parsed?.title || '').slice(0, 95);
+    aiHook = String(parsed?.hook || '').replace(/\s+/g, ' ').trim().slice(0, 110);
     aiDescription = String(parsed?.description || '').trim();
     if (Array.isArray(parsed?.tags)) aiTags = parsed.tags.map((t: any) => String(t).trim()).filter(Boolean);
   } catch (e: any) {
@@ -1579,25 +1696,42 @@ async function generateVideoSeoAdvanced(opts: {
     artistName,
     songTitle,
     `${artistName} ${songTitle}`,
+    `${songTitle} ${artistName}`,
+    `${songTitle} letra`,
+    `${songTitle} lyrics`,
+    `${artistName} letra`,
+    `${artistName} ${year}`,
+    `${artistName} nueva canción`,
+    `${artistName} official`,
     genre,
     genre ? `${genre} music` : '',
     genre ? `música ${genre}` : '',
+    genre ? `mejores canciones ${genre}` : '',
+    genre ? `${genre} nuevo ${year}` : '',
+    genre ? `nueva música ${genre} ${year}` : '',
     'official lyric video',
+    'lyric video oficial',
     'lyric video',
     'letra',
     'lyrics',
+    'video con letra',
     'music',
     'nueva canción',
-    genre ? `${genre} ${new Date().getFullYear()}` : '',
+    `música nueva ${year}`,
+    `canciones ${year}`,
   ]
     .map((s) => String(s).trim())
     .filter(Boolean);
   const { sanitizeYoutubeTags } = await import('../services/youtube-service');
-  const tags = sanitizeYoutubeTags([...aiTags, ...baseTags]);
+  // Las tendencias de búsqueda reales van PRIMERO (más peso) + IA + base.
+  const trendTags = searchTrends.filter((t) => t.length >= 3 && t.length <= 60);
+  const tags = sanitizeYoutubeTags([...trendTags, ...aiTags, ...baseTags]);
 
   const lines: string[] = [];
-  // Cabecera: título de la canción + nombre del artista (siempre visible arriba).
-  lines.push(`🎵 ${songTitle} — ${artistName}${genre ? ` | ${genre}` : ''}`);
+  // Las 2 PRIMERAS líneas y los primeros ~150 caracteres son los que más pesan
+  // para posicionar en la búsqueda: cabecera rica en keywords + gancho de IA.
+  lines.push(`${artistName} - ${songTitle} | Official Lyric Video (Letra/Lyrics)${genre ? ` | ${genre} ${year}` : ` ${year}`}`);
+  lines.push(aiHook || `Escucha "${songTitle}" de ${artistName}, el nuevo lyric video oficial${genre ? ` de ${genre}` : ''} ${year}. Letra completa, dale play y compártelo.`);
   lines.push('');
   // Descripción emocional generada por IA (o un fallback con nombre + título).
   if (aiDescription) {
@@ -1737,7 +1871,7 @@ async function processAlbum(albumId: number): Promise<void> {
   const theme = album.theme || 'blur';
   const accentColor = album.accent_color || '#7c3aed';
   const fontFamily = album.font_family || 'Inter';
-  const artistName: string = album.artist_name || 'Artist';
+  let artistName: string = album.artist_name || 'Artist';
   const artistId: number = album.artist_id;
   const autoUpload: boolean = album.auto_upload !== false;
   const privacyStatus: 'public' | 'unlisted' | 'private' = album.privacy_status || 'public';
@@ -1751,6 +1885,9 @@ async function processAlbum(albumId: number): Promise<void> {
     albumLyricStyle = lyricStyleForGenre(ctx.genre);
     galleryImages = await gatherBackgroundImages(artistId);
   } catch { /* optional */ }
+  // Profile name is the source of truth; prefer the stored album name, then a
+  // profile lookup, falling back to "Artist".
+  artistName = await resolveProfileArtistName(album.artist_name, artistId, artistId);
 
   console.log(`[LyricsAlbum] ▶ procesando álbum ${albumId} (${songs.length} canciones) para "${artistName}"`);
 
