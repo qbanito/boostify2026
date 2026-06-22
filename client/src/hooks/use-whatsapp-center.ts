@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../lib/queryClient';
 
@@ -11,6 +11,7 @@ import { apiRequest } from '../lib/queryClient';
  */
 
 export type WaSessionState = 'idle' | 'initializing' | 'qr' | 'connected' | 'disconnected' | 'expired' | 'error';
+export type WaProvider = 'cloud' | 'openwa' | 'simulated';
 
 export interface WaContact {
   id: string; name: string; phone: string; tags?: string[]; source?: string;
@@ -50,7 +51,7 @@ export function useWhatsAppCenter({ artistId, artistName }: Args) {
         url: '/api/whatsapp/session/create', method: 'POST',
         data: { artistId, artistName, phoneNumber },
       });
-      return res as { success: boolean; sessionId: string; status: WaSessionState; qrCode?: string | null; simulated?: boolean };
+      return res as { success: boolean; sessionId: string; status: WaSessionState; qrCode?: string | null; simulated?: boolean; provider?: WaProvider };
     },
     onSuccess: () => setSessionStarted(true),
   });
@@ -65,7 +66,7 @@ export function useWhatsAppCenter({ artistId, artistName }: Args) {
     },
     queryFn: async () => {
       const res = await apiRequest({ url: `/api/whatsapp/session/${sessionId}/status`, method: 'GET' });
-      return res as { success: boolean; status: WaSessionState; qrCode?: string | null; phoneNumber?: string | null };
+      return res as { success: boolean; status: WaSessionState; qrCode?: string | null; phoneNumber?: string | null; provider?: WaProvider };
     },
   });
 
@@ -77,6 +78,7 @@ export function useWhatsAppCenter({ artistId, artistName }: Args) {
   const status: WaSessionState = (statusQuery.data?.status as WaSessionState) || (createSession.data?.status as WaSessionState) || 'idle';
   const isConnected = status === 'connected';
   const qrCode = statusQuery.data?.qrCode || createSession.data?.qrCode || null;
+  const provider: WaProvider = (statusQuery.data?.provider as WaProvider) || (createSession.data?.provider as WaProvider) || 'simulated';
 
   // ── Data queries (inlined to satisfy React rules-of-hooks) ──────────────────
   const contactsQuery = useQuery({
@@ -143,8 +145,18 @@ export function useWhatsAppCenter({ artistId, artistName }: Args) {
 
   const reset = useCallback(() => { setSessionStarted(false); }, []);
 
+  // Auto-connect once on mount: the official Cloud API has no QR step, so the
+  // session resolves to 'connected' immediately and the panel unlocks without
+  // the owner having to click. For OpenWA it surfaces the QR right away.
+  useEffect(() => {
+    if (!sessionStarted && !createSession.isPending) {
+      createSession.mutate(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
-    sessionId, status, isConnected, qrCode, simulated: !!createSession.data?.simulated,
+    sessionId, status, isConnected, qrCode, provider, simulated: !!createSession.data?.simulated,
     createSession, disconnect, statusQuery,
     contacts, segments,
     campaigns: campaignsQuery.data || [],

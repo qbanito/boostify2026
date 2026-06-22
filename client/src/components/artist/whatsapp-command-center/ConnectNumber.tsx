@@ -1,16 +1,20 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Smartphone, QrCode, RotateCcw, Power, Loader2, ShieldAlert, CheckCircle2, X } from 'lucide-react';
+import { Smartphone, QrCode, RotateCcw, Power, Loader2, ShieldAlert, CheckCircle2, X, BadgeCheck, ShieldCheck } from 'lucide-react';
 import type { WhatsAppCenter } from '../../../hooks/use-whatsapp-center';
 import { GlassCard, PanelHeader, StatusDot } from './shared';
 
 /**
- * Connect Number — create an OpenWA session, render the pairing QR and surface
- * connection state. The artist scans the QR with WhatsApp → status flips to
- * connected and the rest of the Command Center unlocks.
+ * Connect Number — surfaces the WhatsApp connection state.
+ *  • cloud      → Official Meta Business Cloud API. NO QR: the session is bound
+ *                 to the verified Phone Number ID + token and resolves to
+ *                 'connected' on mount.
+ *  • openwa     → Unofficial QR pairing (scan with WhatsApp → Linked devices).
+ *  • simulated  → No gateway configured; auto-connects so the panel is testable.
  */
 export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
-  const { status, isConnected, qrCode, simulated } = center;
+  const { status, isConnected, qrCode, simulated, provider } = center;
   const phone = center.statusQuery.data?.phoneNumber;
+  const isCloud = provider === 'cloud';
 
   const stateLabel: Record<string, string> = {
     idle: 'Sin conectar', initializing: 'Inicializando…', qr: 'Escanea el QR',
@@ -22,7 +26,9 @@ export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
       <PanelHeader
         icon={<Smartphone className="h-5 w-5" />}
         title="Conectar WhatsApp"
-        subtitle="Enlaza tu número para operar ventas, fans, tickets y comandos de IA."
+        subtitle={isCloud
+          ? 'Conectado vía la API oficial de Meta (sin QR). Opera ventas, fans, tickets y comandos de IA.'
+          : 'Enlaza tu número para operar ventas, fans, tickets y comandos de IA.'}
       />
 
       <GlassCard className="p-5">
@@ -30,7 +36,14 @@ export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
           <div className="flex items-center gap-3">
             <StatusDot connected={isConnected} />
             <div>
-              <div className="text-sm font-semibold text-white">{stateLabel[status] || status}</div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                {stateLabel[status] || status}
+                {isCloud && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                    <BadgeCheck className="h-3 w-3" /> API oficial
+                  </span>
+                )}
+              </div>
               {phone && <div className="text-xs text-white/50">+{phone}</div>}
             </div>
           </div>
@@ -42,8 +55,10 @@ export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
                 disabled={center.createSession.isPending}
                 className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
               >
-                {center.createSession.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                Connect WhatsApp
+                {center.createSession.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : (isCloud ? <ShieldCheck className="h-4 w-4" /> : <QrCode className="h-4 w-4" />)}
+                {isCloud ? 'Conectar (API oficial)' : 'Connect WhatsApp'}
               </motion.button>
             ) : (
               <button
@@ -65,7 +80,19 @@ export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
           </div>
         </div>
 
-        {simulated && (
+        {isCloud && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-xs text-emerald-200">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Estás usando la <strong>API oficial de WhatsApp Business (Meta)</strong>. No hay QR ni
+              riesgo de baneo: los mensajes salen desde tu número verificado. Recuerda que el texto
+              libre solo funciona dentro de la ventana de 24h; para envíos en frío se usan plantillas
+              aprobadas.
+            </span>
+          </div>
+        )}
+
+        {!isCloud && simulated && (
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
@@ -77,9 +104,9 @@ export function ConnectNumber({ center }: { center: WhatsAppCenter }) {
         )}
       </GlassCard>
 
-      {/* QR modal */}
+      {/* QR modal — only for the unofficial OpenWA provider */}
       <AnimatePresence>
-        {!isConnected && qrCode && (
+        {!isCloud && !isConnected && qrCode && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"

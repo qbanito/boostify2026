@@ -41,6 +41,15 @@ function uid(req: Request): string {
   return String((req.user as any)?.id ?? (req.user as any)?.uid ?? '');
 }
 
+/** Which gateway is active: 'cloud' (official Meta, no QR), 'openwa' (QR) or 'simulated'. */
+function currentProvider(): 'cloud' | 'openwa' | 'simulated' {
+  if (process.env.WHATSAPP_PROVIDER === 'cloud'
+      && process.env.WHATSAPP_ACCESS_TOKEN
+      && process.env.WHATSAPP_PHONE_NUMBER_ID) return 'cloud';
+  if (process.env.OPENWA_BASE_URL) return 'openwa';
+  return 'simulated';
+}
+
 // ─── Per-artist rate limiter (campaign send pacing + abuse guard) ────────────
 const sendBuckets = new Map<string, { count: number; resetAt: number }>();
 const MAX_SENDS_PER_MINUTE = 60; // safe ceiling per artist to avoid bans/spam
@@ -109,7 +118,7 @@ router.post('/session/create', authenticate, async (req: Request, res: Response)
         .catch((e: any) => logger.warn('[whatsapp] number map write failed:', e?.message));
     }
 
-    return res.json({ success: true, sessionId, status: created.status, qrCode: created.qrCode || null, simulated: !isGatewayConfigured() });
+    return res.json({ success: true, sessionId, status: created.status, qrCode: created.qrCode || null, simulated: !isGatewayConfigured(), provider: currentProvider() });
   } catch (e: any) {
     logger.error('[whatsapp] session/create error:', e?.message);
     return res.status(500).json({ success: false, error: e?.message || 'session create failed' });
@@ -136,7 +145,7 @@ router.get('/session/:sessionId/status', authenticate, async (req: Request, res:
       { merge: true },
     ).catch(() => {});
 
-    return res.json({ success: true, ...status });
+    return res.json({ success: true, ...status, provider: currentProvider() });
   } catch (e: any) {
     logger.error('[whatsapp] session status error:', e?.message);
     return res.status(500).json({ success: false, error: e?.message || 'status failed' });
