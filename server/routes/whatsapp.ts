@@ -101,6 +101,14 @@ router.post('/session/create', authenticate, async (req: Request, res: Response)
     );
     await audit(artistId, 'session.create', { sessionId, status: created.status }, ownerId);
 
+    // For the official Cloud API, inbound webhooks are keyed by Phone Number ID
+    // (not by sessionId), so persist a number→artist map for attribution.
+    if (process.env.WHATSAPP_PROVIDER === 'cloud' && process.env.WHATSAPP_PHONE_NUMBER_ID) {
+      await db.collection('whatsappNumberMap').doc(String(process.env.WHATSAPP_PHONE_NUMBER_ID))
+        .set({ artistId: String(artistId), sessionId, updatedAt: nowMs() }, { merge: true })
+        .catch((e: any) => logger.warn('[whatsapp] number map write failed:', e?.message));
+    }
+
     return res.json({ success: true, sessionId, status: created.status, qrCode: created.qrCode || null, simulated: !isGatewayConfigured() });
   } catch (e: any) {
     logger.error('[whatsapp] session/create error:', e?.message);
@@ -443,16 +451,38 @@ router.get('/sales/:artistId', authenticate, async (req: Request, res: Response)
 // ─────────────────────────── WEBHOOK ────────────────────────────────────────
 
 /**
- * POST /webhook — inbound messages from the OpenWA gateway. NO Boostify auth
- * (the gateway is a server), but we verify a shared secret and ignore anything
- * we can't attribute to an artist session.
+ * GET /webhook — Meta Cloud API verification handshake. When you register the
+ * callback URL in the Meta dashboard, Meta sends hub.mode/hub.verify_token/
+ * hub.challenge; we echo the challenge back if the token matches.
+ */
+router.get('/webhook', (req: Request, res: Response) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  const expected = process.env.WHATSAPP_VERIFY_TOKEN || process.env.OPENWA_API_KEY;
+  if (mode === 'subscribe' && token && token === expected) {
+    return res.status(200).send(String(challenge));
+  }
+  return res.sendStatus(403);
+});
+
+/**
+ * POST /webhook — inbound messages from the gateway (OpenWA) or Meta Cloud API.
+ * NO Boostify auth (the sender is a server), but we verify a shared secret /
+ * Meta signature and ignore anything we can't attribute to an artist session.
  */
 router.post('/webhook', async (req: Request, res: Response) => {
-  // Verify shared secret if one is configured.
-  const expected = process.env.OPENWA_API_KEY;
-  if (expected) {
-    const provided = req.headers['x-openwa-token'] || (req.query.token as string) || '';
-    if (provided !== expected) return res.status(401).json({ success: false, error: 'unauthorized' });
+  const isCloud = process.env.WHATSAPP_PROVIDER === 'cloud';
+
+  // Verify shared secret. Cloud API does NOT send x-openwa-token; it signs the
+  // body with X-Hub-Signature-256 (verified at the body-parser level if an app
+  // secret is set). For OpenWA we check the shared token header.
+  if (!isCloud) {
+    const expected = process.env.OPENWA_API_KEY;
+    if (expected) {
+      const provided = req.headers['x-openwa-token'] || (req.query.token as string) || '';
+      if (provided !== expected) return res.status(401).json({ success: false, error: 'unauthorized' });
+    }
   }
 
   // Acknowledge fast; process asynchronously so the gateway isn't blocked.
@@ -462,8 +492,16 @@ router.post('/webhook', async (req: Request, res: Response) => {
     const inbound: NormalizedInbound | null = await getGateway().receiveWebhook(req.body);
     if (!inbound || !inbound.from) return;
 
-    // Resolve artistId from sessionId (boostify_<artistId>) or session lookup.
-    let artistId = (inbound.sessionId || '').replace(/^boostify_/, '');
+    // Resolve artistId. Cloud API encodes the Phone Number ID (cloud:<id>);
+    // OpenWA encodes the artist in the sessionId (boostify_<artistId>).
+    let artistId = '';
+    if (inbound.sessionId.startsWith('cloud:')) {
+      const phoneNumberId = inbound.sessionId.slice('cloud:'.length);
+      const mapSnap = await db.collection('whatsappNumberMap').doc(phoneNumberId).get().catch(() => null);
+      artistId = (mapSnap?.exists ? mapSnap.data()?.artistId : '') || '';
+    } else {
+      artistId = (inbound.sessionId || '').replace(/^boostify_/, '');
+    }
     if (!artistId) {
       const q = await db.collectionGroup('whatsappSessions').where('sessionId', '==', inbound.sessionId).limit(1).get().catch(() => ({ docs: [] as any[] }));
       if (q.docs.length) artistId = q.docs[0].ref.parent.parent?.id || '';
@@ -471,7 +509,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
     if (!artistId) { logger.warn('[whatsapp] webhook: no artist for session', inbound.sessionId); return; }
 
     const root = artistDoc(artistId);
-    const sessionId = inbound.sessionId || `boostify_${artistId}`;
+    const sessionId = inbound.sessionId.startsWith('cloud:') ? `boostify_${artistId}` : (inbound.sessionId || `boostify_${artistId}`);
 
     // Persist inbound message.
     await persistMessage(artistId, { direction: 'in', from: inbound.from, to: sessionId, body: inbound.body, mediaUrl: inbound.mediaUrl, messageType: inbound.messageType, status: 'received' });

@@ -236,18 +236,36 @@ export function normalizeInbound(payload: any): NormalizedInbound | null {
 let _gateway: WhatsAppGateway | null = null;
 
 export function isGatewayConfigured(): boolean {
+  // Configured = either the official Cloud API or a self-hosted OpenWA gateway.
+  if (process.env.WHATSAPP_PROVIDER === 'cloud') {
+    return !!process.env.WHATSAPP_ACCESS_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+  }
   return !!process.env.OPENWA_BASE_URL;
 }
 
 export function getGateway(): WhatsAppGateway {
   if (_gateway) return _gateway;
+
+  // 1) Official Meta WhatsApp Business Cloud API (recommended for production).
+  if (process.env.WHATSAPP_PROVIDER === 'cloud'
+      && process.env.WHATSAPP_ACCESS_TOKEN
+      && process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    // Lazy require to avoid a hard import cycle (cloud adapter imports types here).
+    const { CloudApiAdapter } = require('./cloud-api.adapter');
+    logger.info('[whatsapp] using OFFICIAL Meta Cloud API gateway (phone_number_id set)');
+    _gateway = new CloudApiAdapter(process.env.WHATSAPP_ACCESS_TOKEN, process.env.WHATSAPP_PHONE_NUMBER_ID);
+    return _gateway!;
+  }
+
+  // 2) Self-hosted OpenWA gateway (unofficial, QR-based — testing/concierge).
   const baseUrl = process.env.OPENWA_BASE_URL;
   const apiKey = process.env.OPENWA_API_KEY || '';
   if (baseUrl) {
     logger.info('[whatsapp] using live OpenWA gateway at', baseUrl);
     _gateway = new OpenWaAdapter(baseUrl, apiKey);
   } else {
-    logger.warn('[whatsapp] OPENWA_BASE_URL not set — running WhatsApp gateway in SIMULATION mode');
+    // 3) Simulation — full module works in dev without any real gateway.
+    logger.warn('[whatsapp] no provider configured — running WhatsApp gateway in SIMULATION mode');
     _gateway = new SimulatedWhatsAppGateway();
   }
   return _gateway;
