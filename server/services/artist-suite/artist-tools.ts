@@ -22,6 +22,7 @@ import {
   artistSuiteThreads,
 } from '../../db/schema';
 import { registerTool, type ToolContext } from '../c-suite/tools';
+import { generateHiggsfieldImage, isHiggsfieldConfigured } from '../higgsfield-service';
 
 // ---------------------------------------------------------------
 // Helpers
@@ -527,6 +528,62 @@ registerTool({
 });
 
 // ---------------------------------------------------------------
+// CREATIVE — generate branded cover / poster / thumbnail images (Higgsfield)
+// ---------------------------------------------------------------
+
+registerTool({
+  id: 'generateArtistCoverImage',
+  description:
+    "Generate a branded COVER / POSTER / THUMBNAIL image for THIS artist using Higgsfield Soul, preserving the artist's REAL likeness from their profile photo when available. Use it for lyric-video covers, YouTube thumbnails, song posters or promo art. Returns a permanent image URL. Costs image credits — call only when an image is actually needed.",
+  schema: z.object({
+    prompt: z.string().min(10).max(1500).describe('Vivid visual description of the cover/poster scene (style, mood, composition, any title text to render).'),
+    aspectRatio: z.enum(['16:9', '1:1', '9:16', '4:5', '3:2']).default('16:9'),
+    useArtistLikeness: z.boolean().default(true).describe('Use the artist profile photo as a reference so the artist appears as the hero.'),
+    purpose: z.string().max(120).optional().describe('What this image is for, e.g. "lyric video cover", "YouTube thumbnail".'),
+  }),
+  requiredAutonomy: 2,
+  risk: 3,
+  readOnly: false,
+  category: 'marketing',
+  execute: async ({ prompt, aspectRatio, useArtistLikeness, purpose }, ctx) => {
+    const artistId = requireArtistId(ctx);
+    if (!isHiggsfieldConfigured()) {
+      return { generated: false, reason: 'Higgsfield is not configured (missing HIGGSFIELD_API_KEY / HIGGSFIELD_API_SECRET).' };
+    }
+    const pk = await resolveUserPk(artistId);
+    let referenceImageUrl: string | undefined;
+    if (useArtistLikeness && pk != null) {
+      const [u] = await db
+        .select({ profileImageUrl: users.profileImageUrl, profileImage: users.profileImage })
+        .from(users)
+        .where(eq(users.id, pk))
+        .limit(1);
+      const candidate = u?.profileImageUrl || u?.profileImage || undefined;
+      if (candidate && /^https?:\/\//.test(candidate)) referenceImageUrl = candidate;
+    }
+
+    if (ctx.dryRun) {
+      return {
+        generated: false,
+        dryRun: true,
+        plan: { provider: 'higgsfield-soul', aspectRatio, usesLikeness: !!referenceImageUrl, purpose: purpose ?? null },
+      };
+    }
+
+    const imageUrl = await generateHiggsfieldImage({
+      prompt,
+      referenceImageUrl,
+      aspectRatio,
+      folder: 'agent-cover-images',
+    });
+    if (!imageUrl) {
+      return { generated: false, reason: 'Higgsfield returned no image (queue failure, moderation or timeout). Try again or simplify the prompt.' };
+    }
+    return { generated: true, imageUrl, provider: 'higgsfield-soul', aspectRatio, usedLikeness: !!referenceImageUrl, purpose: purpose ?? null };
+  },
+});
+
+// ---------------------------------------------------------------
 // Boot marker (so we can confirm the file was loaded)
 // ---------------------------------------------------------------
-console.log('[artist-suite] artist-tools registered: queryMyArtistOverview, queryMyArtistSongStats, queryMyArtistMerchPerformance, queryMyArtistFanMetrics, queryMyArtistTreasury, queryMyArtistMonetizationFunnel, recallArtistMemory, rememberArtistFact, listArtistGoals, checkInOnArtistGoal, handoffToArtistAgent');
+console.log('[artist-suite] artist-tools registered: queryMyArtistOverview, queryMyArtistSongStats, queryMyArtistMerchPerformance, queryMyArtistFanMetrics, queryMyArtistTreasury, queryMyArtistMonetizationFunnel, recallArtistMemory, rememberArtistFact, listArtistGoals, checkInOnArtistGoal, handoffToArtistAgent, generateArtistCoverImage');

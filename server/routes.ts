@@ -250,6 +250,8 @@ import promoClipsRouter from './routes/promo-clips'; // Promo Clips — Song-to-
 import artistCommandRouter from './routes/artist-command'; // Artist Command Engine — voice/text commands → AI module orchestration
 import whatsappRouter from './routes/whatsapp'; // WhatsApp Artist Command Center — OpenWA gateway, fans, campaigns, AI agent
 import telegramRouter from './routes/telegram'; // Telegram Artist Command Center — Bot API gateway, fans, campaigns, communities, AI agent
+import facebookGroupsRouter from './routes/facebook-groups'; // Facebook Groups — controlled auto-publishing engine (Hybrid mode)
+import { startFacebookGroupsScheduler } from './services/facebook-groups-scheduler'; // FB Groups queue prep + readiness scheduler
 import redditRouter from './routes/reddit'; // Reddit Artist Intelligence Center — read-only market intelligence, fan discovery, trends, AI strategy
 import discordRouter from './routes/discord'; // Discord Fan Nation — community hub: OAuth2 + bot, server setup, roles, BTF token gate, campaigns, events, AI moderator & concierge
 import adsCampaignsRouter from './routes/ads-campaigns'; // Ads Campaign Manager — Facebook, Instagram, TikTok paid ads
@@ -818,6 +820,11 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Telegram Artist Command Center — Bot API gateway (bots, fans, campaigns, communities, tickets, merch, AI agent)
   app.use('/api/telegram', telegramRouter);
   console.log('📨 Telegram Artist Command Center registered at /api/telegram');
+
+  // Facebook Groups — controlled auto-publishing engine (groups, content pool, AI captions, queue, Hybrid 1-click publish)
+  app.use('/api/facebook-groups', facebookGroupsRouter);
+  console.log('📘 Facebook Groups auto-publish engine registered at /api/facebook-groups');
+  if (shouldRunSchedulers()) startFacebookGroupsScheduler(); // Queue prep + readiness (Hybrid — never auto-posts)
 
   // Reddit Artist Intelligence Center — read-only market intelligence (trends, communities, fan discovery, competitors, AI strategy)
   app.use('/api/reddit', redditRouter);

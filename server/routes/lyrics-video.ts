@@ -1822,9 +1822,25 @@ async function generateVideoSeoAdvanced(opts: {
   return { title, description, tags };
 }
 
-// Genera una MINIATURA (thumbnail) de YouTube con OpenAI gpt-image-1, usando la
-// imagen de perfil del artista como referencia para conservar su parecido real.
-// Cae a text-to-image y, si todo falla, a la carátula de la canción.
+// ─────────────────────────────────────────────────────────────────────────────
+// Higgsfield Soul — generación de portadas/miniaturas que conservan el PARECIDO
+// real del artista. Implementado en ../services/higgsfield-service (gated en
+// HIGGSFIELD_API_KEY + HIGGSFIELD_API_SECRET; persiste el resultado a Firebase).
+// ─────────────────────────────────────────────────────────────────────────────
+async function higgsfieldGenerateImage(opts: {
+  prompt: string;
+  referenceImageUrl?: string;
+  aspectRatio?: string;
+  folder: string;
+}): Promise<string | undefined> {
+  const { generateHiggsfieldImage } = await import('../services/higgsfield-service');
+  return generateHiggsfieldImage(opts);
+}
+
+// Genera una MINIATURA (thumbnail) de YouTube. Intenta primero Higgsfield Soul
+// (si está configurado) para conservar el parecido real del artista, luego cae a
+// OpenAI gpt-image-1 (edición con la foto de perfil → text-to-image) y, si todo
+// falla, a la carátula de la canción.
 async function generateYoutubeThumbnail(opts: {
   artistName: string;
   songTitle: string;
@@ -1853,6 +1869,16 @@ async function generateYoutubeThumbnail(opts: {
     `NO incluyas ningún logo de marca, NO menciones ni representes Netflix ni ninguna plataforma de streaming, ` +
     `NO añadas marcas de agua. Solo el título de la canción y la palabra BOOSTIFY como texto.`;
   try {
+    // 1) Higgsfield Soul (preserva el parecido real del artista) si está configurado.
+    const higgs = await higgsfieldGenerateImage({
+      prompt,
+      referenceImageUrl: refs[0],
+      aspectRatio: '16:9',
+      folder: 'youtube-thumbnails',
+    });
+    if (higgs) return higgs;
+
+    // 2) OpenAI gpt-image-1 con la foto del artista como referencia.
     if (refs.length) {
       const { editImageWithGPTImage1 } = await import('../services/fal-service');
       const img = await editImageWithGPTImage1(refs, prompt, {
@@ -2384,7 +2410,14 @@ router.post('/youtube/setup-channel', authenticate, async (req, res) => {
         `. Use the reference image to keep the artist's real likeness as the hero. ` +
         `Modern, high-contrast, atmospheric lighting, brand-forward, leaving the center clear for the channel title. ` +
         `NO text, NO words, NO letters, NO logos in the image.`;
-      if (ctx.profileImageUrl && /^https?:\/\//.test(ctx.profileImageUrl)) {
+      // 1) Higgsfield Soul (conserva el parecido real del artista) si está configurado.
+      bannerImageUrl = await higgsfieldGenerateImage({
+        prompt: bannerPrompt,
+        referenceImageUrl: ctx.profileImageUrl,
+        aspectRatio: '16:9',
+        folder: 'youtube-channel-banners',
+      });
+      if (!bannerImageUrl && ctx.profileImageUrl && /^https?:\/\//.test(ctx.profileImageUrl)) {
         const { editImageWithGPTImage1 } = await import('../services/fal-service');
         const img = await editImageWithGPTImage1(ctx.profileImageUrl, bannerPrompt, {
           size: '1536x1024',

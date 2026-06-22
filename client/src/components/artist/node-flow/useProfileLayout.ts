@@ -68,6 +68,7 @@ const DEFAULT_VISIBILITY: Record<string, boolean> = {
   'talk-to-me':         false,
   'whatsapp-command-center': false,
   'telegram-command-center': false,
+  'facebook-groups-command-center': false,
   'reddit-intelligence-center': false,
   'discord-fan-nation': false,
   'ads-campaigns':      false,

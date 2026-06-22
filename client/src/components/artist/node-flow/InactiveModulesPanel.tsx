@@ -48,6 +48,7 @@ const ICONS: Record<string, React.ElementType> = {
   'renaissance-studio': Wand2, 'hologram': Layers,
   'talk-to-me': MessageCircle, 'emotional-studio': Heart, 'gamma-presentations': Monitor,
   'my-universe': Globe, 'whatsapp-command-center': MessageCircle, 'telegram-command-center': Send,
+  'facebook-groups-command-center': Megaphone,
   'reddit-intelligence-center': Flame, 'discord-fan-nation': MessageCircle,
   // WIDGET
   'qr-card': QrCode, 'physical-cards': CreditCard, 'statistics': BarChart2,

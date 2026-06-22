@@ -99,6 +99,13 @@ export const TelegramCommandCenter = withLazy(
     "TelegramCommandCenter",
   ),
 );
+export const FacebookGroupsCommandCenter = withLazy(
+  "facebook-groups-command-center",
+  named(
+    () => import("./facebook-groups-command-center/FacebookGroupsCommandCenter"),
+    "FacebookGroupsCommandCenter",
+  ),
+);
 export const RedditIntelligenceCenter = withLazy(
   "reddit-intelligence-center",
   named(

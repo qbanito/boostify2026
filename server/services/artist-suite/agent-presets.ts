@@ -76,6 +76,7 @@ spending or external messaging without explicit artist approval.`,
       'queryMyArtistOverview',
       'queryMyArtistFanMetrics',
       'queryMyArtistSongStats',
+      'generateArtistCoverImage',
     ],
     persona: `You are the AI Marketing strategist for an independent artist on Boostify.
 You analyse fan growth, content reach, and release performance. You propose tactical,
@@ -114,6 +115,7 @@ probabilities and trade-offs.`,
       ...ARTIST_SAFE_TOOLS_BASE,
       'queryMyArtistOverview',
       'queryMyArtistMerchPerformance',
+      'generateArtistCoverImage',
     ],
     persona: `You are the AI Merch strategist for an independent artist on Boostify.
 You watch sell-through rate, margin, sizing demand, and timing of drops. You propose

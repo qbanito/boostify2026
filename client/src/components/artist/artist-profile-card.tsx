@@ -33,7 +33,7 @@ import {
   ObservationEnginePanel, DeepBriefPanel, EmotionalStudioPanel, ArtistPromoClipsModule, AIVideoStudio,
   AdsCampaignManager, GammaPresentationsModule, KaraokeModule, KaraokePlayer, LyricsVideoModule,
   ConcertCommandCenter, BoostifyLiveStage, WhatsAppCommandCenter, TelegramCommandCenter,
-  RedditIntelligenceCenter, DiscordFanNation,
+  RedditIntelligenceCenter, DiscordFanNation, FacebookGroupsCommandCenter,
 } from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
@@ -2641,6 +2641,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'my-universe':          { label: 'Content',   color: '#6366f1' },
     'whatsapp-command-center': { label: 'Community', color: '#25d366' },
     'telegram-command-center': { label: 'Community', color: '#229ED9' },
+    'facebook-groups-command-center': { label: 'Community', color: '#1877F2' },
     'reddit-intelligence-center': { label: 'Intelligence', color: '#FF4500' },
     'discord-fan-nation': { label: 'Community', color: '#5865F2' },
   };
@@ -2692,6 +2693,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'talk-to-me': { name: 'Talk To Me', icon: MessageCircle, isOwnerOnly: false },
     'whatsapp-command-center': { name: 'WhatsApp Command Center', icon: MessageCircle, isOwnerOnly: true },
     'telegram-command-center': { name: 'Telegram Command Center', icon: Send, isOwnerOnly: true },
+    'facebook-groups-command-center': { name: 'Facebook Groups Autopilot', icon: Megaphone, isOwnerOnly: true },
     'reddit-intelligence-center': { name: 'Reddit Intelligence Center', icon: Flame, isOwnerOnly: true },
     'discord-fan-nation': { name: 'Discord Fan Nation', icon: MessageCircle, isOwnerOnly: true },
     'my-universe': { name: 'My Universe', icon: Globe, isOwnerOnly: false },
@@ -2737,7 +2739,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2841,6 +2843,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'talk-to-me': false,
     'whatsapp-command-center': false,
     'telegram-command-center': false,
+    'facebook-groups-command-center': false,
     'reddit-intelligence-center': false,
     'discord-fan-nation': false,
     'hermes-agent': false,
@@ -10665,6 +10668,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       } else if (sectionId === 'telegram-command-center' && isOwnProfile) {
                         sectionElement = (
                           <TelegramCommandCenter
+                            artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistImageUrl={artist?.profileImage || userProfile?.profileImage}
+                          />
+                        );
+                      } else if (sectionId === 'facebook-groups-command-center' && isOwnProfile) {
+                        sectionElement = (
+                          <FacebookGroupsCommandCenter
                             artistId={String(userProfile?.pgId || artist?.pgId || artistId)}
                             artistName={artist?.name || userProfile?.artistName || userProfile?.username || 'Artist'}
                             artistImageUrl={artist?.profileImage || userProfile?.profileImage}
