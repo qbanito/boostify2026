@@ -818,28 +818,28 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
   {
     key: 'music',
     label: 'Music',
-    description: 'Catalog, videos and lyrics up front.',
+    description: 'Catalog, videos, lyrics and live stage up front.',
     icon: Music,
     accent: '#8b5cf6',
-    sections: ['songs', 'videos', 'lyrics-video', 'karaoke', 'galleries', 'social-hub'],
+    sections: ['songs', 'live-stage', 'videos', 'lyrics-video', 'karaoke', 'galleries', 'social-hub'],
     widgets: ['spotify', 'information', 'qr-card', 'social-media'],
   },
   {
     key: 'store',
     label: 'Store & Sales',
-    description: 'Merch, fashion, vinyl and monetization.',
+    description: 'Merch, smart merch, fashion, art and vinyl.',
     icon: ShoppingCart,
     accent: '#10b981',
-    sections: ['merchandise', 'fashion-store', 'vinyl-records', 'amazon-picks', 'viral-products', 'monetize-cta'],
+    sections: ['merchandise', 'smart-merch', 'fashion-store', 'art-gallery', 'vinyl-records', 'amazon-picks', 'viral-products', 'monetize-cta'],
     widgets: ['qr-card', 'information', 'physical-cards', 'upcoming-shows'],
   },
   {
     key: 'fans',
     label: 'Fans & Community',
-    description: 'Fan club, socials and exclusive content.',
+    description: 'Fan club, live stage, Discord and exclusive content.',
     icon: Users,
     accent: '#ec4899',
-    sections: ['fanclub', 'social-hub', 'social-posts', 'news', 'explicit-content'],
+    sections: ['fanclub', 'live-stage', 'social-hub', 'discord-fan-nation', 'social-posts', 'news', 'explicit-content'],
     widgets: ['crypto-community', 'social-media', 'qr-card', 'information'],
   },
   {
@@ -854,10 +854,10 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
   {
     key: 'live',
     label: 'Live Shows',
-    description: 'Concerts, booking and holography.',
+    description: 'Live stage, concerts, booking and holography.',
     icon: Mic2,
     accent: '#06b6d4',
-    sections: ['songs', 'videos', 'venueBooking', 'hologram', 'promo-clips'],
+    sections: ['live-stage', 'songs', 'videos', 'venueBooking', 'hologram', 'promo-clips'],
     widgets: ['upcoming-shows', 'concert-hub', 'qr-card', 'information'],
   },
   {
@@ -881,10 +881,10 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
   {
     key: 'marketing',
     label: 'Marketing & Growth',
-    description: 'Ads, influencers and audience growth.',
+    description: 'Ads, influencers, social autopilots and growth.',
     icon: Megaphone,
     accent: '#f43f5e',
-    sections: ['ads-campaigns', 'influencer-module', 'social-posts', 'social-hub', 'audience-engine'],
+    sections: ['ads-campaigns', 'influencer-module', 'social-posts', 'social-hub', 'audience-engine', 'facebook-groups-command-center', 'whatsapp-command-center', 'telegram-command-center', 'reddit-intelligence-center'],
     widgets: ['statistics', 'social-media', 'information', 'qr-card'],
   },
   {
@@ -899,10 +899,10 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
   {
     key: 'interactive',
     label: 'Interactive',
-    description: 'Avatar, chat, karaoke and holostage.',
+    description: 'Live stage, avatar, chat, karaoke and holostage.',
     icon: Bot,
     accent: '#14b8a6',
-    sections: ['avatar-talk', 'talk-to-me', 'karaoke', 'hologram', 'fanclub'],
+    sections: ['live-stage', 'avatar-talk', 'talk-to-me', 'karaoke', 'hologram', 'fanclub'],
     widgets: ['social-media', 'crypto-community', 'qr-card', 'information'],
   },
   {
