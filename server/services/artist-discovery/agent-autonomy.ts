@@ -736,8 +736,10 @@ export async function getOptimizedSources(): Promise<{ sources: string[]; reason
       .orderBy(desc(sourceRoi.weekStart))
       .limit(10);
 
-    // Build source priority map
-    const allSources = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube', 'tiktok'];
+    // Build source priority map.
+    // Includes the non-Apify direct-API sources (youtube_api / spotify_api) so
+    // the optimizer keeps them in rotation even when Apify quotas run out.
+    const allSources = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube', 'tiktok', 'youtube_api', 'spotify_api'];
     const sourcePriority: Record<string, number> = {};
 
     // Factor 1: Goal allocation (from AI strategy)

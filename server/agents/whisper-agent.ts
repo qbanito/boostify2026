@@ -16,7 +16,57 @@ import { ChatOpenAI } from '@langchain/openai';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { createRequire } from 'module';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { PRIMARY_MODEL } from '../utils/ai-config';
+
+const nodeRequire = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Downloads the audio and transcodes it to a compact mono 16 kHz 64 kbps MP3 via
+ * the bundled ffmpeg binary. A full song compresses to ~2-3 MB — far below
+ * Whisper's 25 MB limit — so the OpenAI Whisper path works regardless of the
+ * source file's size or format (wav/flac/long tracks). If ffmpeg fails, it
+ * falls back to the raw downloaded file so transcription still proceeds.
+ * Returns the temp file path plus a best-effort cleanup callback.
+ */
+async function downloadAndCompressForWhisper(
+  audioUrl: string,
+): Promise<{ filePath: string; cleanup: () => void }> {
+  const response = await fetch(audioUrl);
+  if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
+  const inputBuffer = Buffer.from(await response.arrayBuffer());
+
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const rawPath = path.join(os.tmpdir(), `whisper-src-${stamp}`);
+  const outPath = path.join(os.tmpdir(), `whisper-${stamp}.mp3`);
+  fs.writeFileSync(rawPath, inputBuffer);
+
+  try {
+    const ffmpegPath = nodeRequire('@ffmpeg-installer/ffmpeg').path as string;
+    await execFileAsync(
+      ffmpegPath,
+      ['-y', '-i', rawPath, '-ac', '1', '-ar', '16000', '-b:a', '64k', '-map', 'a', outPath],
+      { timeout: 180_000, maxBuffer: 1024 * 1024 * 64 },
+    );
+    try { fs.unlinkSync(rawPath); } catch { /* best-effort */ }
+    return {
+      filePath: outPath,
+      cleanup: () => { try { fs.unlinkSync(outPath); } catch { /* best-effort */ } },
+    };
+  } catch (err) {
+    // ffmpeg unavailable / failed → fall back to the raw file (Whisper accepts
+    // common audio formats directly; only the 25 MB cap may bite very large files).
+    console.warn('⚠️ [WhisperAgent] ffmpeg transcode failed, using raw audio:', (err as Error).message);
+    return {
+      filePath: rawPath,
+      cleanup: () => { try { fs.unlinkSync(rawPath); } catch { /* best-effort */ } },
+    };
+  }
+}
 
 // OpenAI Client
 const openai = createTrackedOpenAI({
@@ -174,13 +224,9 @@ export async function transcribeFromUrl(audioUrl: string): Promise<Transcription
 export async function transcribeWithWords(audioUrl: string): Promise<WordTranscriptionResult | null> {
   console.log(`🎙️ [WhisperAgent] Word-level transcription from URL: ${audioUrl}`);
   try {
-    const response = await fetch(audioUrl);
-    if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const tempPath = path.join(process.cwd(), 'uploads', `temp_words_${Date.now()}.mp3`);
-    fs.writeFileSync(tempPath, buffer);
+    // Transcode to a compact mono 16 kHz MP3 first so long/large songs stay
+    // under Whisper's 25 MB limit and upload/transcription is faster.
+    const { filePath: tempPath, cleanup } = await downloadAndCompressForWhisper(audioUrl);
 
     try {
       const audioFile = fs.createReadStream(tempPath);
@@ -218,7 +264,7 @@ export async function transcribeWithWords(audioUrl: string): Promise<WordTranscr
         words: rawWords,
       };
     } finally {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      cleanup();
     }
   } catch (error) {
     console.error('❌ [WhisperAgent] Word transcription error:', error);

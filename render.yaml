@@ -17,6 +17,18 @@ services:
         value: 20.18.0
       - key: NODE_OPTIONS
         value: --max-old-space-size=400
+      # Service role: web process serves the API/frontend. Background cron
+      # schedulers are moved OFF the web process to the dedicated
+      # `boostify-scheduler` service (set SCHEDULERS_IN_WEB=false). This keeps
+      # the web event loop + Neon pool free for user requests under load.
+      - key: SERVICE_ROLE
+        value: web
+      - key: SCHEDULERS_IN_WEB
+        value: "false"
+      # Optional error monitoring. Leave unset to disable (no-op). Set a real
+      # Sentry DSN in the dashboard to capture 5xx + unhandled errors.
+      - key: SENTRY_DSN
+        sync: false
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
       - key: PORT
@@ -132,6 +144,10 @@ services:
         value: --max-old-space-size=400
       - key: WORKER_CONCURRENCY
         value: "3"
+      - key: SERVICE_ROLE
+        value: worker
+      - key: SENTRY_DSN
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -157,6 +173,74 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
+
+  # ════════════════════════════════════════════════════════════════════
+  # SCHEDULER — runs ALL background cron jobs (artist discovery, enrichment,
+  # release publisher, music auto-pilot, news, weekly reports, outreach,
+  # workflow node triggers…). Same codebase as web (npm start) but with
+  # SERVICE_ROLE=scheduler so shouldRunSchedulers() is true here and false on
+  # the web service. Keeps cron load off the user-facing web process.
+  # ════════════════════════════════════════════════════════════════════
+  - type: worker
+    name: boostify-scheduler
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=400
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: PORT
+        value: 3000
+      # This service IS the scheduler → shouldRunSchedulers() returns true.
+      - key: SERVICE_ROLE
+        value: scheduler
+      - key: SENTRY_DSN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FAL_KEY
+        sync: false
+      - key: MESHY_API_KEY
+        sync: false
+      - key: TRIPO_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: boostify-redis
+          property: connectionString
 
   # ════════════════════════════════════════════════════════════════════
   # REDIS (Key Value) — backs the BullMQ queue. `noeviction` is REQUIRED

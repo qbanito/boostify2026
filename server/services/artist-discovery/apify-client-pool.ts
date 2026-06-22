@@ -18,6 +18,33 @@ let activeKey: 'primary' | 'backup' = 'primary';
 let primaryExhaustedAt: number | null = null;
 const EXHAUSTION_COOLDOWN_MS = 6 * 60 * 60 * 1000; // Retry primary after 6h
 
+// When BOTH keys are exhausted (or no keys exist) we mark a global cooldown so
+// callers can skip Apify-dependent work entirely instead of hammering the API
+// (and wasting time + OpenAI tokens on sources that can never scrape).
+let bothExhaustedAt: number | null = null;
+const BOTH_EXHAUSTION_COOLDOWN_MS = 60 * 60 * 1000; // Re-probe Apify after 1h
+
+/**
+ * True when Apify cannot currently run (no keys configured, or both keys hit
+ * their quota within the cooldown window). Lets discovery fall back to the
+ * non-Apify sources (youtube_api / spotify_api) without wasting work.
+ */
+export function isApifyExhausted(): boolean {
+  if (!primaryClient && !backupClient) return true;
+  if (bothExhaustedAt && Date.now() - bothExhaustedAt < BOTH_EXHAUSTION_COOLDOWN_MS) return true;
+  return false;
+}
+
+/** Manually flag Apify as exhausted (used by sources that call Apify directly). */
+export function markApifyExhausted(_msg?: string): void {
+  bothExhaustedAt = Date.now();
+}
+
+/** Whether an error from a direct Apify call indicates quota/usage exhaustion. */
+export function isApifyExhaustionError(err: any): boolean {
+  return isExhausionError(err);
+}
+
 // ─── Stats ───────────────────────────────────────────────────────
 
 interface PoolStats {
@@ -69,6 +96,12 @@ export async function runActorWithFailover(
   input: Record<string, any>,
   options: { waitSecs?: number } = {},
 ): Promise<{ defaultDatasetId: string; client: ApifyClient }> {
+  // Fast-fail when Apify is exhausted — avoids re-hammering hundreds of queries
+  // against keys that are already over quota.
+  if (isApifyExhausted()) {
+    throw new Error('[ApifyPool] Skipped — Apify exhausted (cooldown active)');
+  }
+
   // Check if primary should be retried after cooldown
   if (activeKey === 'backup' && primaryExhaustedAt) {
     if (Date.now() - primaryExhaustedAt > EXHAUSTION_COOLDOWN_MS) {
@@ -90,9 +123,10 @@ export async function runActorWithFailover(
     try {
       const run = await client.actor(actorId).call(input, options);
 
-      // Track success
+      // Track success — clear any global exhaustion flag (Apify is alive again)
       if (label === 'primary') stats.primaryCalls++;
       else stats.backupCalls++;
+      bothExhaustedAt = null;
 
       return { defaultDatasetId: run.defaultDatasetId, client };
     } catch (err: any) {
@@ -112,7 +146,8 @@ export async function runActorWithFailover(
           console.log('[ApifyPool] ⚡ Failing over to BACKUP key');
           continue; // Try backup
         } else {
-          // Both exhausted
+          // Both exhausted — flag a global cooldown so callers skip Apify work
+          markApifyExhausted(errMsg);
           throw new Error(`[ApifyPool] Both primary and backup keys exhausted: ${errMsg}`);
         }
       }

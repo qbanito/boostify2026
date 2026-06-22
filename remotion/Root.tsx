@@ -156,6 +156,8 @@ export const RemotionRoot: React.FC = () => {
           theme: 'dark' as const,
           accentColor: '#7c3aed',
           fontFamily: 'Inter',
+          lyricStyle: 'glow' as const,
+          layout: 'center' as const,
           showProgressBar: true,
           showWatermark: true,
         } as LyricsVideoProps}

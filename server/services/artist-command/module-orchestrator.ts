@@ -12,7 +12,8 @@
  * artistTasks). The orchestrator just reports progress through callbacks.
  */
 import { createTrackedOpenAI } from '../../utils/tracked-openai';
-import { PRIMARY_MODEL } from '../../utils/ai-config';
+import { OpenAI } from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../../utils/ai-config';
 import { generateMasterDesign, generateMusicWithMiniMax, generateVideoFromImage } from '../fal-service';
 import type { CommandIntent, CommandParams, ParsedCommand } from './intent-router';
 
@@ -65,16 +66,52 @@ function langNames(codes: string[]): string {
   return codes.map((c) => map[c] || c).join(' and ');
 }
 
-async function llmText(system: string, user: string, maxTokens = 900): Promise<string> {
+// ─── LLM helpers ─────────────────────────────────────────────────────────────
+// GLM-5.2 (z.ai flagship) es el modelo más avanzado: lo usamos como PRINCIPAL en
+// los módulos creativos/estratégicos largos (letra, guiones, brief, descripción).
+// Si z.ai falla, cae automáticamente a gpt-4o-mini (createTrackedOpenAI).
+const GLM_FLAGSHIP = 'glm-5.2';
+let _zaiClient: OpenAI | null = null;
+function getZaiClient(): OpenAI {
+  if (!_zaiClient) {
+    _zaiClient = new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL });
+  }
+  return _zaiClient;
+}
+
+async function llmText(
+  system: string,
+  user: string,
+  maxTokens = 900,
+  opts: { flagship?: boolean } = {},
+): Promise<string> {
+  const messages = [
+    { role: 'system' as const, content: system },
+    { role: 'user' as const, content: user },
+  ];
+
+  // Módulos flagship: GLM-5.2 primero (máxima calidad), luego fallback a gpt-4o-mini.
+  if (opts.flagship && isZaiConfigured()) {
+    try {
+      const completion = await getZaiClient().chat.completions.create({
+        model: GLM_FLAGSHIP,
+        temperature: 0.85,
+        max_tokens: maxTokens,
+        messages,
+      });
+      const out = (completion.choices?.[0]?.message?.content || '').trim();
+      if (out) return out;
+    } catch (e: any) {
+      console.warn('[ArtistCommand] GLM-5.2 falló, fallback gpt-4o-mini:', e?.message);
+    }
+  }
+
   const openai = createTrackedOpenAI();
   const completion = await openai.chat.completions.create({
     model: PRIMARY_MODEL,
     temperature: 0.85,
     max_tokens: maxTokens,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
+    messages,
   });
   return (completion.choices?.[0]?.message?.content || '').trim();
 }
@@ -119,8 +156,9 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         `You are a hit songwriter for the music platform Boostify. Write original, emotionally resonant song lyrics. Use clear [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro] section tags. If multiple languages are requested, weave them naturally (e.g. verses in one, chorus hook in another). Keep it radio-ready and original.`,
         `Write a complete song.\n${ctxBrief(ctx)}`,
         1100,
+        { flagship: true },
       );
-      return { type: 'text', title: 'Letra completa', content, provider: 'openrouter' };
+      return { type: 'text', title: 'Letra completa', content, provider: 'zai:glm-5.2' };
     },
   },
 
@@ -131,8 +169,9 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         `You are a music producer. Describe the production: tempo (BPM), key, instrumentation, rhythm/groove, arrangement and reference sound. Be concrete and concise (a producer should be able to build it).`,
         `Describe the music production for this song.\n${ctxBrief(ctx)}`,
         500,
+        { flagship: true },
       );
-      return { type: 'text', title: 'Descripción musical', content, provider: 'openrouter' };
+      return { type: 'text', title: 'Descripción musical', content, provider: 'zai:glm-5.2' };
     },
   },
 
@@ -230,8 +269,9 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         `You are a music-video director. Write a shot-by-shot script for a short vertical video (9:16). Use a numbered shot list with: timecode, visual, camera, and on-screen action. Keep it to the requested duration.`,
         `Write the short-video script.\n${ctxBrief(ctx)}${lyricsHint}`,
         700,
+        { flagship: true },
       );
-      return { type: 'text', title: 'Guion de video corto', content, provider: 'openrouter' };
+      return { type: 'text', title: 'Guion de video corto', content, provider: 'zai:glm-5.2' };
     },
   },
 
@@ -308,8 +348,9 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         `You are a music marketing strategist. Write a concise multi-platform campaign brief: objective, target audience, key message, 3 content pillars, channel plan (TikTok/IG/YouTube/Ads), 7-day posting calendar, and 3 KPIs.`,
         `Build the promo campaign brief.\n${ctxBrief(ctx)}`,
         850,
+        { flagship: true },
       );
-      return { type: 'text', title: 'Brief de campaña', content, provider: 'openrouter' };
+      return { type: 'text', title: 'Brief de campaña', content, provider: 'zai:glm-5.2' };
     },
   },
 
@@ -320,8 +361,9 @@ const MODULES: Record<ModuleKey, ModuleDefinition> = {
         `You are a teaser editor. Write a 10-20s vertical teaser script: hook in the first 2s, the single moment that makes people stop scrolling, on-screen text overlays, and a final CTA card.`,
         `Write a teaser script.\n${ctxBrief(ctx)}`,
         400,
+        { flagship: true },
       );
-      return { type: 'text', title: 'Guion de teaser', content, provider: 'openrouter' };
+      return { type: 'text', title: 'Guion de teaser', content, provider: 'zai:glm-5.2' };
     },
   },
 };

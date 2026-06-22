@@ -46,6 +46,7 @@ interface DiscoveryStatus {
   goals?: GoalsDashboard;
   brain?: { totalDecisions: number; decisionsToday: number; aiScoredLeads: number; avgTokensPerDecision: number };
   autonomy?: AutonomyData | null;
+  apifyExhausted?: boolean;
 }
 
 interface AutonomyData {
@@ -181,7 +182,14 @@ function TierBadge({ tier }: { tier: string }) {
 
 type PanelTab = 'dashboard' | 'leads' | 'pipeline' | 'runs' | 'goals' | 'autonomy';
 
-const ALL_SOURCES = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud'];
+// '⚡' sources (youtube_api / spotify_api) work without Apify — resilient when Apify quota is exhausted.
+const ALL_SOURCES = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube_api', 'spotify_api'];
+const SOURCE_LABELS: Record<string, string> = {
+  google_ai: 'Google AI',
+  youtube_api: 'YouTube API ⚡',
+  spotify_api: 'Spotify API ⚡',
+};
+const sourceLabel = (src: string) => SOURCE_LABELS[src] || src.replace(/^./, c => c.toUpperCase());
 
 export function DiscoveryAgentPanel() {
   const { toast } = useToast();
@@ -542,9 +550,15 @@ export function DiscoveryAgentPanel() {
                       prev.includes(src) ? prev.filter(s => s !== src) : [...prev, src]
                     )} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       selectedSources.includes(src) ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                    }`}>{src === 'google_ai' ? 'Google AI' : src.replace(/^./, c => c.toUpperCase())}</button>
+                    }`}>{sourceLabel(src)}</button>
                   ))}
                 </div>
+                {status?.apifyExhausted && (
+                  <div className="mt-2 text-[11px] text-amber-300/90 bg-amber-900/20 border border-amber-500/30 rounded-md px-2.5 py-1.5">
+                    ⚠️ Apify quota exhausted — Apify-based sources return 0 leads right now.
+                    Use the ⚡ direct-API sources (YouTube API / Spotify API), which keep working.
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-2">

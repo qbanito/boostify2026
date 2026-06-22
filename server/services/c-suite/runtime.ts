@@ -28,6 +28,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { getTool, toolsToOpenAI, type ToolContext } from './tools';
 import { EventEmitter } from 'events';
+import { ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../../utils/ai-config';
 
 // Single shared OpenAI client. Use existing tracked variant if available.
 let _client: OpenAI | null = null;
@@ -38,12 +39,49 @@ function client(): OpenAI {
   return _client;
 }
 
+// z.ai (Zhipu GLM) client — OpenAI-compatible. GLM-5.2 is the flagship primary
+// model for the C-Suite; OpenAI is kept as automatic fallback.
+const GLM_FLAGSHIP = 'glm-5.2';
+let _zaiClient: OpenAI | null = null;
+function zaiClient(): OpenAI | null {
+  if (!isZaiConfigured()) return null;
+  if (!_zaiClient) {
+    _zaiClient = new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL });
+  }
+  return _zaiClient;
+}
+
+/**
+ * Resilient chat completion for C-Suite agents.
+ * PRIMARY: z.ai GLM-5.2 (flagship). FALLBACK: OpenAI with the agent's configured model.
+ * Tool/function calling is preserved across both providers.
+ */
+async function createAgentCompletion(
+  agentModel: string,
+  params: { messages: any[]; tools?: any; tool_choice?: any; temperature?: number },
+) {
+  const zai = zaiClient();
+  if (zai) {
+    try {
+      const completion = await zai.chat.completions.create({ model: GLM_FLAGSHIP, ...params });
+      if (completion?.choices?.length) return completion;
+    } catch (err: any) {
+      console.warn('[C-Suite] GLM-5.2 primary failed, falling back to OpenAI:', err?.message || err);
+    }
+  }
+  return client().chat.completions.create({ model: agentModel || 'gpt-4o-mini', ...params });
+}
+
 // Pricing table (USD per 1M tokens). Update as needed.
 const PRICING: Record<string, { in: number; out: number }> = {
   'gpt-4o':       { in: 2.5,  out: 10.0 },
   'gpt-4o-mini':  { in: 0.15, out: 0.60 },
   'gpt-4.1':      { in: 2.0,  out: 8.0 },
   'gpt-4.1-mini': { in: 0.4,  out: 1.6 },
+  'glm-5.2':      { in: 1.4,  out: 4.4 },
+  'glm-4.6':      { in: 0.6,  out: 2.2 },
+  'glm-4.5-flash':{ in: 0.0,  out: 0.0 },
+  'glm-4.5-air':  { in: 0.2,  out: 1.1 },
 };
 function estimateCost(model: string, inT: number, outT: number): number {
   const p = PRICING[model] || PRICING['gpt-4o-mini'];
@@ -166,8 +204,7 @@ export async function runAgentTurn(args: RunArgs): Promise<RunResult> {
       finalText = '⚠️ Turn deadline (5 min) exceeded — terminating.';
       break;
     }
-    const completion = await client().chat.completions.create({
-      model: agent.model,
+    const completion = await createAgentCompletion(agent.model, {
       messages: conversation,
       tools: openaiTools.length ? openaiTools : undefined,
       tool_choice: openaiTools.length ? 'auto' : undefined,

@@ -15,6 +15,7 @@ import { useArtistPWA } from "../hooks/use-artist-pwa";
 import { InstallAppBanner, OfflineIndicator } from "../components/artist/install-app-banner";
 import { formatLocation } from "../lib/formatLocation";
 import { useNavigationVisibilityStore } from "../hooks/use-navigation-visibility";
+import { setCommandContext } from "../lib/command-context";
 
 function ProfileParallaxBackdrop({ imageUrl }: { imageUrl?: string | null }) {
   const reduceMotion = useReducedMotion();
@@ -200,6 +201,23 @@ export default function ArtistProfilePage() {
     if (!currentUser || !postgresId) return;
     if (currentUser.id === postgresId) setIsOwnProfile(true);
   }, [currentUser, postgresId]);
+
+  // Publish command context for the floating assistant (owner only) so it can
+  // route module-creation commands to the Artist Command Engine. Cleared on
+  // unmount or when the visitor is not the owner.
+  useEffect(() => {
+    if (isOwnProfile && artistId && artistData) {
+      setCommandContext({
+        artistId,
+        artistName: artistData.displayName || artistData.name || 'Artist',
+        artistImageUrl: artistData.profileImage || artistData.photoURL || null,
+        genre: artistData.genre || '',
+      });
+    } else {
+      setCommandContext(null);
+    }
+    return () => setCommandContext(null);
+  }, [isOwnProfile, artistId, artistData]);
 
   // PWA: offline mode and install-to-home-screen
   // Must be called before any early returns to respect React hooks rules

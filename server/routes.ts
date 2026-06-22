@@ -238,6 +238,8 @@ import hermesRouter from './routes/hermes'; // Hermes Agent Integration — REST
 import artistHermesProxyRouter from './routes/artist-hermes-proxy'; // Hermes Proxy — Clerk-authenticated frontend facade
 import agentGatewayRouter from './routes/agent-gateway'; // Artist Agent Gateway — communication system
 import seoRouter from './routes/seo'; // SEO — sitemap.xml, robots.txt, news-sitemap
+import { shouldRunSchedulers } from './bootstrap/role'; // Gate background schedulers by service role
+import { cacheRoute } from './middleware/cache-route'; // Short-TTL response cache for hot public reads
 import { startDailyNewsScheduler } from './services/news-generator'; // Daily news article auto-generation
 import { startReleasePublisher } from './services/release-publisher'; // Scheduled song release publisher
 import autoMusicRouter from './routes/auto-music'; // Music Auto-Pilot — scheduled auto-generation from catalog references
@@ -305,7 +307,9 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Session handling is done by Clerk's clerkMiddleware()
 
   // Endpoint público para buscar artista por slug (usado por artist-profile.tsx)
-  app.get('/api/artist/by-slug/:slug', async (req, res) => {
+  // Cacheado 30s por slug: la página fanea ~6 llamadas idénticas por carga y el
+  // perfil público cambia rara vez → evita golpear Neon en cada request.
+  app.get('/api/artist/by-slug/:slug', cacheRoute(30, req => `artist-by-slug:${req.params.slug}`), async (req, res) => {
     try {
       const { slug } = req.params;
       console.log(`🔍 Buscando artista con slug: ${slug}`);
@@ -668,7 +672,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/admin/moderation', contentModerationRouter); // Content Moderation queue (admin)
   app.use('/api/moderation', contentModerationRouter); // Content Moderation public check endpoint
   app.use('/api/admin/reports', adminReportsRouter); // Admin: Platform reports, diagnostics & competitive intel
-  startWeeklyReportScheduler(); // Start auto-weekly email report scheduler
+  if (shouldRunSchedulers()) startWeeklyReportScheduler(); // Start auto-weekly email report scheduler
   app.use('/api/admin/code-engine', codeEngineRouter); // Admin: AI Code Engine - auto-improvements
   app.use('/api/admin/stripe-events', stripeEventsAdminRouter);
   app.use('/api/admin/boostiswap-artists', adminBoostiswapArtistsRouter); // Admin: BoostiSwap artists management
@@ -678,21 +682,21 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/admin/artist-acquisition', adminArtistAcquisitionRouter); // Admin: Artist Acquisition System dashboard
   app.use('/api/admin/artist-identity', adminArtistIdentityRouter); // Admin: Artist Identity & Account Provisioning System (AIAPS)
   app.use('/api/webhooks/aiaps', webhooksAiapsRouter); // Public: AIAPS webhooks (Twilio SMS / inbound email)
-  startAiapsScheduler(); // Start AIAPS health + warm-up scheduler
+  if (shouldRunSchedulers()) startAiapsScheduler(); // Start AIAPS health + warm-up scheduler
   app.use('/api/admin/boostify-alliances', adminBoostifyAlliancesRouter); // Admin: Boostify Alliances dashboard
   app.use('/api/admin/artist-activation', artistActivationRouter); // Admin: Artist Activation Engine (drip, scoring, conversion)
   app.use('/api/artist-activation', artistActivationRouter); // Public: Magic links + unsubscribe
   // Noisy background schedulers — set DISABLE_DISCOVERY_SCHEDULERS=1 in dev to silence
-  if (process.env.DISABLE_DISCOVERY_SCHEDULERS !== '1') {
+  if (shouldRunSchedulers() && process.env.DISABLE_DISCOVERY_SCHEDULERS !== '1') {
     startDiscoveryScheduler(); // Start artist discovery every 6 hours
     startActivationScheduler(); // Start activation drip engine every 30 minutes
     startAutoGeneration(); // Start auto-generation: contacts → artist pages every 4 hours
   } else {
-    console.log('⏸️  [Schedulers] Discovery/Activation/AutoGen disabled via DISABLE_DISCOVERY_SCHEDULERS=1');
+    console.log('⏸️  [Schedulers] Discovery/Activation/AutoGen disabled (role/env)');
   }
   app.use('/api/admin/artist-enrichment', artistEnrichmentRouter); // Admin: Artist Enrichment Agent (auto-enrich profiles)
   app.use('/api/artist-enrichment', artistEnrichmentRouter); // Public: enrichment status
-  if (process.env.DISABLE_DISCOVERY_SCHEDULERS !== '1') {
+  if (shouldRunSchedulers() && process.env.DISABLE_DISCOVERY_SCHEDULERS !== '1') {
     startEnrichmentScheduler(); // Start artist enrichment every 15 minutes
   }
   app.use('/api/admin/c-suite', adminCSuiteRouter); // Admin: C-Suite AI executive team (CEO + 9 chiefs)
@@ -784,7 +788,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
 
   // Boostify News — AI-generated daily articles about innovations & technologies
   app.use('/api/news', newsRouter);
-  startDailyNewsScheduler();
+  if (shouldRunSchedulers()) startDailyNewsScheduler();
   console.log('📰 Boostify News Engine registered at /api/news (daily auto-generation active)');
 
   // Artist profile social sharing — rich OG card + share page
@@ -939,16 +943,16 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   console.log('🔍 SEO routes registered: /sitemap.xml, /sitemap-news.xml, /sitemap-artists.xml, /robots.txt');
 
   // Release Publisher — Scheduled song publication worker (cadence releases)
-  startReleasePublisher();
+  if (shouldRunSchedulers()) startReleasePublisher();
   console.log('🎵 Release Publisher started (auto-publishes songs on release date)');
 
   // Music Auto-Pilot — scheduled active music generation (weekly single, monthly album)
-  startAutoMusicScheduler();
+  if (shouldRunSchedulers()) startAutoMusicScheduler();
   console.log('🤖 Music Auto-Pilot scheduler started (catalog-referenced auto-generation)');
 
   // Influencer Module — Content pipeline, voice cloning, avatar videos, scheduling
   app.use('/api/influencer', influencerContentRouter);
-  startInfluencerContentScheduler();
+  if (shouldRunSchedulers()) startInfluencerContentScheduler();
   console.log('🎬 Influencer Module registered at /api/influencer (auto-generation active)');
 
   // Talk To Me — ElevenLabs Conversational AI for fans to voice-chat with artist AI doubles
@@ -962,9 +966,11 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   console.log('🎧 Streaming module registered at /api/streaming');
 
   // Node Workflow Scheduler — boot cron jobs for all artist ScheduleTrigger nodes
-  workflowScheduler.bootstrap().then(() => {
-    console.log(`⏰ Workflow Scheduler bootstrapped (${workflowScheduler.getActiveCount()} tasks active)`);
-  }).catch(err => console.error('❌ Workflow Scheduler bootstrap failed:', err));
+  if (shouldRunSchedulers()) {
+    workflowScheduler.bootstrap().then(() => {
+      console.log(`⏰ Workflow Scheduler bootstrapped (${workflowScheduler.getActiveCount()} tasks active)`);
+    }).catch(err => console.error('❌ Workflow Scheduler bootstrap failed:', err));
+  }
 
   // Customer Support Chat — OpenAI-powered support agent (platform-wide)
   const customerSupportChatRouter = (await import('./routes/customer-support-chat')).default;
@@ -976,7 +982,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   console.log('🎵 Distribution Orchestrator routes registered at /api/distribution');
 
   // Start auto follow-up scheduler for sponsor deals
-  startFollowUpScheduler();
+  if (shouldRunSchedulers()) startFollowUpScheduler();
   app.use(creditsRouter); // Credits and payment routes
   app.use(adminPricingRouter); // Admin pricing management
   app.use('/api/video-budget', videoBudgetRouter); // Video Budget system (pre-generation Stripe payment)

@@ -67,6 +67,90 @@ const FONT_OPTIONS = [
   { label: 'Josefin Sans', value: 'Josefin Sans' },
 ];
 
+// Estilos de letra modernos para el video lírico (mapeados a presets de
+// tipografía + animación en remotion/lyric-fonts.ts).
+const LYRIC_STYLE_OPTIONS = [
+  { value: 'auto', label: 'Auto (por género)', desc: 'Elige el estilo ideal según tu música', emoji: '✨' },
+  { value: 'glow', label: 'Glow', desc: 'Moderno y luminoso (Outfit)', emoji: '🌟' },
+  { value: 'kinetic', label: 'Kinetic', desc: 'Dinámico palabra a palabra (Sora)', emoji: '⚡' },
+  { value: 'neon', label: 'Neon Club', desc: 'Impacto electrónico (Unbounded)', emoji: '🔮' },
+  { value: 'elegant', label: 'Elegante', desc: 'Serif refinada (Playfair)', emoji: '🕊️' },
+  { value: 'bold', label: 'Bold Urbano', desc: 'Fuerte tipo trap/rap (Anton)', emoji: '🔥' },
+  { value: 'clean', label: 'Clean', desc: 'Minimalista nítido (Montserrat)', emoji: '◻️' },
+] as const;
+
+type LyricStyleValue = (typeof LYRIC_STYLE_OPTIONS)[number]['value'];
+
+
+// Safe JSON — the dev server restarts (tsx watch) and proxies (502/504) can
+// return an EMPTY or non-JSON body. A raw res.json() then throws the cryptic
+// "Unexpected end of JSON input". Read the text first and parse defensively.
+async function readJsonSafe<T = any>(res: Response): Promise<T | null> {
+  let text: string;
+  try { text = await res.text(); } catch { return null; }
+  if (!text || !text.trim()) return null;
+  try { return JSON.parse(text) as T; } catch { return null; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Staged upload progress — the YouTube publish pipeline runs SEO → thumbnail →
+// upload → finalize sequentially in one request, so we animate descriptive
+// stages on a timer and snap to 100% on success.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const UPLOAD_STAGES = [
+  { label: 'Preparing your track', target: 12 },
+  { label: 'Writing competitive SEO with AI', target: 38 },
+  { label: 'Designing your AI thumbnail', target: 64 },
+  { label: 'Uploading to YouTube', target: 88 },
+  { label: 'Setting thumbnail & finishing', target: 96 },
+];
+
+const StagedUploadProgress: React.FC<{ active: boolean; done?: boolean }> = ({ active, done }) => {
+  const [pct, setPct] = useState(0);
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    if (done) { setPct(100); return; }
+    if (!active) { setPct(0); setStage(0); return; }
+    let p = 0;
+    let s = 0;
+    setPct(0);
+    setStage(0);
+    const id = setInterval(() => {
+      const target = UPLOAD_STAGES[s]?.target ?? 96;
+      p = Math.min(p + Math.random() * 3 + 0.6, target);
+      setPct(Math.round(p));
+      if (p >= target && s < UPLOAD_STAGES.length - 1) { s += 1; setStage(s); }
+    }, 320);
+    return () => clearInterval(id);
+  }, [active, done]);
+
+  const label = done ? 'Published to YouTube 🎉' : (UPLOAD_STAGES[stage]?.label ?? 'Working…');
+  const shown = done ? 100 : pct;
+
+  return (
+    <div className="space-y-2 rounded-xl bg-black/30 border border-white/10 p-3">
+      <div className="flex items-center gap-2 text-xs">
+        {done
+          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          : <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />}
+        <span className={done ? 'text-emerald-300 font-medium' : 'text-zinc-100 font-medium'}>{label}</span>
+        <span className="ml-auto font-mono text-zinc-400">{shown}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <motion.div
+          className={`h-full rounded-full ${done
+            ? 'bg-gradient-to-r from-emerald-500 to-emerald-400'
+            : 'bg-gradient-to-r from-rose-600 via-red-500 to-orange-400'}`}
+          animate={{ width: `${shown}%` }}
+          transition={{ duration: 0.4 }}
+        />
+      </div>
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook: poll render status
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,8 +160,11 @@ function useRenderStatus(jobId: number | null, enabled: boolean) {
     queryKey: ['lyricsVideoStatus', jobId],
     queryFn: async () => {
       const res = await fetch(`/api/lyrics-video/${jobId}/status`);
-      if (!res.ok) throw new Error('Status fetch failed');
-      return res.json();
+      const data = await readJsonSafe<RenderStatus>(res);
+      // Empty/non-JSON body or non-200 = server momentarily down (restart) —
+      // throw so React Query keeps the last data and retries on the interval.
+      if (!res.ok || !data) throw new Error('Status temporarily unavailable');
+      return data;
     },
     enabled: !!jobId && enabled,
     // TanStack Query v5: refetchInterval callback receives the Query object.
@@ -135,15 +222,18 @@ const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
 interface Step1Props {
   songs: Song[];
   artistId?: number;
+  artistName?: string;
   onDone: (data: TranscribeResponse & { songTitle: string; artistName: string; coverArtUrl?: string }) => void;
 }
 
-const Step1Configure: React.FC<Step1Props> = ({ songs, artistId, onDone }) => {
+const Step1Configure: React.FC<Step1Props> = ({ songs, artistId, artistName: artistNameProp, onDone }) => {
   const [selectedSongId, setSelectedSongId] = useState<number | null>(null);
-  const [artistName, setArtistName] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
 
   const selectedSong = songs.find(s => s.id === selectedSongId);
+  // Artist name comes from the artist profile, cover art from the selected
+  // song — the user no longer types these by hand.
+  const resolvedArtistName = (artistNameProp || '').trim() || 'Artist';
+  const resolvedCover = selectedSong?.coverArt;
 
   const transcribeMutation = useMutation({
     mutationFn: async () => {
@@ -156,20 +246,28 @@ const Step1Configure: React.FC<Step1Props> = ({ songs, artistId, onDone }) => {
           audioUrl: selectedSong.audioUrl,
           songId: selectedSong.id,
           songTitle: selectedSong.title,
-          artistName: artistName || undefined,
-          coverArtUrl: coverUrl || selectedSong.coverArt || undefined,
+          artistName: resolvedArtistName,
+          coverArtUrl: resolvedCover || undefined,
           artistId: artistId ?? undefined,
         }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Transcription failed'); }
-      return res.json() as Promise<TranscribeResponse>;
+      const data = await readJsonSafe<any>(res);
+      if (!res.ok) {
+        throw new Error(
+          data?.error ?? (res.status >= 500
+            ? 'The server is busy or just restarted. Wait a few seconds and try again.'
+            : 'Transcription failed'),
+        );
+      }
+      if (!data) throw new Error('Empty server response (likely a restart). Please try again.');
+      return data as TranscribeResponse;
     },
     onSuccess: (data) => {
       onDone({
         ...data,
         songTitle: selectedSong!.title,
-        artistName: artistName || 'Artist',
-        coverArtUrl: coverUrl || selectedSong!.coverArt,
+        artistName: resolvedArtistName,
+        coverArtUrl: resolvedCover,
       });
     },
   });
@@ -206,26 +304,21 @@ const Step1Configure: React.FC<Step1Props> = ({ songs, artistId, onDone }) => {
         </div>
       </div>
 
-      {/* Artist name */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-300 mb-2">Artist Name</label>
-        <input
-          value={artistName}
-          onChange={e => setArtistName(e.target.value)}
-          placeholder="Your artist name"
-          className="w-full bg-zinc-800/60 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500"
-        />
-      </div>
-
-      {/* Cover Art URL override */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-300 mb-2">Cover Art URL <span className="text-zinc-500">(optional — uses song cover if blank)</span></label>
-        <input
-          value={coverUrl}
-          onChange={e => setCoverUrl(e.target.value)}
-          placeholder="https://..."
-          className="w-full bg-zinc-800/60 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500"
-        />
+      {/* Auto-derived metadata — artist name from the profile, cover from the song */}
+      <div className="flex items-center gap-3 bg-zinc-800/40 border border-zinc-700 rounded-xl px-4 py-3">
+        <div className="w-10 h-10 rounded-lg bg-zinc-700 flex-shrink-0 overflow-hidden">
+          {resolvedCover ? (
+            <img src={resolvedCover} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Music className="w-5 h-5 m-2.5 text-zinc-400" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white truncate">{resolvedArtistName}</div>
+          <div className="text-[11px] text-zinc-500 truncate">
+            {selectedSong ? 'Cover art taken from the selected song' : 'Select a song to use its cover art'}
+          </div>
+        </div>
       </div>
 
       {transcribeMutation.isError && (
@@ -273,6 +366,8 @@ interface StyleOptions {
   theme: 'dark' | 'light' | 'gradient' | 'blur';
   accentColor: string;
   fontFamily: string;
+  lyricStyle: LyricStyleValue;
+  layout: 'center' | 'side';
   showProgressBar: boolean;
   showWatermark: boolean;
 }
@@ -288,6 +383,8 @@ const Step2Preview: React.FC<Step2Props> = ({
   const [theme, setTheme] = useState<'dark' | 'light' | 'gradient' | 'blur'>('dark');
   const [accentColor, setAccentColor] = useState('#7c3aed');
   const [fontFamily, setFontFamily] = useState('Inter');
+  const [lyricStyle, setLyricStyle] = useState<LyricStyleValue>('auto');
+  const [layout, setLayout] = useState<'center' | 'side'>('center');
   const [showProgressBar, setShowProgressBar] = useState(true);
   const [showWatermark, setShowWatermark] = useState(true);
   const [editingSegments, setEditingSegments] = useState<LyricsSegment[]>(transcription.segments);
@@ -296,6 +393,10 @@ const Step2Preview: React.FC<Step2Props> = ({
 
   const durationSecs = transcription.duration || 180;
   const durationFrames = Math.ceil(durationSecs * 30) + 30;
+
+  // En el preview 'auto' no resuelve género (eso lo hace el server) → usamos
+  // 'glow' como representación visual por defecto.
+  const previewLyricStyle = lyricStyle === 'auto' ? 'glow' : lyricStyle;
 
   const compositionProps: LyricsVideoProps = {
     audioUrl: transcription.segments.length > 0 ? '' : '', // no audio in preview (CORS)
@@ -306,6 +407,8 @@ const Step2Preview: React.FC<Step2Props> = ({
     theme,
     accentColor,
     fontFamily,
+    lyricStyle: previewLyricStyle,
+    layout,
     showProgressBar,
     showWatermark,
     durationSecs,
@@ -397,6 +500,55 @@ const Step2Preview: React.FC<Step2Props> = ({
           >
             {FONT_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
+        </div>
+
+        {/* Estilo de letra (tipografía + animación modernas) */}
+        <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700 md:col-span-2">
+          <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">
+            Estilo de letra ✨
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {LYRIC_STYLE_OPTIONS.map(s => (
+              <button
+                key={s.value}
+                onClick={() => setLyricStyle(s.value)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${
+                  lyricStyle === s.value
+                    ? 'border-violet-500 bg-violet-500/15 ring-1 ring-violet-500/50'
+                    : 'border-zinc-600 bg-zinc-700/40 hover:border-zinc-500'
+                }`}
+              >
+                <div className="text-sm font-semibold text-white flex items-center gap-1">
+                  <span>{s.emoji}</span>{s.label}
+                </div>
+                <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">{s.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Composición / layout */}
+        <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700">
+          <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">Composición</label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { value: 'center', label: 'Centrado', desc: 'Letras grandes al centro' },
+              { value: 'side', label: 'Clásico', desc: 'Portada + lista' },
+            ] as const).map(l => (
+              <button
+                key={l.value}
+                onClick={() => setLayout(l.value)}
+                className={`text-left rounded-lg px-3 py-2 border transition-all ${
+                  layout === l.value
+                    ? 'border-violet-500 bg-violet-500/15 ring-1 ring-violet-500/50'
+                    : 'border-zinc-600 bg-zinc-700/40 hover:border-zinc-500'
+                }`}
+              >
+                <div className="text-sm font-semibold text-white">{l.label}</div>
+                <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">{l.desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Toggles */}
@@ -496,7 +648,7 @@ const Step2Preview: React.FC<Step2Props> = ({
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
         <button
-          onClick={() => onNext({ theme, accentColor, fontFamily, showProgressBar, showWatermark })}
+          onClick={() => onNext({ theme, accentColor, fontFamily, lyricStyle, layout, showProgressBar, showWatermark })}
           className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl py-3 transition-all text-sm"
         >
           <Wand2 className="w-4 h-4" />
@@ -541,8 +693,15 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
         credentials: 'include',
         body: JSON.stringify({ jobId, ...styleOpts }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Render failed'); }
-      return res.json();
+      const data = await readJsonSafe<any>(res);
+      if (!res.ok) {
+        throw new Error(
+          data?.error ?? (res.status >= 500
+            ? 'The server is busy or just restarted. Wait a few seconds and retry the render.'
+            : 'Render failed'),
+        );
+      }
+      return data ?? { status: 'rendering' };
     },
     onSuccess: () => {
       setRenderStarted(true);
@@ -567,8 +726,8 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
           accessToken,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+      const data = await readJsonSafe<any>(res);
+      if (!res.ok) throw new Error(data?.error ?? 'Upload failed');
       queryClient.invalidateQueries({ queryKey: ['lyricsVideoStatus', jobId] });
     } catch (err: any) {
       setYtError(err.message);
@@ -692,6 +851,7 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
                 {ytUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 {ytUploading ? 'Uploading to YouTube…' : 'Upload to YouTube'}
               </button>
+              {ytUploading && <StagedUploadProgress active />}
             </div>
           )}
 
@@ -731,16 +891,558 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Album Autopilot — genera lyric videos de TODO el álbum en 2do plano
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AlbumSongEntry {
+  songId: number | string | null;
+  title: string;
+  audioUrl: string;
+  coverArt?: string | null;
+  status: 'pending' | 'transcribing' | 'rendering' | 'done' | 'failed';
+  jobId?: number;
+  outputUrl?: string;
+  youtubeUrl?: string;
+  uploadError?: string;
+  error?: string;
+}
+
+interface YtConnection {
+  connected: boolean;
+  channelTitle?: string;
+  thumbnailUrl?: string;
+  canManageChannel?: boolean;
+}
+
+interface AlbumStatus {
+  id: number;
+  status: 'processing' | 'done' | 'failed';
+  total_songs: number;
+  completed_songs: number;
+  songs_json: AlbumSongEntry[];
+  email?: string;
+  email_sent?: boolean;
+}
+
+const SONG_STATUS_META: Record<AlbumSongEntry['status'], { label: string; cls: string }> = {
+  pending: { label: 'Queued', cls: 'text-zinc-500' },
+  transcribing: { label: 'Transcribing…', cls: 'text-sky-400' },
+  rendering: { label: 'Rendering…', cls: 'text-violet-400' },
+  done: { label: 'Ready', cls: 'text-emerald-400' },
+  failed: { label: 'Failed', cls: 'text-red-400' },
+};
+
+const AlbumAutopilot: React.FC<{ songs: Song[] }> = ({ songs }) => {
+  const [albumId, setAlbumId] = useState<number | null>(null);
+  const [autoUpload, setAutoUpload] = useState(true);
+  const [privacy, setPrivacy] = useState<'public' | 'unlisted' | 'private'>('public');
+  const eligible = songs.filter((s) => !!s.audioUrl);
+  const queryClient = useQueryClient();
+
+  // Estado de conexión de YouTube del artista
+  const { data: yt, refetch: refetchYt } = useQuery<YtConnection>({
+    queryKey: ['ytConnection'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/youtube/connection');
+      const data = await readJsonSafe<any>(res);
+      const c = data?.connection;
+      return {
+        connected: !!data?.connected,
+        channelTitle: c?.channelTitle,
+        thumbnailUrl: c?.thumbnailUrl,
+        canManageChannel: !!c?.canManageChannel,
+      };
+    },
+    staleTime: 30_000,
+  });
+
+  const connectYoutube = async (switchAccount = false) => {
+    try {
+      const res = await fetch(`/api/auth/youtube/connect${switchAccount ? '?switch=1' : ''}`);
+      const data = await readJsonSafe<{ authUrl?: string; error?: string }>(res);
+      if (data?.authUrl) {
+        window.open(data.authUrl, '_blank', 'noopener');
+      } else {
+        alert(data?.error || 'Could not start the YouTube connection');
+      }
+    } catch { alert('Could not connect to YouTube'); }
+  };
+
+  // YouTube no permite CREAR canales por API: abrimos el conmutador de canales de
+  // Google para que el artista cree uno nuevo y luego lo conecte aquí.
+  const createNewChannel = () => {
+    window.open('https://www.youtube.com/channel_switcher', '_blank', 'noopener');
+  };
+
+  const setupChannelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/lyrics-video/youtube/setup-channel', { method: 'POST' });
+      const data = await readJsonSafe<any>(res);
+      if (!res.ok || !data) throw new Error(data?.error || 'Could not set up the channel');
+      return data;
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: async () => {
+      if (!albumId) throw new Error('No album');
+      const res = await fetch(`/api/lyrics-video/album/${albumId}/retry`, { method: 'POST' });
+      const data = await readJsonSafe<{ success: boolean; retryCount?: number }>(res);
+      if (!res.ok || !data?.success) throw new Error('Could not retry');
+      return data;
+    },
+    onSuccess: () => {
+      // Reabre el polling del estado (se había detenido al quedar 'failed').
+      queryClient.invalidateQueries({ queryKey: ['lyricsAlbumStatus', albumId] });
+    },
+  });
+
+  // Reconecta con un álbum en proceso al recargar la página
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/lyrics-video/albums');
+        const data = await readJsonSafe<{ albums: AlbumStatus[] }>(res);
+        if (cancelled || !data?.albums?.length) return;
+        const active = data.albums.find((a) => a.status === 'processing');
+        if (active) setAlbumId(active.id);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/lyrics-video/album/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songs: eligible.map((s) => ({
+            songId: s.id,
+            title: s.title || 'Untitled',
+            audioUrl: s.audioUrl,
+            coverArt: s.coverArt || undefined,
+          })),
+          autoUpload: autoUpload && !!yt?.connected,
+          privacyStatus: privacy,
+        }),
+      });
+      const data = await readJsonSafe<{ albumId: number; totalSongs: number }>(res);
+      if (!res.ok || !data) throw new Error('Could not start the album');
+      return data;
+    },
+    onSuccess: (d) => setAlbumId(d.albumId),
+  });
+
+  const { data: album } = useQuery<AlbumStatus>({
+    queryKey: ['lyricsAlbumStatus', albumId],
+    queryFn: async () => {
+      const res = await fetch(`/api/lyrics-video/album/${albumId}/status`);
+      const data = await readJsonSafe<AlbumStatus>(res);
+      if (!res.ok || !data) throw new Error('status unavailable');
+      return data;
+    },
+    enabled: !!albumId,
+    refetchInterval: (query) => {
+      const st = (query as any)?.state?.data?.status as string | undefined;
+      return st === 'done' || st === 'failed' ? false : 4000;
+    },
+  });
+
+  const isRunning = album?.status === 'processing' || startMutation.isPending;
+  const albumSongs: AlbumSongEntry[] = album?.songs_json ?? [];
+  const completed = album?.completed_songs ?? 0;
+  const total = album?.total_songs ?? eligible.length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-600/10 via-fuchsia-600/5 to-transparent p-5 sm:p-6 mb-6 shadow-xl">
+      <div className="pointer-events-none absolute -top-24 -right-16 h-48 w-48 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      <div className="relative flex items-center gap-3">
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/20 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+          <Wand2 className="w-5 h-5 text-violet-200" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-bold text-white">Full Album on Autopilot</h3>
+          <p className="text-xs text-zinc-400">
+            We generate lyric videos for every song in the background and email you the moment they're ready for YouTube.
+          </p>
+        </div>
+        {!isRunning && (
+          <button
+            onClick={() => startMutation.mutate()}
+            disabled={eligible.length === 0 || startMutation.isPending}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center gap-2 flex-shrink-0 transition-all shadow-lg shadow-violet-900/30"
+          >
+            {startMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Generate Album ({eligible.length})
+          </button>
+        )}
+      </div>
+
+      {startMutation.isError && (
+        <p className="mt-3 text-xs text-red-400 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" /> {(startMutation.error as Error)?.message || 'Failed to start'}
+        </p>
+      )}
+
+      {/* ── YouTube: connection + auto-upload + channel branding ── */}
+      <div className="relative mt-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Youtube className="w-4 h-4 text-red-500 flex-shrink-0" />
+          {yt?.connected ? (
+            <span className="text-xs text-zinc-300">
+              Connected channel: <span className="font-semibold text-white">{yt.channelTitle || 'YouTube'}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-zinc-400">Connect your channel to upload videos automatically.</span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {!yt?.connected ? (
+              <button onClick={() => connectYoutube(false)} className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center gap-1.5">
+                <Youtube className="w-3.5 h-3.5" /> Connect YouTube
+              </button>
+            ) : (
+              <>
+                <button onClick={() => refetchYt()} className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-xs" title="Refresh connection">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => connectYoutube(true)}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold flex items-center gap-1.5"
+                  title="Connect or switch to another channel by choosing a different Google account"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Switch Channel
+                </button>
+                <button
+                  onClick={() => setupChannelMutation.mutate()}
+                  disabled={setupChannelMutation.isPending}
+                  className="px-3 py-1.5 rounded-lg bg-violet-600/80 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5"
+                  title="Generate channel banner, description and keywords with AI"
+                >
+                  {setupChannelMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Palette className="w-3.5 h-3.5" />}
+                  Set Up Channel
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Create a new channel (the YouTube API can't create one: we open YouTube) */}
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <button
+            onClick={createNewChannel}
+            className="px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 text-[11px] font-medium flex items-center gap-1.5"
+            title="Create a new channel on YouTube, then connect it with 'Switch Channel'"
+          >
+            <Youtube className="w-3 h-3" /> Create New Channel
+          </button>
+          <span className="text-[10px] text-zinc-500">
+            Create the channel on YouTube and come back here to connect it with “Switch Channel”.
+          </span>
+        </div>
+
+        {yt?.connected && (
+          <div className="mt-3 flex items-center gap-4 flex-wrap">
+            <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+              <input type="checkbox" checked={autoUpload} onChange={(e) => setAutoUpload(e.target.checked)} className="accent-violet-500 w-3.5 h-3.5" />
+              Auto-upload to YouTube when each video finishes
+            </label>
+            {autoUpload && (
+              <div className="flex items-center gap-1">
+                {(['public', 'unlisted', 'private'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPrivacy(p)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-colors ${
+                      privacy === p ? 'bg-violet-600 text-white' : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+                    }`}
+                  >
+                    {p === 'public' ? 'Public' : p === 'unlisted' ? 'Unlisted' : 'Private'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {setupChannelMutation.isSuccess && (
+          <p className="mt-2 text-[11px] text-emerald-400">
+            {(setupChannelMutation.data as any)?.needsReconnect
+              ? 'Reconnect YouTube to grant channel management permission.'
+              : `Channel updated${(setupChannelMutation.data as any)?.bannerSet ? ' (new banner)' : ''}.`}
+          </p>
+        )}
+        {setupChannelMutation.isError && (
+          <p className="mt-2 text-[11px] text-red-400">{(setupChannelMutation.error as Error)?.message}</p>
+        )}
+      </div>
+
+      {albumId && album && (
+        <div className="relative mt-4">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-zinc-300 font-medium">
+              {album.status === 'done'
+                ? '✅ Album complete'
+                : album.status === 'failed'
+                ? '⚠️ Finished with errors'
+                : `Processing… ${completed}/${total}`}
+            </span>
+            <span className="text-zinc-500">{pct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all" style={{ width: `${pct}%` }} />
+          </div>
+
+          {album.status === 'done' && album.email_sent && (
+            <p className="mt-2 text-[11px] text-emerald-400">
+              We sent you a confirmation email{album.email ? ` to ${album.email}` : ''}.
+            </p>
+          )}
+
+          {album.status !== 'processing' && albumSongs.some((s) => s.status === 'failed') && (
+            <button
+              onClick={() => retryMutation.mutate()}
+              disabled={retryMutation.isPending}
+              className="mt-3 px-3 py-1.5 rounded-lg bg-amber-600/90 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              title="Retry only the songs that failed (e.g. due to an AWS limit)"
+            >
+              {retryMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Retry Failed ({albumSongs.filter((s) => s.status === 'failed').length})
+            </button>
+          )}
+
+          <div className="mt-3 space-y-1.5 max-h-56 overflow-y-auto pr-1">
+            {albumSongs.map((s, i) => {
+              const meta = SONG_STATUS_META[s.status];
+              return (
+                <div key={`${s.songId ?? i}-${i}`} className="flex items-center gap-2 text-xs">
+                  {s.status === 'done' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  ) : s.status === 'failed' ? (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                  ) : s.status === 'pending' ? (
+                    <Music className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
+                  ) : (
+                    <Loader2 className="w-3.5 h-3.5 text-violet-400 animate-spin flex-shrink-0" />
+                  )}
+                  <span className="text-zinc-300 truncate flex-1">{s.title}</span>
+                  {s.youtubeUrl && (
+                    <a href={s.youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-red-400 hover:text-red-300" title="Watch on YouTube">
+                      <Youtube className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  {s.outputUrl && (
+                    <a href={s.outputUrl} target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300">
+                      <Download className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  <span className={`flex-shrink-0 ${meta.cls}`}>{meta.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// My Videos — galería de lyric videos ya generados (vista del owner)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface MyVideoJob {
+  id: number;
+  status: string;
+  output_url?: string;
+  youtube_url?: string;
+  song_title?: string;
+  artist_name?: string;
+  cover_art_url?: string;
+  created_at?: string;
+}
+
+const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
+  const queryClient = useQueryClient();
+  const [privacy, setPrivacy] = useState<'public' | 'unlisted' | 'private'>('public');
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string>('');
+  const [uploadNotice, setUploadNotice] = useState<string>('');
+
+  const { data, isLoading } = useQuery<MyVideoJob[]>({
+    queryKey: ['lyricsVideoMyJobs', refreshKey],
+    queryFn: async () => {
+      const res = await fetch('/api/lyrics-video/my-jobs');
+      const json = await readJsonSafe<{ jobs: MyVideoJob[] }>(res);
+      if (!res.ok || !json) return [];
+      return json.jobs ?? [];
+    },
+    refetchInterval: 15_000,
+  });
+
+  // Estado de conexión de YouTube (se comparte por key con AlbumAutopilot).
+  const { data: yt } = useQuery<YtConnection>({
+    queryKey: ['ytConnection'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/youtube/connection');
+      const d = await readJsonSafe<any>(res);
+      const c = d?.connection;
+      return {
+        connected: !!d?.connected,
+        channelTitle: c?.channelTitle,
+        thumbnailUrl: c?.thumbnailUrl,
+        canManageChannel: !!c?.canManageChannel,
+      };
+    },
+    staleTime: 30_000,
+  });
+
+  const connectYoutube = async () => {
+    try {
+      const res = await fetch('/api/auth/youtube/connect');
+      const d = await readJsonSafe<{ authUrl?: string; error?: string }>(res);
+      if (d?.authUrl) window.open(d.authUrl, '_blank', 'noopener');
+      else alert(d?.error || 'Could not connect to YouTube');
+    } catch { alert('Could not connect to YouTube'); }
+  };
+
+  const uploadJob = async (jobId: number) => {
+    setUploadingId(jobId);
+    setUploadError('');
+    setUploadNotice('');
+    try {
+      const res = await fetch(`/api/lyrics-video/${jobId}/upload-youtube`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        // auto:true → the server generates advanced SEO (GLM-5.2) + an AI thumbnail.
+        body: JSON.stringify({ auto: true, generateThumbnail: true, privacyStatus: privacy }),
+      });
+      const d = await readJsonSafe<any>(res);
+      if (!res.ok) {
+        if (d?.needsConnect) { setUploadError('Connect your YouTube channel first.'); return; }
+        throw new Error(d?.error || 'Could not upload the video');
+      }
+      // Non-blocking notice: custom thumbnails need a verified YouTube channel.
+      if (d?.thumbnailSet === false) {
+        setUploadNotice(
+          /verif|enabled|forbidden/i.test(d?.thumbnailError || '')
+            ? 'Video uploaded. The custom thumbnail needs a verified YouTube channel — verify at youtube.com/verify and re-upload.'
+            : 'Video uploaded, but the custom thumbnail could not be set.',
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['lyricsVideoMyJobs'] });
+    } catch (err: any) {
+      setUploadError(err?.message || 'Upload failed');
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const done = (data ?? []).filter((j) => j.status === 'done' && j.output_url);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-zinc-500 text-sm gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" /> Loading your videos…
+      </div>
+    );
+  }
+  if (done.length === 0) return null;
+
+  return (
+    <div className="mt-8 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5 sm:p-6">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="w-8 h-8 rounded-xl bg-violet-500/20 ring-1 ring-white/10 flex items-center justify-center">
+          <Music className="w-4 h-4 text-violet-300" />
+        </div>
+        <h3 className="text-base font-bold text-white">My Videos ({done.length})</h3>
+        {/* Privacy selector for manual uploads */}
+        <div className="ml-auto flex items-center gap-1">
+          <Youtube className="w-3.5 h-3.5 text-red-500" />
+          {(['public', 'unlisted', 'private'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPrivacy(p)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                privacy === p ? 'bg-violet-600 text-white' : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+              }`}
+            >
+              {p === 'public' ? 'Public' : p === 'unlisted' ? 'Unlisted' : 'Private'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {!yt?.connected && (
+        <button
+          onClick={connectYoutube}
+          className="mb-3 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold inline-flex items-center gap-1.5"
+        >
+          <Youtube className="w-3.5 h-3.5" /> Connect YouTube to upload
+        </button>
+      )}
+      {uploadError && (
+        <p className="mb-3 text-xs text-red-400 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" /> {uploadError}
+        </p>
+      )}
+      {uploadNotice && (
+        <p className="mb-3 text-xs text-amber-400 flex items-start gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> {uploadNotice}
+        </p>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {done.map((job) => (
+          <div key={job.id} className="group rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 hover:border-violet-500/30 p-3 flex flex-col gap-2 transition-all">
+            <div className="flex items-center gap-2 min-w-0">
+              <Music className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+              <span className="text-sm font-semibold text-white truncate">{job.song_title || 'Lyrics Video'}</span>
+            </div>
+            <video src={job.output_url} controls playsInline className="w-full rounded-lg max-h-52 bg-black" />
+            <div className="flex items-center gap-3 text-xs flex-wrap">
+              <a href={job.output_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300">
+                <Download className="w-3.5 h-3.5" /> Download
+              </a>
+              {job.youtube_url ? (
+                <a href={job.youtube_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-red-400 hover:text-red-300">
+                  <Youtube className="w-3.5 h-3.5" /> On YouTube
+                </a>
+              ) : (
+                <button
+                  onClick={() => uploadJob(job.id)}
+                  disabled={uploadingId === job.id || !yt?.connected}
+                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                  title={yt?.connected ? 'Generate SEO + AI thumbnail and upload to your channel' : 'Connect your YouTube channel first'}
+                >
+                  {uploadingId === job.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {uploadingId === job.id ? 'Uploading…' : 'Upload to YouTube'}
+                </button>
+              )}
+            </div>
+            {uploadingId === job.id && (
+              <StagedUploadProgress active />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Module
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface LyricsVideoModuleProps {
   songs: Song[];
   artistId?: number;
+  artistName?: string;
   isOwner?: boolean;
 }
 
-export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, artistId, isOwner = false }) => {
+export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, artistId, artistName, isOwner = false }) => {
   const [step, setStep] = useState(0);
   const [transcription, setTranscription] = useState<TranscribeResponse | null>(null);
   const [songMeta, setSongMeta] = useState<{ songTitle: string; artistName: string; coverArtUrl?: string } | null>(null);
@@ -824,24 +1526,31 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
 
       {/* ── Owner view: full studio ── */}
       {isOwner && (
-        <div>
+        <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-b from-zinc-900/80 via-zinc-950/90 to-black p-5 sm:p-7 shadow-2xl backdrop-blur">
+          {/* ambient glows */}
+          <div className="pointer-events-none absolute -top-32 -left-24 h-64 w-64 rounded-full bg-violet-600/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-32 -right-24 h-64 w-64 rounded-full bg-fuchsia-600/10 blur-3xl" />
+
           {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-violet-400" />
+          <div className="relative flex items-center gap-3.5 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-900/40">
+              <Sparkles className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Lyrics Video Generator</h2>
-              <p className="text-sm text-zinc-400">AI transcription · Karaoke 1920×1080 · YouTube ready</p>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Lyrics Video Studio</h2>
+              <p className="text-sm text-zinc-400">AI transcription · Karaoke 1920×1080 · One-click YouTube publishing</p>
             </div>
           </div>
 
-          <StepIndicator current={step} />
+          <div className="relative">
+            <AlbumAutopilot songs={songs} />
 
-          <AnimatePresence mode="wait">
+            <StepIndicator current={step} />
+
+            <AnimatePresence mode="wait">
             {step === 0 && (
               <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <Step1Configure songs={songs} artistId={artistId} onDone={handleTranscribeDone} />
+                <Step1Configure songs={songs} artistId={artistId} artistName={artistName} onDone={handleTranscribeDone} />
               </motion.div>
             )}
             {step === 1 && transcription && songMeta && (
@@ -869,6 +1578,9 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
               </motion.div>
             )}
           </AnimatePresence>
+
+            <MyVideosGallery />
+          </div>
         </div>
       )}
     </div>

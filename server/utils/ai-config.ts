@@ -24,7 +24,8 @@ export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 // ─── z.ai / Zhipu GLM (fallback económico — OpenAI-compatible) ─────────────────
 // Modelos GLM (GLM-4.5-Flash gratis, GLM-4.6 barato, GLM-5.2 flagship) usados
 // como fallback de bajo costo en el smart router. API compatible con OpenAI.
-export const ZAI_API_KEY = process.env.ZAI_API_KEY || process.env.ZHIPU_API_KEY || '';
+export const ZAI_API_KEY =
+  process.env.ZAI_API_KEY || process.env.Z_API_KEY || process.env.ZHIPU_API_KEY || '';
 
 export const ZAI_BASE_URL = 'https://api.z.ai/api/paas/v4';
 

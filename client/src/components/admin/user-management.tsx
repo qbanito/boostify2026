@@ -723,9 +723,9 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Role Edit Modal — modal={false} fixes Select dropdown inside Dialog */}
-      <Dialog open={showRoleModal} onOpenChange={setShowRoleModal} modal={false}>
-        <DialogContent className="bg-slate-900 border-orange-500/20 z-[200]">
+      {/* Role Edit Modal */}
+      <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
+        <DialogContent className="bg-slate-900 border-orange-500/20">
           <DialogHeader>
             <DialogTitle className="text-orange-400">Edit User Role</DialogTitle>
             <DialogDescription>
@@ -740,7 +740,7 @@ export function UserManagement() {
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
-                <SelectContent className="z-[300] bg-slate-800 border-slate-700">
+                <SelectContent className="z-[100000] bg-slate-800 border-slate-700">
                   {availableRoles.map(role => (
                     <SelectItem key={role.value} value={role.value}>
                       <span className="font-medium">{role.label}</span>
@@ -796,9 +796,9 @@ export function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Subscription Edit Modal — modal={false} fixes Select inside Dialog */}
-      <Dialog open={showSubscriptionModal} onOpenChange={setShowSubscriptionModal} modal={false}>
-        <DialogContent className="bg-slate-900 border-orange-500/20 z-[200]">
+      {/* Subscription Edit Modal */}
+      <Dialog open={showSubscriptionModal} onOpenChange={setShowSubscriptionModal}>
+        <DialogContent className="bg-slate-900 border-orange-500/20">
           <DialogHeader>
             <DialogTitle className="text-orange-400">Assign Subscription</DialogTitle>
             <DialogDescription>
@@ -813,7 +813,7 @@ export function UserManagement() {
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="z-[300] bg-slate-800 border-slate-700">
+                <SelectContent className="z-[100000] bg-slate-800 border-slate-700">
                   <SelectItem value="free">Discover (Free)</SelectItem>
                   <SelectItem value="creator">Elevate ($49.99/mo)</SelectItem>
                   <SelectItem value="professional">Amplify ($89.99/mo)</SelectItem>
@@ -828,7 +828,7 @@ export function UserManagement() {
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="z-[300] bg-slate-800 border-slate-700">
+                <SelectContent className="z-[100000] bg-slate-800 border-slate-700">
                   <SelectItem value="7">7 days (Trial)</SelectItem>
                   <SelectItem value="30">30 days (1 month)</SelectItem>
                   <SelectItem value="90">90 days (3 months)</SelectItem>
@@ -893,9 +893,9 @@ export function UserManagement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Add User Modal — modal={false} needed for Select dropdown inside Dialog */}
-      <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal} modal={false}>
-        <DialogContent className="bg-slate-900 border-orange-500/20 z-[200]">
+      {/* Add User Modal */}
+      <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
+        <DialogContent className="bg-slate-900 border-orange-500/20">
           <DialogHeader>
             <DialogTitle className="text-orange-400 flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
@@ -945,7 +945,7 @@ export function UserManagement() {
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="z-[300] bg-slate-800 border-slate-700">
+                <SelectContent className="z-[100000] bg-slate-800 border-slate-700">
                   <SelectItem value="user">User</SelectItem>
                   <SelectItem value="moderator">Moderator</SelectItem>
                   <SelectItem value="support">Support</SelectItem>

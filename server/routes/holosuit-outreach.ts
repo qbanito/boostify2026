@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 import { neon } from "@neondatabase/serverless";
+import { shouldRunSchedulers } from "../bootstrap/role";
 import {
   sendOutreachEmail,
   notifyOwnerOfLead,
@@ -332,5 +333,7 @@ async function runDailyOutreach() {
 }
 
 // Kick off — wait until 9 AM today (or tomorrow if already past)
-setTimeout(runDailyOutreach, msUntilNextRun());
-console.log(`[HoloSuit Outreach] 📅 Daily campaign scheduler active — next run at 09:00 AM (in ${Math.round(msUntilNextRun() / 60000)} min)`);
+if (shouldRunSchedulers()) {
+  setTimeout(runDailyOutreach, msUntilNextRun());
+  console.log(`[HoloSuit Outreach] 📅 Daily campaign scheduler active — next run at 09:00 AM (in ${Math.round(msUntilNextRun() / 60000)} min)`);
+}

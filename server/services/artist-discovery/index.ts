@@ -21,6 +21,7 @@ import { discoverYouTubeApiArtists } from './source-youtube-api';
 import { discoverSpotifyApiArtists } from './source-spotify-api';
 import { ingestArtists, type IngestionResult } from './ingestion-pipeline';
 import { getOptimizedSources } from './agent-autonomy';
+import { isApifyExhausted } from './apify-client-pool';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -88,12 +89,35 @@ async function getSourcesForRun(): Promise<DiscoverySource[]> {
     const optimized = await getOptimizedSources();
     if (optimized.sources.length > 0) {
       console.log(`[Discovery] Using optimized sources: ${optimized.sources.join(', ')} — ${optimized.reasoning}`);
-      return optimized.sources as DiscoverySource[];
+      return applyApifyAwareness(optimized.sources as DiscoverySource[]);
     }
   } catch (err) {
     // Fallback to hardcoded rotation
   }
-  return getHardcodedSources();
+  return applyApifyAwareness(getHardcodedSources());
+}
+
+// Sources that depend on Apify scraping (subject to quota exhaustion).
+const APIFY_SOURCES: DiscoverySource[] = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube', 'tiktok'];
+// Direct-API sources that work without Apify (resilient fallback).
+const NON_APIFY_SOURCES: DiscoverySource[] = ['youtube_api', 'spotify_api'];
+
+/**
+ * Guarantees discovery keeps producing leads regardless of Apify quota:
+ *  - Always includes the non-Apify direct-API sources.
+ *  - When Apify is exhausted, drops the Apify-dependent sources so runs don't
+ *    waste ~2min + OpenAI tokens scraping against an over-quota key.
+ */
+function applyApifyAwareness(sources: DiscoverySource[]): DiscoverySource[] {
+  let result = [...sources];
+  for (const s of NON_APIFY_SOURCES) {
+    if (!result.includes(s)) result.push(s);
+  }
+  if (isApifyExhausted()) {
+    result = result.filter(s => NON_APIFY_SOURCES.includes(s));
+    console.log(`[Discovery] ⚠️ Apify exhausted — running non-Apify sources only: ${result.join(', ')}`);
+  }
+  return result;
 }
 
 // ─── Main Discovery Run ──────────────────────────────────────────

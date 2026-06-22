@@ -22,6 +22,11 @@ import {
   hppProtection,
   blockSuspiciousPaths,
 } from './middleware/security-hardening';
+import { requestTimeout } from './middleware/request-timeout';
+import { heavyModuleLimiter } from './middleware/rate-limit-tiers';
+import { shouldRunSchedulers, describeRole } from './bootstrap/role';
+import { installGracefulShutdown } from './bootstrap/shutdown';
+import { initSentry, captureException } from './observability/sentry';
 import { audit, auditFromReq } from './utils/audit-logger';
 import { isAdminEmail } from '../shared/constants';
 import { db as pgDb } from './db';
@@ -232,6 +237,20 @@ app.use('/api/video/generate', aiLimiter);
 app.use('/api/kits-ai/', aiLimiter);
 app.use('/api/fashion/', aiLimiter);
 
+// Per-USER fairness layer on the most expensive AI modules (keyed by user+module,
+// not just IP). Generous hourly budgets — only stops a single account from
+// flooding the generation pipeline; no friction in dev (limits are 10k there).
+app.use('/api/music/generate', heavyModuleLimiter('music', 40));
+app.use('/api/video/generate', heavyModuleLimiter('video', 25));
+app.use('/api/kits-ai/', heavyModuleLimiter('kits-ai', 40));
+app.use('/api/fashion/', heavyModuleLimiter('fashion', 40));
+
+// Hard request-timeout ceiling for normal API reads/writes. A stalled handler
+// (hung upstream, slow query) releases the socket with a 503 instead of
+// pinning a worker/connection forever. Long-running upload/generation routes
+// are exempted inside the middleware (see DEFAULT_SKIP_PREFIXES).
+app.use('/api/', requestTimeout(30_000));
+
 // JSON body limit — 10MB default (upload routes handle larger files via fileUpload)
 // Videoservice lead endpoint accepts image + audio as base64 in a single request,
 // so it needs a larger limit.
@@ -331,7 +350,42 @@ app.get('/api/health/ai-providers', (req, res) => {
   res.status(200).json({ status: 'ok', fallbackReady, providers });
 });
 
-// Basic request logging middleware
+// Deep readiness check — verifies backing services (DB, queue, cache) and
+// reports memory. Use this for dashboards/alerts, NOT as the platform
+// health-check (a Neon blip must never restart the web process — that's what
+// the shallow /api/health liveness probe above is for).
+app.get('/api/health/deep', async (_req, res) => {
+  const out: any = { status: 'ok', role: process.env.SERVICE_ROLE || 'web', checks: {} };
+  const t0 = Date.now();
+  // DB
+  try {
+    const { pool } = await import('./db');
+    await pool.query('SELECT 1');
+    out.checks.db = { ok: true, ms: Date.now() - t0 };
+  } catch (e: any) {
+    out.checks.db = { ok: false, error: e?.message };
+    out.status = 'degraded';
+  }
+  // Queue
+  try {
+    const { queueStats } = await import('./queue');
+    out.checks.queue = await queueStats();
+  } catch (e: any) {
+    out.checks.queue = { ok: false, error: e?.message };
+  }
+  // Circuit breakers
+  try {
+    const { allBreakerStats } = await import('./utils/circuit-breaker');
+    const breakers = allBreakerStats();
+    out.checks.breakers = breakers;
+    if (breakers.some((b: any) => b.state === 'open')) out.status = 'degraded';
+  } catch { /* ignore */ }
+  // Memory
+  const mem = process.memoryUsage();
+  out.memory = { rssMB: Math.round(mem.rss / 1e6), heapUsedMB: Math.round(mem.heapUsed / 1e6) };
+  out.uptime = Math.round(process.uptime());
+  res.status(out.status === 'ok' ? 200 : 503).json(out);
+});
 app.use((req, res, next) => {
   const start = Date.now();
   log(`📥 Incoming request: ${req.method} ${req.path}`);
@@ -352,6 +406,10 @@ app.use((req, res, next) => {
     console.log('🔄 [3/10] Running environment check...');
     checkEnvironment();
     console.log('🔄 [4/10] Environment check completed');
+
+    // Initialise error monitoring (no-op unless SENTRY_DSN + @sentry/node).
+    await initSentry();
+    log(`🧭 Service ${describeRole()}`);
     
     // Log AI model configuration (OpenRouter MiMo primary, OpenAI fallback)
     try {
@@ -903,6 +961,11 @@ app.use((req, res, next) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
+      // Report 5xx to monitoring (no-op unless Sentry is configured).
+      if (status >= 500) {
+        captureException(err, { path: req.path, method: req.method });
+      }
+
       log(`❌ Error handling request ${req.method} ${req.path}: ${err.message}`);
       res.status(status).json({
         message,
@@ -983,6 +1046,10 @@ app.use((req, res, next) => {
       // Silent heartbeat every 30 seconds to keep the event loop active
     }, 30000);
 
+    // Graceful shutdown — on every deploy Render sends SIGTERM; drain in-flight
+    // requests and close the DB pool instead of cutting connections.
+    installGracefulShutdown(server);
+
     // Daily fan sequence emails (runs every 24h)
     const runFanSequence = async () => {
       try {
@@ -1036,25 +1103,37 @@ app.use((req, res, next) => {
       }
     };
 
-    // Run once on startup (catches any missed emails), then every 24h
-    setTimeout(runFanSequence, 60_000);
-    setInterval(runFanSequence, 24 * 60 * 60 * 1000);
+    // ═══ BACKGROUND SCHEDULERS ═══
+    // These run ONLY where shouldRunSchedulers() is true: a dedicated
+    // `scheduler` service in production, or the `web` service when
+    // SCHEDULERS_IN_WEB !== 'false' (the default — preserves current
+    // single-service behaviour). Moving them off the web process keeps cron
+    // ticks (DB-heavy, AI-heavy) from starving live API requests.
+    if (shouldRunSchedulers()) {
+      log('⏱️  Starting background schedulers in this process');
 
-    // Social Integration Worker — email notifications, external publish, platform events
-    try {
-      const { startSocialIntegrationWorker } = await import('./services/social-integration-worker');
-      startSocialIntegrationWorker();
-    } catch (workerErr) {
-      console.warn('⚠️ [SocialWorker] Could not start:', workerErr);
-    }
+      // Run once on startup (catches any missed emails), then every 24h
+      setTimeout(runFanSequence, 60_000);
+      setInterval(runFanSequence, 24 * 60 * 60 * 1000);
 
-    // Aggregated stats cron — keeps artist_stats / event_stats fresh (drift +
-    // high-churn counters like song plays that are kept off the trigger path).
-    try {
-      const { startStatsCron } = await import('./services/stats-aggregates');
-      startStatsCron();
-    } catch (statsErr) {
-      console.warn('⚠️ [StatsCron] Could not start:', statsErr);
+      // Social Integration Worker — email notifications, external publish, platform events
+      try {
+        const { startSocialIntegrationWorker } = await import('./services/social-integration-worker');
+        startSocialIntegrationWorker();
+      } catch (workerErr) {
+        console.warn('⚠️ [SocialWorker] Could not start:', workerErr);
+      }
+
+      // Aggregated stats cron — keeps artist_stats / event_stats fresh (drift +
+      // high-churn counters like song plays that are kept off the trigger path).
+      try {
+        const { startStatsCron } = await import('./services/stats-aggregates');
+        startStatsCron();
+      } catch (statsErr) {
+        console.warn('⚠️ [StatsCron] Could not start:', statsErr);
+      }
+    } else {
+      log('⏭️  Background schedulers disabled in this process (handled by the scheduler service)');
     }
 
     server.on('error', (error: any) => {

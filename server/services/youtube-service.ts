@@ -15,12 +15,19 @@
  */
 
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { pool } from '../db';
 
 const YT_SCOPES = [
   'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube',          // manage channel: branding (banner/portada), thumbnails
   'https://www.googleapis.com/auth/youtube.readonly',
 ];
+
+/** Scope that allows updating channel branding + setting custom thumbnails. */
+const YT_MANAGE_SCOPE = 'https://www.googleapis.com/auth/youtube';
 
 const STATE_SECRET =
   process.env.SESSION_SECRET ||
@@ -98,15 +105,31 @@ async function ensureTable(): Promise<void> {
       channel_title    TEXT,
       thumbnail_url    TEXT,
       scopes           TEXT,
+      lyric_playlist_id TEXT,
       is_active        BOOLEAN DEFAULT true,
       created_at       TIMESTAMPTZ DEFAULT now(),
       updated_at       TIMESTAMPTZ DEFAULT now()
     )
   `);
+  // Backfill the playlist column on pre-existing installs.
+  await pool
+    .query(`ALTER TABLE youtube_connections ADD COLUMN IF NOT EXISTS lyric_playlist_id TEXT`)
+    .catch(() => {});
+}
+
+/** Extracts a readable reason from a googleapis error (reason + message). */
+function ytErrorReason(e: any): string {
+  const apiErr = e?.response?.data?.error;
+  const reason = apiErr?.errors?.[0]?.reason;
+  const msg = apiErr?.message || e?.message || 'unknown error';
+  return reason ? `${reason}: ${msg}` : msg;
 }
 
 /** Build the Google consent URL for this user. */
-export async function getYoutubeAuthUrl(userId: number): Promise<string> {
+export async function getYoutubeAuthUrl(
+  userId: number,
+  opts: { forceSelectAccount?: boolean } = {},
+): Promise<string> {
   if (!isYoutubeOAuthConfigured()) {
     throw new Error(
       'YouTube upload is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.',
@@ -115,7 +138,10 @@ export async function getYoutubeAuthUrl(userId: number): Promise<string> {
   const oauth2 = await getOAuthClient();
   return oauth2.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
+    // 'select_account consent' fuerza el selector de cuenta/canal de Google para
+    // que el artista pueda conectar/cambiar a OTRO canal (la API no puede crear
+    // canales, pero sí elegir uno distinto cambiando de cuenta de Google).
+    prompt: opts.forceSelectAccount ? 'select_account consent' : 'consent',
     include_granted_scopes: true,
     scope: YT_SCOPES,
     state: signState(userId),
@@ -245,4 +271,383 @@ export async function getValidAccessToken(userId: number): Promise<string | null
     [newToken, newExp, userId],
   );
   return newToken || row.access_token || null;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Publishing & channel management (used by the lyrics-video album autopilot)
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface YoutubeManageState {
+  connected: boolean;
+  canManageChannel: boolean; // true when the artist granted the full manage scope
+  channelId: string;
+  channelTitle: string;
+  thumbnailUrl: string;
+}
+
+/** Connection status + whether the stored grant can manage channel branding. */
+export async function getYoutubeManageState(userId: number): Promise<YoutubeManageState> {
+  const conn = await getYoutubeConnection(userId);
+  if (!conn) {
+    return { connected: false, canManageChannel: false, channelId: '', channelTitle: '', thumbnailUrl: '' };
+  }
+  const scopeList = (conn.scopes || '').split(/\s+/).filter(Boolean);
+  return {
+    connected: true,
+    canManageChannel: scopeList.includes(YT_MANAGE_SCOPE),
+    channelId: conn.channelId,
+    channelTitle: conn.channelTitle,
+    thumbnailUrl: conn.thumbnailUrl,
+  };
+}
+
+async function downloadToTmp(url: string, ext: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Cannot fetch ${url}: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const tmp = path.join(os.tmpdir(), `yt_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
+  fs.writeFileSync(tmp, buf);
+  return tmp;
+}
+
+/**
+ * Sanitiza las keywords/tags de YouTube para evitar el error
+ * "The request metadata specifies invalid video keywords":
+ *  - elimina < > (caracteres prohibidos por YouTube) y el # inicial
+ *  - colapsa espacios, recorta cada tag y descarta vacíos
+ *  - deduplica (case-insensitive)
+ *  - respeta el límite total de ~500 caracteres (una tag con espacios cuenta
+ *    entre comillas → +2). Se detiene antes de superar el límite.
+ */
+export function sanitizeYoutubeTags(tags?: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let total = 0;
+  for (const raw of tags || []) {
+    let t = String(raw || '')
+      .replace(/[<>]/g, '')
+      .replace(/^#+/, '')
+      .replace(/["\n\r\t]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    // YouTube cuenta entre comillas las tags con espacios/comas → +2 al total.
+    const cost = t.length + (/[\s,]/.test(t) ? 2 : 0) + 1; // +1 separador
+    if (total + cost > 480) break;
+    seen.add(key);
+    out.push(t);
+    total += cost;
+    if (out.length >= 30) break;
+  }
+  return out;
+}
+
+/** Limpia título/descripción de caracteres que YouTube rechaza (< >). */
+export function sanitizeYoutubeText(s?: string, max = 4900): string {
+  return String(s || '').replace(/[<>]/g, '').slice(0, max);
+}
+
+/**
+ * Upload a rendered video (by URL) to the artist's connected YouTube channel.
+ * Optionally sets a custom thumbnail. Returns the new video id + watch URL.
+ */
+export async function uploadVideoToYoutube(opts: {
+  userId: number;
+  videoUrl: string;
+  title: string;
+  description?: string;
+  tags?: string[];
+  privacyStatus?: 'public' | 'unlisted' | 'private';
+  thumbnailUrl?: string;
+  categoryId?: string;
+  /** When set, the video is added to (or creates) a playlist with this title. */
+  playlistTitle?: string;
+  playlistDescription?: string;
+}): Promise<{
+  videoId: string;
+  url: string;
+  thumbnailSet: boolean;
+  thumbnailError?: string;
+  playlistId?: string;
+  playlistUrl?: string;
+}> {
+  const token = await getValidAccessToken(opts.userId);
+  if (!token) throw new Error('YouTube account not connected');
+
+  const { google } = await import('googleapis');
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: token });
+  const youtube = google.youtube({ version: 'v3', auth });
+
+  const videoTmp = await downloadToTmp(opts.videoUrl, 'mp4');
+  try {
+    const ins = await youtube.videos.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: sanitizeYoutubeText(opts.title || 'Lyric Video', 100) || 'Lyric Video',
+          description: sanitizeYoutubeText(opts.description || '', 4900),
+          tags: sanitizeYoutubeTags(opts.tags),
+          categoryId: opts.categoryId || '10', // Music
+        },
+        status: {
+          privacyStatus: opts.privacyStatus || 'public',
+          selfDeclaredMadeForKids: false,
+        },
+      },
+      media: { body: fs.createReadStream(videoTmp) },
+    });
+    const videoId = (ins.data.id as string) || '';
+    if (!videoId) throw new Error('YouTube did not return a video id');
+
+    // ── Custom thumbnail ──────────────────────────────────────────────────
+    // YouTube caps custom thumbnails at 2MB; gpt-image-1 PNGs are often larger,
+    // so we re-encode to a 1280x720 JPEG before uploading. We also surface the
+    // real failure reason (the most common one is an UNVERIFIED channel, which
+    // YouTube blocks from setting custom thumbnails).
+    let thumbnailSet = false;
+    let thumbnailError: string | undefined;
+    if (opts.thumbnailUrl) {
+      let srcTmp: string | undefined;
+      let jpgTmp: string | undefined;
+      try {
+        srcTmp = await downloadToTmp(opts.thumbnailUrl, 'img');
+        let uploadPath = srcTmp;
+        try {
+          const sharp = (await import('sharp')).default;
+          jpgTmp = path.join(os.tmpdir(), `yt_thumb_${Date.now()}.jpg`);
+          await sharp(srcTmp).resize(1280, 720, { fit: 'cover' }).jpeg({ quality: 85 }).toFile(jpgTmp);
+          uploadPath = jpgTmp;
+        } catch (se: any) {
+          console.warn('[YouTube] thumbnail resize skipped:', se?.message);
+        }
+        await youtube.thumbnails.set({
+          videoId,
+          media: { mimeType: 'image/jpeg', body: fs.createReadStream(uploadPath) },
+        });
+        thumbnailSet = true;
+      } catch (e: any) {
+        thumbnailError = ytErrorReason(e);
+        console.warn('[YouTube] thumbnails.set failed:', thumbnailError);
+      } finally {
+        if (srcTmp) { try { fs.unlinkSync(srcTmp); } catch {} }
+        if (jpgTmp) { try { fs.unlinkSync(jpgTmp); } catch {} }
+      }
+    }
+
+    // ── Playlist: each artist gets one playlist with all their songs ──────
+    let playlistId: string | undefined;
+    let playlistUrl: string | undefined;
+    if (opts.playlistTitle) {
+      try {
+        playlistId = await ensureArtistPlaylist(
+          opts.userId,
+          opts.playlistTitle,
+          opts.playlistDescription,
+          youtube,
+        );
+        if (playlistId) {
+          await addVideoToPlaylist(opts.userId, playlistId, videoId, youtube);
+          playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+        }
+      } catch (e: any) {
+        console.warn('[YouTube] playlist add failed:', ytErrorReason(e));
+      }
+    }
+
+    return {
+      videoId,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      thumbnailSet,
+      thumbnailError,
+      playlistId,
+      playlistUrl,
+    };
+  } finally {
+    try { fs.unlinkSync(videoTmp); } catch {}
+  }
+}
+
+/**
+ * Ensure the artist has a single YouTube playlist that collects all their songs.
+ * Strategy: reuse the stored playlist id → else find an existing playlist with
+ * the same title → else create a new public playlist. The id is cached on the
+ * youtube_connections row so we don't re-create it on every upload.
+ */
+export async function ensureArtistPlaylist(
+  userId: number,
+  title: string,
+  description?: string,
+  client?: any,
+): Promise<string | undefined> {
+  await ensureTable();
+  const playlistTitle = sanitizeYoutubeText(title, 150) || 'My Songs';
+
+  let youtube = client;
+  if (!youtube) {
+    const token = await getValidAccessToken(userId);
+    if (!token) return undefined;
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    youtube = google.youtube({ version: 'v3', auth });
+  }
+
+  // 1) Cached id — verify it still exists.
+  const { rows } = await pool.query(
+    'SELECT lyric_playlist_id FROM youtube_connections WHERE user_id = $1 LIMIT 1',
+    [userId],
+  );
+  const cached: string = rows[0]?.lyric_playlist_id || '';
+  if (cached) {
+    try {
+      const chk = await youtube.playlists.list({ part: ['id'], id: [cached] });
+      if (chk.data.items?.length) return cached;
+    } catch { /* fall through to recreate */ }
+  }
+
+  // 2) Find an existing playlist with the same title.
+  try {
+    let pageToken: string | undefined;
+    for (let i = 0; i < 5; i++) {
+      const list = await youtube.playlists.list({
+        part: ['id', 'snippet'],
+        mine: true,
+        maxResults: 50,
+        pageToken,
+      });
+      const match = (list.data.items || []).find(
+        (p: any) => (p.snippet?.title || '').trim().toLowerCase() === playlistTitle.trim().toLowerCase(),
+      );
+      if (match?.id) {
+        await pool.query(
+          'UPDATE youtube_connections SET lyric_playlist_id = $1, updated_at = now() WHERE user_id = $2',
+          [match.id, userId],
+        );
+        return match.id as string;
+      }
+      pageToken = list.data.nextPageToken || undefined;
+      if (!pageToken) break;
+    }
+  } catch (e: any) {
+    console.warn('[YouTube] playlists.list failed:', ytErrorReason(e));
+  }
+
+  // 3) Create a new playlist.
+  try {
+    const created = await youtube.playlists.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: playlistTitle,
+          description: sanitizeYoutubeText(description || `All songs by ${title}.`, 4900),
+        },
+        status: { privacyStatus: 'public' },
+      },
+    });
+    const id = created.data.id as string;
+    if (id) {
+      await pool.query(
+        'UPDATE youtube_connections SET lyric_playlist_id = $1, updated_at = now() WHERE user_id = $2',
+        [id, userId],
+      );
+    }
+    return id || undefined;
+  } catch (e: any) {
+    console.warn('[YouTube] playlists.insert failed:', ytErrorReason(e));
+    return undefined;
+  }
+}
+
+/** Add a video to a playlist, ignoring duplicate-insert errors. */
+export async function addVideoToPlaylist(
+  userId: number,
+  playlistId: string,
+  videoId: string,
+  client?: any,
+): Promise<boolean> {
+  let youtube = client;
+  if (!youtube) {
+    const token = await getValidAccessToken(userId);
+    if (!token) return false;
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    youtube = google.youtube({ version: 'v3', auth });
+  }
+  try {
+    await youtube.playlistItems.insert({
+      part: ['snippet'],
+      requestBody: {
+        snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } },
+      },
+    });
+    return true;
+  } catch (e: any) {
+    console.warn('[YouTube] playlistItems.insert failed:', ytErrorReason(e));
+    return false;
+  }
+}
+
+/**
+ * Update the artist channel branding: banner image (portada), description and
+ * keywords. Requires the full manage scope — returns needsReconnect when the
+ * stored grant is upload-only.
+ */
+export async function setChannelBranding(opts: {
+  userId: number;
+  description?: string;
+  keywords?: string[];
+  bannerImageUrl?: string;
+}): Promise<{ updated: boolean; bannerSet: boolean; needsReconnect?: boolean }> {
+  const token = await getValidAccessToken(opts.userId);
+  if (!token) throw new Error('YouTube account not connected');
+
+  const { rows } = await pool.query(
+    'SELECT channel_id, scopes FROM youtube_connections WHERE user_id = $1 AND is_active = true LIMIT 1',
+    [opts.userId]
+  );
+  const channelId: string = rows[0]?.channel_id || '';
+  const scopeList = String(rows[0]?.scopes || '').split(/\s+/).filter(Boolean);
+  if (!scopeList.includes(YT_MANAGE_SCOPE)) {
+    return { updated: false, bannerSet: false, needsReconnect: true };
+  }
+  if (!channelId) throw new Error('No channel id on file — reconnect YouTube');
+
+  const { google } = await import('googleapis');
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: token });
+  const youtube = google.youtube({ version: 'v3', auth });
+
+  let bannerSet = false;
+  let bannerExternalUrl: string | undefined;
+  if (opts.bannerImageUrl) {
+    try {
+      const bannerTmp = await downloadToTmp(opts.bannerImageUrl, 'png');
+      try {
+        const up = await youtube.channelBanners.insert({ media: { body: fs.createReadStream(bannerTmp) } });
+        bannerExternalUrl = up.data.url || undefined;
+        bannerSet = !!bannerExternalUrl;
+      } finally {
+        try { fs.unlinkSync(bannerTmp); } catch {}
+      }
+    } catch (e: any) {
+      console.warn('[YouTube] channelBanners.insert failed:', e?.message);
+    }
+  }
+
+  const brandingSettings: any = { channel: {} };
+  if (opts.description) brandingSettings.channel.description = opts.description.slice(0, 1000);
+  if (opts.keywords?.length) brandingSettings.channel.keywords = opts.keywords.join(' ').slice(0, 500);
+  if (bannerExternalUrl) brandingSettings.image = { bannerExternalUrl };
+
+  await youtube.channels.update({
+    part: ['brandingSettings'],
+    requestBody: { id: channelId, brandingSettings },
+  });
+
+  return { updated: true, bannerSet };
 }

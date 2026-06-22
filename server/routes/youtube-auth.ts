@@ -38,7 +38,10 @@ router.get('/connect', authenticate, async (req: Request, res: Response) => {
   }
 
   try {
-    const authUrl = await getYoutubeAuthUrl(userId);
+    // ?switch=1 fuerza el selector de cuenta de Google para conectar/cambiar a
+    // otro canal de YouTube.
+    const forceSelectAccount = req.query.switch === '1' || req.query.switch === 'true';
+    const authUrl = await getYoutubeAuthUrl(userId, { forceSelectAccount });
     res.json({ success: true, authUrl, data: { authUrl } });
   } catch (err: any) {
     console.error('[YouTube OAuth] Connect error:', err.message);
@@ -52,19 +55,19 @@ router.get('/callback', async (req: Request, res: Response) => {
 
   if (error) {
     console.error('[YouTube OAuth] User denied or error:', error);
-    return res.redirect('/dashboard?youtube=denied');
+    return res.redirect('/?youtube=denied');
   }
   if (!code || !state) {
-    return res.redirect('/dashboard?youtube=error');
+    return res.redirect('/?youtube=error');
   }
 
   try {
     const result = await exchangeYoutubeCode(code as string, state as string);
-    if (!result) return res.redirect('/dashboard?youtube=error');
-    return res.redirect('/dashboard?youtube=connected');
+    if (!result) return res.redirect('/?youtube=error');
+    return res.redirect('/?youtube=connected');
   } catch (err: any) {
     console.error('[YouTube OAuth] Callback error:', err.message);
-    return res.redirect('/dashboard?youtube=error');
+    return res.redirect('/?youtube=error');
   }
 });
 
@@ -92,6 +95,7 @@ router.get('/connection', authenticate, async (req: Request, res: Response) => {
       channelTitle: conn.channelTitle,
       thumbnailUrl: conn.thumbnailUrl,
       scopes: conn.scopes,
+      canManageChannel: (conn.scopes || '').split(/\s+/).includes('https://www.googleapis.com/auth/youtube'),
       tokenExpiresAt: conn.tokenExpiresAt,
       createdAt: conn.createdAt,
     };

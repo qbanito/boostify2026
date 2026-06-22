@@ -49,7 +49,7 @@ import {
   getHealthHistory,
   trainPredictiveModel,
 } from "../services/artist-discovery/agent-autonomy";
-import { getPoolStats } from "../services/artist-discovery/apify-client-pool";
+import { getPoolStats, isApifyExhausted } from "../services/artist-discovery/apify-client-pool";
 import { db } from "../db";
 import { musicIndustryContacts } from "../../db/schema";
 import { sql, isNotNull } from "drizzle-orm";
@@ -96,6 +96,7 @@ router.get("/status", async (_req: Request, res: Response) => {
       autonomy,
       // Apify Key Pool (failover)
       apifyPool: getPoolStats(),
+      apifyExhausted: isApifyExhausted(),
     });
   } catch (err: any) {
     console.error("[HunterAPI] Status error:", err);
@@ -116,7 +117,7 @@ router.post("/run", async (req: Request, res: Response) => {
 
     const config: DiscoveryConfig = {};
     if (sources && Array.isArray(sources)) {
-      const valid: DiscoverySource[] = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube', 'tiktok'];
+      const valid: DiscoverySource[] = ['spotify', 'bandcamp', 'google_ai', 'instagram', 'soundcloud', 'youtube', 'tiktok', 'youtube_api', 'spotify_api'];
       config.sources = sources.filter((s: string) => valid.includes(s as DiscoverySource)) as DiscoverySource[];
     }
     if (typeof dryRun === 'boolean') config.dryRun = dryRun;

@@ -8,6 +8,7 @@ import { createTrackedOpenAI } from '../../utils/tracked-openai';
 import { ApifyClient } from 'apify-client';
 import type { RawArtistLead } from './ingestion-pipeline';
 import { PRIMARY_MODEL } from '../../utils/ai-config';
+import { isApifyExhausted, isApifyExhaustionError, markApifyExhausted } from './apify-client-pool';
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN || process.env.APIFY_API_KEY || '';
 const apifyClient = new ApifyClient({ token: APIFY_TOKEN });
@@ -171,6 +172,13 @@ export async function discoverGoogleAIArtists(config: GoogleAIDiscoveryConfig = 
     return [];
   }
 
+  // This source scrapes Google via Apify. If Apify is exhausted there is no
+  // point generating AI queries (which burns OpenAI tokens) — skip entirely.
+  if (isApifyExhausted()) {
+    console.log('[ArtistDiscovery:GoogleAI] Apify exhausted — skipping to save OpenAI tokens');
+    return [];
+  }
+
   const allLeads: RawArtistLead[] = [];
   const countries = shuffleArray(TARGET_COUNTRIES).slice(0, maxCountries);
 
@@ -214,6 +222,13 @@ export async function discoverGoogleAIArtists(config: GoogleAIDiscoveryConfig = 
       console.log(`[ArtistDiscovery:GoogleAI] ${country}: found ${leads.length} leads`);
     } catch (err: any) {
       console.error(`[ArtistDiscovery:GoogleAI] ${country} error:`, err.message?.slice(0, 200));
+      // If Apify hit its quota, stop iterating countries (every call will fail
+      // and AI query generation just wastes tokens).
+      if (isApifyExhaustionError(err)) {
+        markApifyExhausted(err.message);
+        console.log('[ArtistDiscovery:GoogleAI] Apify quota exhausted — aborting remaining countries');
+        break;
+      }
     }
 
     // Rate limiting

@@ -10,6 +10,7 @@ import {
   staticFile,
 } from 'remotion';
 import { getSegmentTransitionStyle, type LyricsTransitionEffect } from './transitions/custom-transitions';
+import { resolveLyricPreset, type LyricStyle, type LyricStylePreset } from './lyric-fonts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -41,6 +42,13 @@ export interface LyricsVideoProps {
   showWatermark?: boolean;
   durationSecs?: number;
   transitionEffect?: LyricsTransitionEffect;
+  /** Visual style of the lyrics typography. Defaults to 'glow' (modern). */
+  lyricStyle?: LyricStyle;
+  /** Layout of the lyrics: centered stage (modern) or side-by-side card. */
+  layout?: 'center' | 'side';
+  /** Pool of background images that rotate (cross-fade) behind the lyrics.
+   *  Falls back to [coverArt] when empty. */
+  backgroundImages?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,31 +87,75 @@ function getWordProgress(words: LyricsWord[] | undefined, timeSec: number): numb
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BlurredBackground: React.FC<{ src: string; frame: number; fps: number; accentColor: string }> = ({ src, frame, fps, accentColor }) => {
+const BlurredBackground: React.FC<{ sources: string[]; frame: number; fps: number; accentColor: string }> = ({ sources, frame, fps, accentColor }) => {
   const { r, g, b } = hexToRgb(accentColor);
-  // Slow cinematic Ken-Burns drift so the artist cover feels alive behind the text.
-  const scale = interpolate(frame, [0, fps * 60], [1.18, 1.32], { extrapolateRight: 'clamp' });
-  const driftX = interpolate(frame, [0, fps * 60], [-2, 2], { extrapolateRight: 'clamp' });
-  const driftY = interpolate(frame, [0, fps * 60], [1.5, -1.5], { extrapolateRight: 'clamp' });
+  const timeSec = frame / fps;
+
+  const imgs = sources.filter(Boolean);
+  const n = imgs.length;
+
+  // Rotation timeline: each image holds for HOLD_SEC then crossfades over FADE_SEC.
+  const HOLD_SEC = 7.5;
+  const FADE_SEC = 1.6;
+  const loop = n * HOLD_SEC;
+
   return (
     <>
+      {imgs.map((src, i) => {
+        // Opacity for a smooth looping crossfade. With a single image it stays 1.
+        let opacity = 1;
+        if (n > 1) {
+          let phase = (((timeSec - i * HOLD_SEC) % loop) + loop) % loop; // 0..loop
+          if (phase < FADE_SEC) opacity = phase / FADE_SEC; // fading in
+          else if (phase < HOLD_SEC) opacity = 1; // fully visible
+          else if (phase < HOLD_SEC + FADE_SEC) opacity = 1 - (phase - HOLD_SEC) / FADE_SEC; // fading out
+          else opacity = 0;
+        }
+        if (opacity <= 0.001) return null;
+
+        // Gentle Ken-Burns per image; alternate the pan direction so each
+        // image in the rotation feels distinct.
+        const dir = i % 2 === 0 ? 1 : -1;
+        const scale = interpolate(timeSec, [i * HOLD_SEC, i * HOLD_SEC + HOLD_SEC + FADE_SEC], [1.06, 1.16], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        });
+        const driftX = dir * interpolate(timeSec, [i * HOLD_SEC, i * HOLD_SEC + HOLD_SEC + FADE_SEC], [-2, 2], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        });
+
+        return (
+          <AbsoluteFill key={i} style={{ opacity }}>
+            <AbsoluteFill
+              style={{
+                // Less blur + brighter than before so the artist photo is clearly
+                // defined (user: "que se vea más, que se defina un poco").
+                filter: 'blur(16px) brightness(0.62) saturate(1.3)',
+                transform: `scale(${scale}) translate(${driftX}%, 0%)`,
+              }}
+            >
+              <Img src={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </AbsoluteFill>
+          </AbsoluteFill>
+        );
+      })}
+
+      {/* Legibility veils — lighter than before so the photo stays visible while
+          the lyrics keep enough contrast (top/bottom darker, center softer). */}
       <AbsoluteFill
         style={{
-          filter: 'blur(45px) brightness(0.4) saturate(1.45)',
-          transform: `scale(${scale}) translate(${driftX}%, ${driftY}%)`,
-        }}
-      >
-        <Img src={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </AbsoluteFill>
-      {/* Dark veil + brand tint so overlaid lyrics stay legible on any cover */}
-      <AbsoluteFill
-        style={{
-          background: `linear-gradient(105deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 42%, rgba(${r},${g},${b},0.18) 100%)`,
+          background: `linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.26) 36%, rgba(0,0,0,0.30) 64%, rgba(0,0,0,0.62) 100%)`,
         }}
       />
       <AbsoluteFill
         style={{
-          background: 'radial-gradient(ellipse at 70% 50%, transparent 30%, rgba(0,0,0,0.55) 100%)',
+          background: 'radial-gradient(ellipse at 50% 48%, transparent 36%, rgba(0,0,0,0.42) 100%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background: `linear-gradient(120deg, rgba(${r},${g},${b},0.12) 0%, transparent 55%)`,
         }}
       />
     </>
@@ -305,6 +357,197 @@ const KaraokePanel: React.FC<{
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Modern centered lyric stage — large current line with prev/next faded, and
+// per-word kinetic entrance + glowing karaoke fill. This is the "bonito y
+// moderno" look (Spotify/Apple-Music style) and the new default layout.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CenterLyrics: React.FC<{
+  segments: LyricsSegment[];
+  activeIdx: number;
+  timeSec: number;
+  accentColor: string;
+  frame: number;
+  fps: number;
+  preset: LyricStylePreset;
+  audioPulse: number; // 0..1 reactive-ish energy for the glow
+}> = ({ segments, activeIdx, timeSec, accentColor, frame, fps, preset, audioPulse }) => {
+  const { r, g, b } = hexToRgb(accentColor);
+  const active = activeIdx >= 0 ? segments[activeIdx] : null;
+  const prev = activeIdx - 1 >= 0 ? segments[activeIdx - 1] : null;
+  const next = activeIdx + 1 < segments.length ? segments[activeIdx + 1] : null;
+
+  const tx = (s: string) => (preset.uppercase ? s.toUpperCase() : s);
+
+  // Breath keeps the glow alive on quiet passages; audioPulse adds punch.
+  const breath = 0.85 + 0.15 * Math.sin(timeSec * 2.2);
+  const glow = preset.glow * (0.6 + 0.4 * audioPulse) * breath;
+
+  const ACTIVE_SIZE = 92;
+  const SIDE_SIZE = 40;
+
+  const segStartFrame = active ? Math.round(active.start * fps) : 0;
+  const lineIn = active
+    ? spring({ frame: frame - segStartFrame, fps, config: { damping: 200 }, durationInFrames: Math.round(fps * 0.45) })
+    : 0;
+
+  const renderActiveLine = () => {
+    if (!active) return null;
+    const words = active.words;
+    const fillList = getWordProgress(words, timeSec);
+
+    if (!words || words.length === 0) {
+      // No word timing — animate the whole line in.
+      return (
+        <div
+          style={{
+            opacity: lineIn,
+            transform: `translateY(${(1 - lineIn) * 26}px) scale(${0.96 + lineIn * 0.04})`,
+            fontSize: ACTIVE_SIZE,
+            fontWeight: preset.weightActive,
+            color: `rgb(${r},${g},${b})`,
+            letterSpacing: preset.letterSpacing,
+            lineHeight: preset.lineHeight,
+            fontStyle: preset.italicAccent ? 'italic' : 'normal',
+            textShadow: `0 0 ${34 * glow}px rgba(${r},${g},${b},${0.6 * glow}), 0 8px 34px rgba(0,0,0,0.6)`,
+          }}
+        >
+          {tx(active.text)}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'baseline',
+          gap: '6px 20px',
+          maxWidth: 1500,
+          lineHeight: preset.lineHeight,
+        }}
+      >
+        {words.map((w, wi) => {
+          const wStartFrame = Math.round(w.start * fps);
+          const local = frame - wStartFrame;
+          const enter = spring({
+            frame: local,
+            fps,
+            config: { damping: 16, mass: 0.6, stiffness: 150 },
+            durationInFrames: Math.round(fps * 0.6),
+          });
+          const fill = fillList[wi] ?? 0;
+
+          let ty = 0;
+          let scale = 1;
+          let blur = 0;
+          let opacity = 1;
+          if (preset.anim === 'rise') {
+            ty = (1 - enter) * 46;
+            opacity = Math.min(1, enter * 1.1);
+            blur = (1 - enter) * 9;
+          } else if (preset.anim === 'pop') {
+            scale = 0.55 + enter * 0.45;
+            opacity = Math.min(1, enter * 1.15);
+          } else {
+            opacity = Math.min(1, enter * 1.2);
+          }
+
+          return (
+            <span
+              key={wi}
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                transform: `translateY(${ty}px) scale(${scale})`,
+                opacity,
+                filter: blur > 0.2 ? `blur(${blur}px)` : undefined,
+                willChange: 'transform, opacity',
+              }}
+            >
+              {/* Base (un-sung) word */}
+              <span
+                style={{
+                  fontSize: ACTIVE_SIZE,
+                  fontWeight: preset.weightActive,
+                  color: 'rgba(255,255,255,0.88)',
+                  letterSpacing: preset.letterSpacing,
+                  fontStyle: preset.italicAccent ? 'italic' : 'normal',
+                  textShadow: '0 8px 34px rgba(0,0,0,0.6)',
+                }}
+              >
+                {tx(w.word)}
+              </span>
+              {/* Accent karaoke fill overlay */}
+              <span
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  overflow: 'hidden',
+                  width: `${fill * 100}%`,
+                  whiteSpace: 'nowrap',
+                  fontSize: ACTIVE_SIZE,
+                  fontWeight: preset.weightActive,
+                  letterSpacing: preset.letterSpacing,
+                  fontStyle: preset.italicAccent ? 'italic' : 'normal',
+                  color: `rgb(${r},${g},${b})`,
+                  textShadow: `0 0 ${26 * glow}px rgba(${r},${g},${b},${0.85 * glow})`,
+                }}
+              >
+                {tx(w.word)}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const sideLine = (seg: LyricsSegment | null, dir: 'up' | 'down') => {
+    if (!seg) return <div style={{ height: SIDE_SIZE * 1.4 }} />;
+    return (
+      <div
+        style={{
+          fontSize: SIDE_SIZE,
+          fontWeight: preset.weightIdle,
+          color: 'rgba(255,255,255,0.32)',
+          letterSpacing: preset.letterSpacing,
+          lineHeight: 1.25,
+          maxWidth: 1300,
+          textAlign: 'center',
+          transform: `translateY(${dir === 'up' ? -4 : 4}px)`,
+          filter: 'blur(0.4px)',
+        }}
+      >
+        {tx(seg.text)}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 34,
+        padding: '0 90px',
+        textAlign: 'center',
+      }}
+    >
+      {sideLine(prev, 'up')}
+      <div style={{ minHeight: ACTIVE_SIZE * preset.lineHeight }}>{renderActiveLine()}</div>
+      {sideLine(next, 'down')}
+    </div>
+  );
+};
+
 const ProgressBar: React.FC<{
   progress: number;
   accentColor: string;
@@ -368,6 +611,9 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
   showWatermark = true,
   durationSecs = 180,
   transitionEffect = 'flash',
+  lyricStyle = 'glow',
+  layout = 'center',
+  backgroundImages,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -375,6 +621,27 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
   const timeSec = frame / fps;
   const totalProgress = frame / durationInFrames;
   const activeIdx = getActiveSegmentIdx(segments, timeSec);
+
+  // Resolve the lyric typography preset (font + animation flavor + glow).
+  const preset = resolveLyricPreset(lyricStyle);
+
+  // Background image pool: rotate the gallery photos when provided, otherwise
+  // fall back to the single cover art. Dedupe + keep only valid http(s) URLs.
+  const bgSources = (() => {
+    const pool = (backgroundImages && backgroundImages.length > 0
+      ? backgroundImages
+      : coverArt
+      ? [coverArt]
+      : []
+    ).filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u));
+    return Array.from(new Set(pool)).slice(0, 6);
+  })();
+
+  // Musical pulse for the glow. Deterministic (render-safe, no audio decode):
+  // a sharpened ~2 Hz beat envelope so the lyrics "breathe" with an implied
+  // tempo even on headless Lambda renders where Web Audio isn't available.
+  const beatEnv = Math.pow(0.5 + 0.5 * Math.sin(timeSec * Math.PI * 2 * 1.9), 3);
+  const audioPulse = 0.35 + 0.65 * beatEnv;
 
   // ── Segment transition overlay ─────────────────────────────────────────────
   const activeSegment = activeIdx >= 0 ? segments[activeIdx] : null;
@@ -412,14 +679,15 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
     <AbsoluteFill
       style={{
         background: theme === 'blur' ? undefined : bgMap[theme],
-        fontFamily: `'${fontFamily}', system-ui, sans-serif`,
+        fontFamily: `'${preset.fontFamily}', '${fontFamily}', system-ui, sans-serif`,
         overflow: 'hidden',
       }}
     >
-      {/* Blurred artist cover — always the hero background when a cover exists,
-          so the lyrics read "encima" of the blurred portada on every theme. */}
-      {coverArt ? (
-        <BlurredBackground src={coverArt} frame={frame} fps={fps} accentColor={accentColor} />
+      {/* Rotating artist photo background — uses the gallery pool when provided,
+          else the cover art. Cross-fades between images and stays clearly
+          defined (low blur) so the artist's photos shine behind the lyrics. */}
+      {bgSources.length > 0 ? (
+        <BlurredBackground sources={bgSources} frame={frame} fps={fps} accentColor={accentColor} />
       ) : null}
 
       {/* Ambient particle glow orbs */}
@@ -441,38 +709,95 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
         />
       ))}
 
-      {/* Divider line between album art and lyrics */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 598,
-          top: '15%',
-          width: 2,
-          height: '70%',
-          background: `linear-gradient(to bottom, transparent, rgba(${r},${g},${b},0.4), transparent)`,
-        }}
-      />
+      {/* ── SIDE layout (legacy): album card + right-aligned karaoke list ── */}
+      {layout === 'side' && (
+        <>
+          {/* Divider line between album art and lyrics */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 598,
+              top: '15%',
+              width: 2,
+              height: '70%',
+              background: `linear-gradient(to bottom, transparent, rgba(${r},${g},${b},0.4), transparent)`,
+            }}
+          />
 
-      {/* Album art card */}
-      <AlbumCard
-        src={coverArt}
-        artistName={artistName}
-        songTitle={songTitle}
-        frame={frame}
-        fps={fps}
-        accentColor={accentColor}
-      />
+          {/* Album art card */}
+          <AlbumCard
+            src={coverArt}
+            artistName={artistName}
+            songTitle={songTitle}
+            frame={frame}
+            fps={fps}
+            accentColor={accentColor}
+          />
 
-      {/* Karaoke lyrics panel */}
-      {activeIdx >= 0 && (
-        <KaraokePanel
-          segments={segments}
-          activeIdx={activeIdx}
-          timeSec={timeSec}
-          accentColor={accentColor}
-          frame={frame}
-          fps={fps}
-        />
+          {/* Karaoke lyrics panel */}
+          {activeIdx >= 0 && (
+            <KaraokePanel
+              segments={segments}
+              activeIdx={activeIdx}
+              timeSec={timeSec}
+              accentColor={accentColor}
+              frame={frame}
+              fps={fps}
+            />
+          )}
+        </>
+      )}
+
+      {/* ── CENTER layout (modern default): big centered kinetic lyrics ── */}
+      {layout === 'center' && (
+        <>
+          {/* Now-playing chip with the song title + artist */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 56,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: '12px 26px',
+              borderRadius: 999,
+              background: 'rgba(0,0,0,0.35)',
+              border: `1px solid rgba(${r},${g},${b},0.45)`,
+              backdropFilter: 'blur(8px)',
+              boxShadow: `0 6px 30px rgba(0,0,0,0.45)`,
+            }}
+          >
+            {coverArt ? (
+              <Img
+                src={coverArt}
+                style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover' }}
+              />
+            ) : null}
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ color: '#fff', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>
+                {songTitle}
+              </div>
+              <div style={{ color: `rgba(${r},${g},${b},1)`, fontSize: 15, fontWeight: 600, marginTop: 2, letterSpacing: 1 }}>
+                {artistName}
+              </div>
+            </div>
+          </div>
+
+          {activeIdx >= 0 && (
+            <CenterLyrics
+              segments={segments}
+              activeIdx={activeIdx}
+              timeSec={timeSec}
+              accentColor={accentColor}
+              frame={frame}
+              fps={fps}
+              preset={preset}
+              audioPulse={audioPulse}
+            />
+          )}
+        </>
       )}
 
       {/* Idle message before first segment */}
@@ -480,13 +805,14 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
         <div
           style={{
             position: 'absolute',
-            left: 620,
-            right: 60,
+            ...(layout === 'center'
+              ? { left: 0, right: 0, textAlign: 'center' as const }
+              : { left: 620, right: 60 }),
             top: '50%',
             transform: 'translateY(-50%)',
             color: `rgba(${r},${g},${b},0.6)`,
-            fontSize: 28,
-            fontWeight: 500,
+            fontSize: 30,
+            fontWeight: 600,
             letterSpacing: 3,
             textTransform: 'uppercase',
           }}
