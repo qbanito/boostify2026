@@ -1330,7 +1330,7 @@ interface MyVideoJob {
   created_at?: string;
 }
 
-const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
+const MyVideosGallery: React.FC<{ refreshKey?: number; artistId?: number }> = ({ refreshKey, artistId }) => {
   const queryClient = useQueryClient();
   const [privacy, setPrivacy] = useState<'public' | 'unlisted' | 'private'>('public');
   const [uploadingId, setUploadingId] = useState<number | null>(null);
@@ -1340,9 +1340,9 @@ const MyVideosGallery: React.FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<MyVideoJob[]>({
-    queryKey: ['lyricsVideoMyJobs', refreshKey],
+    queryKey: ['lyricsVideoMyJobs', refreshKey, artistId],
     queryFn: async () => {
-      const res = await fetch('/api/lyrics-video/my-jobs');
+      const res = await fetch(`/api/lyrics-video/my-jobs${artistId ? `?artistId=${artistId}` : ''}`, { credentials: 'include' });
       const json = await readJsonSafe<{ jobs: MyVideoJob[] }>(res);
       if (!res.ok || !json) return [];
       return json.jobs ?? [];
@@ -1732,7 +1732,7 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
             )}
           </AnimatePresence>
 
-            <MyVideosGallery />
+            <MyVideosGallery artistId={artistId} />
           </div>
         </div>
       )}

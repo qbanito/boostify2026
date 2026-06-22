@@ -419,6 +419,15 @@ router.post('/transcribe', authenticate, async (req, res) => {
     // sin artist_name. Si el cliente no lo manda, lo buscamos por el id de perfil
     // (bodyArtistId) y por último por userId.
     const resolvedArtistName = await resolveProfileArtistName(artistName, bodyArtistId, userId);
+    // Los videos pertenecen al PERFIL del artista que se está viendo (bodyArtistId,
+    // p.ej. un artista creado por IA con id distinto al del usuario logueado), no
+    // a la cuenta que los crea. Guardamos bajo el id del perfil SOLO si el usuario
+    // es su dueño; si no, bajo su propio id. Así la galería pública del perfil y la
+    // del dueño encuentran los videos de forma consistente.
+    let storeArtistId = userId;
+    if (bodyArtistId && bodyArtistId !== userId && await userOwnsArtist(userId, bodyArtistId)) {
+      storeArtistId = bodyArtistId;
+    }
     const { rows: [row] } = await pool.query<{ id: number }>(`
       INSERT INTO lyrics_video_jobs
         (artist_id, song_id, firestore_song_id, status, segments_json, words_json, duration_secs,
@@ -426,7 +435,7 @@ router.post('/transcribe', authenticate, async (req, res) => {
       VALUES ($1,$2,$3,'transcribed',$4,$5,$6,$7,$8,$9,$10)
       RETURNING id
     `, [
-      userId,
+      storeArtistId,
       pgSongId,
       firestoreSongId,
       JSON.stringify(result.segments),
@@ -538,8 +547,9 @@ router.post('/render', authenticate, async (req, res) => {
     const userId = (req as any).user?.id as number;
 
     // Load job
+    const ownedIds = await getOwnedArtistIds(userId);
     const { rows } = await pool.query(
-      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`, [jobId, userId]
+      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`, [jobId, ownedIds]
     );
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
     const job = rows[0];
@@ -552,7 +562,7 @@ router.post('/render', authenticate, async (req, res) => {
     // Resolve the lyric style: explicit choice wins, else auto from genre.
     // Also resolve the real artist name: the job already stored the profile name
     // at transcribe time; fall back to a profile lookup only if it's missing.
-    const ctx = await getArtistMarketingContext(userId);
+    const ctx = await getArtistMarketingContext(job.artist_id || userId);
     const resolvedArtistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
     let lyricStyle = lyricStyleInput;
     if (lyricStyle === 'auto') {
@@ -811,11 +821,12 @@ router.get('/:jobId/status', authenticate, async (req, res) => {
     const jobId = parseInt(req.params.jobId, 10);
     const userId = (req as any).user?.id as number;
 
+    const ownedIds = await getOwnedArtistIds(userId);
     const { rows } = await pool.query(
       `SELECT id, status, progress, output_url, youtube_url, error_msg, duration_secs,
               song_title, artist_name, cover_art_url, theme, accent_color, created_at
-       FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
-      [jobId, userId]
+       FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`,
+      [jobId, ownedIds]
     );
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
 
@@ -862,11 +873,20 @@ router.get('/public-videos', async (req, res) => {
 router.get('/my-jobs', authenticate, async (req, res) => {
   try {
     const userId = (req as any).user?.id as number;
+    // Si el cliente pasa el id del perfil que se está viendo y el usuario lo
+    // controla, listamos ese perfil; si no, todos los perfiles que controla.
+    const profileId = req.query.artistId ? parseInt(String(req.query.artistId), 10) : 0;
+    let scopeIds: number[];
+    if (profileId && await userOwnsArtist(userId, profileId)) {
+      scopeIds = [profileId];
+    } else {
+      scopeIds = await getOwnedArtistIds(userId);
+    }
     const { rows } = await pool.query(
       `SELECT id, status, progress, output_url, youtube_url, duration_secs,
               song_title, artist_name, cover_art_url, thumbnail_url, theme, accent_color, created_at
-       FROM lyrics_video_jobs WHERE artist_id=$1 ORDER BY created_at DESC LIMIT 20`,
-      [userId]
+       FROM lyrics_video_jobs WHERE artist_id = ANY($1) ORDER BY created_at DESC LIMIT 20`,
+      [scopeIds]
     );
     return res.json({ jobs: rows });
   } catch (err: any) {
@@ -889,9 +909,10 @@ router.get('/search-trends', authenticate, async (req, res) => {
 
     const jobId = req.query.jobId ? parseInt(String(req.query.jobId), 10) : 0;
     if (jobId) {
+      const ownedIds = await getOwnedArtistIds(userId);
       const { rows } = await pool.query(
-        `SELECT artist_id, song_title, artist_name FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
-        [jobId, userId]
+        `SELECT artist_id, song_title, artist_name FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`,
+        [jobId, ownedIds]
       );
       if (rows[0]) {
         songTitle = songTitle || rows[0].song_title || '';
@@ -925,14 +946,15 @@ router.post('/:jobId/thumbnail', authenticate, async (req, res) => {
     const userId = (req as any).user?.id as number;
     if (!jobId || isNaN(jobId)) return res.status(400).json({ error: 'Invalid job id' });
 
+    const ownedIds = await getOwnedArtistIds(userId);
     const { rows } = await pool.query(
-      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
-      [jobId, userId]
+      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`,
+      [jobId, ownedIds]
     );
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
     const job = rows[0];
 
-    const ctx = await getArtistMarketingContext(userId);
+    const ctx = await getArtistMarketingContext(job.artist_id || userId);
     const songTitle = job.song_title || 'Lyric Video';
     const artistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
 
@@ -969,9 +991,10 @@ router.delete('/:jobId', authenticate, async (req, res) => {
     const userId = (req as any).user?.id as number;
     if (!jobId || isNaN(jobId)) return res.status(400).json({ error: 'Invalid job id' });
 
+    const ownedIds = await getOwnedArtistIds(userId);
     const { rows } = await pool.query(
-      `SELECT id FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`,
-      [jobId, userId]
+      `SELECT id FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`,
+      [jobId, ownedIds]
     );
     if (!rows.length) return res.status(404).json({ error: 'Job not found' });
 
@@ -984,7 +1007,7 @@ router.delete('/:jobId', authenticate, async (req, res) => {
       console.warn('[LyricsVideo] storage cleanup failed (non-fatal):', e?.message);
     }
 
-    await pool.query(`DELETE FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2`, [jobId, userId]);
+    await pool.query(`DELETE FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2)`, [jobId, ownedIds]);
     return res.json({ success: true });
   } catch (err: any) {
     console.error('[LyricsVideo] DELETE error:', err);
@@ -1022,9 +1045,10 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
     const body = ytUploadSchema.parse(req.body);
     const { privacyStatus, accessToken, auto, generateThumbnail } = body;
 
+    const ownedIds = await getOwnedArtistIds(userId);
     const { rows } = await pool.query(
-      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id=$2 AND status='done'`,
-      [jobId, userId]
+      `SELECT * FROM lyrics_video_jobs WHERE id=$1 AND artist_id = ANY($2) AND status='done'`,
+      [jobId, ownedIds]
     );
     if (!rows.length) return res.status(404).json({ error: 'Job not found or not ready' });
     const job = rows[0];
@@ -1033,7 +1057,7 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
     }
 
     // Contexto del artista para SEO competitivo + CTA a su perfil/tienda.
-    const ctx = await getArtistMarketingContext(userId);
+    const ctx = await getArtistMarketingContext(job.artist_id || userId);
     const songTitle = job.song_title || 'Lyric Video';
     const artistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
 
@@ -1583,6 +1607,38 @@ async function resolveProfileArtistName(
     } catch { /* perfil opcional */ }
   }
   return fromClient || 'Artist';
+}
+
+// Devuelve TODOS los ids de artista que controla un usuario: su propio id +
+// los perfiles de artista que generó (users.generated_by = userId, p.ej. artistas
+// creados por IA). Los videos de lyrics pertenecen al PERFIL (no al usuario que
+// lo creó), así que la propiedad de un job se valida contra este conjunto.
+async function getOwnedArtistIds(userId: number): Promise<number[]> {
+  const ids = new Set<number>();
+  if (userId) ids.add(userId);
+  try {
+    const { rows } = await pool.query<{ id: number }>(
+      `SELECT id FROM users WHERE generated_by = $1`,
+      [userId]
+    );
+    for (const r of rows) if (r.id) ids.add(r.id);
+  } catch { /* tabla users opcional */ }
+  return Array.from(ids);
+}
+
+// ¿El usuario controla este perfil de artista? (su propio id o un perfil que generó)
+async function userOwnsArtist(userId: number, artistId: number): Promise<boolean> {
+  if (!userId || !artistId) return false;
+  if (userId === artistId) return true;
+  try {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM users WHERE id = $1 AND (id = $2 OR generated_by = $2) LIMIT 1`,
+      [artistId, userId]
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 // Reconstruye la letra a partir de los segmentos/palabras almacenados en el job.
