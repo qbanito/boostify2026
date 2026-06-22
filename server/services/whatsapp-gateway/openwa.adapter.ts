@@ -21,6 +21,10 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../utils/logger';
+// Static import (ESM-safe). Cyclic with cloud-api.adapter is fine: CloudApiAdapter
+// is only instantiated at runtime inside getGateway(), and it references this
+// module's exports (normalizePhone — a hoisted function decl) only in methods.
+import { CloudApiAdapter } from './cloud-api.adapter';
 
 export type SessionState = 'initializing' | 'qr' | 'connected' | 'disconnected' | 'expired' | 'error';
 
@@ -250,8 +254,6 @@ export function getGateway(): WhatsAppGateway {
   if (process.env.WHATSAPP_PROVIDER === 'cloud'
       && process.env.WHATSAPP_ACCESS_TOKEN
       && process.env.WHATSAPP_PHONE_NUMBER_ID) {
-    // Lazy require to avoid a hard import cycle (cloud adapter imports types here).
-    const { CloudApiAdapter } = require('./cloud-api.adapter');
     logger.info('[whatsapp] using OFFICIAL Meta Cloud API gateway (phone_number_id set)');
     _gateway = new CloudApiAdapter(process.env.WHATSAPP_ACCESS_TOKEN, process.env.WHATSAPP_PHONE_NUMBER_ID);
     return _gateway!;
