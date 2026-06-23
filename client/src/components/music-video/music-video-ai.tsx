@@ -2552,17 +2552,38 @@ export function MusicVideoAI({
       
     } catch (err) {
       logger.error("❌ Error generando conceptos:", err);
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Error generando conceptos",
-        variant: "destructive",
-      });
       setIsGeneratingConcepts(false);
-      setShowProgress(false);
-      // Volver al modal de director
-      setShowDirectorSelection(true);
+
+      // 🔄 RESILIENCIA: el paso de conceptos es OPCIONAL. Si falla (p.ej. la IA
+      // no respondió), NO regresamos al director — continuamos el workflow
+      // generando el guión del video directamente (sin concepto). El generador
+      // de guión tiene su propio fallback, así que la fase siempre avanza.
+      const buffer = audioBuffer;
+      if (buffer && transcriptionText) {
+        logger.warn("⚠️ [CONCEPTOS] Fallaron — avanzando directamente a la generación del guión");
+        toast({
+          title: "Continuando con el guión",
+          description: "No se pudieron generar las propuestas de concepto, así que creamos el guión del video directamente.",
+        });
+        setSelectedConcept(null);
+        try {
+          await executeScriptGeneration(transcriptionText, buffer);
+        } catch (scriptErr) {
+          logger.error("❌ [CONCEPTOS] Error generando el guión tras el fallo de conceptos:", scriptErr);
+          setShowProgress(false);
+        }
+      } else {
+        // Sin audio/transcripción no hay forma de continuar: informamos y dejamos reintentar.
+        toast({
+          title: "Error",
+          description: err instanceof Error ? err.message : "Error generando conceptos",
+          variant: "destructive",
+        });
+        setShowProgress(false);
+        setShowDirectorSelection(true);
+      }
     }
-  }, [audioBuffer, artistReferenceImages, toast, projectName, selectedFile, seed, user, uploadImageFromUrl]);
+  }, [audioBuffer, transcription, artistReferenceImages, toast, projectName, selectedFile, seed, user, uploadImageFromUrl]);
 
   // Handler para cuando se selecciona un concepto
   const handleConceptSelection = useCallback(async (concept: any) => {
