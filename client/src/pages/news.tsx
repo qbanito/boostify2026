@@ -1204,8 +1204,18 @@ export default function NewsPage() {
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
+  const newsBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://boostifymusic.com";
+
   return (
     <div className="min-h-screen bg-background">
+      {!viewingSlug && (
+        <Head
+          title="Boostify News — AI Music Marketing Insights & Industry Vision"
+          description="Daily AI-generated insights on autonomous artists, AI music, Web3, music marketing and the evolving streaming industry — from Boostify Music."
+          url={`${newsBaseUrl}/news`}
+          type="website"
+        />
+      )}
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {viewingSlug ? (

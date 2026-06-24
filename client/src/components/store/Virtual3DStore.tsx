@@ -1361,6 +1361,13 @@ function StoreScene({
 }) {
   const { scene } = useThree();
 
+  // Respeta la preferencia de accesibilidad: sin auto-rotación si el usuario
+  // pidió movimiento reducido.
+  const reducedMotion = useMemo(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+
   // Texturas de entorno generadas por OpenAI para este artista
   const wallTex = useSafeTexture(wallTextureUrl, [3.2, 1]);
   const floorTex = useSafeTexture(floorTextureUrl, [4, 4]);
@@ -1502,7 +1509,7 @@ function StoreScene({
         enablePan={false}
         enableDamping
         dampingFactor={0.08}
-        autoRotate
+        autoRotate={!reducedMotion}
         autoRotateSpeed={0.4}
         minDistance={5}
         maxDistance={18}
@@ -1676,6 +1683,19 @@ export default function Virtual3DStore({
   const [selected, setSelected] = useState<Virtual3DProduct | null>(null);
   const voice = useBoutiqueVoice(storeSlug, limited);
 
+  // Velo de entrada cinematográfico (se desvanece tras montar la escena).
+  // Se omite si el usuario pidió movimiento reducido.
+  const reduceIntro = useMemo(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+  const [intro, setIntro] = useState(!reduceIntro);
+  useEffect(() => {
+    if (!intro) return;
+    const t = setTimeout(() => setIntro(false), 2300);
+    return () => clearTimeout(t);
+  }, [intro]);
+
   // Fuentes creativas para el overlay HTML (Google Fonts — permitidas por CSP)
   useEffect(() => {
     if (document.getElementById(OVERLAY_FONTS_ID)) return;
@@ -1718,7 +1738,75 @@ export default function Virtual3DStore({
         .boutique-btn { transition: transform .15s ease, filter .15s ease, box-shadow .15s ease; cursor: pointer; }
         .boutique-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.15); }
         .boutique-btn:active { transform: scale(0.97); }
+        @keyframes boutiqueIntroOut {
+          0% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; visibility: hidden; }
+        }
+        @keyframes boutiqueIntroRise {
+          from { transform: translateY(14px); opacity: 0; letter-spacing: 0.5em; }
+          to { transform: translateY(0); opacity: 1; letter-spacing: 0.22em; }
+        }
+        @keyframes boutiqueIntroLine {
+          from { transform: scaleX(0); }
+          to { transform: scaleX(1); }
+        }
       `}</style>
+
+      {/* ── Velo de entrada cinematográfico ── */}
+      {intro && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            background: `radial-gradient(circle at 50% 42%, ${theme.secondary}26, ${theme.background} 62%), ${theme.background}`,
+            animation: "boutiqueIntroOut 2.3s ease forwards",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontSize: 10,
+              letterSpacing: "0.5em",
+              color: theme.accent,
+              textTransform: "uppercase",
+              animation: "boutiqueIntroRise .9s ease both",
+            }}
+          >
+            Boostify Boutique
+          </div>
+          <div
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontWeight: 800,
+              fontSize: "clamp(26px, 6vw, 52px)",
+              color: "#fdf6e3",
+              textAlign: "center",
+              padding: "0 20px",
+              textShadow: `0 0 28px ${theme.primary}66`,
+              animation: "boutiqueIntroRise 1.1s ease both .12s",
+            }}
+          >
+            {artistName}
+          </div>
+          <div
+            style={{
+              width: "min(220px, 50%)",
+              height: 2,
+              borderRadius: 2,
+              transformOrigin: "center",
+              background: `linear-gradient(90deg, transparent, ${theme.primary}, ${theme.accent}, transparent)`,
+              animation: "boutiqueIntroLine 1.6s ease both .2s",
+            }}
+          />
+        </div>
+      )}
 
       <Canvas
         shadows

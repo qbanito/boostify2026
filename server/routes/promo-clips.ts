@@ -240,6 +240,8 @@ const NARRATIVE_SCENE_DURATION = NARRATIVE_TOTAL_DURATION / NARRATIVE_TOTAL_SCEN
 // any rotation of 12 values stays under 30s with a final tiny tail-trim.
 const NARRATIVE_CUT_DURATION_POOL: number[] = [1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0];
 const SEEDANCE_SYNC3_COST_5S = 1.88;
+// Seedance 2.0 Mini: variante económica (~40% más barata que Fast)
+const SEEDANCE_MINI_SYNC3_COST_5S = 1.12;
 
 function clampPercent(value: any, fallback: number): number {
   const parsed = Number(value);
@@ -249,6 +251,7 @@ function clampPercent(value: any, fallback: number): number {
 
 function getModelCost5s(model: string, requiresLipsync: boolean): number {
   if (model === 'seedance-fast-r2v') return requiresLipsync ? SEEDANCE_SYNC3_COST_5S : 1.21;
+  if (model === 'seedance-mini-r2v') return requiresLipsync ? SEEDANCE_MINI_SYNC3_COST_5S : 0.72;
   const workflow = KLING_SYNC3_WORKFLOWS[model] || KLING_SYNC3_WORKFLOWS['kling-v3-standard-sync3'];
   const baseCost = workflow.baseCost5s ?? 0.42;
   return requiresLipsync ? baseCost + (workflow.syncCost5s ?? 0.67) : baseCost;
@@ -2685,8 +2688,11 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
       });
     }
 
-    if (mode === 'seedance-fast-r2v') {
-      // Route B: Seedance 2.0 Fast R2V — 5s rhythmic singer performance locked to profile identity + original song audio
+    if (mode === 'seedance-fast-r2v' || mode === 'seedance-mini-r2v') {
+      // Route B: Seedance 2.0 R2V — 5s rhythmic singer performance locked to profile identity + original song audio.
+      // 'seedance-mini-r2v' usa la variante MÁS ECONÓMICA (mismo flujo, menor coste FAL).
+      const isMini = mode === 'seedance-mini-r2v';
+      const seedanceModelPath = isMini ? FAL_MODELS.SEEDANCE_2_MINI_R2V : FAL_MODELS.SEEDANCE_2_FAST_R2V;
       const artistProfileIdentityUrl = identityImageUrl || await resolveArtistProfileImage(artistId) || imageUrl;
       const seedanceResult = await generateSeedanceFastReferenceVideo({
         imageUrl,
@@ -2701,6 +2707,7 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
         bpmFeel,
         segmentType,
         songTitle,
+        modelPath: seedanceModelPath,
       });
       if (seedanceResult.success && seedanceResult.requestId) {
         const finalAudioSourceUrl = seedanceResult.referenceAudioUrl || audioUrl;
@@ -2715,16 +2722,16 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
       return res.json({
         success: seedanceResult.success,
         requestId: seedanceResult.requestId,
-        endpoint: FAL_MODELS.SEEDANCE_2_FAST_R2V,
+        endpoint: seedanceModelPath,
         statusUrl: seedanceResult.statusUrl,
         resultUrl: seedanceResult.resultUrl,
-        mode: 'seedance-fast-r2v',
+        mode,
         duration: 5,
         clipStartSeconds: Number(clipStartSeconds) || 0,
         audioLock: 'exact-seedance-reference-audio-postprocess',
         audioSync: 'seedance-internal-audio-on-final-audio-replaced',
         identityLock: artistProfileIdentityUrl,
-        message: seedanceResult.success ? 'Seedance 2.0 rhythmic singer video queued' : undefined,
+        message: seedanceResult.success ? `${isMini ? 'Seedance 2.0 Mini' : 'Seedance 2.0'} rhythmic singer video queued` : undefined,
         error: seedanceResult.error,
       });
     }
@@ -2755,7 +2762,7 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
       });
     }
 
-    return res.status(400).json({ success: false, error: 'Invalid mode. Use omnihuman, seedance-fast-r2v, kling-v21-standard-sync3, kling-v3-standard-sync3 or kling-v3-pro-sync3' });
+    return res.status(400).json({ success: false, error: 'Invalid mode. Use omnihuman, seedance-fast-r2v, seedance-mini-r2v, kling-v21-standard-sync3, kling-v3-standard-sync3 or kling-v3-pro-sync3' });
   } catch (err: any) {
     logger.error('[PromoClips] generate-lipsync-video error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -2868,8 +2875,10 @@ router.post('/:artistId/generate-narrative-scene', authenticate, async (req: Req
           'Vertical 9:16, photorealistic music video, stable identity when the artist appears, stable wardrobe/accessories, no text, no watermark.',
         ].filter(Boolean).join(' ');
 
-    if (requiresLipsync && mode === 'seedance-fast-r2v') {
+    if (requiresLipsync && (mode === 'seedance-fast-r2v' || mode === 'seedance-mini-r2v')) {
       if (!audioUrl) return res.status(400).json({ success: false, error: 'audioUrl required for lipsync scene' });
+      const isMiniScene = mode === 'seedance-mini-r2v';
+      const seedanceSceneModelPath = isMiniScene ? FAL_MODELS.SEEDANCE_2_MINI_R2V : FAL_MODELS.SEEDANCE_2_FAST_R2V;
       const seedanceResult = await generateSeedanceFastReferenceVideo({
         imageUrl: sceneImageUrl,
         identityImageUrl: artistProfileIdentityUrl,
@@ -2883,6 +2892,7 @@ router.post('/:artistId/generate-narrative-scene', authenticate, async (req: Req
         bpmFeel: scene.cameraMovement || '',
         segmentType: 'narrative_lipsync',
         songTitle,
+        modelPath: seedanceSceneModelPath,
       });
       if (seedanceResult.success && seedanceResult.requestId) {
         const finalAudioSourceUrl = seedanceResult.referenceAudioUrl || audioUrl;
@@ -2897,10 +2907,10 @@ router.post('/:artistId/generate-narrative-scene', authenticate, async (req: Req
         success: seedanceResult.success,
         sceneId: scene.id,
         requestId: seedanceResult.requestId,
-        endpoint: FAL_MODELS.SEEDANCE_2_FAST_R2V,
+        endpoint: seedanceSceneModelPath,
         statusUrl: seedanceResult.statusUrl,
         resultUrl: seedanceResult.resultUrl,
-        mode: 'seedance-fast-r2v',
+        mode,
         requiresLipsync: true,
         duration,
         clipStartSeconds,

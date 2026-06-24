@@ -9,6 +9,23 @@ import path from 'path';
 import { generateImageWithNanoBanana, editImageWithNanoBanana } from '../services/fal-service';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import { PRIMARY_MODEL } from '../utils/ai-config';
+import { callAI } from '../utils/smart-ai';
+
+// Resilient JSON parser: handles raw JSON, ```json fences and noisy wrappers
+// returned by fallback models (z.ai GLM, Llama, etc.).
+function safeParseJsonObject(raw: string | null | undefined): any | null {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  try { return JSON.parse(text); } catch {}
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch {} }
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    try { return JSON.parse(text.slice(first, last + 1)); } catch {}
+  }
+  return null;
+}
 
 const router = Router();
 
@@ -285,21 +302,30 @@ router.post('/generate-profile-auto-blocks', authenticate, async (req: Request, 
       `Accent color: ${String(accentColor || '').trim()}`,
     ].join('\n');
 
-    const completion = await openai.chat.completions.create({
-      model: PRIMARY_MODEL,
-      response_format: { type: 'json_object' },
-      temperature: 0.88,
-      messages: [
+    const completion = await callAI(
+      'content',
+      [
         {
           role: 'system',
-          content: 'You are a senior music branding copywriter. Produce concise, high-impact copy that feels alive and genre-authentic.',
+          content: 'You are a senior music branding copywriter. Produce concise, high-impact copy that feels alive and genre-authentic. Always respond with a single valid JSON object and nothing else.',
         },
         { role: 'user', content: prompt },
       ],
-    });
+      {
+        temperature: 0.88,
+        maxTokens: 900,
+        requireJSON: true,
+        userId: pgUserId || null,
+        label: 'profile-auto-blocks',
+      },
+    );
 
-    const raw = completion.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(raw);
+    // callAI cascades OpenAI → z.ai (GLM) → others automatically; parse defensively
+    // because fallback models occasionally wrap JSON in prose or fences.
+    const parsed = safeParseJsonObject(completion);
+    if (!parsed) {
+      throw new Error('AI returned unparseable copy for profile auto blocks');
+    }
 
     const safeIconNames = new Set(['sparkles', 'flame', 'rocket', 'music', 'crown', 'zap', 'star']);
     const iconName = safeIconNames.has(parsed.iconName) ? parsed.iconName : 'sparkles';

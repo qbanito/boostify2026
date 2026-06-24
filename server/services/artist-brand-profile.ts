@@ -83,6 +83,34 @@ export interface ArtistIdentity {
   slogans: string[];
 }
 
+/**
+ * CHARACTER SHEET — the immutable visual identity anchor.
+ * Generated once from the artist's photo + profile, it locks the face / body /
+ * wardrobe so EVERY downstream generation (merch, holograms, social posters,
+ * music videos, fashion) renders the SAME person. Stored inside the brand
+ * profile so the existing cross-module brand bus propagates it everywhere.
+ */
+export interface BrandCharacterSheet {
+  /** Immutable face+body identity anchor (<40 words) injected into prompts. */
+  identityLock: string;
+  signatureOutfit?: string;
+  headStudyNotes?: string;
+  /** 4-6 signature wardrobe/brand colors. */
+  signaturePalette?: string[];
+  wardrobe?: Array<{ name: string; description: string }>;
+  props?: Array<{ name: string; description: string }>;
+  materials?: string[];
+  vibeKeywords?: string[];
+  /** Canonical model-sheet views (turnaround / head study / portrait). */
+  views: Array<{ key: string; label: string; category: string; url: string }>;
+  /** Composed DENXEL-style model-sheet poster (optional). */
+  posterUrl?: string;
+  /** Strongest single identity image for quick image-to-image (head front / portrait). */
+  primaryRef?: string;
+  generatedAt: string;
+  version: number;
+}
+
 export interface ArtistBrandProfile {
   /** Postgres user id */
   artistId: number | string;
@@ -122,6 +150,9 @@ export interface ArtistBrandProfile {
     masterLogo?: string;
     additional?: string[];
   };
+
+  /** Locked visual identity (turnaround + head study + wardrobe). Optional. */
+  characterSheet?: BrandCharacterSheet;
 
   // — PROMPT BUILDING BLOCKS —
   /** Pre-composed prompt prefix used in every generation */
@@ -635,10 +666,30 @@ Negative: ${profile.negativePrompt}.`;
  */
 export function getReferenceImageUrls(profile: ArtistBrandProfile, fallbackArtistImage?: string): string[] {
   const refs: string[] = [];
-  if (profile.referenceImages?.artistPhoto) refs.push(profile.referenceImages.artistPhoto);
+  // Character sheet identity anchor wins (strongest, multi-angle locked likeness).
+  const cs = profile.characterSheet;
+  if (cs?.primaryRef) refs.push(cs.primaryRef);
+  if (profile.referenceImages?.artistPhoto && !refs.includes(profile.referenceImages.artistPhoto)) {
+    refs.push(profile.referenceImages.artistPhoto);
+  }
   if (profile.referenceImages?.masterLogo) refs.push(profile.referenceImages.masterLogo);
   if (refs.length === 0 && fallbackArtistImage) refs.push(fallbackArtistImage);
   return refs;
+}
+
+/**
+ * All canonical character-sheet view URLs (turnaround / head / portrait),
+ * with the strongest identity anchor first. Empty array when no sheet yet.
+ */
+export function getCharacterSheetRefs(profile: ArtistBrandProfile | null | undefined): string[] {
+  const cs = profile?.characterSheet;
+  if (!cs) return [];
+  const ordered: string[] = [];
+  if (cs.primaryRef) ordered.push(cs.primaryRef);
+  for (const v of cs.views || []) {
+    if (v?.url && !ordered.includes(v.url)) ordered.push(v.url);
+  }
+  return ordered;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -658,8 +709,10 @@ export function buildBrandPromptBlock(profile: ArtistBrandProfile): string {
   const palette = c ? `primary ${c.primary}, secondary ${c.secondary}, accent ${c.accent}` : '';
   const mood = (profile.moodKeywords || []).join(', ');
   const motifs = (profile.motifs || []).slice(0, 3).join(', ');
+  const identityLock = profile.characterSheet?.identityLock?.trim();
   return [
     `BRAND DNA (keep visual identity consistent): ${profile.visualStyle}.`,
+    identityLock ? `ARTIST IDENTITY LOCK (the person must match this exactly — never alter face, build or signature look): ${identityLock}.` : '',
     palette ? `On-brand color grading — ${palette}.` : '',
     mood ? `Mood: ${mood}.` : '',
     motifs ? `Subtle signature motifs when natural (do not force, never as logos): ${motifs}.` : '',
@@ -723,5 +776,62 @@ export async function getBrandPromptContext(input: {
       promptBlock: '',
       referenceImages: input.fallbackArtistImage ? [input.fallbackArtistImage] : [],
     };
+  }
+}
+
+/**
+ * Persist a generated CHARACTER SHEET into the artist's brand profile.
+ * - Ensures the brand profile exists (idempotent).
+ * - Stores the full characterSheet block.
+ * - Appends the canonical view URLs into referenceImages.additional[] (deduped)
+ *   so every existing brand-bus consumer inherits the locked references.
+ * Safe: never throws (logs + returns false on failure).
+ */
+export async function saveCharacterSheetToBrandProfile(
+  input: {
+    artistId: number | string;
+    artistName?: string;
+    genre?: string;
+    bio?: string;
+    artistImageUrl?: string;
+    masterDesignUrl?: string;
+  },
+  sheet: BrandCharacterSheet,
+): Promise<boolean> {
+  try {
+    // Make sure a profile exists before we merge into it.
+    await getOrCreateBrandProfile({
+      artistId: input.artistId,
+      artistName: input.artistName || 'Artist',
+      genre: input.genre || 'editorial',
+      bio: input.bio,
+      artistImageUrl: input.artistImageUrl,
+      masterDesignUrl: input.masterDesignUrl,
+    });
+
+    const existing = await loadBrandProfile(input.artistId);
+    const prevAdditional = existing?.referenceImages?.additional || [];
+    const viewUrls = (sheet.views || []).map((v) => v.url).filter(Boolean);
+    const additional = Array.from(new Set([...viewUrls, ...prevAdditional])).slice(0, 12);
+
+    const { db: firestoreDb } = await import('../firebase');
+    if (!firestoreDb) return false;
+    await firestoreDb
+      .collection('artistBrandProfiles')
+      .doc(String(input.artistId))
+      .set(
+        {
+          characterSheet: sheet,
+          referenceImages: {
+            ...(existing?.referenceImages || {}),
+            additional,
+          },
+        },
+        { merge: true },
+      );
+    return true;
+  } catch (err: any) {
+    console.warn('[BrandProfile] saveCharacterSheetToBrandProfile failed:', err?.message || err);
+    return false;
   }
 }

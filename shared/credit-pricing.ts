@@ -127,6 +127,15 @@ export const OPERATION_COSTS = {
     provider: 'fal',
     model: 'bytedance/seedance-2.0/fast/reference-to-video',
   },
+  'video.seedance_2_mini': {
+    category: 'video_generation' as OperationCategory,
+    name: 'Video (Seedance 2.0 Mini ByteDance)',
+    internalCostUsd: 0.1440,
+    unit: 'per_second' as const,
+    description: 'ByteDance Seedance 2.0 Mini — economical reference-to-video, native synced audio, up to 15s ($0.1440/sec)',
+    provider: 'fal',
+    model: 'bytedance/seedance-2.0/mini/reference-to-video',
+  },
   'video.kling_o3': {
     category: 'video_generation' as OperationCategory,
     name: 'Video (Kling 3.0 O3)',

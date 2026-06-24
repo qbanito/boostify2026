@@ -102,6 +102,8 @@ export const FAL_MODELS = {
   KLING_V21_STANDARD_I2V: 'fal-ai/kling-video/v2.1/standard/image-to-video',
   // Seedance 2.0 Fast Reference-to-Video: performance musical rítmica con imagen + audio de referencia
   SEEDANCE_2_FAST_R2V: 'bytedance/seedance-2.0/fast/reference-to-video',
+  // Seedance 2.0 Mini Reference-to-Video: variante MÁS ECONÓMICA (misma lógica R2V, menor coste)
+  SEEDANCE_2_MINI_R2V: 'bytedance/seedance-2.0/mini/reference-to-video',
   // Happy Horse (Alibaba): Lipsync nativo multilingüe + audio sync, 1080p, 3-15s
   HAPPY_HORSE_I2V_LIPSYNC: 'alibaba/happy-horse/image-to-video',
   // Topaz Video Upscale: Upscale profesional del video final antes de exportar
@@ -5008,6 +5010,7 @@ export async function generateSeedanceFastReferenceVideo(params: {
   bpmFeel?: string;
   segmentType?: string;
   songTitle?: string;
+  modelPath?: string;
 }): Promise<SeedanceReferenceVideoResult> {
   if (!FAL_API_KEY) {
     return { success: false, error: 'FAL_API_KEY not configured' };
@@ -5016,8 +5019,10 @@ export async function generateSeedanceFastReferenceVideo(params: {
   try {
     const duration = Math.min(15, Math.max(4, params.duration || 5)) as 5 | 10 | 15;
     const clipStartSeconds = Math.max(0, params.clipStartSeconds || 0);
+    const seedanceModelPath = params.modelPath || FAL_MODELS.SEEDANCE_2_FAST_R2V;
+    const seedanceModelLabel = seedanceModelPath.includes('/mini/') ? 'Seedance 2.0 Mini' : 'Seedance 2.0 Fast';
 
-    logger.log(`[Seedance 2.0] Preparing 5s rhythmic singer clip | start=${clipStartSeconds}s`);
+    logger.log(`[${seedanceModelLabel}] Preparing ${duration}s rhythmic singer clip | start=${clipStartSeconds}s`);
     const falAudioUrl = await trimAndUploadAudioToFal(params.audioUrl, duration, clipStartSeconds);
     const falSceneImageUrl = await uploadUrlToFalStorage(params.imageUrl, 'seedance-scene-reference.jpg');
     const falIdentityImageUrl = params.identityImageUrl
@@ -5029,7 +5034,7 @@ export async function generateSeedanceFastReferenceVideo(params: {
     const prompt = buildSeedanceSingerPrompt({ ...params, hasIdentityReference: imageUrls.length > 1 });
 
     const submitRes = await axios.post(
-      `${FAL_QUEUE_URL}/${FAL_MODELS.SEEDANCE_2_FAST_R2V}`,
+      `${FAL_QUEUE_URL}/${seedanceModelPath}`,
       {
         prompt,
         image_urls: imageUrls,

@@ -18,6 +18,7 @@ const DEFAULT_SKIP_PREFIXES = [
   '/api/events/upload-media',
   '/api/music/generate',
   '/api/video/generate',
+  '/api/artist-generator',
   '/api/kits-ai',
   '/api/fashion',
   '/api/upload',

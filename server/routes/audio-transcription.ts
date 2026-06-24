@@ -13,14 +13,23 @@ const requireAuth = isAuthenticated;
 
 const openAiApiKey = process.env.OPENAI_API_KEY2 || process.env.OPENAI_API_KEY || '';
 
+// FAL key resolution. The deploy (Render) frequently sets FAL_API_KEY instead
+// of FAL_KEY, so resolve the same way the rest of the codebase does. We also
+// keep a backup key (FAL_KEY_BACKUP) so we can retry when the primary FAL
+// account runs out of balance (403 "Exhausted balance").
+const FAL_PRIMARY_KEY = process.env.FAL_KEY || process.env.FAL_AI_KEY || process.env.FAL_API_KEY || '';
+const FAL_BACKUP_KEY = process.env.FAL_KEY_BACKUP || '';
+const FAL_KEYS: string[] = Array.from(new Set([FAL_PRIMARY_KEY, FAL_BACKUP_KEY].filter(Boolean)));
+const HAS_FAL = FAL_KEYS.length > 0;
+
 const openai = createTrackedOpenAI({
   apiKey: openAiApiKey
 });
 
 // Configurar FAL como fallback
-if (process.env.FAL_KEY) {
+if (FAL_PRIMARY_KEY) {
   fal.config({
-    credentials: process.env.FAL_KEY
+    credentials: FAL_PRIMARY_KEY
   });
 }
 
@@ -61,12 +70,12 @@ router.get('/test-connection', requireAuth, async (req: Request, res: Response) 
 router.get('/test-fal', requireAuth, async (req: Request, res: Response) => {
   try {
     console.log('🧪 Probando FAL...');
-    console.log('📋 FAL_KEY presente:', !!process.env.FAL_KEY);
+    console.log('📋 FAL key presente:', HAS_FAL, '| backup:', !!FAL_BACKUP_KEY);
     
-    if (!process.env.FAL_KEY) {
+    if (!HAS_FAL) {
       return res.status(500).json({
         success: false,
-        error: 'FAL_KEY no configurada',
+        error: 'FAL no configurada (FAL_KEY / FAL_API_KEY / FAL_AI_KEY)',
         fal_configured: false
       });
     }
@@ -133,13 +142,13 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
     console.log('🎤 Solicitud de transcripción recibida');
     console.log('👤 Usuario:', userId);
     console.log('📋 OpenAI API key configurada:', !!openAiApiKey);
-    console.log('📋 FAL key configurada:', !!process.env.FAL_KEY);
+    console.log('📋 FAL key configurada:', HAS_FAL, '| claves FAL disponibles:', FAL_KEYS.length);
     
-    if (!openAiApiKey && !process.env.FAL_KEY) {
+    if (!openAiApiKey && !HAS_FAL) {
       console.error('❌ Error: No hay provider de transcripción configurado (FAL/OpenAI)');
       return res.status(500).json({
         success: false,
-        error: 'No hay provider de transcripción configurado. Configura FAL_KEY o OPENAI_API_KEY2/OPENAI_API_KEY.'
+        error: 'No hay provider de transcripción configurado. Configura FAL_KEY/FAL_API_KEY o OPENAI_API_KEY2/OPENAI_API_KEY.'
       });
     }
 
@@ -209,8 +218,8 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
     // INTENTO 1: FAL primero (más rápido - 2x)
     console.log('🚀 Iniciando transcripción con FAL (fal-ai/wizper - el más rápido)...');
     
-    if (!process.env.FAL_KEY) {
-      console.warn('⚠️ FAL_KEY no configurada, saltando a OpenAI');
+    if (!HAS_FAL) {
+      console.warn('⚠️ FAL no configurada, saltando a OpenAI');
     } else {
       try {
         // FAL Wizper - Convertir archivo a buffer para envío directo
@@ -226,14 +235,31 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
         else if (fileExtension === '.flac') mimeType = 'audio/flac';
         else if (fileExtension === '.ogg') mimeType = 'audio/ogg';
         
-        const falResult = await fal.subscribe('fal-ai/wizper', {
-          input: {
-            audio_url: `data:${mimeType};base64,${audioBase64}`,
-            task: 'transcribe'
-            // Language auto-detected by Wizper for multilingual support
-          },
-          logs: true
-        });
+        // Intentar Wizper con cada clave FAL (primaria → backup). Así, si la
+        // cuenta primaria está sin saldo (403 "Exhausted balance"), reintentamos
+        // automáticamente con la clave de respaldo antes de caer a OpenAI.
+        let falResult: any = null;
+        let wizperErr: any = null;
+        for (let i = 0; i < FAL_KEYS.length; i++) {
+          try {
+            fal.config({ credentials: FAL_KEYS[i] });
+            console.log(`🚀 FAL Wizper con clave ${i + 1}/${FAL_KEYS.length}...`);
+            falResult = await fal.subscribe('fal-ai/wizper', {
+              input: {
+                audio_url: `data:${mimeType};base64,${audioBase64}`,
+                task: 'transcribe'
+                // Language auto-detected by Wizper for multilingual support
+              },
+              logs: true
+            });
+            wizperErr = null;
+            break;
+          } catch (keyErr: any) {
+            wizperErr = keyErr;
+            console.error(`❌ FAL Wizper falló con clave ${i + 1}/${FAL_KEYS.length}: ${keyErr.message}`);
+          }
+        }
+        if (!falResult) throw wizperErr || new Error('FAL Wizper failed for all keys');
 
         console.log('✅ Transcripción FAL exitosa');
         console.log('📝 LETRA DE LA CANCIÓN (primeros 500 caracteres):');
@@ -357,7 +383,7 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
         success: false,
         error: 'FAL falló y OpenAI no está configurado para fallback.',
         providers: {
-          fal: process.env.FAL_KEY ? 'failed' : 'not configured',
+          fal: HAS_FAL ? 'failed' : 'not configured',
           openai: 'not configured'
         }
       });
@@ -454,7 +480,7 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Determinar el estado de los providers basado en el error
-    const falStatus = !process.env.FAL_KEY ? 'not configured' : 
+    const falStatus = !HAS_FAL ? 'not configured' : 
                       (errorMessage.includes('FAL') ? 'failed' : 'skipped');
     const openaiStatus = errorMessage.includes('413') || errorMessage.includes('exceeded') 
                         ? 'file too large (max 25MB for OpenAI)' 

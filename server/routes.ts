@@ -151,6 +151,7 @@ import apifyInstagramRouter from './routes/apify-instagram'; // Import Apify Ins
 import viralProductsRouter from './routes/viral-products'; // Import Viral Product Content Generator (TikTok Shop + FAL AI)
 import influencerBrandsRouter from './routes/influencer-brands'; // Import Influencer Brand Collaborations (Artist × Brand Content)
 import businessPlanRouter from './routes/business-plan'; // Import Artist Business Plan (financial planning, pitch deck, roadmap)
+import investorRoomRouter from './routes/investor-room'; // Interactive pitch-deck investor agent + feedback capture
 import fashionStudioRouter from './routes/fashion-studio'; // Import Artist Fashion Studio (FAL + Gemini)
 import myUniverseRouter from './routes/my-universe'; // My Universe — artist discography landing page
 import financialImagesRouter from './routes/financial-images'; // Financial Enablement marketing images (OpenAI gpt-image-1)
@@ -758,6 +759,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/influencer', influencerBrandsRouter); // Influencer Brand Collaborations (Artist × Brand Content)
   app.use('/api/artist-modules', artistModulesStatusRouter); // Unified health snapshot for the 6 artist modules
   app.use('/api/business-plan', businessPlanRouter); // Artist Business Plan (financial planning, pitch deck, roadmap)
+  app.use('/api/investor-room', investorRoomRouter); // Interactive pitch-deck investor agent + feedback capture
 
   // ── Economic Engine (Layer 3 — Hidden Motor) ──
   const economicEngineRouter = (await import('./routes/economic-engine')).default;
@@ -861,6 +863,16 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Lyrics Video — Remotion 16:9 karaoke video generator + YouTube upload
   app.use('/api/lyrics-video', lyricsVideoRouter);
   console.log('🎬 Lyrics Video module registered at /api/lyrics-video');
+
+  // YouTube Shopping — product feed (Google Merchant Center / RSS) para vender merch en YouTube
+  const youtubeShoppingRouter = (await import('./routes/youtube-shopping')).default;
+  app.use('/api/youtube-shopping', youtubeShoppingRouter);
+  console.log('🛍️ YouTube Shopping feed registered at /api/youtube-shopping/feed/:artistId.xml');
+
+  // Google Merchant Center — OAuth + Content API sync (sube los productos automáticamente)
+  const merchantRouter = (await import('./routes/merchant')).default;
+  app.use('/api/merchant', merchantRouter);
+  console.log('🟢 Google Merchant Center registered at /api/merchant (connect/sync/status)');
 
   // Vinyl Pre-Order Module — Diggers Factory integration
   const vinylRouter = (await import('./routes/vinyl')).default;

@@ -141,7 +141,7 @@ interface PromoClipsProps {
 }
 
 type Step = 'select' | 'analyze' | 'direction' | 'image' | 'video' | 'captions' | 'export';
-type LipsyncMode = 'omnihuman' | 'seedance-fast-r2v' | 'kling-v21-standard-sync3' | 'kling-v3-standard-sync3' | 'kling-v3-pro-sync3' | 'pixverse-v6' | 'pixverse-sora-2' | 'pixverse-veo-3.1-fast';
+type LipsyncMode = 'omnihuman' | 'seedance-fast-r2v' | 'seedance-mini-r2v' | 'kling-v21-standard-sync3' | 'kling-v3-standard-sync3' | 'kling-v3-pro-sync3' | 'pixverse-v6' | 'pixverse-sora-2' | 'pixverse-veo-3.1-fast';
 type ClipDuration = 15 | 30 | 60;
 type Platform = 'tiktok' | 'instagram_reels' | 'youtube_shorts';
 type AudioClipLock = { audioUrl?: string; clipStartSeconds?: number; duration?: number };
@@ -267,6 +267,10 @@ interface NarrativeSceneImageJob {
 const KLING_SYNC3_MODES = ['kling-v21-standard-sync3', 'kling-v3-standard-sync3', 'kling-v3-pro-sync3', 'kling+sync3'];
 const isKlingSync3Mode = (mode?: string) => KLING_SYNC3_MODES.includes(mode || '');
 
+// Seedance reference-to-video (Fast + Mini económico). Ambos pasan por el mismo chain Seedance→Sync-3.
+const SEEDANCE_R2V_MODES = ['seedance-fast-r2v', 'seedance-mini-r2v'];
+const isSeedanceR2vMode = (mode?: string) => SEEDANCE_R2V_MODES.includes(mode || '');
+
 const PIXVERSE_MODES: LipsyncMode[] = ['pixverse-v6', 'pixverse-sora-2', 'pixverse-veo-3.1-fast'];
 const isPixVerseMode = (mode?: string): boolean => PIXVERSE_MODES.includes(mode as LipsyncMode);
 
@@ -274,6 +278,7 @@ const BROLL_MODEL_OPTIONS: LipsyncMode[] = ['kling-v21-standard-sync3', 'kling-v
 const LIPSYNC_COST_5S: Record<LipsyncMode, number> = {
   omnihuman: 0.75,
   'seedance-fast-r2v': 1.88,
+  'seedance-mini-r2v': 1.12,
   'kling-v21-standard-sync3': 0.95,
   'kling-v3-standard-sync3': 1.09,
   'kling-v3-pro-sync3': 1.23,
@@ -325,6 +330,16 @@ const LIPSYNC_MODE_INFO: Record<LipsyncMode, { label: string; shortLabel: string
     accent: '#14b8a6',
     cost5s: '$1.88/5s',
     cost30s: '$11.26/30s',
+  },
+  'seedance-mini-r2v': {
+    label: 'Seedance Mini + Sync-3',
+    shortLabel: 'Eco',
+    generateLabel: 'Generar Video Economico (Seedance Mini + Sync-3) ->',
+    pollingLabel: 'Seedance 2.0 Mini generando performance economica...',
+    description: 'Misma performance ritmica con Sync-3, en la variante Seedance Mini mas barata para economizar',
+    accent: '#10b981',
+    cost5s: '$1.12/5s',
+    cost30s: '$6.72/30s',
   },
   'kling-v21-standard-sync3': {
     label: 'Kling v2.1 Standard + Sync-3',
@@ -530,6 +545,8 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
   // Polling refs
   const imagePollRef = useRef<NodeJS.Timeout | null>(null);
   const videoPollRef = useRef<NodeJS.Timeout | null>(null);
+  // Evita guardar dos veces el mismo video en la coleccion 'videos'
+  const savedVideoUrlRef = useRef<string | null>(null);
   const imagePollCount = useRef(0);
   // Ref to hold the latest autoSave fn â€” avoids circular dependency in startImagePolling
   const autoSaveRef = useRef<(overrides?: any) => void>(() => {});
@@ -908,8 +925,8 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
           endpoint,
           statusUrl,
           resultUrl,
-          deferSave: mode === 'seedance-fast-r2v' || isKlingSync3Mode(mode),
-          ...(mode === 'seedance-fast-r2v' ? seedanceLock : {}),
+          deferSave: isSeedanceR2vMode(mode) || isKlingSync3Mode(mode),
+          ...(isSeedanceR2vMode(mode) ? seedanceLock : {}),
         });
         consecutiveErrors = 0; // reset on success
         // Update queue info
@@ -1069,8 +1086,24 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         const list = await apiRequest('GET', `/api/promo-clips/${artistId}/jobs`);
         if (list.success) setSavedJobs(list.jobs || []);
       }
+      // Para los modos Seedance el servidor difiere el guardado (deferSave), por lo que el video
+      // nunca llega a la coleccion 'videos' (que alimenta la seccion de Videos). Lo guardamos aqui.
+      // OmniHuman y Kling+Sync-3 ya los guarda el backend en poll-fal, asi que solo cubrimos Seedance.
+      if (vid && vid !== savedVideoUrlRef.current && isSeedanceR2vMode(lipsyncMode)) {
+        savedVideoUrlRef.current = vid;
+        try {
+          await apiRequest('POST', `/api/promo-clips/${artistId}/save-to-videos`, {
+            videoUrl: vid,
+            songName: selectedSong?.name || selectedSong?.title || 'Promo Clip',
+            songId: selectedSong?.id,
+            imageUrl: selImg || selectedImageUrl || '',
+            artistName: artistName || '',
+            mode: lipsyncMode,
+          });
+        } catch (_) { /* silent: el job ya quedo guardado */ }
+      }
     } catch (_) { /* silent */ }
-  }, [artistId, selectedSong, direction, analysis, generatedImages, selectedImageUrl, generatedVideoUrl, captions, lipsyncMode]);
+  }, [artistId, selectedSong, direction, analysis, generatedImages, selectedImageUrl, generatedVideoUrl, captions, lipsyncMode, artistName]);
 
   // Keep autoSaveRef in sync so startImagePolling can call autoSave without a circular dep
   useEffect(() => { autoSaveRef.current = autoSave; }, [autoSave]);
@@ -2045,9 +2078,10 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
             {/* Lipsync engine */}
             <div>
               <label className="text-[11px] font-bold uppercase tracking-wider text-white/35 block mb-2">Lipsync Engine</label>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5">
                 {([
                   { mode: 'omnihuman' as LipsyncMode, label: 'Fast', color: accent },
+                  { mode: 'seedance-mini-r2v' as LipsyncMode, label: 'Eco', color: '#10b981' },
                   { mode: 'seedance-fast-r2v' as LipsyncMode, label: 'Rhythm', color: '#14b8a6' },
                   { mode: 'kling-v21-standard-sync3' as LipsyncMode, label: 'Test', color: '#22c55e' },
                   { mode: 'kling-v3-standard-sync3' as LipsyncMode, label: 'Balance', color: '#f59e0b' },
@@ -2055,7 +2089,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 ]).map(({ mode, label, color }) => (
                   <button key={mode} onClick={() => setLipsyncMode(mode)}
                     className="py-2 text-xs rounded-xl font-bold transition-all"
-                    style={{ background: lipsyncMode === mode ? color : 'rgba(255,255,255,0.05)', color: lipsyncMode === mode ? '#fff' : 'rgba(255,255,255,0.5)', border: `1px solid ${lipsyncMode === mode ? color : 'transparent'}`, gridColumn: mode === 'kling-v3-pro-sync3' ? 'span 2 / span 2' : undefined }}>
+                    style={{ background: lipsyncMode === mode ? color : 'rgba(255,255,255,0.05)', color: lipsyncMode === mode ? '#fff' : 'rgba(255,255,255,0.5)', border: `1px solid ${lipsyncMode === mode ? color : 'transparent'}` }}>
                     {label}
                   </button>
                 ))}

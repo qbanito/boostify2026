@@ -417,6 +417,10 @@ export const artistWallet = pgTable("artist_wallet", {
   totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default('0').notNull(), // Total ganado histórico
   totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).default('0').notNull(), // Total gastado
   currency: text("currency").default("usd").notNull(),
+  payoutMethod: text("payout_method"), // paypal | bank | wise | stripe
+  payoutAccount: text("payout_account"), // email / IBAN / account ref
+  payoutDetails: json("payout_details").$type<Record<string, any>>(),
+  totalPaidOut: decimal("total_paid_out", { precision: 10, scale: 2 }).default('0').notNull(), // Total ya retirado
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
@@ -453,7 +457,27 @@ export const walletTransactions = pgTable("wallet_transactions", {
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
-// Artist Access Unlocks - Fan pays-what-you-want ($5 min) to unlock an artist's full catalog
+// Artist Payouts - Unified payout requests + ledger (artist withdraws wallet balance)
+export const artistPayouts = pgTable("artist_payouts", {
+  id: serial("id").primaryKey(),
+  artistId: integer("artist_id").references(() => users.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("usd").notNull(),
+  method: text("method"), // paypal | bank | wise | stripe
+  account: text("account"),
+  status: text("status", { enum: ["requested", "approved", "paid", "rejected"] }).default("requested").notNull(),
+  reference: text("reference"), // payout tx id / receipt
+  notes: text("notes"),
+  requestedBy: integer("requested_by").references(() => users.id),
+  processedBy: integer("processed_by").references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  processedAt: timestamp("processed_at"),
+  paidAt: timestamp("paid_at"),
+}, (table) => [
+  index("idx_artist_payouts_artist").on(table.artistId),
+  index("idx_artist_payouts_status").on(table.status),
+]);
+
 export const artistAccessUnlocks = pgTable("artist_access_unlocks", {
   id: serial("id").primaryKey(),
   artistId: integer("artist_id").references(() => users.id).notNull(), // artista cuyo catálogo se desbloquea
@@ -12058,3 +12082,34 @@ export const legalAuditLog = pgTable("legal_audit_log", {
 ]);
 export type InsertLegalAuditLog = typeof legalAuditLog.$inferInsert;
 export type SelectLegalAuditLog = typeof legalAuditLog.$inferSelect;
+
+// ─── Investor Room — interactive pitch-deck agent + feedback capture ─────────
+/**
+ * Investor Feedback — captures an investor's points of view shared through the
+ * interactive pitch-deck agent. On submit we email the owner a copy and send the
+ * investor a professional acknowledgement.
+ */
+export const investorFeedback = pgTable("investor_feedback", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  company: text("company"),
+  investorType: text("investor_type", {
+    enum: ["individual", "corporate", "institutional", "other"],
+  }).default("individual"),
+  interestLevel: text("interest_level", {
+    enum: ["low", "medium", "high"],
+  }).default("medium"),
+  viewpoints: text("viewpoints").notNull(),
+  chatTranscript: jsonb("chat_transcript"),
+  emailedOwner: boolean("emailed_owner").default(false),
+  emailedInvestor: boolean("emailed_investor").default(false),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_investor_feedback_email").on(table.email),
+  index("idx_investor_feedback_created").on(table.createdAt),
+]);
+export type InsertInvestorFeedback = typeof investorFeedback.$inferInsert;
+export type SelectInvestorFeedback = typeof investorFeedback.$inferSelect;

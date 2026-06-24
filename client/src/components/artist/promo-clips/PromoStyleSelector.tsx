@@ -1,6 +1,8 @@
 /**
  * PromoStyleSelector
- * 10 cinematic visual styles with AI-generated preview images (fal.ai flux kontext pro)
+ * Cinematic visual styles with AI-generated preview images (fal.ai flux kontext pro).
+ * Includes a featured set of "studio singing" styles (artist singing into a vintage
+ * ribbon microphone) for the per-song vertical promo shorts, plus general cinematic styles.
  * Each card shows: style name, mood description, and a generated preview from the artist's photo
  */
 
@@ -22,6 +24,110 @@ export interface VisualStyle {
 }
 
 export const VISUAL_STYLES: VisualStyle[] = [
+  // ─────────────────────────────────────────────────────────────
+  // 🎙️ STUDIO SINGING STYLES — el artista cantando frente a un
+  // micrófono de cinta vintage. Pensados para los promo-shorts
+  // verticales "el artista canta un trozo de la canción" (YouTube Shorts).
+  // ─────────────────────────────────────────────────────────────
+  {
+    id: 'studio-classic-crooner',
+    name: 'Crooner Clásico',
+    mood: 'Elegante, atemporal, terciopelo',
+    keyword: 'crooner',
+    promptSuffix: 'wearing a sharp black tuxedo with a bow tie, singing with eyes half-closed into a vintage silver ribbon microphone on a chrome stand, warm tungsten lamp-lit recording studio, soft amber key light, Sinatra-era film-noir session, classy timeless crooner atmosphere, cinematic vertical portrait, photorealistic',
+    colorHints: ['#140a02', '#3a2207', '#d9b96a'],
+    icon: '🎙️',
+    accent: '#d9b96a',
+    bg: 'linear-gradient(135deg, #140a02, #2e1c06)',
+  },
+  {
+    id: 'studio-cozy-hoodie',
+    name: 'Sesión Íntima',
+    mood: 'Cercano, cálido, lo-fi acústico',
+    keyword: 'cozy',
+    promptSuffix: 'wearing a cozy cream beige hoodie, singing softly into a vintage ribbon microphone with a foam pop filter, intimate retro home studio with vintage radios and warm glowing lamps, relaxed lo-fi acoustic session, warm cozy lighting, gentle bokeh of studio gear, cinematic vertical portrait, photorealistic',
+    colorHints: ['#1a120a', '#3d2e1a', '#e8c79a'],
+    icon: '🎧',
+    accent: '#e8c79a',
+    bg: 'linear-gradient(135deg, #1a120a, #2e2114)',
+  },
+  {
+    id: 'studio-red-leather',
+    name: 'Fuego Rojo',
+    mood: 'Rock, intenso, dramático',
+    keyword: 'red',
+    promptSuffix: 'wearing a black leather jacket, singing passionately into a vintage ribbon microphone, dramatic deep red neon lighting, smoky atmospheric rock recording booth, high-contrast crimson rim light, edgy moody intensity, cinematic vertical portrait, photorealistic',
+    colorHints: ['#1a0303', '#5c0a0a', '#ff3b3b'],
+    icon: '🔥',
+    accent: '#ff3b3b',
+    bg: 'linear-gradient(135deg, #1a0303, #3a0808)',
+  },
+  {
+    id: 'studio-glam-sequin',
+    name: 'Glam Reflector',
+    mood: 'Showbiz, brillo, espectáculo',
+    keyword: 'glam',
+    promptSuffix: 'wearing a black sequined jacket with gold chains, singing into a golden vintage ribbon microphone, backdrop of film reels and old Hollywood studio decor, glamorous showbiz lighting with sparkle and shimmer, retro glam spotlight, cinematic vertical portrait, photorealistic',
+    colorHints: ['#120d02', '#3d2e0a', '#f2cd5a'],
+    icon: '✨',
+    accent: '#f2cd5a',
+    bg: 'linear-gradient(135deg, #120d02, #2e2208)',
+  },
+  {
+    id: 'studio-soul-raw',
+    name: 'Soul Crudo',
+    mood: 'Emotivo, R&B, luz de ventana',
+    keyword: 'soul',
+    promptSuffix: 'wearing a black sleeveless top with a single gold chain, singing soulfully into a vintage ribbon microphone, warm natural window light streaming across the studio, intimate raw emotional R&B session, golden-hour interior glow, cinematic vertical portrait, photorealistic',
+    colorHints: ['#160d05', '#43260f', '#f0a64f'],
+    icon: '🎵',
+    accent: '#f0a64f',
+    bg: 'linear-gradient(135deg, #160d05, #33200f)',
+  },
+  {
+    id: 'studio-control-room',
+    name: 'Sala de Control',
+    mood: 'Sofisticado, productor, pro',
+    keyword: 'studio',
+    promptSuffix: 'wearing a black blazer and turtleneck, singing into a vintage ribbon microphone, professional mixing console and studio monitors glowing in the background, sophisticated producer-artist control-room session, cool balanced studio lighting, cinematic vertical portrait, photorealistic',
+    colorHints: ['#060a0f', '#16242e', '#7fd0e8'],
+    icon: '🎚️',
+    accent: '#7fd0e8',
+    bg: 'linear-gradient(135deg, #060a0f, #12202e)',
+  },
+  {
+    id: 'studio-white-elegance',
+    name: 'Elegancia Blanca',
+    mood: 'Refinado, clase, soul-singer',
+    keyword: 'white',
+    promptSuffix: 'wearing a sharp elegant white suit, singing into a vintage ribbon microphone, warm luxurious recording studio with soft golden lighting, refined classy soul-singer presence, clean bright editorial glow, cinematic vertical portrait, photorealistic',
+    colorHints: ['#1f1a12', '#4a3f2c', '#f5ead0'],
+    icon: '🤍',
+    accent: '#f5ead0',
+    bg: 'linear-gradient(135deg, #1f1a12, #332b1e)',
+  },
+  {
+    id: 'studio-denim-songwriter',
+    name: 'Cantautor Denim',
+    mood: 'Orgánico, unplugged, sincero',
+    keyword: 'denim',
+    promptSuffix: 'wearing a denim jacket, singing heartfeltly into a vintage ribbon microphone, warm acoustic studio with wood textures and soft lamps, intimate singer-songwriter unplugged session, natural warm light, organic honest mood, cinematic vertical portrait, photorealistic',
+    colorHints: ['#0d1018', '#27384f', '#cf9b63'],
+    icon: '🎸',
+    accent: '#cf9b63',
+    bg: 'linear-gradient(135deg, #0d1018, #1d2a3a)',
+  },
+  {
+    id: 'studio-smoke-glitter',
+    name: 'Humo y Brillo',
+    mood: 'Cinematográfico, moody, final',
+    keyword: 'smoke',
+    promptSuffix: 'wearing a glittery black jacket, singing into a vintage ribbon microphone, smoky atmospheric stage with hazy beams of light, moody cinematic finale performance, dramatic spotlight cutting through the fog, glamorous dark ambiance, cinematic vertical portrait, photorealistic',
+    colorHints: ['#0a0a0d', '#1c1c26', '#b9a6e0'],
+    icon: '🌫️',
+    accent: '#b9a6e0',
+    bg: 'linear-gradient(135deg, #0a0a0d, #18181f)',
+  },
   {
     id: 'cinematic-noir',
     name: 'Cinematic Noir',

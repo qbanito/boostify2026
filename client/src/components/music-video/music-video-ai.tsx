@@ -2257,7 +2257,28 @@ export function MusicVideoAI({
         const authToken = await getToken();
         logger.info('🔐 Token de autenticación obtenido:', !!authToken);
         
-        const transcriptionText = await transcribeAudio(selectedFile, authToken);
+        // 🔁 RESILIENCIA: la transcripción puede fallar de forma transitoria
+        // (FAL sin saldo momentáneo, hipo de red, Whisper ocupado). Reintentamos
+        // automáticamente una vez antes de devolver al usuario al director.
+        let transcriptionText = '';
+        let transcribeErr: any = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            if (attempt > 1) {
+              setProgressMessage("🎵 Reintentando análisis de la letra...");
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+            transcriptionText = await transcribeAudio(selectedFile, authToken);
+            transcribeErr = null;
+            break;
+          } catch (e) {
+            transcribeErr = e;
+            logger.warn(`⚠️ Transcripción intento ${attempt}/2 falló:`, e);
+          }
+        }
+        if (transcribeErr || !transcriptionText) {
+          throw transcribeErr || new Error('Transcription was not generated correctly');
+        }
         logger.info('✅ Transcripción completada, length:', transcriptionText.length, 'characters');
         logger.info('📝 LETRA DE LA CANCIÓN (primeros 500 caracteres):');
         logger.info('═'.repeat(60));
@@ -2334,16 +2355,22 @@ export function MusicVideoAI({
       } catch (err) {
         logger.error("❌ Error transcribing audio:", err);
         clearInterval(progressInterval);
+        const rawMsg = err instanceof Error ? err.message : "Error al transcribir el audio";
+        // Mensaje accionable: la causa casi siempre es el proveedor de
+        // transcripción (saldo FAL / límite OpenAI / conexión), no un fallo del
+        // workflow. Conservamos el director ya elegido para que reintentar sea
+        // un solo clic y no se sienta como "volver atrás".
         toast({
-          title: "Error de transcripción",
-          description: err instanceof Error ? err.message : "Error al transcribir el audio",
+          title: "No se pudo analizar la letra",
+          description: `${rawMsg}. Tu director quedó seleccionado — pulsa de nuevo para reintentar, o prueba con otro archivo de audio.`,
           variant: "destructive",
         });
         setIsTranscribing(false);
         setShowProgress(false);
         setProgressPercentage(0);
         setProgressMessage("");
-        // Volver al modal de selección
+        // Reabrir el selector de director como punto de reintento (el director
+        // sigue guardado en videoStyle.selectedDirector).
         setShowDirectorSelection(true);
       }
     } else if (transcription) {

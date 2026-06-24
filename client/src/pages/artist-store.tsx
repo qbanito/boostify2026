@@ -464,6 +464,21 @@ export default function ArtistStorePage() {
     staleTime: 10 * 60 * 1000,
   });
 
+  // Tema visual premium de la tienda: usa la paleta de marca del artista,
+  // con degradado boostify como fallback. Centraliza el acento de toda la página.
+  const storeTheme = useMemo(() => {
+    const primary = brandColors?.primary || '#ff7b00';
+    const secondary = brandColors?.secondary || '#ff2d95';
+    const accent = brandColors?.accent || '#7c5cff';
+    return {
+      primary,
+      secondary,
+      accent,
+      gradient: `linear-gradient(90deg, ${primary}, ${secondary}, ${accent})`,
+      gradientSoft: `linear-gradient(135deg, ${primary}22, ${secondary}11, ${accent}22)`,
+    };
+  }, [brandColors]);
+
   // Avatar 3D del artista (si existe) para colocarlo dentro de la boutique 3D
   const { data: avatar3D } = useQuery<{ glbUrl?: string; animatedGlbUrl?: string; animatedUrl?: string; animatedFormat?: string } | null>({
     queryKey: ['artist-avatar-3d', artistPgId],
@@ -705,15 +720,45 @@ export default function ArtistStorePage() {
 
   return (
     <div className="min-h-screen bg-black">
+      <style>{`
+        @keyframes storeLoaderSpin { to { transform: rotate(360deg); } }
+        @keyframes storeLoaderSpinRev { to { transform: rotate(-360deg); } }
+        @keyframes storePortalHalo { 0%,100% { opacity: 0.35; } 50% { opacity: 0.85; } }
+        .store-loader-ring { animation: storeLoaderSpin 1.1s linear infinite; }
+        .store-loader-ring-rev { animation: storeLoaderSpinRev 1.6s linear infinite; }
+        .store-portal-halo { animation: storePortalHalo 2.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .store-loader-ring, .store-loader-ring-rev, .store-portal-halo { animation: none !important; }
+        }
+      `}</style>
       {/* ═══ EXPERIENCIA VIRTUAL 3D ═══ */}
       {show3D && (
         <div className="fixed inset-0 z-[100] bg-black">
           <Suspense
             fallback={
-              <div className="flex h-full w-full items-center justify-center">
-                <div className="text-center">
-                  <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-orange-500" />
-                  <p className="text-sm text-white/60">Building {artist.name}'s 3D universe…</p>
+              <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black">
+                {/* aura de marca */}
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-50"
+                  style={{ background: `radial-gradient(circle at 50% 45%, ${storeTheme.secondary}33, transparent 60%)` }}
+                />
+                <div className="relative text-center">
+                  <div className="relative mx-auto mb-5 h-20 w-20">
+                    {/* anillo orbital */}
+                    <span
+                      className="store-loader-ring absolute inset-0 rounded-full motion-reduce:animate-none"
+                      style={{ border: '2px solid transparent', borderTopColor: storeTheme.primary, borderRightColor: storeTheme.secondary }}
+                    />
+                    <span
+                      className="store-loader-ring-rev absolute inset-1.5 rounded-full motion-reduce:animate-none"
+                      style={{ border: '2px solid transparent', borderBottomColor: storeTheme.accent }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Box className="h-6 w-6 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold tracking-wide text-white">Building {artist.name}'s 3D universe…</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.3em] text-white/40">Immersive boutique</p>
                 </div>
               </div>
             }
@@ -738,12 +783,20 @@ export default function ArtistStorePage() {
           </Suspense>
           <button
             onClick={() => setShow3D(false)}
-            className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur-md transition-colors hover:bg-white/20"
+            className="absolute right-4 top-4 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white outline-none backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/70"
+            aria-label="Exit 3D experience"
           >
             <X className="h-4 w-4" /> Exit 3D
           </button>
-          <div className="absolute left-4 top-4 z-10 rounded-full border border-orange-500/30 bg-black/50 px-3 py-1.5 text-xs font-semibold text-orange-400 backdrop-blur-md">
-            <Sparkles className="mr-1 inline h-3 w-3" />
+          <div
+            className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold backdrop-blur-md"
+            style={{
+              borderColor: `${storeTheme.primary}55`,
+              background: 'rgba(0,0,0,0.5)',
+              color: storeTheme.primary,
+            }}
+          >
+            <Sparkles className="h-3 w-3" />
             {artist.name} · 3D STORE
           </div>
         </div>
@@ -808,16 +861,29 @@ export default function ArtistStorePage() {
             </div>
 
             {products3D.length > 0 && (
-              <button
+              <motion.button
                 onClick={() => setShow3D(true)}
-                className="group relative mt-5 inline-flex items-center gap-2 overflow-hidden rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-purple-500/30 transition-transform hover:scale-105"
-                style={{ background: 'linear-gradient(90deg,#ff7b00,#ff2d95,#7c5cff)' }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                className="store-portal-cta motion-reduce:transform-none group relative mt-5 inline-flex cursor-pointer items-center gap-2.5 overflow-hidden rounded-full px-6 py-3 text-sm font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                style={{
+                  background: storeTheme.gradient,
+                  boxShadow: `0 12px 40px -8px ${storeTheme.secondary}88, inset 0 1px 0 0 #ffffff33`,
+                }}
+                aria-label={`Enter the immersive 3D store of ${artist.name}`}
               >
-                <span className="absolute inset-0 -translate-x-full bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
-                <Box className="w-4 h-4" />
-                Enter 3D Experience
-                <Sparkles className="w-3.5 h-3.5" />
-              </button>
+                {/* brillo barrido */}
+                <span className="store-portal-shine pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-700 group-hover:translate-x-full motion-reduce:hidden" />
+                {/* halo pulsante */}
+                <span
+                  className="store-portal-halo pointer-events-none absolute -inset-px rounded-full opacity-60 motion-reduce:hidden"
+                  style={{ boxShadow: `0 0 0 1px ${storeTheme.accent}55` }}
+                />
+                <Box className="relative h-4 w-4" />
+                <span className="relative tracking-wide">Enter 3D Experience</span>
+                <Sparkles className="relative h-3.5 w-3.5 opacity-90 transition-transform duration-500 group-hover:rotate-90" />
+              </motion.button>
             )}
           </div>
         </div>

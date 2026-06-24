@@ -74,6 +74,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { apiRequest } from "@/lib/queryClient";
 import { DynamicOfferTerms } from "../components/investors/dynamic-offer-terms";
+import { InvestorRoomModal } from "../components/investors/InvestorRoomModal";
 import { getLiveOfferTerms, snapshotOfferTerms, fmtUsdMillions } from "../lib/investor-offer";
 
 // ─── Professional images generated with fal.ai flux-pro/kontext ────────────
@@ -748,6 +749,7 @@ function UserGrowthSimulator() {
 function PitchDeck({ setSelectedTab }: { setSelectedTab: (tab: string) => void }) {
   const [activeSlide, setActiveSlide] = useState(0);
   const { toast } = useToast();
+  const [investorRoomOpen, setInvestorRoomOpen] = useState(false);
 
   // Current (stepped) offer terms — used in static prose & summary. The animated
   // ticking cards are isolated in <DynamicOfferTerms /> so the whole deck doesn't
@@ -1869,6 +1871,15 @@ with financial advisors before investing.
             <Button 
               variant="outline" 
               size="lg" 
+              onClick={() => setInvestorRoomOpen(true)}
+              className="w-full sm:w-auto border-purple-500/50 text-purple-200 hover:bg-purple-500/10 sm:px-8"
+            >
+              <Bot className="mr-2 h-5 w-5" />
+              Talk to Investor Agent
+            </Button>
+            <Button 
+              variant="outline" 
+              size="lg" 
               onClick={handleDownloadPDF}
               className="w-full sm:w-auto border-orange-500/50 text-orange-300 hover:bg-orange-500/10 sm:px-8"
             >
@@ -1883,6 +1894,7 @@ with financial advisors before investing.
           </p>
         </div>
       </Card>
+      <InvestorRoomModal open={investorRoomOpen} onOpenChange={setInvestorRoomOpen} />
     </div>
   );
 }

@@ -36,9 +36,19 @@ const execFileAsync = promisify(execFile);
 async function downloadAndCompressForWhisper(
   audioUrl: string,
 ): Promise<{ filePath: string; cleanup: () => void }> {
-  const response = await fetch(audioUrl);
-  if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(audioUrl);
+  } catch (e) {
+    throw new Error(`Could not reach the audio URL (${(e as Error).message}). The link may be offline or blocked.`);
+  }
+  if (!response.ok) {
+    throw new Error(`Audio URL returned HTTP ${response.status} ${response.statusText}. The file may be missing or the link expired.`);
+  }
   const inputBuffer = Buffer.from(await response.arrayBuffer());
+  if (inputBuffer.length === 0) {
+    throw new Error('Downloaded audio is empty (0 bytes). Re-upload the song or check the audio URL.');
+  }
 
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const rawPath = path.join(os.tmpdir(), `whisper-src-${stamp}`);
@@ -267,8 +277,12 @@ export async function transcribeWithWords(audioUrl: string): Promise<WordTranscr
       cleanup();
     }
   } catch (error) {
+    const msg = (error as Error)?.message || String(error);
     console.error('❌ [WhisperAgent] Word transcription error:', error);
-    return null;
+    // Re-throw with a descriptive reason so the caller can surface WHY it
+    // failed (bad URL, empty file, unsupported format, Whisper rejection…)
+    // instead of a generic "Transcription failed".
+    throw new Error(msg);
   }
 }
 

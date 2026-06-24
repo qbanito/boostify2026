@@ -6,7 +6,7 @@ import {
   Music, Mic, Play, Pause, Download, Upload, Youtube,
   Loader2, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft,
   Sparkles, Settings, Eye, RefreshCw, X, Wand2, Palette,
-  Image as ImageIcon, Trash2, TrendingUp,
+  Image as ImageIcon, Trash2, TrendingUp, ShoppingBag,
 } from 'lucide-react';
 import { LyricsVideoComposition } from '../../../../remotion/LyricsVideoComposition';
 import type { LyricsVideoProps, LyricsSegment } from '../../../../remotion/LyricsVideoComposition';
@@ -999,7 +999,7 @@ const SONG_STATUS_META: Record<AlbumSongEntry['status'], { label: string; cls: s
   failed: { label: 'Failed', cls: 'text-red-400' },
 };
 
-const AlbumAutopilot: React.FC<{ songs: Song[] }> = ({ songs }) => {
+const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs, artistId }) => {
   const [albumId, setAlbumId] = useState<number | null>(null);
   const [autoUpload, setAutoUpload] = useState(true);
   const [privacy, setPrivacy] = useState<'public' | 'unlisted' | 'private'>('public');
@@ -1048,6 +1048,40 @@ const AlbumAutopilot: React.FC<{ songs: Song[] }> = ({ songs }) => {
       if (!res.ok || !data) throw new Error(data?.error || 'Could not set up the channel');
       return data;
     },
+  });
+
+  // ── Google Merchant Center: estado + conectar + sincronizar productos ──
+  const { data: merchant, refetch: refetchMerchant } = useQuery<any>({
+    queryKey: ['merchantStatus', artistId],
+    queryFn: async () => {
+      const res = await fetch('/api/merchant/status', { credentials: 'include' });
+      return (await readJsonSafe<any>(res)) ?? { connected: false };
+    },
+    staleTime: 30_000,
+  });
+
+  const connectMerchant = async () => {
+    try {
+      const res = await fetch(`/api/merchant/connect${artistId ? `?artistId=${artistId}` : ''}`, { credentials: 'include' });
+      const data = await readJsonSafe<{ authUrl?: string; error?: string }>(res);
+      if (data?.authUrl) window.open(data.authUrl, '_blank', 'noopener');
+      else alert(data?.error || 'No se pudo iniciar la conexión con Merchant Center');
+    } catch { alert('No se pudo conectar con Merchant Center'); }
+  };
+
+  const syncMerchantMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/merchant/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ artistId }),
+      });
+      const data = await readJsonSafe<any>(res);
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'No se pudo sincronizar');
+      return data;
+    },
+    onSuccess: () => refetchMerchant(),
   });
 
   const retryMutation = useMutation({
@@ -1209,6 +1243,64 @@ const AlbumAutopilot: React.FC<{ songs: Song[] }> = ({ songs }) => {
             Create the channel on YouTube and come back here to connect it with “Switch Channel”.
           </span>
         </div>
+
+        {/* Google Merchant Center: vender el merch de la tienda dentro de YouTube */}
+        {artistId ? (
+          <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <ShoppingBag className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              {merchant?.connected ? (
+                <span className="text-xs text-zinc-300">
+                  Merchant Center conectado{merchant?.merchantId ? <> · <span className="font-semibold text-white">ID {merchant.merchantId}</span></> : null}
+                  {typeof merchant?.active === 'number' ? <> · <span className="text-emerald-400">{merchant.active} activos</span>{merchant.pending ? `, ${merchant.pending} pendientes` : ''}{merchant.disapproved ? `, ${merchant.disapproved} rechazados` : ''}</> : null}
+                </span>
+              ) : (
+                <span className="text-xs text-zinc-300">
+                  Conecta tu tienda con <span className="font-semibold text-white">Google Merchant Center</span> para subir tu merch automáticamente y venderlo en YouTube y Google Shopping.
+                </span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                {merchant?.connected ? (
+                  <button
+                    onClick={() => syncMerchantMutation.mutate()}
+                    disabled={syncMerchantMutation.isPending}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5"
+                    title="Sube/actualiza tus productos en Google Merchant Center"
+                  >
+                    {syncMerchantMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Sincronizar productos
+                  </button>
+                ) : (
+                  <button
+                    onClick={connectMerchant}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                    title="Conecta tu cuenta de Google Merchant Center por OAuth"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" /> Conectar automático
+                  </button>
+                )}
+                <a
+                  href={`/api/youtube-shopping/connect/${artistId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold"
+                  title="Abrir la guía paso a paso (feed manual)"
+                >
+                  Ver guía
+                </a>
+              </div>
+            </div>
+            {syncMerchantMutation.isSuccess && (
+              <p className="mt-2 text-[11px] text-emerald-400">
+                {(syncMerchantMutation.data as any)?.inserted ?? 0} productos sincronizados
+                {(syncMerchantMutation.data as any)?.failed ? `, ${(syncMerchantMutation.data as any).failed} con error` : ''}.
+              </p>
+            )}
+            {syncMerchantMutation.isError && (
+              <p className="mt-2 text-[11px] text-red-400">{(syncMerchantMutation.error as Error)?.message}</p>
+            )}
+          </div>
+        ) : null}
 
         {yt?.connected && (
           <div className="mt-3 flex items-center gap-4 flex-wrap">
@@ -1698,7 +1790,7 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
           </div>
 
           <div className="relative">
-            <AlbumAutopilot songs={songs} />
+            <AlbumAutopilot songs={songs} artistId={artistId} />
 
             <StepIndicator current={step} />
 

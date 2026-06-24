@@ -1498,7 +1498,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
 
   // Monthly artist catalog subscription invoice.
   const artistCatalogSub = await db
-    .select({ id: explicitSubscriptions.id })
+    .select({ id: explicitSubscriptions.id, artistId: explicitSubscriptions.artistId, subscriberId: explicitSubscriptions.subscriberId })
     .from(explicitSubscriptions)
     .where(eq(explicitSubscriptions.stripeSubscriptionId, invoice.subscription as string))
     .limit(1);
@@ -1506,6 +1506,24 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
     await db.update(explicitSubscriptions)
       .set({ status: 'active', updatedAt: new Date() })
       .where(eq(explicitSubscriptions.stripeSubscriptionId, invoice.subscription as string));
+
+    // 💰 Credit the artist wallet (85/15) for this membership invoice (first + renewals).
+    try {
+      const amount = (invoice.amount_paid || 0) / 100;
+      const fanEmail = invoice.customer_email || (invoice as any).customer_details?.email || null;
+      const { recordArtistSubscriptionPayment } = await import('../services/artist-unlock-service');
+      await recordArtistSubscriptionPayment({
+        stripeInvoiceId: invoice.id,
+        artistId: artistCatalogSub[0].artistId,
+        fanUserId: artistCatalogSub[0].subscriberId,
+        fanEmail,
+        amount,
+        currency: invoice.currency || 'usd',
+      });
+    } catch (subPayErr) {
+      console.error('❌ Failed to credit artist for membership invoice:', subPayErr);
+    }
+
     console.log(`✅ Artist catalog monthly payment succeeded: ${invoice.subscription}`);
     return;
   }

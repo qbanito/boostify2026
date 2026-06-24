@@ -10,7 +10,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { artistAccessUnlocks, artistFanLeads, artistWallet, users, walletTransactions } from '../db/schema';
+import { artistAccessUnlocks, artistFanLeads, artistWallet, salesTransactions, users, walletTransactions } from '../db/schema';
 
 export const ARTIST_SPLIT = 0.85; // 85% to the artist, 15% to Boostify
 
@@ -139,6 +139,144 @@ export async function recordArtistUnlock(params: RecordUnlockParams): Promise<Re
     console.log(`💰 Wallet credited: artist #${artistId} +$${artistEarning.toFixed(2)} (platform $${platformFee.toFixed(2)})`);
   } catch (walletErr) {
     console.error('❌ Failed to credit artist wallet for unlock:', walletErr);
+  }
+
+  return { ok: true, alreadyProcessed: false, artistEarning, platformFee, balanceAfter };
+}
+
+export interface RecordSubscriptionPaymentParams {
+  stripeInvoiceId: string;
+  artistId: number;
+  fanUserId?: number | null;
+  fanEmail?: string | null;
+  amount: number; // dollars (amount_paid for this invoice)
+  currency?: string;
+}
+
+/**
+ * Idempotently record a monthly catalog-membership invoice payment and credit
+ * the artist wallet (85/15 split). Runs on every successful invoice
+ * (first charge + each renewal). Idempotent by Stripe invoice id.
+ */
+export async function recordArtistSubscriptionPayment(
+  params: RecordSubscriptionPaymentParams,
+): Promise<RecordUnlockResult> {
+  const { stripeInvoiceId, artistId, amount } = params;
+  const fanUserId = params.fanUserId ?? null;
+  const fanEmail = params.fanEmail ?? null;
+  const currency = (params.currency || 'usd').toLowerCase();
+
+  if (!artistId || isNaN(artistId)) {
+    throw new Error('recordArtistSubscriptionPayment: invalid artistId');
+  }
+
+  const artistEarning = Math.round(amount * ARTIST_SPLIT * 100) / 100;
+  const platformFee = Math.round((amount - artistEarning) * 100) / 100;
+
+  // ── Idempotency: skip if this Stripe invoice was already processed ────────
+  const existing = await db
+    .select({ id: salesTransactions.id })
+    .from(salesTransactions)
+    .where(eq(salesTransactions.stripePaymentId, stripeInvoiceId))
+    .limit(1);
+  if (existing.length > 0) {
+    console.log(`ℹ️ artist_catalog_subscription invoice already processed: ${stripeInvoiceId}`);
+    return { ok: true, alreadyProcessed: true, artistEarning, platformFee };
+  }
+
+  if (amount <= 0) {
+    return { ok: true, alreadyProcessed: false, artistEarning: 0, platformFee: 0 };
+  }
+
+  // ── 1) Record the sale (completed) ───────────────────────────────────────
+  let saleId: number | undefined;
+  try {
+    const [sale] = await db
+      .insert(salesTransactions)
+      .values({
+        artistId,
+        productName: 'Membresía mensual del catálogo',
+        saleAmount: amount.toFixed(2),
+        productionCost: '0',
+        artistEarning: artistEarning.toFixed(2),
+        platformFee: platformFee.toFixed(2),
+        commissionRate: 15,
+        quantity: 1,
+        currency,
+        buyerEmail: fanEmail,
+        stripePaymentId: stripeInvoiceId,
+        status: 'completed',
+      })
+      .returning({ id: salesTransactions.id });
+    saleId = sale?.id;
+  } catch (saleErr) {
+    console.error('❌ Failed to record subscription sale:', saleErr);
+  }
+
+  // ── 2) Credit the artist wallet (85% artist / 15% Boostify) ──────────────
+  let balanceAfter: number | undefined;
+  try {
+    let wallet = await db.query.artistWallet.findFirst({
+      where: eq(artistWallet.userId, artistId),
+    });
+    if (!wallet) {
+      const [created] = await db
+        .insert(artistWallet)
+        .values({ userId: artistId, balance: '0', totalEarnings: '0', totalSpent: '0', currency })
+        .returning();
+      wallet = created;
+    }
+
+    const balanceBefore = parseFloat(wallet.balance);
+    balanceAfter = Math.round((balanceBefore + artistEarning) * 100) / 100;
+    const totalEarnings = Math.round((parseFloat(wallet.totalEarnings) + artistEarning) * 100) / 100;
+
+    await db
+      .update(artistWallet)
+      .set({
+        balance: balanceAfter.toFixed(2),
+        totalEarnings: totalEarnings.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(eq(artistWallet.userId, artistId));
+
+    await db.insert(walletTransactions).values({
+      userId: artistId,
+      type: 'earning',
+      amount: artistEarning.toFixed(2),
+      balanceBefore: balanceBefore.toFixed(2),
+      balanceAfter: balanceAfter.toFixed(2),
+      description: `Membresía mensual de ${fanEmail || 'un fan'} (85% de $${amount.toFixed(2)})`,
+      relatedSaleId: saleId ?? null,
+      metadata: { type: 'artist_catalog_subscription', stripeInvoiceId, platformFee, fanEmail },
+    });
+
+    console.log(`💰 Wallet credited (membership): artist #${artistId} +$${artistEarning.toFixed(2)} (platform $${platformFee.toFixed(2)})`);
+  } catch (walletErr) {
+    console.error('❌ Failed to credit artist wallet for subscription:', walletErr);
+  }
+
+  // ── 3) Auto-enroll the paying fan as an artist-scoped lead ───────────────
+  if (fanEmail) {
+    try {
+      const [artistRow] = await db
+        .select({ slug: users.slug })
+        .from(users)
+        .where(eq(users.id, artistId))
+        .limit(1);
+      await db.insert(artistFanLeads).values({
+        artistId,
+        email: fanEmail.toLowerCase(),
+        name: null,
+        artistSlug: artistRow?.slug || String(artistId),
+        source: 'paid_membership',
+        metadata: { type: 'artist_catalog_subscription', stripeInvoiceId, amount, currency },
+      }).onConflictDoNothing({
+        target: [artistFanLeads.artistId, artistFanLeads.email],
+      });
+    } catch (fanErr) {
+      console.warn('⚠️ Failed to auto-enroll membership fan lead:', fanErr);
+    }
   }
 
   return { ok: true, alreadyProcessed: false, artistEarning, platformFee, balanceAfter };

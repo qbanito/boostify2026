@@ -23,6 +23,7 @@ import { pool } from '../db';
 const YT_SCOPES = [
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube',          // manage channel: branding (banner/portada), thumbnails
+  'https://www.googleapis.com/auth/youtube.force-ssl', // escribir comentarios (commentThreads.insert)
   'https://www.googleapis.com/auth/youtube.readonly',
 ];
 
@@ -468,6 +469,152 @@ export async function uploadVideoToYoutube(opts: {
     };
   } finally {
     try { fs.unlinkSync(videoTmp); } catch {}
+  }
+}
+
+/**
+ * Publish a top-level comment on a video as the connected channel. Used to drop
+ * a "Shop this video" comment with product/event deep-links right after upload.
+ * Best-effort: returns the comment id or null (never throws on API failure).
+ * Note: the YouTube Data API cannot PIN a comment programmatically — the creator
+ * pins it once in YouTube Studio; this still surfaces the links to viewers.
+ */
+export async function insertVideoComment(
+  userId: number,
+  videoId: string,
+  text: string,
+): Promise<string | null> {
+  if (!videoId || !text || !text.trim()) return null;
+  try {
+    const token = await getValidAccessToken(userId);
+    if (!token) return null;
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    const youtube = google.youtube({ version: 'v3', auth });
+    const resp = await youtube.commentThreads.insert({
+      part: ['snippet'],
+      requestBody: {
+        snippet: {
+          videoId,
+          topLevelComment: {
+            snippet: { textOriginal: sanitizeYoutubeText(text, 9900) },
+          },
+        },
+      },
+    });
+    return (resp.data.id as string) || null;
+  } catch (e: any) {
+    console.warn('[YouTube] insertVideoComment failed:', ytErrorReason(e));
+    return null;
+  }
+}
+
+/**
+ * Update the description of an EXISTING video. `build` receives the current
+ * description and returns the new one (lets callers merge a shop section
+ * idempotently). YouTube's videos.update requires title + categoryId, so we
+ * read the current snippet first and preserve them. Best-effort: never throws.
+ */
+export async function updateVideoDescription(
+  userId: number,
+  videoId: string,
+  build: (current: string) => string,
+): Promise<{ updated: boolean; reason?: string }> {
+  if (!videoId) return { updated: false, reason: 'no_video_id' };
+  try {
+    const token = await getValidAccessToken(userId);
+    if (!token) return { updated: false, reason: 'not_connected' };
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    const youtube = google.youtube({ version: 'v3', auth });
+    const list = await youtube.videos.list({ part: ['snippet'], id: [videoId] });
+    const item = list.data.items?.[0];
+    if (!item?.snippet) return { updated: false, reason: 'not_found' };
+    const cur = item.snippet.description || '';
+    const next = sanitizeYoutubeText(build(cur), 4900);
+    if (next === cur) return { updated: false, reason: 'unchanged' };
+    await youtube.videos.update({
+      part: ['snippet'],
+      requestBody: {
+        id: videoId,
+        snippet: {
+          title: item.snippet.title || 'Lyric Video',
+          categoryId: item.snippet.categoryId || '10',
+          description: next,
+          tags: item.snippet.tags || undefined,
+          defaultLanguage: item.snippet.defaultLanguage || undefined,
+        },
+      },
+    });
+    return { updated: true };
+  } catch (e: any) {
+    return { updated: false, reason: ytErrorReason(e) };
+  }
+}
+
+/**
+ * Post a top-level "shop" comment on a video ONLY if one containing `marker`
+ * isn't already there (idempotent across re-runs). Best-effort, never throws.
+ */
+export async function ensureVideoShopComment(
+  userId: number,
+  videoId: string,
+  text: string,
+  marker: string,
+  legacyMarkers: string[] = [],
+): Promise<{ posted: boolean; reason?: string }> {
+  if (!videoId || !text || !text.trim()) return { posted: false, reason: 'empty' };
+  try {
+    const token = await getValidAccessToken(userId);
+    if (!token) return { posted: false, reason: 'not_connected' };
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    const youtube = google.youtube({ version: 'v3', auth });
+    if (marker || legacyMarkers.length) {
+      try {
+        const existing = await youtube.commentThreads.list({
+          part: ['snippet'],
+          videoId,
+          maxResults: 100,
+          textFormat: 'plainText',
+        });
+        const items = existing.data.items || [];
+        const hasMarker = (txt: string, m: string) => !!m && txt.includes(m);
+        const found = items.some((it: any) =>
+          hasMarker(String(it?.snippet?.topLevelComment?.snippet?.textDisplay || ''), marker),
+        );
+        if (found) return { posted: false, reason: 'already_present' };
+        // Migración: borra comentarios de versiones anteriores para no duplicar.
+        for (const it of items) {
+          const txt = String((it as any)?.snippet?.topLevelComment?.snippet?.textDisplay || '');
+          const commentId = (it as any)?.snippet?.topLevelComment?.id;
+          if (commentId && legacyMarkers.some((m) => hasMarker(txt, m))) {
+            try {
+              await youtube.comments.delete({ id: commentId });
+            } catch {
+              /* sin permiso de borrado o ya borrado → ignorar */
+            }
+          }
+        }
+      } catch {
+        /* comentarios desactivados o sin hilos → intentar insertar igual */
+      }
+    }
+    await youtube.commentThreads.insert({
+      part: ['snippet'],
+      requestBody: {
+        snippet: {
+          videoId,
+          topLevelComment: { snippet: { textOriginal: sanitizeYoutubeText(text, 9900) } },
+        },
+      },
+    });
+    return { posted: true };
+  } catch (e: any) {
+    return { posted: false, reason: ytErrorReason(e) };
   }
 }
 

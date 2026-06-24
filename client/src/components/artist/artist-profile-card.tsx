@@ -23,7 +23,7 @@ import { ArtistDownloads } from "./artist-downloads";
 // only when their section becomes visible. See ./lazy-modules for details.
 import {
   InfluencerModule, TalkToMeModule, AmazonCuratedPicksModule, FashionVirtualStore,
-  ArtistCareerSuite, EpkSection, ArtistNewsGenerator, AvatarTalkModule, EarningsChart,
+  ArtistCareerSuite, EpkSection, ArtistNewsGenerator, AvatarTalkModule, EarningsChart, PayoutsPanel,
   MyUniverseModule, SponsorPanel, VenueBookingPanel, ExplicitContentSection, AASEnginePanel,
   AudienceCaptureDashboard, ViralProductGenerator, BrandCollabPanel, ArtistBusinessPlan,
   ArtistBusinessPlanV2, TokenizationPanel, EconomicEngineDashboard, CryptoCommunityDashboard,
@@ -10500,9 +10500,12 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           <div className={cardStyles} style={cardStyleInline}>
                             {renderSectionHeader(sectionId, DollarSign, 'Earnings')}
                             {sectionExpanded[sectionId] && (
-                              earningsUserId && earningsUserId > 0
-                                ? <EarningsChart userId={earningsUserId} days={30} />
-                                : <p className="text-center text-xs text-gray-600 py-6">Loading earnings data�</p>
+                              <div className="space-y-5">
+                                {earningsUserId && earningsUserId > 0
+                                  ? <EarningsChart userId={earningsUserId} days={30} />
+                                  : <p className="text-center text-xs text-gray-600 py-6">Loading earnings data�</p>}
+                                <PayoutsPanel accent={colors.hexAccent || '#22c55e'} />
+                              </div>
                             )}
                           </div>
                         );

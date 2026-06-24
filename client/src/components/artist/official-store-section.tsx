@@ -571,15 +571,43 @@ function OfficialStoreSectionInner({
 
   return (
     <>
+      <style>{`
+        @keyframes store3dLoaderSpin { to { transform: rotate(360deg); } }
+        @keyframes store3dLoaderSpinRev { to { transform: rotate(-360deg); } }
+        @keyframes store3dPortalHalo { 0%,100% { opacity: 0.35; } 50% { opacity: 0.85; } }
+        .store3d-loader-ring { animation: store3dLoaderSpin 1.1s linear infinite; }
+        .store3d-loader-ring-rev { animation: store3dLoaderSpinRev 1.6s linear infinite; }
+        .store3d-portal-halo { animation: store3dPortalHalo 2.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .store3d-loader-ring, .store3d-loader-ring-rev, .store3d-portal-halo { animation: none !important; }
+        }
+      `}</style>
       {/* Experiencia virtual 3D inmersiva */}
       {show3D && (
         <div className="fixed inset-0 z-[100] bg-black">
           <Suspense
             fallback={
-              <div className="flex h-full w-full items-center justify-center">
-                <div className="text-center">
-                  <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin" style={{ color: colors.hexAccent }} />
-                  <p className="text-sm text-white/60">Building {artist.name}'s 3D universe…</p>
+              <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black">
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-50"
+                  style={{ background: `radial-gradient(circle at 50% 45%, ${colors.hexAccent}33, transparent 60%)` }}
+                />
+                <div className="relative text-center">
+                  <div className="relative mx-auto mb-5 h-20 w-20">
+                    <span
+                      className="store3d-loader-ring absolute inset-0 rounded-full motion-reduce:animate-none"
+                      style={{ border: '2px solid transparent', borderTopColor: colors.hexPrimary, borderRightColor: colors.hexAccent }}
+                    />
+                    <span
+                      className="store3d-loader-ring-rev absolute inset-1.5 rounded-full motion-reduce:animate-none"
+                      style={{ border: '2px solid transparent', borderBottomColor: colors.hexAccent }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Box className="h-6 w-6 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold tracking-wide text-white">Building {artist.name}'s 3D universe…</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.3em] text-white/40">Immersive boutique</p>
                 </div>
               </div>
             }
@@ -602,7 +630,8 @@ function OfficialStoreSectionInner({
           </Suspense>
           <button
             onClick={() => setShow3D(false)}
-            className="absolute right-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur-md transition-colors hover:bg-white/20"
+            className="absolute right-4 top-4 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white outline-none backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/70"
+            aria-label="Exit 3D experience"
           >
             <X className="h-4 w-4" /> Exit 3D
           </button>
@@ -808,14 +837,22 @@ function OfficialStoreSectionInner({
         {products3D.length > 0 && (
           <button
             onClick={() => setShow3D(true)}
-            className="group relative mb-3 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 px-6 text-sm font-bold text-white shadow-xl transition-transform hover:scale-[1.02]"
-            style={{ background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})` }}
+            className="store3d-portal-cta motion-reduce:transform-none group relative mb-3 flex w-full cursor-pointer items-center justify-center gap-2.5 overflow-hidden rounded-2xl py-4 px-6 text-sm font-bold text-white outline-none transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            style={{
+              background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
+              boxShadow: `0 14px 44px -10px ${colors.hexAccent}99, inset 0 1px 0 0 #ffffff33`,
+            }}
             data-testid="button-enter-3d-store"
+            aria-label={`Enter the immersive 3D store of ${artist.name}`}
           >
-            <span className="absolute inset-0 -translate-x-full bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
-            <Box className="h-5 w-5" />
-            Enter 3D Experience
-            <Sparkles className="h-4 w-4" />
+            <span className="store3d-portal-shine pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-700 group-hover:translate-x-full motion-reduce:hidden" />
+            <span
+              className="store3d-portal-halo pointer-events-none absolute -inset-px rounded-2xl motion-reduce:hidden"
+              style={{ boxShadow: `0 0 0 1px ${colors.hexAccent}55` }}
+            />
+            <Box className="relative h-5 w-5" />
+            <span className="relative tracking-wide">Enter 3D Experience</span>
+            <Sparkles className="relative h-4 w-4 transition-transform duration-500 group-hover:rotate-90" />
           </button>
         )}
         <Link href={`/artist/${artist.slug || artist.name.toLowerCase().replace(/\s+/g, '-')}/store`}>

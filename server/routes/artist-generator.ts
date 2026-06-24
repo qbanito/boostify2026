@@ -1258,10 +1258,12 @@ router.post("/generate-artist", async (req: Request, res: Response) => {
     res.status(200).json(completeArtistData);
   } catch (error) {
     console.error('Error generando artista aleatorio:', error);
-    res.status(500).json({ 
-      error: 'Error al generar artista aleatorio',
-      details: error instanceof Error ? error.message : 'Error desconocido'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error al generar artista aleatorio',
+        details: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    }
   }
 });
 
@@ -1597,6 +1599,104 @@ router.post("/generate-single-song", async (req: Request, res: Response) => {
       error: 'Error al generar canción',
       details: error instanceof Error ? error.message : 'Error desconocido'
     });
+  }
+});
+
+/**
+ * 🔁 Backfill / recuperación: regenera las 3 canciones tokenizadas de un artista
+ * ya existente cuya generación quedó incompleta (timeout / reinicio del server).
+ * Reusa generateTokenizedSongs → inserta en PostgreSQL + Firestore con tokens,
+ * calendario de releases y bootstrap de monetización.
+ * Si el artista ya tiene canciones, no hace nada salvo que se envíe { force: true }.
+ */
+router.post('/generate-songs/:artistId', async (req: Request, res: Response) => {
+  try {
+    const artistId = parseInt(req.params.artistId, 10);
+    if (!Number.isFinite(artistId)) {
+      return res.status(400).json({ error: 'artistId inválido' });
+    }
+    const force = req.body?.force === true;
+
+    // Cargar artista desde PostgreSQL
+    const [artist] = await pgDb
+      .select({ id: users.id, artistName: users.artistName, masterJson: users.masterJson })
+      .from(users)
+      .where(eq(users.id, artistId))
+      .limit(1);
+
+    if (!artist) {
+      return res.status(404).json({ error: 'Artista no encontrado' });
+    }
+
+    // ¿Ya tiene canciones?
+    const [existing] = await pgDb
+      .select({ n: count() })
+      .from(songs)
+      .where(eq(songs.userId, artistId));
+    const existingCount = Number(existing?.n || 0);
+    if (existingCount > 0 && !force) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        message: `El artista ya tiene ${existingCount} canción(es). Envía { "force": true } para regenerar.`,
+        songsCreated: 0,
+        existingCount,
+      });
+    }
+
+    const masterJson: any = artist.masterJson || {};
+    const genre = masterJson?.musical_dna?.primary_genre || 'Pop';
+    const gender = (masterJson?.canonical?.gender === 'female' ? 'female' : 'male') as 'male' | 'female';
+
+    // Localizar el firestoreId del artista (generated_artists.postgresId == artistId)
+    let firestoreId = '';
+    try {
+      const snap = await db.collection('generated_artists').where('postgresId', '==', artistId).limit(1).get();
+      if (!snap.empty) firestoreId = snap.docs[0].id;
+    } catch (fsErr) {
+      console.warn('⚠️ No se pudo localizar el doc de Firestore del artista:', fsErr);
+    }
+
+    const artistDNA = {
+      biography: masterJson?.canonical?.biography_long || '',
+      musicGenres: [masterJson?.musical_dna?.primary_genre, ...(masterJson?.musical_dna?.secondary_genres || [])].filter(Boolean) as string[],
+      moodVibe: masterJson?.musical_dna?.mood_keywords?.[0] || '',
+      lookDescription: masterJson?.visual_dna?.physical_description?.substring(0, 200) || '',
+      influences: masterJson?.musical_dna?.influences || [],
+    };
+
+    console.log(`🔁 [backfill-songs] Regenerando canciones para #${artistId} ${artist.artistName} (${genre}/${gender})${force ? ' [FORCE]' : ''}`);
+
+    const { tokenIds, scheduledSongs } = await generateTokenizedSongs(
+      artistId,
+      artist.artistName || 'Artist',
+      genre,
+      String(artistId),
+      firestoreId,
+      gender,
+      artistDNA,
+    );
+
+    console.log(`✅ [backfill-songs] ${tokenIds.length} canciones creadas para #${artistId} ${artist.artistName}`);
+
+    if (!res.headersSent) {
+      res.status(200).json({
+        success: true,
+        artistId,
+        artistName: artist.artistName,
+        songsCreated: tokenIds.length,
+        tokenIds,
+        songs: scheduledSongs,
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error en generate-songs (backfill):', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Error al regenerar canciones',
+        details: error instanceof Error ? error.message : 'Error desconocido',
+      });
+    }
   }
 });
 
@@ -2924,11 +3024,13 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
   } catch (error) {
     console.error('❌ Error generating artist:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({
-      error: 'Failed to generate artist',
-      message: errorMessage,
-      code: 'GENERATION_ERROR'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to generate artist',
+        message: errorMessage,
+        code: 'GENERATION_ERROR'
+      });
+    }
   }
 });
 

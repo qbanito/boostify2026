@@ -279,3 +279,8 @@ export const EarningsChart = withLazy(
   named(() => import("../wallet/earnings-chart"), "EarningsChart"),
   true,
 );
+export const PayoutsPanel = withLazy(
+  "payouts-panel",
+  named(() => import("../wallet/payouts-panel"), "PayoutsPanel"),
+  true,
+);

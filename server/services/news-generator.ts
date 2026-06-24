@@ -156,16 +156,50 @@ Style guide:
 - End with a forward-looking conclusion about the future Boostify is building
 - Do NOT use generic filler — every sentence should carry meaning`;
 
-  const rawContent = await callAI(
-    'description',
-    [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    { temperature: 0.8, maxTokens: 4000, requireJSON: true, label: 'news-generator-article' }
-  );
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: userPrompt },
+  ];
 
-  const content = JSON.parse(rawContent || '{}');
+  // Resilient generation: the smart router already cascades
+  // (Gemini/OpenRouter → z.ai GLM → Llama → OpenAI), but a fallback model can
+  // occasionally return slightly malformed JSON. We parse defensively and, if
+  // that fails, force the z.ai GLM model first (free + reliable, our explicit
+  // fallback) and finally OpenAI gpt-4o-mini — so an article ALWAYS generates.
+  const attempts: Array<{ label: string; forceModel?: string }> = [
+    { label: 'news-generator-article' },                       // smart router (incl. z.ai)
+    { label: 'news-generator-article-zai', forceModel: 'glm-4.5-flash' }, // z.ai fallback
+    { label: 'news-generator-article-openai', forceModel: 'gpt-4o-mini' }, // OpenAI fallback
+  ];
+
+  let content: any = null;
+  let lastError: any = null;
+  for (const { label, forceModel } of attempts) {
+    try {
+      const rawContent = await callAI('description', messages, {
+        temperature: 0.8,
+        maxTokens: 4000,
+        requireJSON: true,
+        label,
+        ...(forceModel ? { forceModel } : {}),
+      });
+      const parsed = safeParseArticleJson(rawContent);
+      if (parsed && (parsed.title || parsed.htmlContent)) {
+        content = parsed;
+        if (forceModel) console.log(`[News-Gen] article JSON recovered via forced model: ${forceModel}`);
+        break;
+      }
+      lastError = new Error('Model returned unparseable / empty article JSON');
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[News-Gen] article attempt "${label}" failed: ${err?.message || err}`);
+    }
+  }
+
+  if (!content) {
+    throw new Error(`Article text generation failed across all models: ${lastError?.message || 'unknown error'}`);
+  }
+
   const tokensUsed = 0; // tracked inside callAI via api_usage_log
 
   return {
@@ -173,10 +207,33 @@ Style guide:
     subtitle: content.subtitle || '',
     summary: content.summary || '',
     htmlContent: content.htmlContent || '<p>Article generation failed.</p>',
-    tags: content.tags || ['boostify', 'music-tech'],
+    tags: Array.isArray(content.tags) ? content.tags : ['boostify', 'music-tech'],
     readTimeMinutes: content.readTimeMinutes || 5,
     tokensUsed,
   };
+}
+
+/**
+ * Defensive JSON parse for AI article output. Handles raw JSON, markdown-fenced
+ * blocks, and extra prose around the object that some fallback models add.
+ */
+function safeParseArticleJson(raw: string | null | undefined): any | null {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  // 1) direct parse
+  try { return JSON.parse(text); } catch { /* continue */ }
+  // 2) strip ```json ... ``` fences
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) {
+    try { return JSON.parse(fenced[1].trim()); } catch { /* continue */ }
+  }
+  // 3) grab the first balanced {...} block
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last > first) {
+    try { return JSON.parse(text.slice(first, last + 1)); } catch { /* continue */ }
+  }
+  return null;
 }
 
 // ── Generate Cover Image (centralized FAL-first service) ───────

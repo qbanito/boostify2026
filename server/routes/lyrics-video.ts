@@ -1075,6 +1075,9 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
         artistUrl: ctx.artistUrl,
         storeUrl: ctx.storeUrl,
         products: ctx.products,
+        productItems: ctx.productItems,
+        events: ctx.events,
+        videoTag: `lv${jobId}`,
       });
       title = title || seo.title;
       description = description || seo.description;
@@ -1138,12 +1141,26 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
         `UPDATE lyrics_video_jobs SET youtube_url=$2, thumbnail_url=COALESCE($3, thumbnail_url), updated_at=NOW() WHERE id=$1`,
         [jobId, up.url, thumbnailUrl || null]
       );
+      // Comentario "SHOP THIS VIDEO" con productos + próximos shows (best-effort).
+      // La API de YouTube no permite FIJAR por código: el artista lo fija una vez
+      // en YouTube Studio; aun así los links quedan visibles para los fans.
+      let shopCommentPosted = false;
+      try {
+        const shopComment = buildShopComment(ctx, `lv${jobId}`);
+        if (shopComment && up.videoId) {
+          const { insertVideoComment } = await import('../services/youtube-service');
+          shopCommentPosted = !!(await insertVideoComment(userId, up.videoId, shopComment));
+        }
+      } catch (e: any) {
+        console.warn('[LyricsVideo] shop comment falló:', e?.message);
+      }
       return res.json({
         youtubeUrl: up.url,
         videoId: up.videoId,
         thumbnailSet: up.thumbnailSet,
         thumbnailError: up.thumbnailError || null,
         playlistUrl: up.playlistUrl || null,
+        shopCommentPosted,
         title,
         description,
         tags,
@@ -1240,13 +1257,137 @@ router.post('/:jobId/upload-youtube', authenticate, async (req, res) => {
         [jobId, youtubeUrl, thumbnailUrl || null]
       );
 
-      return res.json({ youtubeUrl, videoId, thumbnailSet, thumbnailError, playlistUrl, title, description, tags, thumbnailUrl: thumbnailUrl || null });
+      // Comentario "SHOP THIS VIDEO" con productos + próximos shows (best-effort).
+      let shopCommentPosted = false;
+      try {
+        const shopComment = buildShopComment(ctx, `lv${jobId}`);
+        if (shopComment && videoId) {
+          await youtube.commentThreads.insert({
+            part: ['snippet'],
+            requestBody: {
+              snippet: {
+                videoId,
+                topLevelComment: { snippet: { textOriginal: sanitizeYoutubeText(shopComment, 9900) } },
+              },
+            },
+          });
+          shopCommentPosted = true;
+        }
+      } catch (e: any) {
+        console.warn('[LyricsVideo] shop comment (legacy) falló:', e?.message);
+      }
+
+      return res.json({ youtubeUrl, videoId, thumbnailSet, thumbnailError, playlistUrl, shopCommentPosted, title, description, tags, thumbnailUrl: thumbnailUrl || null });
     } finally {
       if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
     }
   } catch (err: any) {
     console.error('[LyricsVideo] /upload-youtube error:', err);
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SYNC STORE — actualiza los videos YA SUBIDOS a YouTube con los productos de la
+// tienda + próximos shows: reescribe la sección de tienda en la descripción
+// (idempotente) y publica el comentario "SHOP THIS VIDEO" si aún no existe.
+// ════════════════════════════════════════════════════════════════════════════
+const syncStoreSchema = z.object({
+  artistId: z.number().int().positive().optional(),
+  updateDescription: z.boolean().optional().default(true),
+  postComment: z.boolean().optional().default(true),
+  limit: z.number().int().min(1).max(200).optional().default(100),
+});
+router.post('/youtube/sync-store', authenticate, async (req, res) => {
+  try {
+    const userId = (req as any).user?.id as number;
+    const { artistId, updateDescription, postComment, limit } = syncStoreSchema.parse(req.body || {});
+
+    const ownedIds = await getOwnedArtistIds(userId);
+    let targetIds = ownedIds;
+    if (artistId) {
+      if (!ownedIds.includes(artistId)) {
+        return res.status(403).json({ error: 'No autorizado para este artista' });
+      }
+      targetIds = [artistId];
+    }
+
+    const { rows: jobs } = await pool.query(
+      `SELECT id, artist_id, song_title, youtube_url FROM lyrics_video_jobs
+       WHERE artist_id = ANY($1) AND youtube_url IS NOT NULL AND youtube_url <> ''
+       ORDER BY updated_at DESC LIMIT $2`,
+      [targetIds, limit]
+    );
+    if (!jobs.length) {
+      return res.json({ total: 0, updated: 0, commented: 0, skipped: 0, results: [], message: 'No hay videos publicados en YouTube para este artista.' });
+    }
+
+    const { getValidAccessToken, updateVideoDescription, ensureVideoShopComment } =
+      await import('../services/youtube-service');
+    const ctxCache = new Map<number, ArtistMarketingContext>();
+    const connCache = new Map<string, number | null>();
+    const resolveConn = async (ids: number[]): Promise<number | null> => {
+      const key = ids.join(',');
+      if (connCache.has(key)) return connCache.get(key)!;
+      let found: number | null = null;
+      for (const id of ids) {
+        if (!id) continue;
+        try {
+          if (await getValidAccessToken(id)) { found = id; break; }
+        } catch { /* sin conexión para ese id */ }
+      }
+      connCache.set(key, found);
+      return found;
+    };
+
+    let updated = 0, commented = 0, skipped = 0;
+    const results: any[] = [];
+    for (const job of jobs) {
+      const videoId = String(job.youtube_url).match(/[?&]v=([\w-]{6,})/)?.[1];
+      if (!videoId) { skipped++; results.push({ jobId: job.id, videoId: null, skipped: 'no_video_id' }); continue; }
+
+      let ctx = ctxCache.get(job.artist_id);
+      if (!ctx) { ctx = await getArtistMarketingContext(job.artist_id); ctxCache.set(job.artist_id, ctx); }
+      if (!ctx.productItems.length && !ctx.events.length) {
+        skipped++; results.push({ jobId: job.id, videoId, skipped: 'no_products_or_events' }); continue;
+      }
+
+      const connUser = await resolveConn([job.artist_id, userId]);
+      if (!connUser) { skipped++; results.push({ jobId: job.id, videoId, skipped: 'youtube_not_connected' }); continue; }
+
+      const videoTag = `lv${job.id}`;
+      const row: any = { jobId: job.id, videoId, title: job.song_title || null };
+
+      if (updateDescription) {
+        const lines = buildCommerceLines({
+          artistName: ctx.artistName,
+          artistUrl: ctx.artistUrl,
+          storeUrl: ctx.storeUrl,
+          productItems: ctx.productItems,
+          events: ctx.events,
+          videoTag,
+          includeHeader: false,
+        });
+        const out = await updateVideoDescription(connUser, videoId, (cur) => applyShopSection(cur, lines));
+        row.description = out.updated ? 'updated' : (out.reason || 'unchanged');
+        if (out.updated) updated++;
+      }
+
+      if (postComment) {
+        const comment = buildShopComment(ctx, videoTag);
+        const out = await ensureVideoShopComment(connUser, videoId, comment, SHOP_COMMENT_MARKER, LEGACY_COMMENT_MARKERS);
+        row.comment = out.posted ? 'posted' : (out.reason || 'skipped');
+        if (out.posted) commented++;
+      }
+
+      results.push(row);
+    }
+
+    return res.json({ total: jobs.length, updated, commented, skipped, results });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    console.error('[LyricsVideo] /youtube/sync-store error:', err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -1535,6 +1676,135 @@ async function callAdvancedJson(prompt: string): Promise<any> {
 
 // Resuelve el contexto de marketing del artista (slug, género, productos, foto…)
 // para enriquecer SEO, links y CTA.
+interface CommerceProduct {
+  id: number;
+  title: string;
+  price?: string | number | null;
+  currency?: string;
+}
+interface CommerceEvent {
+  id: number;
+  title: string;
+  startsAt?: string | Date | null;
+  venue?: string;
+  location?: string;
+}
+
+// Añade parámetros UTM a una URL para atribuir el tráfico/ventas que llegan desde
+// YouTube (visible en el dashboard de ventas del artista).
+function withYoutubeUtm(url: string, content?: string): string {
+  if (!url) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  let u = `${url}${sep}utm_source=youtube&utm_medium=lyric_video&utm_campaign=shop_this_video`;
+  if (content) u += `&utm_content=${encodeURIComponent(content)}`;
+  return u;
+}
+function fmtCommercePrice(price: any, currency = 'usd'): string {
+  const n = Number(price);
+  if (!isFinite(n) || n <= 0) return '';
+  const sym = String(currency || 'usd').toLowerCase() === 'usd' ? '$' : '';
+  return `${sym}${n.toFixed(2)}`;
+}
+function fmtEventDate(iso: any): string {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  } catch {
+    return '';
+  }
+}
+// Construye el bloque "SHOP THIS VIDEO" (productos + shows) con deep-links y UTM.
+// Se reutiliza tanto en la descripción del video como en el comentario fijable.
+function buildCommerceLines(o: {
+  artistName: string;
+  artistUrl: string;
+  storeUrl: string;
+  productItems?: CommerceProduct[];
+  events?: CommerceEvent[];
+  videoTag?: string;
+  includeHeader?: boolean;
+}): string[] {
+  const { artistName, artistUrl, storeUrl, productItems = [], events = [], videoTag, includeHeader = true } = o;
+  const lines: string[] = [];
+  lines.push(
+    includeHeader
+      ? `� TIENDA OFICIAL de ${artistName} — merch, shows y música: ${withYoutubeUtm(storeUrl, videoTag)}`
+      : `🛒 Tienda oficial de ${artistName}: ${withYoutubeUtm(storeUrl, videoTag)}`
+  );
+  if (productItems.length) {
+    lines.push('');
+    lines.push('🛍️ PRODUCTOS:');
+    for (const p of productItems.slice(0, 4)) {
+      const price = fmtCommercePrice(p.price, p.currency);
+      const link = withYoutubeUtm(`${storeUrl}?product=${p.id}`, videoTag);
+      lines.push(`• ${p.title}${price ? ` — ${price}` : ''}: ${link}`);
+    }
+  }
+  if (events.length) {
+    lines.push('');
+    lines.push(`🎫 PRÓXIMOS SHOWS de ${artistName}:`);
+    for (const e of events.slice(0, 4)) {
+      const date = fmtEventDate(e.startsAt);
+      const place = [e.venue, e.location].filter(Boolean).join(', ');
+      const link = withYoutubeUtm(`${artistUrl}?event=${e.id}`, videoTag);
+      lines.push(`• ${date ? `${date} · ` : ''}${e.title}${place ? ` (${place})` : ''} → Entradas: ${link}`);
+    }
+  }
+  lines.push('');
+  lines.push(`🎵 Escucha y consigue su música: ${withYoutubeUtm(artistUrl, videoTag)}`);
+  return lines;
+}
+
+// Sentinelas para la sección de tienda añadida a videos YA subidos (backfill).
+// Permiten re-ejecutar el sync de forma IDEMPOTENTE: si la sección ya existe se
+// reemplaza por una fresca (con los productos/precios actuales) en vez de duplicarse.
+const SHOP_SECTION_START = '� ───── TIENDA OFICIAL ─────';
+const SHOP_SECTION_END = '───── Apoya a tu artista · Boostify ─────';
+const SHOP_COMMENT_MARKER = 'TIENDA OFICIAL';
+// Marcadores de versiones anteriores (para reemplazar/limpiar sin duplicar).
+const LEGACY_SECTION_STARTS = ['🛍️ ───── COMPRA EN ESTE VIDEO ─────'];
+const LEGACY_COMMENT_MARKERS = ['COMPRA EN ESTE VIDEO'];
+function stripShopSection(text: string): string {
+  let t = text;
+  for (const startMark of [SHOP_SECTION_START, ...LEGACY_SECTION_STARTS]) {
+    const start = t.indexOf(startMark);
+    if (start >= 0) {
+      const endPos = t.indexOf(SHOP_SECTION_END, start);
+      t = (t.slice(0, start) + (endPos >= 0 ? t.slice(endPos + SHOP_SECTION_END.length) : '')).trimEnd();
+    }
+  }
+  return t;
+}
+function applyShopSection(current: string, lines: string[]): string {
+  const MAX = 4900;
+  let base = stripShopSection(current).trimEnd();
+  const section = [SHOP_SECTION_START, ...lines, SHOP_SECTION_END].join('\n');
+  let next = base ? `${base}\n\n${section}` : section;
+  if (next.length > MAX) {
+    // Recorta la parte original (letra) para conservar la sección de tienda completa.
+    const room = MAX - section.length - 2;
+    base = room > 0 ? base.slice(0, room).trimEnd() : '';
+    next = base ? `${base}\n\n${section}` : section.slice(0, MAX);
+  }
+  return next;
+}
+// Texto del comentario auto-publicado tras subir el video (links de compra).
+function buildShopComment(ctx: ArtistMarketingContext, videoTag?: string): string {
+  const hasProducts = ctx.productItems && ctx.productItems.length > 0;
+  const hasEvents = ctx.events && ctx.events.length > 0;
+  if (!hasProducts && !hasEvents) return '';
+  const head = `� Tienda oficial de ${ctx.artistName} — productos, shows y música 👇`;
+  const body = buildCommerceLines({
+    artistName: ctx.artistName,
+    artistUrl: ctx.artistUrl,
+    storeUrl: ctx.storeUrl,
+    productItems: ctx.productItems,
+    events: ctx.events,
+    videoTag,
+  });
+  return [head, '', ...body].join('\n').slice(0, 9000);
+}
+
 interface ArtistMarketingContext {
   artistName: string;
   slug: string;
@@ -1542,6 +1812,8 @@ interface ArtistMarketingContext {
   bio: string;
   profileImageUrl: string;
   products: string[];
+  productItems: CommerceProduct[];
+  events: CommerceEvent[];
   artistUrl: string;
   storeUrl: string;
 }
@@ -1568,23 +1840,54 @@ async function getArtistMarketingContext(userId: number): Promise<ArtistMarketin
     console.warn('[LyricsVideo] getArtistMarketingContext users lookup:', e?.message);
   }
   let products: string[] = [];
+  let productItems: CommerceProduct[] = [];
   try {
     const { rows } = await pool.query(
-      `SELECT title FROM smart_merch_products
+      `SELECT id, title, presale_price, currency FROM smart_merch_products
        WHERE artist_id=$1 AND is_published=true AND status<>'archived'
        ORDER BY created_at DESC LIMIT 5`,
       [userId]
     );
-    products = rows.map((r) => r.title).filter(Boolean);
+    productItems = rows
+      .filter((r) => r.title)
+      .map((r) => ({
+        id: Number(r.id),
+        title: String(r.title),
+        price: r.presale_price,
+        currency: r.currency || 'usd',
+      }));
+    products = productItems.map((p) => p.title);
   } catch {
     /* tabla de merch opcional */
+  }
+  // Próximos shows publicados (futuros) para enlazar entradas desde el video.
+  let events: CommerceEvent[] = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, title, starts_at, venue, location FROM concert_events
+       WHERE artist_id=$1 AND status IN ('published','live','on_sale')
+         AND (starts_at IS NULL OR starts_at >= NOW())
+       ORDER BY starts_at ASC NULLS LAST LIMIT 4`,
+      [userId]
+    );
+    events = rows
+      .filter((r) => r.title)
+      .map((r) => ({
+        id: Number(r.id),
+        title: String(r.title),
+        startsAt: r.starts_at,
+        venue: r.venue || '',
+        location: r.location || '',
+      }));
+  } catch {
+    /* módulo de conciertos opcional */
   }
   // Si la fila no tiene slug guardado, derivamos uno como último recurso para no
   // dejar el enlace del artista apuntando solo al dominio raíz.
   if (!slug) slug = slugifyArtist(artistName);
   const artistUrl = slug ? `${PUBLIC_ARTIST_BASE_URL}/artist/${slug}` : PUBLIC_ARTIST_BASE_URL;
   const storeUrl = slug ? `${PUBLIC_ARTIST_BASE_URL}/artist/${slug}/store` : PUBLIC_ARTIST_BASE_URL;
-  return { artistName, slug, genre, bio, profileImageUrl, products, artistUrl, storeUrl };
+  return { artistName, slug, genre, bio, profileImageUrl, products, productItems, events, artistUrl, storeUrl };
 }
 
 // Resuelve el nombre del artista del PERFIL que se está editando.
@@ -1702,8 +2005,11 @@ async function generateVideoSeoAdvanced(opts: {
   artistUrl: string;
   storeUrl: string;
   products?: string[];
+  productItems?: CommerceProduct[];
+  events?: CommerceEvent[];
+  videoTag?: string;
 }): Promise<{ title: string; description: string; tags: string[] }> {
-  const { songTitle, artistName, genre = '', lyrics = '', artistUrl, storeUrl, products = [] } = opts;
+  const { songTitle, artistName, genre = '', lyrics = '', artistUrl, storeUrl, products = [], productItems = [], events = [], videoTag } = opts;
   const cleanTag = (s: string) => s.replace(/[^\p{L}\p{N}]+/gu, '');
 
   const year = new Date().getFullYear();
@@ -1797,10 +2103,16 @@ async function generateVideoSeoAdvanced(opts: {
   }
   lines.push('');
   // Llamado a la acción + enlace DIRECTO a la página oficial del artista.
-  lines.push(`👉 Página oficial de ${artistName}: ${artistUrl}`);
-  lines.push(`🛍️ Tienda oficial y merch de ${artistName}: ${storeUrl}`);
-  if (products.length) {
-    lines.push(`✨ No te pierdas: ${products.slice(0, 3).join(' · ')} → ${storeUrl}`);
+  lines.push(`👉 Página oficial de ${artistName}: ${withYoutubeUtm(artistUrl, videoTag)}`);
+  // Bloque comercial: tienda + productos con deep-link/precio + próximos shows.
+  if (productItems.length || events.length) {
+    lines.push('');
+    lines.push(...buildCommerceLines({ artistName, artistUrl, storeUrl, productItems, events, videoTag }));
+  } else {
+    lines.push(`🛍️ Tienda oficial y merch de ${artistName}: ${withYoutubeUtm(storeUrl, videoTag)}`);
+    if (products.length) {
+      lines.push(`✨ No te pierdas: ${products.slice(0, 3).join(' · ')} → ${withYoutubeUtm(storeUrl, videoTag)}`);
+    }
   }
   lines.push(`🔔 Suscríbete y activa la campana para no perderte ningún lanzamiento de ${artistName}.`);
   if (lyrics) {
@@ -2069,6 +2381,9 @@ async function processAlbum(albumId: number): Promise<void> {
               artistUrl: ctx.artistUrl,
               storeUrl: ctx.storeUrl,
               products: ctx.products,
+              productItems: ctx.productItems,
+              events: ctx.events,
+              videoTag: `lv${song.jobId}`,
             });
             // Miniatura IA cinematográfica (póster con título + BOOSTIFY) basada en la letra.
             const thumbnailUrl = await generateYoutubeThumbnail({
@@ -2094,6 +2409,16 @@ async function processAlbum(albumId: number): Promise<void> {
             song.youtubeUrl = up.url;
             song.uploadError = undefined;
             await pool.query(`UPDATE lyrics_video_jobs SET youtube_url=$2, thumbnail_url=COALESCE($3, thumbnail_url), updated_at=NOW() WHERE id=$1`, [song.jobId, up.url, thumbnailUrl || null]);
+            // Comentario "SHOP THIS VIDEO" con productos + shows (best-effort).
+            try {
+              const shopComment = buildShopComment(ctx, `lv${song.jobId}`);
+              if (shopComment && up.videoId) {
+                const { insertVideoComment } = await import('../services/youtube-service');
+                await insertVideoComment(artistId, up.videoId, shopComment);
+              }
+            } catch (ce: any) {
+              console.warn(`[LyricsAlbum] shop comment "${song.title}" falló:`, ce?.message);
+            }
             console.log(`[LyricsAlbum] ↑ "${song.title}" subido a YouTube: ${up.url}`);
           } else {
             song.uploadError = 'YouTube no conectado';
