@@ -47,7 +47,7 @@ export interface ArtistProfileForSheet {
   profileImageUrl?: string | null;
 }
 
-const SYS = `You are a casting director + visual stylist creating a definitive CHARACTER SHEET (model sheet) for a music artist's promo imagery — the kind used in film/animation production with turnaround, head study, wardrobe, props, palette and materials.
+const SYS = `You are a high-fashion casting director + editorial stylist creating a definitive CHARACTER SHEET (model sheet) for a music artist's promo imagery — magazine-campaign quality (Vogue / editorial fashion lookbook), the kind used in film/animation production with turnaround, head study, wardrobe, props, palette and materials. The visual language is elevated, premium, editorial fashion — NOT amateur, NOT generic stock.
 Return strict JSON matching this TypeScript interface:
 interface CharacterSheet {
   name: string;
@@ -82,7 +82,33 @@ Rules:
 - "props": 2-4 signature accessories/objects (instrument, jewelry, eyewear, hat...).
 - "materials": fabrics/textures that recur (leather, denim, silk, chrome, velvet...).
 - Use the artist's bio/genre/style hints. If profile data is sparse, infer plausible visual identity from the genre.
+- Wardrobe and styling must read as high-fashion editorial coherent with the artist's genre and culture — refined, intentional, campaign-grade.
 - Never include text like "AI", "render", "illustration" — we want photorealistic capture.`;
+
+/**
+ * Builds a high-fashion EDITORIAL style modifier that stays coherent with the
+ * specific artist (their vibe, aesthetic tags, palette and materials). This is
+ * appended to every generated view so the character sheet reads like a premium
+ * magazine campaign instead of generic stock — while the identity_lock keeps
+ * the face/body identical to the artist's real photo.
+ */
+export function buildEditorialStyle(sheet: CharacterSheet): string {
+  const vibe = (sheet.vibe_keywords || []).slice(0, 3).join(', ');
+  const tags = (sheet.aesthetic_tags || []).slice(0, 3).join(', ');
+  const palette = (sheet.signature_palette || sheet.color_palette || []).slice(0, 4).join(', ');
+  const materials = (sheet.materials || []).slice(0, 3).join(', ');
+  return [
+    'high-fashion editorial campaign aesthetic',
+    'premium magazine photography, Vogue / editorial lookbook grade',
+    'sophisticated art direction and intentional styling',
+    'refined cinematic directional lighting, elegant contrast, rich tonality',
+    'shot on medium-format, fine grain, crisp detail',
+    tags ? `fashion direction: ${tags}` : '',
+    materials ? `luxe materials: ${materials}` : '',
+    vibe ? `editorial mood: ${vibe}` : '',
+    palette ? `coherent color story: ${palette}` : '',
+  ].filter(Boolean).join(', ');
+}
 
 export async function generateCharacterSheet(profile: ArtistProfileForSheet): Promise<CharacterSheet> {
   const userPrompt = `Artist profile:
@@ -164,35 +190,36 @@ export function buildBootstrapPrompts(sheet: CharacterSheet): Array<{
   aspect: '1:1' | '4:5' | '9:16' | '3:4';
 }> {
   const subject = sheet.base_prompt;
+  const editorial = buildEditorialStyle(sheet);
   return [
     {
       label: 'studio_portrait',
-      prompt: `${subject}. Studio portrait, neutral grey backdrop, soft octabox key light, 85mm f/1.8, eye-contact, beauty retouch, photorealistic`,
+      prompt: `${subject}. Studio portrait, neutral grey backdrop, soft octabox key light, 85mm f/1.8, eye-contact, beauty retouch, ${editorial}, photorealistic`,
       aspect: '4:5',
     },
     {
       label: 'urban_golden_hour',
-      prompt: `${subject}. 3/4 medium shot, urban rooftop at golden hour, warm backlight, anamorphic 35mm, candid expression, photorealistic`,
+      prompt: `${subject}. 3/4 medium shot, urban rooftop at golden hour, warm backlight, anamorphic 35mm, candid expression, ${editorial}, photorealistic`,
       aspect: '4:5',
     },
     {
       label: 'on_stage',
-      prompt: `${subject}. Full-body, on a music stage with mic stand, performance light haze, 24mm wide, cinematic, photorealistic`,
+      prompt: `${subject}. Full-body, on a music stage with mic stand, performance light haze, 24mm wide, cinematic, ${editorial}, photorealistic`,
       aspect: '9:16',
     },
     {
       label: 'profile_dramatic',
-      prompt: `${subject}. Side profile, single hard rim light against deep black, dramatic chiaroscuro, 85mm, photorealistic`,
+      prompt: `${subject}. Side profile, single hard rim light against deep black, dramatic chiaroscuro, 85mm, ${editorial}, photorealistic`,
       aspect: '4:5',
     },
     {
       label: 'lifestyle_candid',
-      prompt: `${subject}. Lifestyle candid moment, natural daylight near a window, slight smile, 35mm, Kodak Portra 400 look, photorealistic`,
+      prompt: `${subject}. Lifestyle candid moment, natural daylight near a window, slight smile, 35mm, Kodak Portra 400 look, ${editorial}, photorealistic`,
       aspect: '4:5',
     },
     {
       label: 'editorial_fashion',
-      prompt: `${subject}. Editorial fashion magazine cover style, hard light, beauty dish key, seamless backdrop, 85mm, photorealistic`,
+      prompt: `${subject}. Editorial fashion magazine cover style, hard light, beauty dish key, seamless backdrop, 85mm, ${editorial}, photorealistic`,
       aspect: '4:5',
     },
   ];
@@ -225,8 +252,10 @@ export function buildCanonicalViewPrompts(sheet: CharacterSheet): CanonicalView[
     .filter(Boolean)
     .join(', ');
 
+  const editorial = buildEditorialStyle(sheet);
+
   const consistency =
-    'same exact person and face, identical features, consistent identity, neutral seamless studio backdrop, even soft three-point lighting, full color, sharp focus, photorealistic, ultra-detailed';
+    `same exact person and face, identical features, consistent identity, neutral seamless studio backdrop, even soft three-point lighting, full color, sharp focus, photorealistic, ultra-detailed, ${editorial}`;
 
   return [
     {
@@ -276,7 +305,7 @@ export function buildCanonicalViewPrompts(sheet: CharacterSheet): CanonicalView[
       label: 'Cinematic Portrait',
       category: 'portrait',
       aspect: '4:5',
-      prompt: `${anchor}${wardrobeLook && wardrobeLook !== outfit ? `, ${wardrobeLook}` : ''}. Hero cinematic portrait, dramatic editorial lighting${palette ? `, color palette ${palette}` : ''}, confident expression, shallow depth of field, 85mm, magazine-grade, photorealistic, ultra-detailed`,
+      prompt: `${anchor}${wardrobeLook && wardrobeLook !== outfit ? `, ${wardrobeLook}` : ''}. Hero high-fashion editorial campaign portrait, dramatic directional lighting${palette ? `, color palette ${palette}` : ''}, confident editorial expression, shallow depth of field, 85mm, ${editorial}, photorealistic, ultra-detailed`,
     },
   ];
 }

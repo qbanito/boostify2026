@@ -11094,6 +11094,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 songs={songs.map(s => ({ id: s.id, title: s.title ?? s.name ?? '', audioUrl: s.audioUrl ?? '', coverArt: s.coverArt, duration: s.duration }))}
                                 artistId={userProfile?.pgId ? Number(userProfile.pgId) : undefined}
                                 artistName={artist.name || userProfile?.artistName || userProfile?.username || 'Artist'}
+                                artistImageUrl={artist.profileImage}
                                 isOwner={!!isOwnProfile}
                               />
                             </div>

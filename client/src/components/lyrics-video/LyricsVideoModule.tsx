@@ -1701,10 +1701,11 @@ interface LyricsVideoModuleProps {
   songs: Song[];
   artistId?: number;
   artistName?: string;
+  artistImageUrl?: string;
   isOwner?: boolean;
 }
 
-export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, artistId, artistName, isOwner = false }) => {
+export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, artistId, artistName, artistImageUrl, isOwner = false }) => {
   const [step, setStep] = useState(0);
   const [transcription, setTranscription] = useState<TranscribeResponse | null>(null);
   const [songMeta, setSongMeta] = useState<{ songTitle: string; artistName: string; coverArtUrl?: string } | null>(null);
@@ -1760,6 +1761,8 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
               publicChannel?.thumbnailUrl ||
               publicJobs.find(j => j.thumbnail_url)?.thumbnail_url ||
               publicJobs.find(j => j.cover_art_url)?.cover_art_url ||
+              artistImageUrl ||
+              songs.find(s => s.coverArt)?.coverArt ||
               null;
             const channelName = publicChannel?.title || publicJobs[0]?.artist_name || artistName || 'YouTube';
             const ytLabel = (job: RenderStatus) => job.youtube_url || heroLink;

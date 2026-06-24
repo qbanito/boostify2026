@@ -275,7 +275,22 @@ async function runLambdaRender(params: {
   // under 10 with burst headroom). Raise REMOTION_LAMBDA_MAX_FUNCTIONS once the
   // account's concurrency limit is increased for full parallel speed.
   const maxFunctions = Math.max(1, Number(process.env.REMOTION_LAMBDA_MAX_FUNCTIONS) || 5);
-  const framesPerLambda = Math.max(20, Math.ceil(durationFrames / maxFunctions));
+
+  // HARD CAP on frames per Lambda. A function timeout is a *fatal* failure (no
+  // partial output), whereas exceeding the concurrency quota is *soft* (handled
+  // by the retry/backoff below). So we must never hand a single Lambda more
+  // frames than it can render within its 900s timeout. At 720p a lyrics frame
+  // takes ~0.4-0.8s incl. Chrome/overhead, so ~350 frames (≈ under ~5 min) is a
+  // safe budget. Without this cap, a low maxFunctions (e.g. 1) would route a
+  // whole long song into ONE Lambda and time out ("1 out of 1" chunk missing).
+  const maxFramesPerLambda = Math.max(50, Number(process.env.REMOTION_LAMBDA_MAX_FRAMES_PER_LAMBDA) || 350);
+  const framesPerLambda = Math.min(
+    maxFramesPerLambda,
+    Math.max(20, Math.ceil(durationFrames / maxFunctions)),
+  );
+  const plannedChunks = Math.ceil(durationFrames / framesPerLambda);
+  console.log(`[LyricsVideo] job ${jobId} lambda plan: ${durationFrames} frames → ${framesPerLambda} frames/lambda → ~${plannedChunks} chunk(s) (maxFns=${maxFunctions}, scale=${scale})`);
+
 
   // Retry the whole render on transient concurrency/rate-limit errors with
   // exponential backoff. This is what makes album batches survive the 10-lambda
