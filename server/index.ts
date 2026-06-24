@@ -23,7 +23,7 @@ import {
   blockSuspiciousPaths,
 } from './middleware/security-hardening';
 import { requestTimeout } from './middleware/request-timeout';
-import { heavyModuleLimiter } from './middleware/rate-limit-tiers';
+import { heavyModuleLimiter, makeRateStore } from './middleware/rate-limit-tiers';
 import { shouldRunSchedulers, describeRole } from './bootstrap/role';
 import { installGracefulShutdown } from './bootstrap/shutdown';
 import { initSentry, captureException } from './observability/sentry';
@@ -170,6 +170,7 @@ const apiLimiter = rateLimit({
   max: isDev ? 10000 : 500, // 500/min in prod — handles burst page loads comfortably
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeRateStore('rl:api:'),
   message: { success: false, error: 'Too many requests, please try again later.' },
   skip: (req) => {
     const ip = req.ip || '';
@@ -199,6 +200,7 @@ const authLimiter = rateLimit({
   max: isDev ? 10000 : 30,
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeRateStore('rl:auth:'),
   message: { success: false, error: 'Too many login attempts, please try again later.' },
   skip: (req) => {
     const ip = req.ip || '';
@@ -212,6 +214,7 @@ const aiLimiter = rateLimit({
   max: isDev ? 10000 : 50,
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeRateStore('rl:ai:'),
   message: { success: false, error: 'AI generation rate limit reached. Please try again later.' },
   skip: (req) => {
     const ip = req.ip || '';

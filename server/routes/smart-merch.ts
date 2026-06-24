@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import Stripe from 'stripe';
 import { authenticate } from '../middleware/auth';
 import { generateImageWithGPTImage1, editImageWithGPTImage1 } from '../services/fal-service';
@@ -19,7 +19,6 @@ import {
 import OpenAI from 'openai';
 
 const router = Router();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-01-27.acacia' as any });
 const BASE_URL = process.env.PRODUCTION_URL || 'http://localhost:5000';
 

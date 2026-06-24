@@ -24,6 +24,7 @@ import type { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import hpp from 'hpp';
+import { makeRateStore } from './rate-limit-tiers';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -40,6 +41,7 @@ export const publicFormLimiter = rateLimit({
   max: isDev ? 100000 : 20, // 20 submissions / hour / IP in prod
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeRateStore('rl:form:'),
   message: { success: false, error: 'Too many submissions from this IP. Please try again later.' },
   skip: (req) => isLoopback(req.ip || ''),
 });

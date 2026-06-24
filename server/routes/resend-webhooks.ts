@@ -6,6 +6,7 @@
 
 import express, { Request, Response, Router } from 'express';
 import crypto from 'crypto';
+import { pool } from '../db';
 
 const router: Router = express.Router();
 
@@ -154,8 +155,6 @@ router.get('/health', (req: Request, res: Response) => {
 router.post('/inbound', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
   try {
     const { recordInboundMessage } = await import('../services/aas-audit');
-    const { Pool } = await import('pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
     const body = req.body || {};
     const fromRaw = body.from || body.From || {};

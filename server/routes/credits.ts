@@ -9,11 +9,13 @@ import {
   addCredits,
   getOperationCreditCost,
   canAfford,
+  grantMonthlyCreditsIfDue,
 } from '../services/credit-engine';
 import {
   OPERATION_COSTS,
   CREDIT_PACKAGES,
   TIER_CREDIT_ALLOCATIONS,
+  DEFAULT_MARKUP_MULTIPLIER,
   getFullPricingTable,
   type OperationType,
 } from '../../shared/credit-pricing';
@@ -36,9 +38,15 @@ router.get('/api/credits/balance', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
+    // Self-healing monthly subscription credit grant (idempotent per billing period).
+    let monthlyGrant: { granted: boolean; credits: number; plan: string } | null = null;
+    try {
+      monthlyGrant = await grantMonthlyCreditsIfDue(userEmail);
+    } catch { /* non-fatal */ }
+
     const { credits, isAdmin } = await getUserBalance(userEmail);
 
-    res.json({ credits, isAdmin });
+    res.json({ credits, isAdmin, monthlyGrant });
   } catch (error: any) {
     console.error('Error fetching credits:', error);
     res.status(500).json({ error: error.message });
@@ -99,6 +107,128 @@ router.post('/api/credits/verify-payment', async (req, res) => {
     res.json({ success: true, credits, newBalance: result.newBalance });
   } catch (error: any) {
     console.error('Error verifying payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// Stripe Checkout — buy a credit package (hosted checkout, recommended flow)
+// ============================================
+router.post('/api/credits/create-checkout-session', async (req, res) => {
+  try {
+    const { email, packageId, tier, successUrl, cancelUrl } = req.body || {};
+
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const pkg = CREDIT_PACKAGES.find((p) => p.id === packageId);
+    if (!pkg) return res.status(400).json({ error: 'Invalid packageId' });
+
+    const origin =
+      (req.headers.origin as string) ||
+      (req.headers.referer ? new URL(req.headers.referer as string).origin : '') ||
+      process.env.APP_BASE_URL ||
+      'https://boostify.app';
+
+    // Return the user to wherever they launched checkout from, appending the session id.
+    const returnBase = (successUrl || origin).split('#')[0];
+    const successWithSession = `${returnBase}${returnBase.includes('?') ? '&' : '?'}credits_session={CHECKOUT_SESSION_ID}`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      customer_email: email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: Math.round(pkg.priceUsd * 100),
+            product_data: {
+              name: `Boostify Credits — ${pkg.label} (${pkg.credits.toLocaleString()} credits)`,
+              description: `One-time purchase of ${pkg.credits.toLocaleString()} Boostify AI credits.`,
+            },
+          },
+        },
+      ],
+      metadata: {
+        type: 'credit_purchase',
+        userEmail: email,
+        credits: String(pkg.credits),
+        packageId: pkg.id,
+        priceUsd: String(pkg.priceUsd),
+        tier: tier || 'free',
+      },
+      success_url: successWithSession,
+      cancel_url: cancelUrl || origin,
+    });
+
+    res.json({ success: true, url: session.url, sessionId: session.id });
+  } catch (error: any) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify a completed Checkout Session and credit the user (idempotent).
+router.post('/api/credits/verify-checkout', async (req, res) => {
+  try {
+    const { sessionId } = req.body || {};
+    if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status !== 'paid') {
+      return res.status(400).json({ error: 'Payment not completed', paymentStatus: session.payment_status });
+    }
+
+    const md = session.metadata || {};
+    if (md.type !== 'credit_purchase') {
+      return res.status(400).json({ error: 'Not a credit purchase session' });
+    }
+
+    const email = md.userEmail;
+    const credits = parseInt(md.credits || '0', 10);
+    const priceUsd = parseFloat(md.priceUsd || '0');
+    if (!email || credits <= 0) {
+      return res.status(400).json({ error: 'Invalid session metadata' });
+    }
+
+    // Idempotency: bail if we already credited this checkout session.
+    const [already] = await db
+      .select()
+      .from(creditTransactions)
+      .where(eq(creditTransactions.stripeCheckoutSessionId, sessionId))
+      .limit(1);
+    if (already) {
+      const bal = await getUserBalance(email);
+      return res.json({ success: true, alreadyProcessed: true, credits, newBalance: bal.credits });
+    }
+
+    const result = await addCredits(
+      email,
+      credits,
+      'purchase',
+      `Purchased ${credits.toLocaleString()} credits (${md.packageId})`,
+      {
+        stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+        tier: md.tier || 'free',
+        paidUsd: priceUsd,
+        markup: DEFAULT_MARKUP_MULTIPLIER,
+      }
+    );
+
+    // Tag a marker transaction with the checkout session id for idempotency.
+    await db.insert(creditTransactions).values({
+      userEmail: email,
+      amount: 0,
+      type: 'purchase',
+      description: `Checkout session ${sessionId} settled`,
+      stripeCheckoutSessionId: sessionId,
+    });
+
+    res.json({ success: true, credits, newBalance: result.newBalance });
+  } catch (error: any) {
+    console.error('Error verifying checkout:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -26,6 +26,7 @@ import {
   type OperationType,
 } from '../../shared/credit-pricing';
 import { requireAdmin } from '../middleware/require-admin';
+import { getTreasuryOverview, recordTopup, configureProvider } from '../services/treasury-engine';
 
 const router = express.Router();
 router.use('/api/admin/pricing', requireAdmin);
@@ -266,6 +267,56 @@ router.post('/api/admin/pricing/reset-cache', async (req, res) => {
 
     res.json({ success: true, message: 'Pricing cache invalidated' });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// PROVIDER TREASURY (smart provider-funding pool)
+// ============================================
+router.use('/api/admin/treasury', requireAdmin);
+
+// GET /api/admin/treasury — overview of reserve, spend, provider balances + alerts
+router.get('/api/admin/treasury', async (req, res) => {
+  try {
+    const overview = await getTreasuryOverview();
+    res.json({ success: true, ...overview });
+  } catch (error: any) {
+    console.error('Error fetching treasury overview:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/treasury/topup — record a real provider top-up { provider, amountUsd }
+router.post('/api/admin/treasury/topup', async (req, res) => {
+  try {
+    const { provider, amountUsd } = req.body || {};
+    const amount = parseFloat(amountUsd);
+    if (!provider || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'provider and positive amountUsd are required' });
+    }
+    const account = await recordTopup(provider, amount, (req as any).adminEmail || 'admin');
+    res.json({ success: true, account });
+  } catch (error: any) {
+    console.error('Error recording top-up:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/treasury/configure — set thresholds / balance / auto-recharge
+router.post('/api/admin/treasury/configure', async (req, res) => {
+  try {
+    const { provider, externalBalanceUsd, lowBalanceThresholdUsd, autoRechargeEnabled, autoRechargeAmountUsd } = req.body || {};
+    if (!provider) return res.status(400).json({ error: 'provider is required' });
+    const account = await configureProvider(provider, {
+      externalBalanceUsd: externalBalanceUsd !== undefined ? parseFloat(externalBalanceUsd) : undefined,
+      lowBalanceThresholdUsd: lowBalanceThresholdUsd !== undefined ? parseFloat(lowBalanceThresholdUsd) : undefined,
+      autoRechargeEnabled: autoRechargeEnabled !== undefined ? Boolean(autoRechargeEnabled) : undefined,
+      autoRechargeAmountUsd: autoRechargeAmountUsd !== undefined ? parseFloat(autoRechargeAmountUsd) : undefined,
+    });
+    res.json({ success: true, account });
+  } catch (error: any) {
+    console.error('Error configuring provider treasury:', error);
     res.status(500).json({ error: error.message });
   }
 });

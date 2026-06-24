@@ -11,10 +11,14 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// Single shared pool for the whole server. Every route/service imports THIS
+// pool (never `new Pool(...)`) so connections to Neon are centrally bounded.
+// Size is env-tunable for production scaling (Neon pooled endpoint supports
+// many clients). Default 20 — raise PG_POOL_MAX when scaling compute.
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
-  max: 10,
+  max: Number(process.env.PG_POOL_MAX) > 0 ? Number(process.env.PG_POOL_MAX) : 20,
 });
 export const db = drizzle({ client: pool, schema });

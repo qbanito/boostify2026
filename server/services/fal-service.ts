@@ -214,7 +214,7 @@ async function generateImageWithFluxDevForFolder(
   }
 }
 
-async function editImageWithFluxKontext(
+export async function editImageWithFluxKontext(
   imageUrl: string,
   prompt: string,
   options: {
@@ -5010,6 +5010,7 @@ export async function generateSeedanceFastReferenceVideo(params: {
   bpmFeel?: string;
   segmentType?: string;
   songTitle?: string;
+  referenceVideoUrl?: string;
   modelPath?: string;
 }): Promise<SeedanceReferenceVideoResult> {
   if (!FAL_API_KEY) {
@@ -5031,13 +5032,23 @@ export async function generateSeedanceFastReferenceVideo(params: {
     const imageUrls = falIdentityImageUrl === falSceneImageUrl
       ? [falSceneImageUrl]
       : [falIdentityImageUrl, falSceneImageUrl];
-    const prompt = buildSeedanceSingerPrompt({ ...params, hasIdentityReference: imageUrls.length > 1 });
+    // Optional recorded performance clip (webcam) → reference video so Seedance copies the
+    // artist's real timing / head motion / mouth shapes onto the look (microphone) image.
+    const falReferenceVideoUrl = params.referenceVideoUrl
+      ? await uploadUrlToFalStorage(params.referenceVideoUrl, 'seedance-performance-reference.mp4').catch(() => undefined)
+      : undefined;
+    const basePrompt = buildSeedanceSingerPrompt({ ...params, hasIdentityReference: imageUrls.length > 1 });
+    const prompt = falReferenceVideoUrl
+      ? `${basePrompt} Match the timing, energy, head movement and mouth shapes of the reference performance video, while keeping the exact face/identity and the wardrobe, microphone and studio environment from the reference image.`
+      : basePrompt;
+    if (falReferenceVideoUrl) logger.log(`[${seedanceModelLabel}] Using recorded performance reference video`);
 
     const submitRes = await axios.post(
       `${FAL_QUEUE_URL}/${seedanceModelPath}`,
       {
         prompt,
         image_urls: imageUrls,
+        ...(falReferenceVideoUrl ? { video_urls: [falReferenceVideoUrl] } : {}),
         audio_urls: [falAudioUrl],
         resolution: '720p',
         duration: String(duration),
@@ -5084,11 +5095,12 @@ export async function replaceVideoAudioWithOriginalSong(params: {
   const os = nodeRequire('os') as typeof import('os');
   const path = nodeRequire('path') as typeof import('path');
   const fs = nodeRequire('fs') as typeof import('fs');
+  const { spawnSync } = nodeRequire('child_process') as typeof import('child_process');
   const ffmpeg = nodeRequire('fluent-ffmpeg');
-  const ffmpegPath = nodeRequire('@ffmpeg-installer/ffmpeg').path;
+  const ffmpegPath = nodeRequire('@ffmpeg-installer/ffmpeg').path as string;
   ffmpeg.setFfmpegPath(ffmpegPath);
 
-  const safeStartSeconds = Math.max(0, Number.isFinite(params.clipStartSeconds || 0) ? Number(params.clipStartSeconds || 0) : 0);
+  const requestedStart = Math.max(0, Number.isFinite(params.clipStartSeconds || 0) ? Number(params.clipStartSeconds || 0) : 0);
   const safeDuration = Math.max(4, Math.min(15, Number(params.duration || 5)));
   const tmpDir = os.tmpdir();
   const stamp = `${Date.now()}_${Math.round(Math.random() * 100000)}`;
@@ -5096,38 +5108,107 @@ export async function replaceVideoAudioWithOriginalSong(params: {
   const inputAudioPath = path.join(tmpDir, `seedance_audio_${stamp}.mp3`);
   const outputPath = path.join(tmpDir, `seedance_locked_${stamp}.mp4`);
 
-  try {
-    logger.log(`[Seedance 2.0] Locking final audio to original song | start=${safeStartSeconds}s duration=${safeDuration}s`);
-    const [videoRes, audioRes] = await Promise.all([
-      axios.get(params.videoUrl, { responseType: 'arraybuffer', timeout: 60000 }),
-      axios.get(params.audioUrl, { responseType: 'arraybuffer', timeout: 60000 }),
-    ]);
-    fs.writeFileSync(inputVideoPath, Buffer.from(videoRes.data));
-    fs.writeFileSync(inputAudioPath, Buffer.from(audioRes.data));
+  // Download a remote asset to disk with retries (FAL/Firebase URLs occasionally blip).
+  const downloadWithRetry = async (url: string, destPath: string, label: string): Promise<number> => {
+    let lastErr: any;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await axios.get(url, {
+          responseType: 'arraybuffer',
+          timeout: 90000,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          headers: { 'User-Agent': 'Mozilla/5.0 (Boostify Promo Clips)' },
+          validateStatus: (s) => s >= 200 && s < 300,
+        });
+        const buf = Buffer.from(res.data);
+        if (!buf || buf.length < 1024) throw new Error(`${label} download too small (${buf?.length || 0} bytes)`);
+        fs.writeFileSync(destPath, buf);
+        return buf.length;
+      } catch (e: any) {
+        lastErr = e;
+        const code = e?.response?.status ? `HTTP ${e.response.status}` : (e?.code || e?.message || 'error');
+        logger.warn(`[Seedance 2.0] ${label} download attempt ${attempt}/3 failed (${code})`);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+    throw new Error(`Could not download ${label}: ${lastErr?.response?.status ? `HTTP ${lastErr.response.status}` : (lastErr?.message || 'unknown')}`);
+  };
 
-    await new Promise<void>((resolve, reject) => {
-      ffmpeg()
-        .input(inputVideoPath)
-        .input(inputAudioPath)
-        .complexFilter([
-          `[1:a]atrim=start=${safeStartSeconds}:duration=${safeDuration},asetpts=PTS-STARTPTS[a]`,
-        ])
-        .outputOptions([
-          '-map 0:v:0',
-          '-map [a]',
-          '-c:v copy',
-          '-c:a aac',
-          '-b:a 192k',
-          '-movflags +faststart',
-          '-shortest',
-        ])
-        .output(outputPath)
-        .on('end', () => resolve())
-        .on('error', (err: Error) => reject(err))
-        .run();
-    });
+  // Probe a media file via the ffmpeg binary (no ffprobe needed). Returns {durationSec, hasAudio}.
+  const probeMedia = (filePath: string): { durationSec: number; hasAudio: boolean } => {
+    try {
+      const out = spawnSync(ffmpegPath, ['-hide_banner', '-i', filePath], { encoding: 'utf8' });
+      const stderr = `${out.stderr || ''}`;
+      const hasAudio = /Stream #\d+:\d+.*: Audio:/.test(stderr);
+      const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      let durationSec = 0;
+      if (m) durationSec = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+      return { durationSec, hasAudio };
+    } catch {
+      return { durationSec: 0, hasAudio: false };
+    }
+  };
+
+  // Mux: original song (seeked to start, capped to the video length) onto the Seedance video.
+  const runMux = (startSeconds: number): Promise<void> => new Promise<void>((resolve, reject) => {
+    ffmpeg()
+      .input(inputVideoPath)
+      .input(inputAudioPath)
+      .inputOptions(startSeconds > 0 ? [`-ss ${startSeconds.toFixed(3)}`] : [])
+      .outputOptions([
+        '-map 0:v:0',
+        '-map 1:a:0',
+        '-c:v copy',
+        '-c:a aac',
+        '-b:a 192k',
+        '-ar 44100',
+        '-movflags +faststart',
+        '-shortest',
+      ])
+      .output(outputPath)
+      .on('end', () => resolve())
+      .on('error', (err: Error) => reject(err))
+      .run();
+  });
+
+  try {
+    logger.log(`[Seedance 2.0] Locking final audio to original song | start=${requestedStart}s duration=${safeDuration}s`);
+    const [videoBytes, audioBytes] = await Promise.all([
+      downloadWithRetry(params.videoUrl, inputVideoPath, 'Seedance video'),
+      downloadWithRetry(params.audioUrl, inputAudioPath, 'original song'),
+    ]);
+
+    // Clamp the start so there is always audio left to play under the ~5s clip.
+    const songInfo = probeMedia(inputAudioPath);
+    if (!songInfo.hasAudio) {
+      throw new Error('Selected song file has no decodable audio stream');
+    }
+    let startSeconds = requestedStart;
+    if (songInfo.durationSec > 0 && startSeconds > Math.max(0, songInfo.durationSec - safeDuration)) {
+      const clamped = Math.max(0, songInfo.durationSec - safeDuration);
+      logger.warn(`[Seedance 2.0] clipStart ${startSeconds}s exceeds song (${songInfo.durationSec.toFixed(1)}s) → clamping to ${clamped.toFixed(1)}s`);
+      startSeconds = clamped;
+    }
+    logger.log(`[Seedance 2.0] downloaded video=${(videoBytes / 1024).toFixed(0)}KB song=${(audioBytes / 1024).toFixed(0)}KB songDur=${songInfo.durationSec.toFixed(1)}s → mux start=${startSeconds.toFixed(2)}s`);
+
+    await runMux(startSeconds);
+
+    // Guarantee the muxed video actually carries the song audio; retry from 0 if not.
+    let outInfo = probeMedia(outputPath);
+    if (!outInfo.hasAudio && startSeconds > 0) {
+      logger.warn('[Seedance 2.0] Muxed output had no audio stream; retrying from song start 0s');
+      await runMux(0);
+      outInfo = probeMedia(outputPath);
+    }
+    if (!outInfo.hasAudio) {
+      throw new Error('Muxed video did not contain an audio stream after ffmpeg');
+    }
 
     const finalBuffer = fs.readFileSync(outputPath);
+    if (!finalBuffer || finalBuffer.length < 1024) {
+      throw new Error('Muxed video output is empty');
+    }
     const finalUrl = await uploadBufferToFalStorage(finalBuffer, 'seedance_original_song_locked.mp4', 'video/mp4');
     logger.log(`[Seedance 2.0] ✅ Final video audio locked to original song → ${finalUrl.substring(0, 70)}`);
     return { success: true, videoUrl: finalUrl };

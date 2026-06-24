@@ -14,7 +14,7 @@
  * behind the Secret Vault layer (see `vault_ref` columns).
  */
 import { Router, type Request, type Response } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import { requireAdmin } from '../middleware/require-admin';
 import { generateIdentity, applyIdentity } from '../services/aiaps/identity-engine';
 import { generateHandles, scoreHandle, probeAvailability, persistCandidates } from '../services/aiaps/username-engine';
@@ -34,16 +34,6 @@ import { generateArtistImages } from '../services/aiaps/image-engine';
 import { runDiagnostic } from '../services/aiaps/diagnostic';
 
 const router = Router();
-
-// ---------------------------------------------------------------------------
-// Database pool — reuse shared DATABASE_URL
-// ---------------------------------------------------------------------------
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 let bootstrapped = false;
 async function ensureTables() {

@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect, useCallback } from "react";
+﻿import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { logger } from "@/lib/logger";
 import { FanCaptureModal } from "./FanCaptureModal";
 import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "framer-motion";
@@ -37,6 +37,7 @@ import {
 } from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
+const CreditsWidget = lazy(() => import("../credits/CreditsWidget"));
 import { PremiumGate, UploadLimitBanner, ModuleGuide } from "../ui/premium-gate";
 import { useTranslation } from "react-i18next";
 import {
@@ -8098,6 +8099,17 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   </Link>
                 </div>
               </div>
+            )}
+
+            {/* Owner-only: AI credits balance + buy more (powers all AI tools) */}
+            {isOwnProfile && user?.email && (
+              <Suspense fallback={null}>
+                <CreditsWidget
+                  email={user.email}
+                  accentColor={colors.hexAccent}
+                  primaryColor={colors.hexPrimary}
+                />
+              </Suspense>
             )}
 
             {/* Owner quick action: generate/update AI narrative blocks directly from the module area */}

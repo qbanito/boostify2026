@@ -25,8 +25,7 @@ async function vinylQuery(sql_: string, params: unknown[] = []) {
 }
 
 // Use the underlying pool directly since vinyl tables are added via migration
-import { Pool } from 'pg';
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { pool } from '../db';
 
 async function q(text: string, params: unknown[] = []) {
   const res = await pool.query(text, params);

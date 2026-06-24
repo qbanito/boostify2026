@@ -17,14 +17,13 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import Stripe from 'stripe';
 import axios from 'axios';
 import { authenticate } from '../middleware/auth';
 import { storage } from '../firebase';
 
 const router = Router();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-01-27.acacia' as any });
 
 const FAL_KEY = process.env.FAL_API_KEY || process.env.FAL_KEY || '';

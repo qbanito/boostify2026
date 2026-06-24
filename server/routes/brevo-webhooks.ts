@@ -8,11 +8,10 @@
  */
 
 import express, { Request, Response, Router } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import { registerBounce } from '../services/email-verification-service.js';
 
 const router: Router = express.Router();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Lazy import for activation tracker (avoids circular deps)
 let _trackEvent: ((email: string, eventType: string, data?: Record<string, any>, contactId?: number) => Promise<void>) | null = null;

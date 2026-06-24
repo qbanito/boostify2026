@@ -18,17 +18,10 @@
  * already used by other modules in this codebase.
  */
 import { Router, type Request, type Response } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
 
 let bootstrapped = false;
 async function ensureTable(): Promise<void> {

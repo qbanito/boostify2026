@@ -250,7 +250,7 @@ interface PromoStyleSelectorProps {
   artistId: string;
   referenceImageUrl?: string;
   selectedStyleId?: string;
-  onSelectStyle: (style: VisualStyle) => void;
+  onSelectStyle: (style: VisualStyle, previewUrl?: string) => void;
   accent?: string;
 }
 
@@ -268,7 +268,7 @@ export function PromoStyleSelector({
   // Load cached global style preview images from Firestore on mount
   useEffect(() => {
     let cancelled = false;
-    apiRequest({ url: '/api/promo-clips/previews/styles', method: 'GET' })
+    apiRequest({ url: `/api/promo-clips/previews/styles`, method: 'GET' })
       .then((data: any) => {
         if (cancelled || !data?.previews) return;
         const loaded: Record<string, StylePreview> = {};
@@ -414,7 +414,7 @@ export function PromoStyleSelector({
                   transition={{ delay: idx * 0.03, duration: 0.3 }}
                   whileHover={{ scale: 1.04, y: -2 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => onSelectStyle(style)}
+                  onClick={() => onSelectStyle(style, preview?.imageUrl)}
                   className="relative group rounded-xl overflow-hidden text-left"
                   style={{
                     aspectRatio: '2/3',

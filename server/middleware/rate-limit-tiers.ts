@@ -43,8 +43,12 @@ const isLocal = (req: Request) => {
 // ─── Minimal ioredis-backed store (only used when REDIS_URL is set) ──────────
 class RedisRateStore implements Store {
   private windowMs = 60_000;
-  prefix = 'rl:';
+  prefix: string;
   private client = getRedisConnection();
+
+  constructor(prefix = 'rl:') {
+    this.prefix = prefix;
+  }
 
   init(options: Options): void {
     this.windowMs = options.windowMs;
@@ -75,9 +79,20 @@ class RedisRateStore implements Store {
   }
 }
 
-function makeStore(): Store | undefined {
-  // Only use Redis store when a connection is actually available.
-  return getRedisConnection() ? new RedisRateStore() : undefined;
+/**
+ * Build a shared Redis-backed rate-limit store with a UNIQUE prefix per
+ * limiter. Each express-rate-limit instance MUST get its own store with a
+ * distinct prefix — otherwise different limiters (api/auth/ai) would collide on
+ * the same IP key in Redis and share a single counter. Returns undefined when
+ * no Redis is configured (express-rate-limit then uses its per-instance
+ * MemoryStore, which is correct on a single instance).
+ */
+export function makeRateStore(prefix: string): Store | undefined {
+  return getRedisConnection() ? new RedisRateStore(prefix) : undefined;
+}
+
+function makeStore(prefix: string): Store | undefined {
+  return makeRateStore(prefix);
 }
 
 /**
@@ -91,7 +106,7 @@ export const userReadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: userOrIp,
   skip: isLocal,
-  store: makeStore(),
+  store: makeStore('rl:read:'),
   message: { success: false, error: 'Too many requests, please slow down.' },
 });
 
@@ -108,7 +123,7 @@ export function heavyModuleLimiter(module: string, maxPerHour = 20) {
     legacyHeaders: false,
     keyGenerator: (req: Request) => `${module}:${userOrIp(req)}`,
     skip: isLocal,
-    store: makeStore(),
+    store: makeStore(`rl:heavy:${module}:`),
     message: {
       success: false,
       error: `Has alcanzado el límite del módulo "${module}". Intenta de nuevo más tarde.`,

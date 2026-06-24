@@ -16,8 +16,11 @@ import {
   creditTransactions,
   adminPricingConfig,
   adminGlobalSettings,
+  subscriptionCreditGrants,
+  subscriptions,
+  users,
 } from '../db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and, desc } from 'drizzle-orm';
 import {
   OPERATION_COSTS,
   DEFAULT_MARKUP_MULTIPLIER,
@@ -25,6 +28,7 @@ import {
   TIER_CREDIT_ALLOCATIONS,
   type OperationType,
 } from '../../shared/credit-pricing';
+import { reserveFromPurchase, recordProviderSpend } from './treasury-engine';
 
 const ADMIN_EMAIL = 'convoycubano@gmail.com';
 
@@ -309,6 +313,12 @@ export async function chargeCredits(
 
   console.log(`💳 Charged ${creditsToCharge} credits from ${userEmail} for ${operationType} — balance: ${updated.credits}`);
 
+  // Record the real provider spend against the treasury reserve (best-effort).
+  const opCost = (op?.internalCostUsd || 0) * quantity;
+  if (opCost > 0) {
+    void recordProviderSpend(opCost, { operationType, source: operationType, refId: tx?.id ? String(tx.id) : undefined });
+  }
+
   return {
     success: true,
     creditsCharged: creditsToCharge,
@@ -373,6 +383,15 @@ export async function chargeCreditsFromUsd(
 
   console.log(`💳 Charged ${creditsToCharge} credits ($${internalCostUsd.toFixed(4)} internal) from ${userEmail} — balance: ${updated.credits}`);
 
+  // Record the real provider spend against the treasury reserve (best-effort).
+  if (internalCostUsd > 0) {
+    void recordProviderSpend(internalCostUsd, {
+      provider: options.metadata?.provider,
+      source: description,
+      refId: tx?.id ? String(tx.id) : undefined,
+    });
+  }
+
   return {
     success: true,
     creditsCharged: creditsToCharge,
@@ -392,6 +411,8 @@ export async function addCredits(
   options: {
     stripePaymentIntentId?: string;
     tier?: string;
+    paidUsd?: number;   // real money the user paid (purchases) → drives treasury reserve
+    markup?: number;    // markup applied at purchase time
   } = {}
 ): Promise<{ success: boolean; newBalance: number }> {
   // Ensure user exists
@@ -455,7 +476,94 @@ export async function addCredits(
     .from(userCredits)
     .where(eq(userCredits.userEmail, userEmail));
 
+  // On real purchases, reserve the provider-funding share into the treasury (best-effort).
+  if (type === 'purchase' && options.paidUsd && options.paidUsd > 0) {
+    const markup = options.markup || (await getGlobalMarkup());
+    void reserveFromPurchase(options.paidUsd, markup, options.stripePaymentIntentId);
+  }
+
   return { success: true, newBalance: updated?.credits || 0 };
+}
+
+// ============================================
+// SUBSCRIPTION MONTHLY CREDIT GRANTS
+// ============================================
+
+// Map subscription plan enum → credit tier key in TIER_CREDIT_ALLOCATIONS.
+const PLAN_TO_TIER: Record<string, string> = {
+  free: 'free',
+  artist: 'artist',
+  basic: 'artist',
+  creator: 'creator',
+  pro: 'professional',
+  professional: 'professional',
+  premium: 'enterprise',
+  enterprise: 'enterprise',
+};
+
+/**
+ * Grant the user's monthly credit allotment for their current billing period,
+ * exactly once. Lazy/idempotent — safe to call on every balance read; the unique
+ * (user_email, period_key) index prevents double grants. Monthly credits are
+ * NON-accumulable: each period gets its own allotment keyed by period.
+ */
+export async function grantMonthlyCreditsIfDue(userEmail: string): Promise<{ granted: boolean; credits: number; plan: string }> {
+  if (!userEmail || userEmail === ADMIN_EMAIL) {
+    return { granted: false, credits: 0, plan: 'admin' };
+  }
+
+  try {
+    // Resolve plan from the user's active subscription (fallback to free tier).
+    let plan = 'free';
+    let periodKey = new Date().toISOString().slice(0, 7); // 'YYYY-MM' for free/no-sub
+
+    const [userRow] = await db.select().from(users).where(eq(users.email, userEmail));
+    if (userRow) {
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(eq(subscriptions.userId, userRow.id), eq(subscriptions.status, 'active')))
+        .orderBy(desc(subscriptions.currentPeriodEnd))
+        .limit(1);
+      if (sub) {
+        plan = PLAN_TO_TIER[sub.plan] || 'free';
+        // Use the Stripe billing-period start so the key rolls exactly with billing.
+        periodKey = sub.currentPeriodStart
+          ? new Date(sub.currentPeriodStart).toISOString().slice(0, 10)
+          : (sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toISOString().slice(0, 10) : periodKey);
+      }
+    }
+
+    const tier = TIER_CREDIT_ALLOCATIONS[plan];
+    const monthlyCredits = tier?.monthlyCredits || 0;
+    if (monthlyCredits <= 0) return { granted: false, credits: 0, plan };
+
+    // Idempotent insert — unique index blocks a second grant for the same period.
+    try {
+      await db.insert(subscriptionCreditGrants).values({
+        userEmail,
+        plan,
+        periodKey,
+        creditsGranted: monthlyCredits,
+      });
+    } catch (e) {
+      // Already granted for this period.
+      return { granted: false, credits: 0, plan };
+    }
+
+    await addCredits(
+      userEmail,
+      monthlyCredits,
+      'subscription',
+      `Monthly ${plan} plan credits (${periodKey})`,
+    );
+
+    console.log(`🎁 Granted ${monthlyCredits} monthly ${plan} credits to ${userEmail} (${periodKey})`);
+    return { granted: true, credits: monthlyCredits, plan };
+  } catch (e) {
+    console.warn('[credits] grantMonthlyCreditsIfDue failed (non-fatal):', (e as Error)?.message);
+    return { granted: false, credits: 0, plan: 'free' };
+  }
 }
 
 // ============================================

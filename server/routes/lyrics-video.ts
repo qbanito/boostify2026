@@ -854,14 +854,43 @@ router.get('/public-videos', async (req, res) => {
   try {
     await ensureLyricsVideoJobsTable();
     const artistId = parseInt(req.query.artistId as string, 10);
-    if (!artistId || isNaN(artistId)) return res.json({ jobs: [] });
+    if (!artistId || isNaN(artistId)) return res.json({ jobs: [], channel: null });
     const { rows } = await pool.query(
-      `SELECT id, status, output_url, youtube_url, song_title, artist_name, cover_art_url, created_at
+      `SELECT id, status, output_url, youtube_url, song_title, artist_name, cover_art_url, thumbnail_url, created_at
        FROM lyrics_video_jobs WHERE artist_id=$1 AND status='done' AND output_url IS NOT NULL
        ORDER BY created_at DESC LIMIT 20`,
       [artistId]
     );
-    return res.json({ jobs: rows });
+
+    // Resolve the artist's YouTube channel + lyric playlist so the visitor view can
+    // link out to the channel/playlist instead of stacking embedded players.
+    let channel: {
+      id: string | null; title: string | null; thumbnailUrl: string | null;
+      url: string | null; playlistUrl: string | null;
+    } | null = null;
+    try {
+      const { rows: connRows } = await pool.query(
+        `SELECT yc.channel_id, yc.channel_title, yc.thumbnail_url, yc.lyric_playlist_id
+           FROM youtube_connections yc
+          WHERE yc.user_id = $1
+             OR yc.user_id = (SELECT generated_by FROM users WHERE id = $1)
+          ORDER BY (yc.user_id = $1) DESC
+          LIMIT 1`,
+        [artistId]
+      );
+      const c = connRows[0];
+      if (c && (c.channel_id || c.lyric_playlist_id)) {
+        channel = {
+          id: c.channel_id || null,
+          title: c.channel_title || null,
+          thumbnailUrl: c.thumbnail_url || null,
+          url: c.channel_id ? `https://www.youtube.com/channel/${c.channel_id}` : null,
+          playlistUrl: c.lyric_playlist_id ? `https://www.youtube.com/playlist?list=${c.lyric_playlist_id}` : null,
+        };
+      }
+    } catch { /* best-effort: channel stays null */ }
+
+    return res.json({ jobs: rows, channel });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

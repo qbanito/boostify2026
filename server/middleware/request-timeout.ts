@@ -25,6 +25,9 @@ const DEFAULT_SKIP_PREFIXES = [
   '/api/proxy',
   '/api/karaoke',
   '/api/lyrics-video',
+  // Promo Clips runs synchronous AI media generation (Hollywood poster via Flux
+  // Kontext, lipsync/narrative video) that legitimately exceeds the API ceiling.
+  '/api/promo-clips',
 ];
 
 export function requestTimeout(ms = 25_000, skipPrefixes: string[] = DEFAULT_SKIP_PREFIXES) {

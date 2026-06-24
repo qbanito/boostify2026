@@ -41,6 +41,21 @@ interface RenderStatus {
   log?: string;
   song_title?: string;
   artist_name?: string;
+  cover_art_url?: string;
+  thumbnail_url?: string;
+}
+
+interface PublicChannel {
+  id: string | null;
+  title: string | null;
+  thumbnailUrl: string | null;
+  url: string | null;
+  playlistUrl: string | null;
+}
+
+interface PublicVideosResponse {
+  jobs: RenderStatus[];
+  channel: PublicChannel | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1696,17 +1711,19 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
   const [styleOpts, setStyleOpts] = useState<StyleOptions | null>(null);
 
   // Fetch completed jobs for the public (visitor) view
-  const { data: publicJobs } = useQuery<RenderStatus[]>({
+  const { data: publicData } = useQuery<PublicVideosResponse>({
     queryKey: ['lyricsVideoPublicJobs', artistId],
     queryFn: async () => {
       const res = await fetch(`/api/lyrics-video/public-videos?artistId=${artistId}`);
-      if (!res.ok) return [];
+      if (!res.ok) return { jobs: [], channel: null };
       const data = await res.json();
-      return data.jobs ?? [];
+      return { jobs: data.jobs ?? [], channel: data.channel ?? null };
     },
     enabled: !isOwner && !!artistId,
     staleTime: 60_000,
   });
+  const publicJobs = publicData?.jobs;
+  const publicChannel = publicData?.channel;
 
   const handleTranscribeDone = useCallback((data: TranscribeResponse & { songTitle: string; artistName: string; coverArtUrl?: string }) => {
     setTranscription(data);
@@ -1728,46 +1745,125 @@ export const LyricsVideoModule: React.FC<LyricsVideoModuleProps> = ({ songs, art
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      {/* ── Visitor (non-owner) view: show finished videos only ── */}
+      {/* ── Visitor (non-owner) view: channel/playlist art + compact thumbnail grid ── */}
       {!isOwner && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {(!publicJobs || publicJobs.length === 0) ? (
             <div className="text-center py-10 text-zinc-500 text-sm">
               No lyrics videos yet.
             </div>
-          ) : (
-            publicJobs.map(job => (
-              <div
-                key={job.id}
-                className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/8 p-4 flex flex-col gap-3"
-              >
-                <div className="flex items-center gap-2">
-                  <Music className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                  <span className="text-sm font-semibold text-white">{job.song_title || 'Lyrics Video'}</span>
-                  {job.artist_name && <span className="text-xs text-zinc-500">· {job.artist_name}</span>}
-                </div>
-                {job.output_url && (
-                  <video
-                    src={job.output_url}
-                    controls
-                    className="w-full rounded-lg max-h-64 bg-black"
-                    playsInline
-                  />
-                )}
-                {job.youtube_url && (
+          ) : (() => {
+            // Primary YouTube destination: channel → playlist → first published video.
+            const firstYouTube = publicJobs.find(j => j.youtube_url)?.youtube_url || null;
+            const heroLink = publicChannel?.url || publicChannel?.playlistUrl || firstYouTube;
+            const heroImage =
+              publicChannel?.thumbnailUrl ||
+              publicJobs.find(j => j.thumbnail_url)?.thumbnail_url ||
+              publicJobs.find(j => j.cover_art_url)?.cover_art_url ||
+              null;
+            const channelName = publicChannel?.title || publicJobs[0]?.artist_name || artistName || 'YouTube';
+            const ytLabel = (job: RenderStatus) => job.youtube_url || heroLink;
+            return (
+              <>
+                {/* Channel / playlist hero card */}
+                {heroLink && (
                   <a
-                    href={job.youtube_url}
+                    href={heroLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors"
+                    className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black"
                   >
-                    <Youtube className="w-3.5 h-3.5" />
-                    Watch on YouTube
+                    {heroImage && (
+                      <img
+                        src={heroImage}
+                        alt={channelName}
+                        className="absolute inset-0 h-full w-full object-cover opacity-25 transition-opacity duration-300 group-hover:opacity-35"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="relative flex items-center gap-4 p-5">
+                      <div className="relative flex-shrink-0">
+                        {heroImage ? (
+                          <img
+                            src={heroImage}
+                            alt={channelName}
+                            className="h-16 w-16 rounded-full object-cover ring-2 ring-red-500/60"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20 ring-2 ring-red-500/60">
+                            <Youtube className="h-7 w-7 text-red-400" />
+                          </div>
+                        )}
+                        <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 shadow-lg">
+                          <Play className="h-3.5 w-3.5 text-white" fill="currentColor" />
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-red-400">
+                          {publicChannel?.url ? 'YouTube Channel' : publicChannel?.playlistUrl ? 'YouTube Playlist' : 'Watch on YouTube'}
+                        </p>
+                        <h3 className="truncate text-base font-bold text-white">{channelName}</h3>
+                        <p className="text-xs text-zinc-400">
+                          {publicJobs.length} lyric {publicJobs.length === 1 ? 'video' : 'videos'}
+                        </p>
+                      </div>
+                      <span className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-transform group-hover:scale-105">
+                        <Youtube className="h-4 w-4" />
+                        {publicChannel?.url ? 'Visit channel' : publicChannel?.playlistUrl ? 'Open playlist' : 'Watch'}
+                      </span>
+                    </div>
                   </a>
                 )}
-              </div>
-            ))
-          )}
+
+                {/* Compact thumbnail grid — links out instead of stacking players */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {publicJobs.map(job => {
+                    const thumb = job.thumbnail_url || job.cover_art_url || heroImage;
+                    const link = ytLabel(job) || job.output_url;
+                    return (
+                      <a
+                        key={job.id}
+                        href={link || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block overflow-hidden rounded-xl border border-white/8 bg-white/[0.03] transition-colors hover:border-red-500/40"
+                      >
+                        <div className="relative aspect-video w-full overflow-hidden bg-black">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt={job.song_title || 'Lyrics video'}
+                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Music className="h-6 w-6 text-zinc-600" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-600/90 shadow-lg">
+                              <Play className="h-4 w-4 text-white" fill="currentColor" />
+                            </span>
+                          </div>
+                          {job.youtube_url && (
+                            <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/70">
+                              <Youtube className="h-3.5 w-3.5 text-red-400" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 p-2.5">
+                          <Music className="h-3.5 w-3.5 flex-shrink-0 text-violet-400" />
+                          <span className="truncate text-xs font-medium text-white">{job.song_title || 'Lyrics Video'}</span>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 

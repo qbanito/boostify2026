@@ -13,7 +13,7 @@
  * artist_fan_leads so the existing nurture engine still reaches new fans.
  */
 import { Router, Request, Response } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import {
   fanClubMembers, fanPointEvents, artistFanLeads,
   users, artistPersonality, songs, aiSocialPosts,
@@ -24,14 +24,13 @@ import { generatePersonality } from '../agents/personality-agent';
 import { authenticate } from '../middleware/auth';
 import { sendFanNewsEmail, buildFanNewsEmail } from '../services/fan-club-email';
 import { loadBrandProfile } from '../services/artist-brand-profile';
-import { Pool } from 'pg';
 import crypto from 'crypto';
 import OpenAI from 'openai';
 
 // Raw pool for the Fan Club CRM tables (contacts + campaigns). Kept separate
 // from the drizzle schema so the loyalty system and the marketing CRM evolve
 // independently.
-const crmPool = new Pool({ connectionString: process.env.DATABASE_URL });
+const crmPool = pool;
 async function cq(text: string, params: unknown[] = []) {
   return crmPool.query(text, params);
 }

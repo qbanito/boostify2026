@@ -41,6 +41,8 @@ import {
   Zap,
   Megaphone,
   Target,
+  Store,
+  ArrowRight,
 } from 'lucide-react';
 import { getAuthToken } from '../../lib/firebase';
 
@@ -2037,6 +2039,14 @@ export default function SmartMerchModule({ artistId, artistName, isOwner = false
 
   if (!isOwner && !isLoading && products.length === 0 && !heroImageUrl) return null;
 
+  // Visitor (non-logged-in) experience: show an elegant cover + a small preview,
+  // and reveal the full catalog only inside the fullscreen storefront.
+  const isVisitor = !isOwner;
+  const VISITOR_PREVIEW = 4;
+  const storeCover = heroImageUrl || (products.find((p: SmartProduct) => p.image_url) as SmartProduct | undefined)?.image_url || null;
+  const visibleProducts: SmartProduct[] = isVisitor && !isFullscreen ? products.slice(0, VISITOR_PREVIEW) : products;
+  const hiddenCount = isVisitor && !isFullscreen ? Math.max(0, products.length - VISITOR_PREVIEW) : 0;
+
   const fullscreenBtn = (
     <button
       onClick={() => setIsFullscreen((v) => !v)}
@@ -2112,31 +2122,58 @@ export default function SmartMerchModule({ artistId, artistName, isOwner = false
         </div>
       )}
 
-      {/* Hero banner (AI generated: Boostify brand + artist identity) */}
-      {(!isOwner || activeTab === 'products') && (heroImageUrl ? (
-        <div className="relative rounded-2xl overflow-hidden mb-4" style={{ border: `1px solid ${accent}33` }}>
-          <img src={heroImageUrl} alt="Boostify Smart Merch" className="w-full h-40 md:h-52 object-cover" />
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)' }} />
-          <div className="absolute inset-0 p-4 md:p-6 flex flex-col justify-center max-w-[70%]">
-            <span className="text-[10px] uppercase tracking-[0.3em]" style={{ color: accent }}>Smart Merch Engine</span>
-            <h4 className="text-lg md:text-2xl font-extrabold text-white leading-tight mt-1">{artistName || 'Artist'} · Smart store</h4>
-            <p className="text-[11px] md:text-xs text-gray-300 mt-1">Physical products with NFC and QR that unlock exclusive experiences.</p>
-          </div>
-        </div>
-      ) : isOwner ? (
-        <div className="rounded-2xl mb-4 p-4 flex items-center justify-between gap-3" style={{ background: '#0b0f16', border: `1px dashed ${accent}33` }}>
-          <div className="flex items-center gap-2">
-            <ImagePlus className="h-5 w-5" style={{ color: accent }} />
-            <p className="text-xs text-gray-300">Generate an AI cover with the Boostify brand and your artist identity.</p>
-          </div>
-          <button onClick={generateHero} disabled={generatingHero}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-60 shrink-0"
-            style={{ background: accent, color: '#000' }}>
-            {generatingHero ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-            Generate cover
-          </button>
-        </div>
-      ) : null)}
+      {/* Hero banner (AI generated: Boostify brand + artist identity).
+          For visitors it doubles as the clickable entry into the fullscreen store. */}
+      {(!isOwner || activeTab === 'products') && (() => {
+        const cover = isVisitor ? storeCover : heroImageUrl;
+        if (cover) {
+          const clickable = isVisitor && !isFullscreen;
+          const Wrapper: any = clickable ? 'button' : 'div';
+          return (
+            <Wrapper
+              onClick={clickable ? () => setIsFullscreen(true) : undefined}
+              className={`group relative block w-full text-left rounded-2xl overflow-hidden mb-4 ${clickable ? 'cursor-pointer' : ''}`}
+              style={{ border: `1px solid ${accent}33` }}>
+              <img
+                src={cover}
+                alt="Boostify Smart Merch"
+                className={`w-full object-cover transition-transform duration-700 ${clickable ? 'h-52 md:h-72 group-hover:scale-105' : 'h-40 md:h-52'}`}
+              />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.12) 100%)' }} />
+              <div className="absolute inset-0 p-4 md:p-6 flex flex-col justify-center max-w-[80%]">
+                <span className="text-[10px] uppercase tracking-[0.3em]" style={{ color: accent }}>Smart Merch Engine</span>
+                <h4 className="text-lg md:text-2xl font-extrabold text-white leading-tight mt-1">{artistName || 'Artist'} · Smart store</h4>
+                <p className="text-[11px] md:text-xs text-gray-300 mt-1">Physical products with NFC and QR that unlock exclusive experiences.</p>
+                {clickable && (
+                  <span
+                    className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-full text-xs font-bold w-fit shadow-lg transition-all group-hover:gap-3"
+                    style={{ background: accent, color: '#000' }}>
+                    <Store className="h-3.5 w-3.5" /> Enter store{products.length ? ` · ${products.length} ${products.length === 1 ? 'product' : 'products'}` : ''}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
+            </Wrapper>
+          );
+        }
+        if (isOwner) {
+          return (
+            <div className="rounded-2xl mb-4 p-4 flex items-center justify-between gap-3" style={{ background: '#0b0f16', border: `1px dashed ${accent}33` }}>
+              <div className="flex items-center gap-2">
+                <ImagePlus className="h-5 w-5" style={{ color: accent }} />
+                <p className="text-xs text-gray-300">Generate an AI cover with the Boostify brand and your artist identity.</p>
+              </div>
+              <button onClick={generateHero} disabled={generatingHero}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-60 shrink-0"
+                style={{ background: accent, color: '#000' }}>
+                {generatingHero ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                Generate cover
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Contract status (owner only) */}
       {isOwner && (
@@ -2206,7 +2243,7 @@ export default function SmartMerchModule({ artistId, artistName, isOwner = false
             <p className="text-xs text-gray-500 mt-1">Create drafts, launch pre-orders and unlock shipping once the threshold is reached.</p>
           </div>
         ) : (
-          products.map((p: SmartProduct) => (
+          visibleProducts.map((p: SmartProduct) => (
             <ProductCard
               key={p.id}
               product={p}
@@ -2224,7 +2261,32 @@ export default function SmartMerchModule({ artistId, artistName, isOwner = false
       </div>
       )}
 
-      {(!isOwner || activeTab === 'products') && (
+      {/* Visitor: invite to open the full storefront instead of stacking every product */}
+      {isVisitor && !isFullscreen && products.length > 0 && (
+        <button
+          onClick={() => setIsFullscreen(true)}
+          className="group mt-4 w-full rounded-2xl px-5 py-4 flex items-center justify-between gap-3 transition"
+          style={{ background: `linear-gradient(90deg, ${accent}1f, transparent)`, border: `1px solid ${accent}44` }}>
+          <span className="flex items-center gap-3 text-left">
+            <span className="p-2 rounded-xl shrink-0" style={{ background: `${accent}22` }}>
+              <Store className="h-5 w-5" style={{ color: accent }} />
+            </span>
+            <span>
+              <span className="block text-sm font-bold text-white">Explore the full store</span>
+              <span className="block text-[11px] text-gray-400">
+                {hiddenCount > 0
+                  ? `+${hiddenCount} more ${hiddenCount === 1 ? 'product' : 'products'} · open the elegant fullscreen storefront`
+                  : 'Open the elegant fullscreen storefront'}
+              </span>
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold shrink-0 transition group-hover:gap-3" style={{ background: accent, color: '#000' }}>
+            Enter store <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </button>
+      )}
+
+      {(isOwner ? activeTab === 'products' : isFullscreen) && (
       <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
         <div className="rounded-lg p-3" style={{ background: '#111827', border: `1px solid ${accent}22` }}>
           <div className="flex items-center gap-2 text-xs text-gray-300 font-semibold"><QrCode className="h-4 w-4" /> QR activation</div>

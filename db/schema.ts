@@ -7181,6 +7181,59 @@ export type InsertAdminGlobalSettings = z.infer<typeof insertAdminGlobalSettings
 export type SelectAdminGlobalSettings = typeof adminGlobalSettings.$inferSelect;
 
 // ============================================
+// PROVIDER TREASURY — Smart funding pool so we never run out of provider tokens.
+// On every credit purchase we reserve the real internal-cost share (paid / markup)
+// into the pool; every billable operation records the real provider spend against it.
+// ============================================
+export const providerTreasuryAccounts = pgTable("provider_treasury_accounts", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull().unique(),            // 'fal' | 'openai' | 'gemini' | '_pool' | ...
+  reservedUsd: decimal("reserved_usd", { precision: 14, scale: 4 }).default('0').notNull(), // money set aside to buy tokens
+  spentUsd: decimal("spent_usd", { precision: 14, scale: 4 }).default('0').notNull(),        // real provider cost consumed
+  externalBalanceUsd: decimal("external_balance_usd", { precision: 14, scale: 4 }).default('0').notNull(), // last known balance at provider
+  lowBalanceThresholdUsd: decimal("low_balance_threshold_usd", { precision: 14, scale: 4 }).default('25').notNull(),
+  autoRechargeEnabled: boolean("auto_recharge_enabled").default(false).notNull(),
+  autoRechargeAmountUsd: decimal("auto_recharge_amount_usd", { precision: 14, scale: 4 }).default('0').notNull(),
+  status: text("status", { enum: ["healthy", "low", "critical"] }).default("healthy").notNull(),
+  lastAlertAt: timestamp("last_alert_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_provider_treasury_provider").on(table.provider),
+]);
+
+export const providerTreasuryTransactions = pgTable("provider_treasury_transactions", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull(),
+  type: text("type", { enum: ["reserve", "spend", "topup", "adjust"] }).notNull(),
+  amountUsd: decimal("amount_usd", { precision: 14, scale: 6 }).notNull(), // +reserve/+topup, -spend
+  balanceAfterUsd: decimal("balance_after_usd", { precision: 14, scale: 4 }),
+  source: text("source"),                                  // 'credit_purchase' | operationType | 'manual'
+  description: text("description"),
+  refId: text("ref_id"),                                   // stripe id, tx id, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_provider_treasury_tx_provider").on(table.provider),
+  index("idx_provider_treasury_tx_type").on(table.type),
+  index("idx_provider_treasury_tx_created").on(table.createdAt),
+]);
+
+// ============================================
+// SUBSCRIPTION CREDIT GRANTS — tracks the monthly credit allotment already granted
+// for a user's billing period so we never double-grant. Lazy-granted on balance read.
+// ============================================
+export const subscriptionCreditGrants = pgTable("subscription_credit_grants", {
+  id: serial("id").primaryKey(),
+  userEmail: text("user_email").notNull(),
+  plan: text("plan").notNull(),                            // resolved tier key
+  periodKey: text("period_key").notNull(),                // e.g. '2026-06' or stripe period start ISO
+  creditsGranted: integer("credits_granted").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_sub_grant_unique").on(table.userEmail, table.periodKey),
+]);
+
+// ============================================
 // ARTIST BUSINESS PLANS — Professional financial planning for artists
 // ============================================
 export const artistBusinessPlans = pgTable("artist_business_plans", {

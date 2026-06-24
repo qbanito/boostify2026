@@ -5,9 +5,9 @@
  * Genera videos cortos donde el artista canta sincronizado.
  *
  * Pipeline:
- *  1. Seleccionar canciÃ³n
- *  2. Analizar canciÃ³n â†’ detectar segmento viral (AI)
- *  3. Generar direcciÃ³n visual por gÃ©nero (AI)
+ *  1. Seleccionar canción
+ *  2. Analizar canción → detectar segmento viral (AI)
+ *  3. Generar dirección visual por género (AI)
  *  4. Generar imagen 9:16 del artista (FAL Flux Kontext)
  *  5. Generar video lipsync/performance (FAL OmniHuman, Seedance 2.0 o Kling+Sync-3)
  *  6. Generar captions/hashtags/CTA
@@ -47,11 +47,12 @@ import { DIRECTORS } from '../../../data/directors';
 import { storage } from '../../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { PromoStyleSelector, VISUAL_STYLES, type VisualStyle } from './PromoStyleSelector';
+import { PerformanceCaptureRecorder } from './PerformanceCaptureRecorder';
 import { PromoColorMoodPicker, COLOR_MOODS, type ColorPalette } from './PromoColorMoodPicker';
 import { PromoAutoFlow, useAutoFlow, type AutoFlowStepId } from './PromoAutoFlow';
 import { PromoPosterGenerator } from './PromoPosterGenerator';
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Song {
   id: string;
@@ -380,7 +381,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 };
 
 const POLL_INTERVAL_MS = 5000;
-const MAX_POLLS = 200; // 200 Ã— 5s = ~16 min â€” OmniHuman puede tardar 5-12 min
+const MAX_POLLS = 200; // 200 × 5s = ~16 min — OmniHuman puede tardar 5-12 min
 const NARRATIVE_PAID_SOURCE_SCENES = 6;
 const NARRATIVE_VARIABLE_CUTS = 12;
 
@@ -398,9 +399,9 @@ const stripInternalSceneCopy = (value?: string) => String(value || '')
   .replace(/\bMood:\s*[^.]*\.?/gi, '')
   .trim();
 const cleanBrollDisplayCopy = (value?: string) => stripInternalSceneCopy(value)
-  .replace(/,?\s*connected to lyric meaning:\s*/i, ' Â· letra: ')
-  .replace(/,?\s*answering the nearby lyric:\s*/i, ' Â· responde a: ')
-  .replace(/,?\s*carrying the instrumental groove without inventing lyrics/i, ' Â· groove instrumental')
+  .replace(/,?\s*connected to lyric meaning:\s*/i, ' · letra: ')
+  .replace(/,?\s*answering the nearby lyric:\s*/i, ' · responde a: ')
+  .replace(/,?\s*carrying the instrumental groove without inventing lyrics/i, ' · groove instrumental')
   .trim();
 const getNarrativeSceneDisplayIntent = (scene: NarrativeScene) => {
   if (isStoryOnlyNarrativeScene(scene)) {
@@ -411,7 +412,7 @@ const getNarrativeSceneDisplayIntent = (scene: NarrativeScene) => {
 const getNarrativeSceneDisplayMeta = (scene: NarrativeScene) => {
   const shot = stripInternalSceneCopy(scene.shotType);
   const camera = stripInternalSceneCopy(scene.cameraMovement);
-  return [shot, camera].filter(Boolean).join(' Â· ');
+  return [shot, camera].filter(Boolean).join(' · ');
 };
 const looksStaticRepeatedSymbol = (_value?: string) => {
   // REFACTOR 2026-05: AI has full creative freedom per cut; we no longer
@@ -424,13 +425,13 @@ const needsObjectOnlyRefresh = (scene: NarrativeScene) => isStoryOnlyNarrativeSc
   );
 const formatTimelineSeconds = (value: number) => Number(value || 0).toFixed(Number.isInteger(value) ? 0 : 1);
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ArtistPromoClipsModule({ artistId, songs = [], colors, isOwnProfile, artistName, artistProfileImage, artistGenre, artistBiography }: PromoClipsProps) {
   const accent = colors?.accent || '#ec4899';
   const primary = colors?.primary || '#1a1a2e';
 
-  // â”€â”€ State â”€â”€
+  // ── State ──
   const [activeStep, setActiveStep] = useState<Step>('select');
 
   // Step 1: Song selection
@@ -438,7 +439,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
   const [clipDuration, setClipDuration] = useState<ClipDuration>(30);
   const [targetPlatforms, setTargetPlatforms] = useState<Platform[]>(['tiktok', 'instagram_reels']);
   const [promoWorkflow, setPromoWorkflow] = useState<PromoWorkflow>('single');
-  const [lipsyncMode, setLipsyncMode] = useState<LipsyncMode>('omnihuman');
+  const [lipsyncMode, setLipsyncMode] = useState<LipsyncMode>('seedance-mini-r2v');
   const [brollMode, setBrollMode] = useState<LipsyncMode>('kling-v3-standard-sync3');
   const [performancePercent, setPerformancePercent] = useState(40);
   const [lipsyncPercent, setLipsyncPercent] = useState(20);
@@ -548,28 +549,32 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
   // Evita guardar dos veces el mismo video en la coleccion 'videos'
   const savedVideoUrlRef = useRef<string | null>(null);
   const imagePollCount = useRef(0);
-  // Ref to hold the latest autoSave fn â€” avoids circular dependency in startImagePolling
+  // Ref to hold the latest autoSave fn — avoids circular dependency in startImagePolling
   const autoSaveRef = useRef<(overrides?: any) => void>(() => {});
   const applySync3Ref = useRef<(videoUrl: string, sourceMode?: string, clipLock?: AudioClipLock) => Promise<void>>(async () => {});
   const videoPollCount = useRef(0);
 
-  // â”€â”€ New: Style, Palette, Auto-Flow â”€â”€
+  // ── New: Style, Palette, Auto-Flow ──
   const [selectedStyleId, setSelectedStyleId] = useState<string | undefined>();
+  const [selectedStylePreviewUrl, setSelectedStylePreviewUrl] = useState<string | undefined>();
+  // Recorded webcam performance clip (reference video for Seedance r2v).
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | undefined>();
   const [selectedPaletteId, setSelectedPaletteId] = useState<string | undefined>();
   const selectedPalette = COLOR_MOODS.find(p => p.id === selectedPaletteId);
   const selectedVisualStyle = VISUAL_STYLES.find(s => s.id === selectedStyleId);
   const autoFlow = useAutoFlow();
   const autoFlowAbortRef = useRef(false);
 
-  const handleSelectStyle = useCallback((style: VisualStyle) => {
+  const handleSelectStyle = useCallback((style: VisualStyle, previewUrl?: string) => {
     setSelectedStyleId(style.id);
+    setSelectedStylePreviewUrl(previewUrl);
   }, []);
 
   const handleSelectPalette = useCallback((palette: ColorPalette) => {
     setSelectedPaletteId(palette.id);
   }, []);
 
-  // â”€â”€ Cleanup on unmount
+  // ── Cleanup on unmount
   useEffect(() => {
     return () => {
       if (imagePollRef.current) clearTimeout(imagePollRef.current);
@@ -584,7 +589,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       .catch(() => {});
   }, [artistId]);
 
-  // â”€â”€ Helpers â”€â”€
+  // ── Helpers ──
   const clearError = () => setError(null);
 
   const handleCopy = (text: string) => {
@@ -624,7 +629,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       setCharacterReferenceUrls(prev => Array.from(new Set([...prev, ...uploadedUrls])).slice(0, 8));
       setCharacterLock(null);
     } catch (e: any) {
-      setError(e.message || 'No se pudieron subir las imÃ¡genes de referencia.');
+      setError(e.message || 'No se pudieron subir las imágenes de referencia.');
     } finally {
       setCharacterImageUploading(false);
     }
@@ -666,7 +671,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [analysis, artistBiography, artistId, artistName, artistProfileImage, characterNotes, characterReferenceUrls, direction, referenceImageUrl, selectedSong]);
 
-  // â”€â”€ Step 2: Analyze Song â”€â”€
+  // ── Step 2: Analyze Song ──
   const analyzeSong = useCallback(async () => {
     if (!selectedSong) return;
     setAnalyzingLoading(true);
@@ -687,7 +692,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [selectedSong, artistId, clipDuration, targetGoal]);
 
-  // â”€â”€ Step 3: Create Visual Direction â”€â”€
+  // ── Step 3: Create Visual Direction ──
   const createVisualDirection = useCallback(async () => {
     if (!analysis || !selectedSong) return;
     setDirectionLoading(true);
@@ -702,7 +707,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         artistProfileImage: referenceImageUrl || artistProfileImage,
         targetPlatforms,
         campaignGoal: targetGoal,
-        // Song analysis data â€” drives the actual visual concept
+        // Song analysis data — drives the actual visual concept
         lyricsExcerpt: analysis.best_segment?.lyrics_excerpt || '',
         emotionalTrigger: analysis.emotional_trigger || '',
         viralHook: analysis.viral_hook || '',
@@ -720,9 +725,9 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [analysis, selectedSong, artistId, targetPlatforms, targetGoal]);
 
-  // â”€â”€ Step 4: Generate Image â”€â”€
+  // ── Step 4: Generate Image ──
   // El endpoint llama FAL async queue y retorna jobs con requestId.
-  // Polling acumula imÃ¡genes de los 3 jobs (wide + closeup + stage).
+  // Polling acumula imágenes de los 3 jobs (wide + closeup + stage).
   const generateImage = useCallback(async () => {
     if (!direction && !customImagePrompt) return;
     setImageLoading(true);
@@ -732,11 +737,18 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     setError(null);
     let asyncMode = false;
     try {
-      const falImagePrompt = customImagePrompt || direction?.fal_image_prompt;
+      // Aplica el estilo visual elegido (p.ej. "studio singing" frente al micrófono) y la paleta
+      // a la imagen, igual que en el auto-flow, para que la generación manual respete el estilo.
+      const basePrompt = customImagePrompt || direction?.fal_image_prompt || '';
+      const styleSuffix = selectedVisualStyle?.promptSuffix || '';
+      const paletteSuffix = selectedPalette?.promptHint || '';
+      const alreadyHasStyle = styleSuffix && basePrompt.includes(styleSuffix.slice(0, 40));
+      const falImagePrompt = [basePrompt, alreadyHasStyle ? '' : paletteSuffix, alreadyHasStyle ? '' : styleSuffix].filter(Boolean).join(', ');
       const data = await apiRequest('POST', `/api/promo-clips/${artistId}/generate-fal-image`, {
         falImagePrompt,
         referenceImageUrl: referenceImageUrl || undefined,
         artistProfileImage: artistProfileImage || undefined,
+        styleReferenceImageUrl: selectedStylePreviewUrl || undefined,
         songName: selectedSong?.name || selectedSong?.title || '',
         artistName: artistName || '',
       });
@@ -749,7 +761,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         const jobs: Array<{ requestId: string; statusUrl?: string; resultUrl?: string; shotType?: string }> =
           data.jobs || [{ requestId: data.requestId, statusUrl: data.statusUrl, resultUrl: data.resultUrl }];
 
-        // Shared counter: when all jobs complete â†’ stop loading
+        // Shared counter: when all jobs complete → stop loading
         const pendingRef = { count: jobs.length };
 
         jobs.forEach((job) => {
@@ -767,9 +779,9 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         return;
       }
 
-      // â”€â”€ SYNC MODE: Flux Dev T2I (no reference photo) â”€â”€
+      // ── SYNC MODE: Flux Dev T2I (no reference photo) ──
       const imgs: Array<{ url: string }> = data.images || [];
-      if (imgs.length === 0) throw new Error('FAL no retornÃ³ imÃ¡genes');
+      if (imgs.length === 0) throw new Error('FAL no retornó imágenes');
       const newImages = imgs.map((img, i) => ({ url: img.url, index: i }));
       setGeneratedImages(newImages);
       setSelectedImageUrl(newImages[0]?.url || null);
@@ -782,7 +794,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     } finally {
       if (!asyncMode) setImageLoading(false);
     }
-  }, [direction, customImagePrompt, artistId, referenceImageUrl, artistProfileImage, artistName, selectedSong]);
+  }, [direction, customImagePrompt, artistId, referenceImageUrl, artistProfileImage, artistName, selectedSong, selectedVisualStyle, selectedPalette, selectedStylePreviewUrl]);
 
   const startImagePolling = useCallback((
     requestId: string,
@@ -827,7 +839,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
           });
           setImagePollStatus('done');
           setActiveStep('image');
-          // Decrement shared counter â€” when all jobs done, stop loading
+          // Decrement shared counter — when all jobs done, stop loading
           if (pendingRef) {
             pendingRef.count--;
             if (pendingRef.count <= 0) {
@@ -857,7 +869,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     imagePollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
   }, [artistId]);
 
-  // â”€â”€ Step 5: Generate Lipsync Video â”€â”€
+  // ── Step 5: Generate Lipsync Video ──
   const generateVideo = useCallback(async () => {
     if (!selectedImageUrl || !selectedSong?.audioUrl) return;
     setVideoLoading(true);
@@ -883,6 +895,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         bpmFeel: analysis?.detected_bpm_feel || '',
         segmentType: analysis?.segment_type || '',
         songTitle: selectedSong.name || selectedSong.title || '',
+        recordedVideoUrl: isSeedanceR2vMode(lipsyncMode) ? (recordedVideoUrl || undefined) : undefined,
       });
       if (!data.success) throw new Error(data.error || 'Video generation failed');
       setVideoRequestId(data.requestId);
@@ -900,7 +913,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     } finally {
       setVideoLoading(false);
     }
-  }, [selectedImageUrl, selectedSong, artistId, lipsyncMode, direction, analysis, artistProfileImage, referenceImageUrl]);
+  }, [selectedImageUrl, selectedSong, artistId, lipsyncMode, direction, analysis, artistProfileImage, referenceImageUrl, recordedVideoUrl]);
 
   const startVideoPolling = useCallback((
     requestId: string,
@@ -915,7 +928,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       if (videoPollCount.current >= MAX_POLLS) {
         const elapsed = Math.round((Date.now() - videoStartTime.current) / 1000);
         setVideoPollStatus('error');
-        setError(`Video generation timed out after ${elapsed}s. El servidor de FAL puede estar ocupado â€” intenta de nuevo.`);
+        setError(`Video generation timed out after ${elapsed}s. El servidor de FAL puede estar ocupado — intenta de nuevo.`);
         return;
       }
       videoPollCount.current++;
@@ -954,7 +967,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
             autoSave({ videoUrl });
             return;
           }
-          // COMPLETED but no videoUrl found â†’ show result for debugging, stop polling
+          // COMPLETED but no videoUrl found → show result for debugging, stop polling
           if (!videoUrl) {
             console.warn('[VideoPolling] COMPLETED but no video URL found. Result:', JSON.stringify(data.result).substring(0, 300));
             setVideoPollStatus('error');
@@ -1060,7 +1073,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     videoPollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
   }, [artistId]);
 
-  // â”€â”€ Auto-save current job state â”€â”€
+  // ── Auto-save current job state ──
   const autoSave = useCallback(async (overrides: { images?: GeneratedImage[]; selectedImg?: string | null; videoUrl?: string | null } = {}) => {
     try {
       const imgs = overrides.images ?? generatedImages;
@@ -1365,7 +1378,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         || artistProfileImage;
     if (!baseImageUrl) {
       setError(isStoryOnlyScene
-        ? 'Genera primero el concepto/still de b-roll. No se usarÃ¡ la imagen del artista para escenas de historia.'
+        ? 'Genera primero el concepto/still de b-roll. No se usará la imagen del artista para escenas de historia.'
         : 'Necesitamos una imagen base del artista para generar escenas narrativas.');
       return;
     }
@@ -1466,7 +1479,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [narrativeStoryboard, narrativeSceneJobs, selectedSong, artistId, artistName, autoSave]);
 
-  // â”€â”€ Load a saved job into current state â”€â”€
+  // ── Load a saved job into current state ──
   const loadJob = useCallback((job: any) => {
     if (job.analysis) setAnalysis(job.analysis);
     if (job.direction) { setDirection(job.direction); setCustomImagePrompt(job.direction.fal_image_prompt || ''); }
@@ -1483,7 +1496,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     setShowSavedJobs(false);
   }, []);
 
-  // â”€â”€ Step 6: Generate Captions â”€â”€
+  // ── Step 6: Generate Captions ──
   const generateCaptions = useCallback(async () => {
     if (!analysis || !selectedSong) return;
     setCaptionsLoading(true);
@@ -1506,7 +1519,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [analysis, selectedSong, artistId, targetPlatforms]);
 
-  // â”€â”€ Auto-Flow: Full automated pipeline â”€â”€
+  // ── Auto-Flow: Full automated pipeline ──
   const runAutoFlow = useCallback(async () => {
     if (!selectedSong) { setError('Select a song first'); return; }
     autoFlowAbortRef.current = false;
@@ -1566,7 +1579,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       setDirection(dirData.direction);
       setCustomImagePrompt(dirData.direction.fal_image_prompt || '');
       setActiveStep('direction');
-      autoFlow.setStepDone('direction', 'Visual direction composed âœ“');
+      autoFlow.setStepDone('direction', 'Visual direction composed ✓');
 
       if (autoFlowAbortRef.current) return;
 
@@ -1581,12 +1594,18 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         falImagePrompt: falPromptWithStyle,
         referenceImageUrl: referenceImageUrl || undefined,
         artistProfileImage: artistProfileImage || undefined,
+        styleReferenceImageUrl: selectedStylePreviewUrl || undefined,
         songName: selectedSong?.name || selectedSong?.title || '',
         artistName: artistName || '',
       });
       if (!imgData.success) throw new Error(imgData.error || 'Image generation failed');
 
       autoFlow.setStepProgress('style-image', 40, 'Polling Flux Kontext Pro...');
+
+      // Capturamos las URLs generadas en una variable LOCAL — no podemos confiar en
+      // el estado `generatedImages` dentro de este closure (queda obsoleto durante el run),
+      // así que los pasos siguientes (video, poster, gallery) leen de aquí.
+      const collectedImageUrls: string[] = [];
 
       if (imgData.pending) {
         // Async polling for image
@@ -1609,6 +1628,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               });
               if (pollData.status === 'COMPLETED' && pollData.result?.images?.length) {
                 const imgs = pollData.result.images.map((img: any, i: number) => ({ url: img.url, index: i }));
+                collectedImageUrls.push(...imgs.map((im: any) => im.url).filter(Boolean));
                 setGeneratedImages(prev => {
                   const all = [...prev, ...imgs].map((img, i) => ({ ...img, index: i }));
                   if (prev.length === 0 && all.length > 0) setSelectedImageUrl(all[0].url);
@@ -1631,18 +1651,19 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         // Sync mode
         const imgs: any[] = imgData.images || [];
         const newImages = imgs.map((img: any, i: number) => ({ url: img.url, index: i }));
+        collectedImageUrls.push(...newImages.map((im: any) => im.url).filter(Boolean));
         setGeneratedImages(newImages);
         setSelectedImageUrl(newImages[0]?.url || null);
         setImagePollStatus('done');
         setActiveStep('image');
       }
 
-      autoFlow.setStepDone('style-image', 'Artist frame generated âœ“');
+      autoFlow.setStepDone('style-image', 'Artist frame generated ✓');
 
       if (autoFlowAbortRef.current) return;
 
-      // Step 4: Generate Video â€” requires selected image and audio
-      const imageForVideo = generatedImages[0]?.url;
+      // Step 4: Generate Video — requires selected image and audio
+      const imageForVideo = collectedImageUrls[0] || generatedImages[0]?.url;
       if (imageForVideo && selectedSong.audioUrl) {
         autoFlow.setStepRunning('video', 'Lipsync engine composing frames...');
         autoFlow.setStepProgress('video', 5, 'Submitting to lipsync engine...');
@@ -1660,6 +1681,9 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
           bpmFeel: analyzeData.analysis?.detected_bpm_feel || '',
           segmentType: analyzeData.analysis?.segment_type || '',
           songTitle: selectedSong.name || selectedSong.title || '',
+          // 📹 Captura de cámara: si el artista grabó su actuación, el flujo auto la
+          // transfiere al look (Seedance r2v). Sin grabación = comportamiento normal.
+          recordedVideoUrl: isSeedanceR2vMode(lipsyncMode) ? (recordedVideoUrl || undefined) : undefined,
         });
 
         if (vidData.success) {
@@ -1680,12 +1704,32 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                   requestId: vidData.requestId,
                   endpoint: vidData.endpoint,
                   jobType: 'video',
+                  // Mismo contrato que el flujo manual: para Seedance/Kling diferimos el guardado al
+                  // cliente (audio-lock con la canción original) y pasamos el lock de audio.
+                  deferSave: isSeedanceR2vMode(lipsyncMode) || isKlingSync3Mode(lipsyncMode),
+                  ...(isSeedanceR2vMode(lipsyncMode)
+                    ? {
+                        audioUrl: selectedSong.audioUrl,
+                        clipStartSeconds: analyzeData.analysis?.best_segment?.start_time || 0,
+                        duration: vidData.duration || 5,
+                      }
+                    : {}),
                 });
-                if (pollData.status === 'COMPLETED' && pollData.result?.video?.url) {
-                  setGeneratedVideoUrl(pollData.result.video.url);
-                  setVideoPollStatus('done');
-                  resolve();
-                  return;
+                if (pollData.status === 'COMPLETED') {
+                  const videoUrl = pollData.result?.video?.url
+                    || pollData.result?.video_url
+                    || pollData.result?.output?.video?.url
+                    || pollData.result?.output?.url
+                    || pollData.result?.url;
+                  if (videoUrl) {
+                    setGeneratedVideoUrl(videoUrl);
+                    setVideoPollStatus('done');
+                    // Garantiza que el video quede en la colección 'videos' de Firestore
+                    // (módulo Videos). Para Seedance el backend difiere el guardado → save-to-videos.
+                    autoSave({ videoUrl });
+                    resolve();
+                    return;
+                  }
                 }
                 if (pollData.status === 'FAILED') { resolve(); return; }
               } catch {}
@@ -1694,7 +1738,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
             setTimeout(pollVideo, POLL_INTERVAL_MS);
           });
 
-          autoFlow.setStepDone('video', 'Promo video rendered âœ“');
+          autoFlow.setStepDone('video', 'Promo video rendered ✓');
         } else {
           autoFlow.setStepSkipped('video');
         }
@@ -1717,7 +1761,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         if (capData.success) {
           setCaptions(capData.captions);
           setActiveStep('captions');
-          autoFlow.setStepDone('captions', 'Viral captions written âœ“');
+          autoFlow.setStepDone('captions', 'Viral captions written ✓');
         } else {
           autoFlow.setStepError('captions', capData.error);
         }
@@ -1757,11 +1801,11 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       if (imageForVideo) {
         try {
           await apiRequest('POST', `/api/promo-clips/${artistId}/save-to-gallery`, {
-            imageUrls: generatedImages.map(i => i.url),
+            imageUrls: collectedImageUrls.length ? collectedImageUrls : generatedImages.map(i => i.url),
             songName: selectedSong.name || selectedSong.title || '',
             artistName: artistName || '',
           });
-          autoFlow.setStepDone('gallery', 'Saved to your gallery âœ“');
+          autoFlow.setStepDone('gallery', 'Saved to your gallery ✓');
         } catch {
           autoFlow.setStepError('gallery', 'Could not save to gallery');
         }
@@ -1776,9 +1820,10 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     }
   }, [selectedSong, artistId, clipDuration, targetGoal, artistGenre, artistName, artistBiography,
       referenceImageUrl, artistProfileImage, targetPlatforms, lipsyncMode,
-      selectedPalette, selectedVisualStyle, autoFlow, generatedImages]);
+      selectedPalette, selectedVisualStyle, autoFlow, generatedImages, selectedStylePreviewUrl,
+      recordedVideoUrl, autoSave]);
 
-  // â”€â”€ Render Helpers â”€â”€
+  // ── Render Helpers ──
 
   const StepBadge = ({ step, label, icon: Icon }: { step: Step; label: string; icon: any }) => {
     const steps: Step[] = ['select', 'analyze', 'direction', 'image', 'video', 'captions', 'export'];
@@ -1816,7 +1861,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
   const narrativeCompletedCount = narrativeSourceKeys.filter(sceneKey => narrativeSceneJobs[sceneKey]?.status === 'done').length;
   const narrativeSceneImageCount = narrativeStoryboard?.scenes.filter(scene => !needsObjectOnlyRefresh(scene) && (scene.sceneImageUrl || narrativeSceneImageJobs[getNarrativeSceneImageJobKey(scene)]?.imageUrl)).length || 0;
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -1842,7 +1887,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
       {/* Cinematic gradient top bar */}
       <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, transparent 0%, ${accent} 30%, #8b5cf6 70%, transparent 100%)` }} />
 
-      {/* â”€â”€â”€ HEADER â”€â”€â”€ */}
+      {/* ─── HEADER ─── */}
       <div className="px-5 pt-5 pb-4 flex items-center justify-between gap-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex items-center gap-3">
           <div
@@ -1861,7 +1906,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 Lipsync Engine
               </span>
             </div>
-            <p className="text-white/35 text-xs mt-1 leading-none">AI music video generation Â· Flux Kontext Pro</p>
+            <p className="text-white/35 text-xs mt-1 leading-none">AI music video generation · Flux Kontext Pro</p>
           </div>
         </div>
 
@@ -1887,10 +1932,26 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               Auto-Generate
             </motion.button>
           )}
+          {isOwnProfile && selectedSong && isSeedanceR2vMode(lipsyncMode) && (
+            <div
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[10px] font-semibold"
+              title={recordedVideoUrl
+                ? 'El auto-flow usará tu actuación grabada con la cámara'
+                : 'Graba tu actuación con la cámara abajo y el auto-flow la usará'}
+              style={{
+                background: recordedVideoUrl ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.12)',
+                border: `1px solid ${recordedVideoUrl ? 'rgba(34,197,94,0.4)' : 'rgba(245,158,11,0.4)'}`,
+                color: recordedVideoUrl ? '#4ade80' : '#fbbf24',
+              }}
+            >
+              <Camera size={12} />
+              {recordedVideoUrl ? 'Cámara lista' : 'Graba tu toma'}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* â”€â”€â”€ STEP PROGRESS â”€â”€â”€ */}
+      {/* ─── STEP PROGRESS ─── */}
       <div className="px-5 py-3 flex items-center gap-0 overflow-x-auto" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         {([
           { step: 'select' as Step, label: 'Song', num: 1 },
@@ -1949,7 +2010,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold truncate">{job.song_name || 'No song'}</p>
-                  <p className="text-white/35 mt-0.5">{job.status === 'complete' ? 'âœ… Complete' : job.status === 'has_image' ? 'ðŸ–¼ Has image' : 'ðŸ“ Draft'} Â· {new Date(job.created_at || 0).toLocaleDateString()}</p>
+                  <p className="text-white/35 mt-0.5">{job.status === 'complete' ? '✅ Complete' : job.status === 'has_image' ? 'ðŸ–¼ Has image' : 'ðŸ“ Draft'} · {new Date(job.created_at || 0).toLocaleDateString()}</p>
                 </div>
                 <button
                   onClick={() => loadJob(job)}
@@ -1975,7 +2036,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
 
       <div className="p-5 space-y-5">
 
-      {/* â”€â”€â”€ STEP 1: SELECT SONG â”€â”€â”€ */}
+      {/* ─── STEP 1: SELECT SONG ─── */}
       {(activeStep === 'select' || true) && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2019,7 +2080,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{song.name || song.title || 'Untitled'}</p>
-                        <p className="text-white/40 text-xs mt-0.5">{song.genre || 'No genre'}{song.mood ? ` Â· ${song.mood}` : ''}</p>
+                        <p className="text-white/40 text-xs mt-0.5">{song.genre || 'No genre'}{song.mood ? ` · ${song.mood}` : ''}</p>
                       </div>
                       {isSelected && (
                         <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: accent }}>
@@ -2095,7 +2156,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-white/35 leading-snug">
-                {selectedModeInfo.label}{selectedModeInfo.cost5s ? ` Â· ${selectedModeInfo.cost5s} Â· ${selectedModeInfo.cost30s}` : ''}
+                {selectedModeInfo.label}{selectedModeInfo.cost5s ? ` · ${selectedModeInfo.cost5s} · ${selectedModeInfo.cost30s}` : ''}
               </p>
             </div>
 
@@ -2159,7 +2220,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#fff', background: 'rgba(255,255,255,0.03)' }} />
             </div>
 
-            {/* â”€â”€ VISUAL STYLE SELECTOR â”€â”€ */}
+            {/* ── VISUAL STYLE SELECTOR ── */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-0.5 h-4 rounded-full" style={{ background: accent }} />
@@ -2174,7 +2235,30 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               />
             </div>
 
-            {/* â”€â”€ COLOR MOOD PICKER â”€â”€ */}
+            {/* ── PERFORMANCE CAPTURE (Seedance r2v) ── */}
+            {isSeedanceR2vMode(lipsyncMode) && (
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-0.5 h-4 rounded-full" style={{ background: accent }} />
+                  <span className="text-xs font-bold uppercase tracking-widest text-white/50">Captura de Actuación</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>Opcional</span>
+                </div>
+                <p className="text-white/35 text-[11px] mb-3 leading-snug">
+                  El botón <span className="font-semibold text-white/55">Auto-Generate</span> usará esta grabación automáticamente para tu clip.
+                </p>
+                <PerformanceCaptureRecorder
+                  artistId={artistId}
+                  songAudioUrl={selectedSong?.audioUrl}
+                  lookImageUrl={selectedStylePreviewUrl || selectedImageUrl || referenceImageUrl || artistProfileImage}
+                  value={recordedVideoUrl}
+                  onRecorded={setRecordedVideoUrl}
+                  accent={accent}
+                />
+              </div>
+            )}
+
+            {/* ── COLOR MOOD PICKER ── */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-0.5 h-4 rounded-full" style={{ background: '#a855f7' }} />
@@ -2260,13 +2344,13 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               style={{ background: selectedSong ? `linear-gradient(135deg, ${accent}, #8b5cf6)` : 'rgba(255,255,255,0.07)', color: '#fff' }}
             >
               {analyzingLoading ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-              {analyzingLoading ? 'Analyzing Song...' : 'Analyze Song â†’'}
+              {analyzingLoading ? 'Analyzing Song...' : 'Analyze Song →'}
             </motion.button>
           </div>
         </div>
       )}
 
-      {/* â”€â”€â”€ STEP 2: SONG ANALYSIS â”€â”€â”€ */}
+      {/* ─── STEP 2: SONG ANALYSIS ─── */}
       {analysis && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2306,7 +2390,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               </div>
             )}
             <div className="p-3.5 rounded-xl space-y-1" style={{ background: `${accent}10`, border: `1px solid ${accent}28` }}>
-              <p className="text-white/40 text-xs">Best segment: {analysis.best_segment?.start_time}s â€“ {analysis.best_segment?.end_time}s</p>
+              <p className="text-white/40 text-xs">Best segment: {analysis.best_segment?.start_time}s – {analysis.best_segment?.end_time}s</p>
               <p className="font-semibold text-sm italic">"{analysis.best_segment?.lyrics_excerpt}"</p>
               <p className="text-white/50 text-xs">{analysis.best_segment?.reason}</p>
             </div>
@@ -2322,7 +2406,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg, ${accent}, #8b5cf6)` }}>
                 {directionLoading ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                {directionLoading ? 'Creating...' : 'Visual Direction â†’'}
+                {directionLoading ? 'Creating...' : 'Visual Direction →'}
               </motion.button>
               {promoWorkflow === 'narrative-30s' && (
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
@@ -2330,7 +2414,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                   className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
                   style={{ background: 'linear-gradient(135deg, #14b8a6, #0d9488)' }}>
                   {storyboardLoading ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}
-                  {storyboardLoading ? 'Building...' : 'Storyboard 30s â†’'}
+                  {storyboardLoading ? 'Building...' : 'Storyboard 30s →'}
                 </motion.button>
               )}
             </div>
@@ -2338,7 +2422,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ STEP 3: VISUAL DIRECTION â”€â”€â”€ */}
+      {/* ─── STEP 3: VISUAL DIRECTION ─── */}
       {direction && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2372,7 +2456,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
               style={{ background: `linear-gradient(135deg, ${accent}, #8b5cf6)` }}>
               {imageLoading ? <Loader2 size={16} className="animate-spin" /> : <Image size={16} />}
-              {imageLoading ? 'Generating with Flux Kontext Pro...' : 'Generate 9:16 Image â†’'}
+              {imageLoading ? 'Generating with Flux Kontext Pro...' : 'Generate 9:16 Image →'}
             </motion.button>
             {promoWorkflow === 'narrative-30s' && (
               <>
@@ -2394,7 +2478,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                       <button onClick={() => setSelectedDirector(null)} className="text-white/30 hover:text-white/60"><X size={14} /></button>
                     </div>
                   ) : (
-                    <p className="text-xs text-white/30">No director â€” AI decides visual style</p>
+                    <p className="text-xs text-white/30">No director — AI decides visual style</p>
                   )}
                   {showDirectorSelector && (
                     <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
@@ -2414,7 +2498,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                   className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
                   style={{ background: 'linear-gradient(135deg, #14b8a6, #0d9488)' }}>
                   {storyboardLoading ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}
-                  {storyboardLoading ? 'Refining storyboard...' : 'Create Narrative Storyboard 30s â†’'}
+                  {storyboardLoading ? 'Refining storyboard...' : 'Create Narrative Storyboard 30s →'}
                 </motion.button>
               </>
             )}
@@ -2422,7 +2506,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ STEP 4: IMAGE RESULTS â”€â”€â”€ */}
+      {/* ─── STEP 4: IMAGE RESULTS ─── */}
       {(imageRequestId || generatedImages.length > 0 || imagePollStatus === 'polling') && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2436,8 +2520,8 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
             {imagePollStatus === 'polling' && (
               <div className="flex items-center gap-3 p-3 rounded-xl text-xs text-white/50" style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <Clock size={13} className="flex-shrink-0" />
-                <span>Generating 6 images â€” 3 framings: wide Â· close-up Â· stage</span>
-                {generatedImages.length > 0 && <span className="ml-auto" style={{ color: accent }}>âœ“ {generatedImages.length} ready...</span>}
+                <span>Generating 6 images — 3 framings: wide · close-up · stage</span>
+                {generatedImages.length > 0 && <span className="ml-auto" style={{ color: accent }}>✓ {generatedImages.length} ready...</span>}
               </div>
             )}
             {generatedImages.length > 0 && (
@@ -2473,13 +2557,13 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               </motion.button>
             )}
             {!selectedSong?.audioUrl && selectedImageUrl && (
-              <p className="text-xs text-center" style={{ color: '#f59e0b' }}>âš  This song has no audio URL. Upload audio first.</p>
+              <p className="text-xs text-center" style={{ color: '#f59e0b' }}>⚠ This song has no audio URL. Upload audio first.</p>
             )}
           </div>
         </div>
       )}
 
-      {/* â”€â”€â”€ NARRATIVE 30S STORYBOARD â”€â”€â”€ */}
+      {/* ─── NARRATIVE 30S STORYBOARD ─── */}
       {promoWorkflow === 'narrative-30s' && narrativeStoryboard && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(20,184,166,0.25)' }}>
           <div className="flex items-start justify-between gap-3 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(20,184,166,0.12)' }}>
@@ -2494,7 +2578,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
             </div>
             <div className="text-right text-xs flex-shrink-0">
               <p className="font-bold text-sm" style={{ color: '#14b8a6' }}>~${narrativeStoryboard.costBreakdown?.totalWithImages || narrativeStoryboard.estimatedCost}</p>
-              <p className="text-white/35 mt-0.5">{narrativeCompletedCount}/{narrativeSourceCount} Â· {narrativeCutCount} cuts</p>
+              <p className="text-white/35 mt-0.5">{narrativeCompletedCount}/{narrativeSourceCount} · {narrativeCutCount} cuts</p>
             </div>
           </div>
           <div className="p-5 space-y-4">
@@ -2543,7 +2627,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                          <span className="text-xs font-bold">{formatTimelineSeconds(scene.startTime)}sâ€“{formatTimelineSeconds(scene.endTime)}s Â· {formatTimelineSeconds(scene.duration)}s</span>
+                          <span className="text-xs font-bold">{formatTimelineSeconds(scene.startTime)}s–{formatTimelineSeconds(scene.endTime)}s · {formatTimelineSeconds(scene.duration)}s</span>
                           {scene.sourceSceneId && (
                             <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold" style={{ background: scene.isContinuationCut ? 'rgba(255,255,255,0.06)' : 'rgba(20,184,166,0.15)', color: scene.isContinuationCut ? 'rgba(255,255,255,0.45)' : '#5eead4' }}>
                               {scene.isContinuationCut ? 'cut' : 'source'} {Number(scene.sourceIndex ?? scene.index) + 1}
@@ -2558,7 +2642,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                             </span>
                           )}
                           <span className="px-1.5 py-0.5 rounded-md text-[10px] text-white/45" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                            {LIPSYNC_MODE_INFO[scene.model]?.shortLabel || 'Model'} Â· ${scene.estimatedCost}
+                            {LIPSYNC_MODE_INFO[scene.model]?.shortLabel || 'Model'} · ${scene.estimatedCost}
                           </span>
                         </div>
                         <p className="text-xs font-medium leading-snug line-clamp-2">{displayIntent}</p>
@@ -2566,8 +2650,8 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                         {scene.lyricsExcerpt && <p className="text-[11px] text-white/50 italic mt-1">"{scene.lyricsExcerpt}"</p>}
                         {scene.lyricConnection && <p className="text-[11px] mt-1" style={{ color: '#5eead4' }}>{stripInternalSceneCopy(scene.lyricConnection)}</p>}
                         {scene.brollSubject && <p className="text-[11px] text-white/35 mt-1">B-roll: {cleanBrollDisplayCopy(scene.brollSubject)}</p>}
-                        {(scene.pipelineRole || scene.transition || scene.editCue) && <p className="text-[11px] text-white/35 mt-1">Edit/QC: {[scene.pipelineRole, scene.transition, scene.editCue].filter(Boolean).join(' Â· ')}</p>}
-                        {scene.qualityChecklist?.length ? <p className="text-[11px] text-white/35 mt-1 line-clamp-2">QC: {scene.qualityChecklist.slice(0, 3).join(' Â· ')}</p> : null}
+                        {(scene.pipelineRole || scene.transition || scene.editCue) && <p className="text-[11px] text-white/35 mt-1">Edit/QC: {[scene.pipelineRole, scene.transition, scene.editCue].filter(Boolean).join(' · ')}</p>}
+                        {scene.qualityChecklist?.length ? <p className="text-[11px] text-white/35 mt-1 line-clamp-2">QC: {scene.qualityChecklist.slice(0, 3).join(' · ')}</p> : null}
                         {sceneNeedsRefresh && <p className="text-[11px] mt-1" style={{ color: '#fbbf24' }}>Redo concept before generating video.</p>}
                       </div>
                       <div className="flex flex-col gap-1.5 flex-shrink-0">
@@ -2625,7 +2709,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ STEP 5: VIDEO RESULTS â”€â”€â”€ */}
+      {/* ─── STEP 5: VIDEO RESULTS ─── */}
       {(videoRequestId || generatedVideoUrl) && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2650,7 +2734,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 <div className="flex items-center gap-3 text-xs text-white/35 flex-wrap">
                   {videoQueuePhase && (
                     <span className="px-2.5 py-1 rounded-lg" style={{ background: videoQueuePhase === 'IN_PROGRESS' ? `${accent}22` : 'rgba(255,255,255,0.06)' }}>
-                      {videoQueuePhase === 'IN_QUEUE' ? 'ðŸ• In queue' : videoQueuePhase === 'IN_PROGRESS' ? 'âš¡ Processing' : videoQueuePhase}
+                      {videoQueuePhase === 'IN_QUEUE' ? 'ðŸ• In queue' : videoQueuePhase === 'IN_PROGRESS' ? '⚡ Processing' : videoQueuePhase}
                     </span>
                   )}
                   {videoQueuePosition !== null && videoQueuePosition > 0 && <span>Queue #{videoQueuePosition}</span>}
@@ -2658,7 +2742,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 </div>
                 {videoPollCount.current * POLL_INTERVAL_MS / 1000 > 600 && (
                   <button onClick={generateVideo} className="text-xs px-3 py-1.5 rounded-xl opacity-60 hover:opacity-100 transition-opacity" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    âŸ³ Retry with new request
+                    ⟳ Retry with new request
                   </button>
                 )}
               </div>
@@ -2676,7 +2760,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                     className="flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40"
                     style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}>
                     {captionsLoading ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
-                    {captionsLoading ? 'Generating...' : 'Captions â†’'}
+                    {captionsLoading ? 'Generating...' : 'Captions →'}
                   </button>
                 </div>
               </div>
@@ -2685,7 +2769,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ STEP 6: CAPTIONS â”€â”€â”€ */}
+      {/* ─── STEP 6: CAPTIONS ─── */}
       {captions && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2741,7 +2825,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ EXPORT SUMMARY â”€â”€â”€ */}
+      {/* ─── EXPORT SUMMARY ─── */}
       {generatedVideoUrl && captions && (
         <div className="rounded-2xl p-5" style={{ background: `linear-gradient(135deg, ${accent}0d, rgba(34,197,94,0.05))`, border: `1px solid ${accent}28` }}>
           <div className="flex items-center gap-3 mb-4">
@@ -2760,7 +2844,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         </div>
       )}
 
-      {/* â”€â”€â”€ HOLLYWOOD POSTER â”€â”€â”€ */}
+      {/* ─── HOLLYWOOD POSTER ─── */}
       {(analysis || generatedImages.length > 0) && (
         <div className="rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>

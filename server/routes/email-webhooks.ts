@@ -4,11 +4,10 @@
  */
 
 import { Router } from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db';
 import { registerBounce } from '../services/email-verification-service.js';
 
 const router = Router();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 interface BrevoWebhookEvent {
   event: 'hard_bounce' | 'soft_bounce' | 'blocked' | 'spam' | 'unsubscribed' | 'delivered' | 'opened' | 'click';

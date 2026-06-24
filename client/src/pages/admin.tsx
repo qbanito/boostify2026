@@ -48,6 +48,7 @@ import { ContentModerationQueue } from '../components/admin/content-moderation-q
 import { MCPApiKeysManager } from '../components/admin/mcp-api-keys';
 import { AdminSongAnalyzer } from '../components/admin/admin-song-analyzer';
 import { ConcertsManager } from '../components/admin/concerts-manager';
+import { CreditPricingAdmin } from '../components/admin/credit-pricing-admin';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -300,6 +301,7 @@ export default function AdminDashboard() {
                     label: '💰 Money',
                     tabs: [
                       { value: 'accounting', label: 'Accounting', icon: DollarSign },
+                      { value: 'credits-pricing', label: 'Credits & Pricing', icon: Zap },
                       { value: 'stripe-events', label: 'Stripe Events', icon: CreditCard },
                       { value: 'economic-engine', label: 'Economic Engine', icon: PieChartIcon },
                       { value: 'smart-merch-suppliers', label: 'Smart Merch', icon: Truck },
@@ -555,6 +557,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="accounting" className="w-full">
                 <AccountingDashboard />
+              </TabsContent>
+
+              <TabsContent value="credits-pricing" className="w-full">
+                <CreditPricingAdmin />
               </TabsContent>
 
               <TabsContent value="api-usage" className="w-full">

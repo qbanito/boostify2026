@@ -16,7 +16,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { db as pgDb } from '../../db';
 import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
@@ -32,6 +32,8 @@ import {
   generateSyncLipsyncV3,
   generateKlingV3ProVideo,
   generateImageWithFluxKontextPro,
+  editImageWithFluxKontext,
+  editImageWithNanoBanana,
 } from '../services/fal-service';
 import { PRIMARY_MODEL } from '../utils/ai-config';
 import { logger } from '../utils/logger';
@@ -2303,6 +2305,7 @@ router.post('/:artistId/generate-fal-image', authenticate, async (req: Request, 
   try {
     const { artistId } = req.params;
     const { falImagePrompt, referenceImageUrl, artistProfileImage, imageModel } = req.body;
+    const styleReferenceImageUrl: string | undefined = req.body.styleReferenceImageUrl || undefined;
 
     if (!falImagePrompt) return res.status(400).json({ success: false, error: 'falImagePrompt required' });
     if (!FAL_API_KEY) return res.status(500).json({ success: false, error: 'FAL_API_KEY not configured' });
@@ -2336,6 +2339,63 @@ router.post('/:artistId/generate-fal-image', authenticate, async (req: Request, 
     logger.log(`[PromoClips] 🎨 generate-fal-image — model=${imageModel || 'flux-kontext'} baseImage=${baseImageUrl ? baseImageUrl.substring(0, 60) : 'none (T2I)'}`);
     logger.log(`[PromoClips] Prompt: ${falImagePrompt.substring(0, 120)}...`);
 
+    // ── EXACT-STYLE COMPOSITION TRANSFER ──────────────────────────────────────
+    // Cuando el usuario elige un estilo (se manda styleReferenceImageUrl = la imagen
+    // de preview de ese estilo) y tenemos la cara del artista, usamos nano-banana 2
+    // multi-imagen para REPRODUCIR EXACTAMENTE la composición de la referencia de
+    // estilo (posición del micrófono, pose, encuadre, vestuario, luz) pero con la
+    // cara real del artista. Así el resultado respeta el estilo elegido al 100%.
+    if (baseImageUrl && styleReferenceImageUrl) {
+      logger.log(`[PromoClips] 🎯 Exact-style composition transfer — styleRef=${styleReferenceImageUrl.substring(0, 60)}`);
+
+      const compositionPrompt = [
+        'Use the FIRST reference image as the exact scene template:',
+        'reproduce its identical composition, camera framing, microphone type and exact microphone position,',
+        'the singer\'s pose and body position, wardrobe, studio environment, lighting and color grade EXACTLY.',
+        'Replace ONLY the singer\'s face and identity with the person from the SECOND reference image,',
+        'preserving their exact facial features, eye spacing, nose, mouth, jawline, skin tone, hair and likeness.',
+        'Do NOT generate a different person, do NOT beautify or alter the identity.',
+        'Photorealistic 9:16 vertical music portrait of the artist singing into the microphone,',
+        'professional cinematic music photography, no text, no watermark.',
+      ].join(' ');
+
+      // 3 variantes en paralelo — todas conservan la MISMA composición exacta
+      // (nano-banana genera micro-variaciones naturales entre llamadas).
+      const variantResults = await Promise.allSettled(
+        ['scene', 'closeup', 'stage'].map(() =>
+          editImageWithNanoBanana(
+            [styleReferenceImageUrl, baseImageUrl as string],
+            compositionPrompt,
+            { aspectRatio: '9:16', outputFormat: 'jpeg' }
+          )
+        )
+      );
+
+      const styleImages = variantResults
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled' && !!r.value?.success && !!r.value?.imageUrl)
+        .map((r) => ({ url: r.value.imageUrl as string }));
+
+      if (styleImages.length === 0) {
+        const reasons = variantResults
+          .filter((r) => r.status === 'rejected')
+          .map((r) => (r as PromiseRejectedResult).reason?.message || 'unknown')
+          .join(' | ');
+        // No tiramos el flujo: caemos al método Flux Kontext de siempre (text-prompt del estilo).
+        logger.warn(`[PromoClips] ⚠️ Style transfer produced no images (${reasons || 'no detail'}) — fallback a Flux Kontext`);
+      } else {
+        logger.log(`[PromoClips] ✅ Exact-style transfer produced ${styleImages.length}/3 images`);
+        return res.json({
+          success: true,
+          images: styleImages,
+          endpoint: FAL_MODELS.IMAGE_EDIT,
+          mode: 'style-transfer',
+          songName,
+          artistName: artistNameForGallery,
+          falImagePrompt,
+        });
+      }
+    }
+
     if (baseImageUrl) {
       // ── IDENTITY-PRESERVING GENERATION: 3 Flux Kontext Pro jobs in parallel ──
       // Flux Kontext Pro (image-to-image) takes the artist's reference photo and
@@ -2349,20 +2409,36 @@ router.post('/:artistId/generate-fal-image', authenticate, async (req: Request, 
       // Ensure prompt starts with "The same person" for Flux Kontext identity preservation
       const ensureKontextPrompt = (p: string) => {
         const clean = p.replace(/\.?\s*(cinematic 9:16.*|no text.*|no watermark.*)/gi, '').trim();
-        const hasRef = /^the same person/i.test(clean);
-        return hasRef ? clean : `The same person, ${clean}`;
+        const hasRef = /^the (exact )?same person/i.test(clean);
+        return hasRef ? clean : `The exact same person from the reference photo, ${clean}`;
       };
+      // Lock de identidad FUERTE — Flux Kontext debe conservar la cara real del artista, no reinventarla.
+      const identityLock = "Preserve the artist's exact same face, identical facial features, same eyes, nose, mouth, jawline, skin tone, hair and overall identity from the reference photo. Only change the wardrobe, pose, framing and environment. Do NOT alter or beautify the face, do NOT generate a different person.";
       const promptSuffix = 'Cinematic 9:16 vertical portrait, photorealistic, professional music photography, no text, no watermarks.';
       const baseScene = ensureKontextPrompt(falImagePrompt);
 
-      const shotPrompts = [
-        // 1. Full scene — as described by the AI
-        `${baseScene}. ${promptSuffix}`,
-        // 2. Close-up — face and shoulders
-        `${baseScene}, extreme close-up portrait, face and upper shoulders only, intense emotional expression, shallow depth of field, dramatic lighting. ${promptSuffix}`,
-        // 3. Stage performance
-        `${baseScene}, performing live on stage, ${micType} visible, dramatic spotlights, crowd blur in background. ${promptSuffix}`,
-      ];
+      // Detecta escenas de canto frente a micrófono (los nuevos estilos "studio singing").
+      // En esas, las 3 tomas mantienen al artista EN EL MISMO MICRÓFONO (solo cambia el ángulo de cámara),
+      // para respetar exactamente la posición y el estilo del estilo elegido.
+      const isSingingScene = /\b(ribbon microphone|microphone|singing into|vocal booth|recording studio|mic stand)\b/i.test(falImagePrompt);
+
+      const shotPrompts = isSingingScene
+        ? [
+            // 1. Escena completa cantando al micrófono — tal cual la describe el estilo
+            `${baseScene}. ${identityLock} ${promptSuffix}`,
+            // 2. Close-up del rostro y el micrófono, misma escena
+            `${baseScene}, medium close-up framing on the face and the microphone, intense emotional singing expression, shallow depth of field, same studio scene. ${identityLock} ${promptSuffix}`,
+            // 3. Ángulo de tres cuartos cantando en el MISMO micrófono (sin escenario ni público)
+            `${baseScene}, three-quarter side camera angle of the artist singing into the same microphone, cinematic studio lighting, same scene. ${identityLock} ${promptSuffix}`,
+          ]
+        : [
+            // 1. Full scene — as described by the AI
+            `${baseScene}. ${identityLock} ${promptSuffix}`,
+            // 2. Close-up — face and shoulders
+            `${baseScene}, extreme close-up portrait, face and upper shoulders only, intense emotional expression, shallow depth of field, dramatic lighting. ${identityLock} ${promptSuffix}`,
+            // 3. Stage performance
+            `${baseScene}, performing live on stage, ${micType} visible, dramatic spotlights, crowd blur in background. ${identityLock} ${promptSuffix}`,
+          ];
 
       const kontextBase = {
         image_url: baseImageUrl,
@@ -2647,8 +2723,42 @@ router.post('/:artistId/generate-narrative-scene-image', authenticate, async (re
 });
 
 // ──────────────────────────────────────────────
+// POST /api/promo-clips/:artistId/upload-recording
+// Sube un clip de cámara grabado (webcam) a Firebase Storage y devuelve la URL pública.
+// Body: { dataUrl: 'data:video/webm;base64,...' , contentType?: string }
+// Se usa como reference video para Seedance r2v (transferir la actuación al look).
+// ──────────────────────────────────────────────
+router.post('/:artistId/upload-recording', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { artistId } = req.params;
+    const { dataUrl, contentType } = req.body || {};
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      return res.status(400).json({ success: false, error: 'dataUrl required' });
+    }
+    const match = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl);
+    const ct = (contentType || match?.[1] || 'video/webm').split(';')[0];
+    const b64 = match ? match[2] : dataUrl;
+    const buffer = Buffer.from(b64, 'base64');
+    // ~20MB safety cap (a 30s 480p clip should be well under this).
+    if (buffer.length > 20 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: 'Recording too large (max 20MB). Graba en menor resolución o menos segundos.' });
+    }
+    const ext = ct.includes('mp4') ? 'mp4' : 'webm';
+    const fileName = `promo-recordings/${artistId}/${Date.now()}_${uuidv4().slice(0, 8)}.${ext}`;
+    const file = storage.bucket().file(fileName);
+    await file.save(buffer, { metadata: { contentType: ct }, public: true, validation: false });
+    const url = `https://storage.googleapis.com/${storage.bucket().name}/${fileName}`;
+    logger.log(`[PromoClips] 📹 Saved webcam recording (${(buffer.length / 1024 / 1024).toFixed(1)}MB) → ${fileName}`);
+    return res.json({ success: true, url, contentType: ct });
+  } catch (err: any) {
+    logger.error('[PromoClips] upload-recording error:', err?.message);
+    return res.status(500).json({ success: false, error: err?.message || 'upload failed' });
+  }
+});
+
+// ──────────────────────────────────────────────
 // POST /api/promo-clips/:artistId/generate-lipsync-video
-// Body: { mode: 'omnihuman'|'seedance-fast-r2v'|'kling-v21-standard-sync3'|'kling-v3-standard-sync3'|'kling-v3-pro-sync3', imageUrl, identityImageUrl, audioUrl, klingPrompt, seedancePrompt, clipStartSeconds, lyricsExcerpt }
+// Body: { mode: 'omnihuman'|'seedance-fast-r2v'|'kling-v21-standard-sync3'|'kling-v3-standard-sync3'|'kling-v3-pro-sync3', imageUrl, identityImageUrl, audioUrl, klingPrompt, seedancePrompt, clipStartSeconds, lyricsExcerpt, recordedVideoUrl }
 // ──────────────────────────────────────────────
 router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Request, res: Response) => {
   try {
@@ -2667,6 +2777,7 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
       bpmFeel,
       segmentType,
       songTitle,
+      recordedVideoUrl,
     } = req.body;
 
     if (!imageUrl) return res.status(400).json({ success: false, error: 'imageUrl required' });
@@ -2707,6 +2818,7 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
         bpmFeel,
         segmentType,
         songTitle,
+        referenceVideoUrl: recordedVideoUrl || undefined,
         modelPath: seedanceModelPath,
       });
       if (seedanceResult.success && seedanceResult.requestId) {
@@ -3085,7 +3197,38 @@ router.post('/:artistId/poll-fal', authenticate, async (req: Request, res: Respo
       const seedanceClipStart = Number(clipStartSeconds) || seedanceAudioLock?.clipStartSeconds || 0;
       const seedanceDuration = Number(duration) || seedanceAudioLock?.duration || 5;
 
-      if (videoUrl && endpoint.includes('seedance') && !seedanceChain && seedanceAudioUrl) {
+      // Seedance MINI (modo económico): NO encadenar Sync-3 (un segundo job FAL caro y lento que puede
+      // agotar el timeout del cliente). Seedance 2.0 ya sincroniza la boca al audio de referencia, así que
+      // solo reemplazamos el audio por el clip exacto de la canción original con ffmpeg → 1 job = rápido y barato.
+      if (videoUrl && endpoint.includes('seedance') && endpoint.includes('/mini/') && !seedanceChain && seedanceAudioUrl) {
+        logger.log(`[PromoClips] Seedance Mini complete; locking original audio WITHOUT Sync-3 for ${requestId}`);
+        const lockedMini = await replaceVideoAudioWithOriginalSong({
+          videoUrl,
+          audioUrl: seedanceAudioUrl,
+          clipStartSeconds: seedanceClipStart,
+          duration: seedanceDuration,
+        });
+        if (lockedMini.success && lockedMini.videoUrl) {
+          videoUrl = lockedMini.videoUrl;
+          result = {
+            ...result,
+            video: { ...(result?.video || {}), url: videoUrl, audio_locked: true },
+            audio_locked: true,
+          };
+          seedanceAudioLocks.delete(requestId);
+        } else {
+          // No entregar un video con el audio nativo de Seedance (NO es la canción seleccionada).
+          // Mejor fallar claro para que el usuario reintente que enviar un clip "sin la canción".
+          logger.warn(`[PromoClips] Seedance Mini audio lock failed for ${requestId}: ${lockedMini.error}`);
+          seedanceAudioLocks.delete(requestId);
+          return res.json({
+            success: false,
+            status: 'FAILED',
+            error: `El video se generó pero no se pudo aplicar el audio de la canción (${lockedMini.error || 'error de audio'}). Intenta de nuevo.`,
+          });
+        }
+        // Cae al bloque de auto-save / return COMPLETED de más abajo (deferSave=true → lo guarda el cliente)
+      } else if (videoUrl && endpoint.includes('seedance') && !seedanceChain && seedanceAudioUrl) {
         logger.log(`[PromoClips] Seedance performance complete; queuing Sync-3 final lipsync for ${requestId}`);
         const syncResult = await generateSyncLipsyncV3({
           videoUrl,
@@ -3171,19 +3314,25 @@ router.post('/:artistId/poll-fal', authenticate, async (req: Request, res: Respo
           : endpoint.includes('seedance')
           ? 'seedance-fast-r2v-sync3'
           : sync3AudioLock?.sourceMode || 'sync3';
+        // El perfil consulta `videos` con `where('userId','==', user.id)` donde user.id es el PG id NUMÉRICO.
+        // artistId llega como string desde la URL → hay que guardarlo como número o Firestore no hace match.
+        const profileUserId = /^\d+$/.test(String(artistId)) ? Number(artistId) : artistId;
         db.collection('videos').doc(videoId).set({
           id: videoId,
-          userId: artistId,
+          userId: profileUserId,
+          artistId,
           title: `Promo Lipsync`,
           url: videoUrl,
+          videoUrl,
           thumbnailUrl: '',
           type: 'promo_lipsync',
           source: 'promo_clips',
           lipsyncMode,
           createdAt: new Date(),
+          isPublished: true,
           isPublic: false,
         }).catch(e => logger.warn('[PromoClips] video auto-save failed:', e.message));
-        logger.log(`[PromoClips] 🎬 Auto-saved lipsync video to videos collection`);
+        logger.log(`[PromoClips] 🎬 Auto-saved lipsync video to videos collection (userId=${profileUserId})`);
       }
 
       // Auto-save IMAGES to gallery (fire-and-forget) — for PuLID / image jobs
@@ -3459,11 +3608,17 @@ router.post('/:artistId/save-to-videos', authenticate, async (req: Request, res:
     const now = new Date().toISOString();
     const videoId = `promo_video_${uuidv4()}`;
 
+    // El perfil consulta `videos` con `where('userId','==', user.id)` (PG id NUMÉRICO).
+    // artistId llega como string desde la URL → guardarlo como número o no hace match.
+    const profileUserId = /^\d+$/.test(String(artistId)) ? Number(artistId) : artistId;
+
     const videoDoc = {
       id: videoId,
-      userId: artistId,
+      userId: profileUserId,
+      artistId,
       title: `${songName || 'Promo Clip'} — Lipsync`,
       url: videoUrl,
+      videoUrl,
       thumbnailUrl: imageUrl || '',
       songId: songId || '',
       songName: songName || '',
@@ -3472,11 +3627,12 @@ router.post('/:artistId/save-to-videos', authenticate, async (req: Request, res:
       lipsyncMode: mode,
       source: 'promo_clips',
       createdAt: new Date(),
+      isPublished: true,
       isPublic: false,
     };
 
     await db.collection('videos').doc(videoId).set(videoDoc);
-    logger.log(`[PromoClips] 🎬 Saved lipsync video ${videoId} to videos collection`);
+    logger.log(`[PromoClips] 🎬 Saved lipsync video ${videoId} to videos collection (userId=${profileUserId})`);
 
     res.json({ success: true, videoId });
   } catch (err: any) {
@@ -3646,10 +3802,21 @@ router.post('/:artistId/generate-style-preview', authenticate, async (req: Reque
 
     logger.log(`[PromoClips] 🎨 Generating style preview for style=${styleId} artist=${artistId}`);
 
-    const result = await generateImageWithFluxKontextPro(fullPrompt, {
-      aspectRatio: '3:4',
-      outputFolder: `artists/${artistId}/style-previews`,
-    });
+    // Con foto de referencia → image-to-image (Flux Kontext) para que el preview
+    // muestre la CARA REAL del artista en ese estilo. Sin referencia → text-to-image (ejemplo global).
+    let result;
+    if (referenceImageUrl) {
+      const identityLock = "Preserve the artist's exact same face, identical facial features, same eyes, nose, mouth, jawline, skin tone and hair from the reference photo. Only change the wardrobe, pose, framing and environment to match the style. Do NOT generate a different person.";
+      result = await editImageWithFluxKontext(referenceImageUrl, `${identityLock} ${fullPrompt}`, {
+        aspectRatio: '3:4',
+        outputFolder: `artists/${artistId}/style-previews`,
+      });
+    } else {
+      result = await generateImageWithFluxKontextPro(fullPrompt, {
+        aspectRatio: '3:4',
+        outputFolder: `artists/${artistId}/style-previews`,
+      });
+    }
 
     if (!result.success || !result.imageUrl) {
       return res.status(500).json({ success: false, error: result.error || 'Image generation failed' });
@@ -3729,6 +3896,7 @@ router.post('/:artistId/generate-mood-preview', authenticate, async (req: Reques
 // ──────────────────────────────────────────────────────────────────────────────
 router.get('/previews/styles', authenticate, async (req: Request, res: Response) => {
   try {
+    const artistId = typeof req.query.artistId === 'string' ? req.query.artistId : '';
     // Global (same for every user) → cache 5 min + bound the read.
     const previews = await cached('promo:previews:styles', 300, async () => {
       const snapshot = await db.collection('promoStylePreviews').limit(500).get();
@@ -3742,6 +3910,20 @@ router.get('/previews/styles', authenticate, async (req: Request, res: Response)
       });
       return out;
     });
+    // Si se pasa artistId, los previews específicos del artista (cara real en el estilo)
+    // tienen prioridad sobre los globales genéricos. Cache corto por artista.
+    if (artistId) {
+      const artistPreviews = await cached(`promo:previews:styles:${artistId}`, 120, async () => {
+        const snap = await db.collection('promoStylePreviews').where('artistId', '==', artistId).limit(200).get();
+        const out: Record<string, string> = {};
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.styleId && data.imageUrl) out[data.styleId] = data.imageUrl;
+        });
+        return out;
+      });
+      return res.json({ success: true, previews: { ...previews, ...artistPreviews } });
+    }
     return res.json({ success: true, previews });
   } catch (err: any) {
     logger.error('[PromoClips] previews/styles error:', err);
@@ -3844,18 +4026,29 @@ Make it feel like a real Hollywood A-list movie poster. Be bold, cinematic, icon
 
     // Step 2: Flux Pro generates the 9:16 poster image
     const colorSuffix = colorPromptHint || 'dramatic cinematic color palette';
-    const visualBase = referenceImageUrl
-      ? `Cinematic Hollywood movie poster portrait of ${artistName}`
-      : `Cinematic Hollywood movie poster of a music artist`;
+    const commonStyle = `${posterCopy.visual_direction}, ${colorSuffix}, 9:16 portrait format, dramatic moody lighting, ${songGenre || 'music'} industry aesthetic, ${mood || 'intense'} atmosphere, photorealistic, ultra high quality editorial poster photography, Hollywood A-list production value, title card: "${posterCopy.headline}", subtitle: "${posterCopy.tagline}"`;
 
-    const posterPrompt = `${visualBase}, ${posterCopy.visual_direction}, ${colorSuffix}, 9:16 portrait format, dramatic moody lighting, ${songGenre || 'music'} industry aesthetic, ${mood || 'intense'} atmosphere, photorealistic, ultra high quality editorial poster photography, Hollywood A-list production value, title card: "${posterCopy.headline}", subtitle: "${posterCopy.tagline}"`;
-
-    logger.log(`[PromoClips] 🖼️ Generating poster image with Flux Kontext Pro...`);
-
-    const imageResult = await generateImageWithFluxKontextPro(posterPrompt, {
-      aspectRatio: '9:16',
-      outputFolder: `artists/${artistId}/posters`,
-    });
+    let imageResult;
+    let posterPrompt: string;
+    if (referenceImageUrl) {
+      // ── IMAGE-TO-IMAGE: usa la foto real del artista como referencia (Flux Kontext i2i) ──
+      // El poster debe ser el MISMO artista (cara/identidad), no una persona inventada.
+      const identityLock = "The exact same person from the reference photo as the hero of the poster. Preserve their identical face, facial features, eyes, nose, mouth, jawline, skin tone and hair. Only restyle them into a cinematic poster — do NOT generate a different person, do NOT beautify or alter the face.";
+      posterPrompt = `${identityLock} Turn the reference photo into a cinematic Hollywood movie poster portrait of ${artistName}: ${commonStyle}`;
+      logger.log(`[PromoClips] 🖼️ Generating Hollywood poster with Flux Kontext i2i (artist reference)...`);
+      imageResult = await editImageWithFluxKontext(referenceImageUrl, posterPrompt, {
+        aspectRatio: '9:16',
+        outputFolder: `artists/${artistId}/posters`,
+      });
+    } else {
+      // ── Sin foto de referencia → text-to-image genérico ──
+      posterPrompt = `Cinematic Hollywood movie poster of a music artist, ${commonStyle}`;
+      logger.log(`[PromoClips] 🖼️ Generating Hollywood poster with Flux Kontext Pro (text-to-image, no reference)...`);
+      imageResult = await generateImageWithFluxKontextPro(posterPrompt, {
+        aspectRatio: '9:16',
+        outputFolder: `artists/${artistId}/posters`,
+      });
+    }
 
     if (!imageResult.success || !imageResult.imageUrl) {
       return res.status(500).json({ success: false, error: imageResult.error || 'Poster image generation failed' });

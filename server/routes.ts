@@ -250,6 +250,7 @@ import { startInfluencerContentScheduler } from './services/influencer-content-s
 import promoClipsRouter from './routes/promo-clips'; // Promo Clips — Song-to-Visual Lipsync Engine (FAL OmniHuman + Sync-3)
 import artistCommandRouter from './routes/artist-command'; // Artist Command Engine — voice/text commands → AI module orchestration
 import whatsappRouter from './routes/whatsapp'; // WhatsApp Artist Command Center — OpenWA gateway, fans, campaigns, AI agent
+import promoContentRouter from './routes/promo-content'; // Promo Content Library — songs/videos/products/tickets/gallery as ready promo links
 import telegramRouter from './routes/telegram'; // Telegram Artist Command Center — Bot API gateway, fans, campaigns, communities, AI agent
 import facebookGroupsRouter from './routes/facebook-groups'; // Facebook Groups — controlled auto-publishing engine (Hybrid mode)
 import { startFacebookGroupsScheduler } from './services/facebook-groups-scheduler'; // FB Groups queue prep + readiness scheduler
@@ -818,6 +819,10 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // WhatsApp Artist Command Center — OpenWA gateway (sessions, fans, campaigns, tickets, merch, AI agent)
   app.use('/api/whatsapp', whatsappRouter);
   console.log('💬 WhatsApp Artist Command Center registered at /api/whatsapp');
+
+  // Promo Content Library — aggregates songs/videos/products/tickets/gallery into ready-to-use promo links + captions
+  app.use('/api/promo-content', promoContentRouter);
+  console.log('🔗 Promo Content Library registered at /api/promo-content');
 
   // Telegram Artist Command Center — Bot API gateway (bots, fans, campaigns, communities, tickets, merch, AI agent)
   app.use('/api/telegram', telegramRouter);
