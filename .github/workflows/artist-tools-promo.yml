@@ -111,6 +111,7 @@ jobs:
           RESEND_API_ARTISTS_4:       ${{ secrets.RESEND_API_ARTISTS_4 }}
           RESEND_API_ARTISTS_5:       ${{ secrets.RESEND_API_ARTISTS_5 }}
           RESEND_API_ARTISTS_6:       ${{ secrets.RESEND_API_ARTISTS_6 }}
+          RESEND_API_ARTISTS_7:       ${{ secrets.RESEND_API_ARTISTS_7 }}
           BREVO_API_KEY:              ${{ secrets.BREVO_API_KEY }}
           JWT_SECRET:                 ${{ secrets.JWT_SECRET }}
           SESSION_SECRET:             ${{ secrets.SESSION_SECRET }}
