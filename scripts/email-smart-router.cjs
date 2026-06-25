@@ -1,16 +1,23 @@
 /**
  * 📬 EMAIL SMART ROUTER
  * 
- * Manages daily send limits across all email providers:
- *   - Brevo:     300/day limit  → safe max = 200  (leaves 100 buffer)
- *   - Resend x11: 100/day each → safe max =  70  (leaves 30 buffer)
+ * Healthy GLOBAL daily ceiling across ALL providers: 600 emails/day
+ * (override per-run with env DAILY_SEND_TARGET). The router rotates intelligently,
+ * always picking the least-used domain so every account stays warm and far below
+ * its hard cap. Per-account safe maxes:
+ *   - Brevo (boostifymusic.com):        300/day hard → safe 120
+ *   - Resend FREE x6 (established):      100/day hard → safe  60 each
+ *   - Resend PAID x5 (new, warming up):  paid acct   → safe  40 each
  * 
- * Rotates between Resend accounts automatically.
- * Tracks sends in Supabase `email_daily_limits` table.
- * Always sets reply-to: convoycubano@gmail.com
+ * Tracks sends in `email_daily_limits` table (shared by every GitHub Action).
+ * Always sets reply-to: convoycubano@gmail.com (so all client replies land there).
  */
 
 const REPLY_TO = 'convoycubano@gmail.com';
+
+// 🎯 Global healthy daily ceiling across ALL providers (Resend + Brevo combined).
+// Intelligent rotation keeps every domain warm and well under its hard cap.
+const GLOBAL_DAILY_TARGET = parseInt(process.env.DAILY_SEND_TARGET || '600', 10);
 
 const PROVIDERS = {
   // Brevo — used for industry/investor domain (boostifymusic.com)
@@ -18,7 +25,7 @@ const PROVIDERS = {
     key: 'BREVO',
     type: 'brevo',
     dailyLimit: 300,
-    safeMax: 200,
+    safeMax: 120,
     envVar: 'BREVO_API_KEY',
     fromEmail: 'info@boostifymusic.com',
     fromName: 'Alex from Boostify',
@@ -30,7 +37,7 @@ const PROVIDERS = {
     key: 'ARTISTS_1',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_1',
     fromEmail: 'info@boostifymusic.site',
     fromName: 'Alex from Boostify',
@@ -40,7 +47,7 @@ const PROVIDERS = {
     key: 'ARTISTS_2',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_2',
     fromEmail: 'info@boostifymusic.space',
     fromName: 'Alex from Boostify',
@@ -50,7 +57,7 @@ const PROVIDERS = {
     key: 'ARTISTS_3',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_3',
     fromEmail: 'info@boostifymusic.sbs',
     fromName: 'Alex from Boostify',
@@ -60,7 +67,7 @@ const PROVIDERS = {
     key: 'ARTISTS_4',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_4',
     fromEmail: 'info@boostifymusic.online',
     fromName: 'Alex from Boostify',
@@ -70,7 +77,7 @@ const PROVIDERS = {
     key: 'ARTISTS_5',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_5',
     fromEmail: 'info@boostifymusica.space',
     fromName: 'Alex from Boostify',
@@ -80,7 +87,7 @@ const PROVIDERS = {
     key: 'ARTISTS_6',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 60,
     envVar: 'RESEND_API_ARTISTS_6',
     fromEmail: 'info@boostifymusica.site',
     fromName: 'Alex from Boostify',
@@ -90,7 +97,7 @@ const PROVIDERS = {
     key: 'ARTISTS_7',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 40,
     envVar: 'RESEND_API_ARTISTS_7',
     fromEmail: 'info@boostifymusicusa.sbs',
     fromName: 'Alex from Boostify',
@@ -100,7 +107,7 @@ const PROVIDERS = {
     key: 'ARTISTS_8',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 40,
     envVar: 'RESEND_API_ARTISTS_8',
     fromEmail: 'info@boostifymusicusa.space',
     fromName: 'Alex from Boostify',
@@ -110,7 +117,7 @@ const PROVIDERS = {
     key: 'ARTISTS_9',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 40,
     envVar: 'RESEND_API_ARTISTS_9',
     fromEmail: 'info@boostifymusicusa.online',
     fromName: 'Alex from Boostify',
@@ -120,7 +127,7 @@ const PROVIDERS = {
     key: 'ARTISTS_10',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 40,
     envVar: 'RESEND_API_ARTISTS_10',
     fromEmail: 'info@boostifymusic.shop',
     fromName: 'Alex from Boostify',
@@ -130,13 +137,45 @@ const PROVIDERS = {
     key: 'ARTISTS_11',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 70,
+    safeMax: 40,
     envVar: 'RESEND_API_ARTISTS_11',
     fromEmail: 'info@boostifymusic.xyz',
     fromName: 'Alex from Boostify',
     domain: 'boostifymusic.xyz',
   },
 };
+
+/**
+ * Total emails sent across ALL providers today (for the global daily ceiling).
+ * @param {object} pool - pg Pool instance
+ * @returns {Promise<number>}
+ */
+async function getGlobalSentToday(pool) {
+  const today = new Date().toISOString().slice(0, 10);
+  let client;
+  try {
+    client = await pool.connect();
+    const res = await client.query(
+      `SELECT COALESCE(SUM(sent), 0) AS total FROM email_daily_limits WHERE date = $1`,
+      [today]
+    );
+    return parseInt(res.rows[0]?.total || 0, 10);
+  } catch (e) {
+    return 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Remaining emails allowed today under the GLOBAL ceiling (across every provider).
+ * @param {object} pool - pg Pool instance
+ * @returns {Promise<{ sentToday: number, target: number, remaining: number }>}
+ */
+async function getDailyBudget(pool) {
+  const sentToday = await getGlobalSentToday(pool);
+  return { sentToday, target: GLOBAL_DAILY_TARGET, remaining: Math.max(GLOBAL_DAILY_TARGET - sentToday, 0) };
+}
 
 /**
  * Returns the best available Resend provider for artist emails.
@@ -192,8 +231,11 @@ async function getBestArtistProvider(pool) {
   }
 
   const p = PROVIDERS[best];
-  const remaining = p.safeMax - (counts[best] || 0);
-  console.log(`📬 Resend router → ${best} (${counts[best] || 0}/${p.safeMax} used today, ${remaining} remaining)`);
+  const accountRemaining = p.safeMax - (counts[best] || 0);
+  const globalSent = await getGlobalSentToday(pool);
+  const globalRemaining = Math.max(GLOBAL_DAILY_TARGET - globalSent, 0);
+  const remaining = Math.max(0, Math.min(accountRemaining, globalRemaining));
+  console.log(`📬 Resend router → ${best} (acct ${counts[best] || 0}/${p.safeMax}, global ${globalSent}/${GLOBAL_DAILY_TARGET}) → ${remaining} left`);
   return {
     provider: best,
     apiKey: process.env[p.envVar],
@@ -224,9 +266,12 @@ async function getBrevoQuota(pool) {
   } finally {
     if (client) client.release();
   }
-  const remaining = PROVIDERS.BREVO.safeMax - sent;
-  console.log(`📬 Brevo quota → ${sent}/${PROVIDERS.BREVO.safeMax} used today (${remaining} remaining)`);
-  return { remainingToday: Math.max(remaining, 0) };
+  const accountRemaining = PROVIDERS.BREVO.safeMax - sent;
+  const globalSent = await getGlobalSentToday(pool);
+  const globalRemaining = Math.max(GLOBAL_DAILY_TARGET - globalSent, 0);
+  const remaining = Math.max(0, Math.min(accountRemaining, globalRemaining));
+  console.log(`📬 Brevo quota → acct ${sent}/${PROVIDERS.BREVO.safeMax}, global ${globalSent}/${GLOBAL_DAILY_TARGET} → ${remaining} remaining`);
+  return { remainingToday: remaining };
 }
 
 /**
@@ -391,9 +436,12 @@ function isMissingRelation(err) {
 
 module.exports = {
   REPLY_TO,
+  GLOBAL_DAILY_TARGET,
   PROVIDERS,
   getBestArtistProvider,
   getBrevoQuota,
+  getGlobalSentToday,
+  getDailyBudget,
   recordSends,
   sendWithBrevo,
   sendWithResend,
