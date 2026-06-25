@@ -84,11 +84,31 @@ async function prefetchDemoImages() {
     );
     for (const d of Object.values(DEMO)) {
       const row = res.rows.find((r) => r.slug === d.slug);
-      if (row) { d.profile = row.profile_image || null; d.cover = row.cover_image || null; }
+      if (row) {
+        // Only keep URLs that are genuinely images (a cover_image can be an mp4/video → would break in <img>).
+        d.profile = await validImageUrl(row.profile_image);
+        d.cover = await validImageUrl(row.cover_image);
+      }
     }
-    console.log(`📸 Demo images: ${Object.values(DEMO).filter((d) => d.cover || d.profile).length}/${slugs.length} loaded`);
+    console.log(`📸 Demo images: ${Object.values(DEMO).filter((d) => d.cover || d.profile).length}/${slugs.length} with a valid image`);
   } catch (e) {
     console.warn('⚠️  Could not prefetch demo images:', e.message);
+  }
+}
+
+// Returns the URL only if it resolves to a real image (content-type image/*), else null.
+async function validImageUrl(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  try {
+    let resp = await fetch(url, { method: 'HEAD' });
+    let ct = (resp.headers.get('content-type') || '').toLowerCase();
+    if (!ct) { // some CDNs don't return content-type on HEAD → fall back to GET
+      resp = await fetch(url, { method: 'GET' });
+      ct = (resp.headers.get('content-type') || '').toLowerCase();
+    }
+    return resp.ok && ct.startsWith('image/') ? url : null;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -421,13 +441,14 @@ function buildHtml(toolKey, lang, contact) {
               <td valign="top" style="padding:9px 0;font-size:14px;color:${BODY};font-family:Arial,sans-serif;line-height:1.6;">${b}</td>
             </tr>`).join('');
 
-  // Real artist visual from DB (cover preferred, then profile). Rendered only if present.
-  const heroImg = demo.cover || demo.profile;
+  // Real artist visual from DB. Prefer the portrait (profile = face, framed) so heads are never cut;
+  // fall back to a valid cover. Both are pre-validated as real images (no broken/video sources).
+  const heroImg = demo.profile || demo.cover;
   const visualBlock = heroImg ? `
     <tr><td style="padding:22px 30px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius:16px;overflow:hidden;border:1px solid ${HAIR};">
-        <tr><td style="padding:0;line-height:0;position:relative;">
-          <img src="${heroImg}" alt="${demo.name} on Boostify" width="540" style="width:100%;max-width:540px;height:230px;object-fit:cover;display:block;" />
+        <tr><td style="padding:0;line-height:0;">
+          <img src="${heroImg}" alt="${demo.name} on Boostify" width="540" style="width:100%;max-width:540px;height:260px;object-fit:cover;object-position:center top;display:block;background:#e8eaf0;" />
         </td></tr>
         <tr><td style="background:${INK};padding:13px 20px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -438,10 +459,7 @@ function buildHtml(toolKey, lang, contact) {
       </table>
     </td></tr>` : '';
 
-  const profileThumb = demo.profile ? `
-              <td valign="top" style="width:54px;padding:0 14px 0 0;">
-                <img src="${demo.profile}" alt="${demo.name}" width="48" height="48" style="width:48px;height:48px;border-radius:50%;object-fit:cover;display:block;border:2px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.12);" />
-              </td>` : '';
+  const profileThumb = '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
