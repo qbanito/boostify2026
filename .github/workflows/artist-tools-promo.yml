@@ -100,16 +100,6 @@ jobs:
           echo "TOOL=$TOOL" >> $GITHUB_ENV
           echo "📅 Day $DAY → promoting tool: $TOOL"
 
-      - name: � Debug — which secrets are set
-        run: |
-          echo "DATABASE_URL set?               ${{ secrets.DATABASE_URL != '' }}"
-          echo "SUPABASE_CONNECTION_STRING set? ${{ secrets.SUPABASE_CONNECTION_STRING != '' }}"
-          echo "RESEND_API_ARTISTS_1 set?       ${{ secrets.RESEND_API_ARTISTS_1 != '' }}"
-          echo "RESEND_API_ARTISTS_2 set?       ${{ secrets.RESEND_API_ARTISTS_2 != '' }}"
-          echo "RESEND_API_ARTISTS_3 set?       ${{ secrets.RESEND_API_ARTISTS_3 != '' }}"
-          echo "RESEND_API_ARTISTS_4 set?       ${{ secrets.RESEND_API_ARTISTS_4 != '' }}"
-          echo "BREVO_API_KEY set?              ${{ secrets.BREVO_API_KEY != '' }}"
-          echo "SESSION_SECRET set?             ${{ secrets.SESSION_SECRET != '' }}"
 
       - name: �🚀 Run Artist Tools Promo
         env:
