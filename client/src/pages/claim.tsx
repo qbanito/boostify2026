@@ -2,7 +2,97 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2, Sparkles, ShieldCheck, Music2, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  Sparkles,
+  ShieldCheck,
+  Music2,
+  ArrowRight,
+  Globe,
+  Clapperboard,
+  Mic2,
+  Store,
+  Ticket,
+  Users,
+  Megaphone,
+  Image as ImageIcon,
+  Radio,
+  TrendingUp,
+  Bot,
+  Gift,
+  Infinity as InfinityIcon,
+  type LucideIcon,
+} from "lucide-react";
+
+interface ClaimTool {
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+}
+
+// The full Boostify arsenal — shown on the claim page so the artist sees the
+// irresistible offer (everything they unlock for free).
+const CLAIM_TOOLS: ClaimTool[] = [
+  { icon: Globe, title: "Página profesional", desc: "Tu sitio de artista listo" },
+  { icon: Music2, title: "Música y videos", desc: "Sube todo tu catálogo" },
+  { icon: Clapperboard, title: "Videos musicales IA", desc: "Clips cinematográficos" },
+  { icon: Mic2, title: "Karaoke y lyric videos", desc: "Engancha a tus fans" },
+  { icon: Store, title: "Tienda 3D + merch IA", desc: "Productos sin inventario" },
+  { icon: Ticket, title: "Conciertos y tickets", desc: "Vende entradas online" },
+  { icon: Users, title: "Club de fans", desc: "Monetiza tu comunidad" },
+  { icon: Megaphone, title: "Marketing automático", desc: "Redes en piloto" },
+  { icon: ImageIcon, title: "Arte e imágenes IA", desc: "Galería visual infinita" },
+  { icon: Radio, title: "Streaming y radio", desc: "Suena en todo el mundo" },
+  { icon: TrendingUp, title: "Motor económico", desc: "Ingresos y tesorería" },
+  { icon: Bot, title: "Agentes IA 24/7", desc: "Trabajan por ti sin parar" },
+];
+
+// AI pre-built profiles ship with throwaway placeholder covers (picsum / ui-avatars).
+// We never want those as the hero — show the branded animated background instead.
+function isPlaceholderCover(url?: string | null): boolean {
+  if (!url) return true;
+  return /picsum\.photos|ui-avatars\.com|placehold|dummyimage|gravatar/i.test(url);
+}
+
+const AURORA_CSS = `
+.claim-orb{position:absolute;border-radius:9999px;filter:blur(44px);opacity:.6;mix-blend-mode:screen;will-change:transform}
+.claim-orb-1{width:260px;height:260px;left:-50px;top:-70px;background:radial-gradient(circle at 30% 30%,#7c5cff,transparent 70%);animation:claimFloat1 15s ease-in-out infinite}
+.claim-orb-2{width:320px;height:320px;right:-70px;top:-50px;background:radial-gradient(circle at 50% 50%,#ff2d95,transparent 70%);animation:claimFloat2 19s ease-in-out infinite}
+.claim-orb-3{width:240px;height:240px;left:38%;top:10px;background:radial-gradient(circle at 50% 50%,#ff7b00,transparent 70%);animation:claimFloat3 17s ease-in-out infinite}
+.claim-sheen{position:absolute;inset:-60%;background:conic-gradient(from 0deg,transparent,rgba(232,201,138,.12),transparent 38%);animation:claimSpin 24s linear infinite}
+.claim-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:42px 42px;-webkit-mask-image:radial-gradient(circle at 50% 35%,#000,transparent 75%);mask-image:radial-gradient(circle at 50% 35%,#000,transparent 75%);animation:claimGrid 7s linear infinite}
+.claim-note{position:absolute;bottom:-10px;color:rgba(255,255,255,.5);animation:claimRise 9s linear infinite}
+.claim-note-1{left:13%;animation-delay:0s}
+.claim-note-2{left:34%;color:rgba(232,201,138,.65);animation-delay:2.6s}
+.claim-note-3{left:61%;animation-delay:1.3s}
+.claim-note-4{left:83%;color:rgba(255,45,149,.6);animation-delay:3.8s}
+@keyframes claimFloat1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(44px,30px) scale(1.15)}}
+@keyframes claimFloat2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-42px,26px) scale(1.2)}}
+@keyframes claimFloat3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(22px,40px) scale(1.1)}}
+@keyframes claimSpin{to{transform:rotate(360deg)}}
+@keyframes claimGrid{to{background-position:0 42px}}
+@keyframes claimRise{0%{transform:translateY(12px);opacity:0}15%{opacity:.6}85%{opacity:.6}100%{transform:translateY(-170px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.claim-orb,.claim-sheen,.claim-grid,.claim-note{animation:none!important}}
+`;
+
+// Modern, Boostify-branded animated hero used when no real cover exists.
+function BrandAurora() {
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-[#0b0b0f]">
+      <style>{AURORA_CSS}</style>
+      <div className="claim-orb claim-orb-1" />
+      <div className="claim-orb claim-orb-2" />
+      <div className="claim-orb claim-orb-3" />
+      <div className="claim-sheen" />
+      <div className="claim-grid" />
+      <Music2 className="claim-note claim-note-1 h-5 w-5" />
+      <Sparkles className="claim-note claim-note-2 h-4 w-4" />
+      <Music2 className="claim-note claim-note-3 h-6 w-6" />
+      <Sparkles className="claim-note claim-note-4 h-4 w-4" />
+    </div>
+  );
+}
 
 interface ClaimArtist {
   id: number;
@@ -117,28 +207,35 @@ export default function ClaimPage() {
     submitClaim();
   };
 
-  const cover = artist?.coverImage || artist?.profileImage || "";
+  const realCoverUrl = !isPlaceholderCover(artist?.coverImage)
+    ? artist?.coverImage
+    : !isPlaceholderCover(artist?.profileImage)
+      ? artist?.profileImage
+      : "";
   const name = artist?.artistName || "tu perfil";
 
   return (
     <div className="min-h-screen w-full bg-[#0b0b0f] text-white flex items-center justify-center p-4 pb-28 sm:pb-12">
       <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-[#101016] shadow-[0_30px_120px_-20px_rgba(124,92,255,0.45)]">
         {/* Cover */}
-        <div className="relative h-56 w-full sm:h-72">
-          {cover ? (
+        <div className="relative h-56 w-full overflow-hidden sm:h-72">
+          {realCoverUrl ? (
             <img
-              src={cover}
+              src={realCoverUrl}
               alt={name}
               className="h-full w-full object-cover"
               style={{ objectPosition: "center top" }}
             />
           ) : (
-            <div className="h-full w-full bg-gradient-to-br from-[#7c5cff] via-[#ff2d95] to-[#ff7b00]" />
+            <BrandAurora />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#101016] via-[#101016]/40 to-transparent" />
-          <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 text-xs font-medium backdrop-blur">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#101016] via-[#101016]/40 to-transparent" />
+          <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-medium backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-[#e8c98a]" />
             Perfil creado por Boostify AI
+          </div>
+          <div className="absolute right-5 top-5 select-none text-xs font-extrabold tracking-[0.25em] text-white/70">
+            BOOSTIFY
           </div>
         </div>
 
@@ -175,21 +272,63 @@ export default function ClaimPage() {
               </p>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/60">
                 {artist?.biography
-                  ? artist.biography.slice(0, 220) + (artist.biography.length > 220 ? "…" : "")
-                  : "Ya construimos tu página de artista con IA. Reclámala gratis para tomar el control, publicar tu música y activar todas las herramientas de Boostify."}
+                  ? artist.biography.slice(0, 160) + (artist.biography.length > 160 ? "…" : "")
+                  : "Ya construimos tu página de artista con IA. Reclámala gratis y desbloquea toda la plataforma para llevar tu carrera al siguiente nivel."}
               </p>
 
-              <ul className="mt-5 grid grid-cols-1 gap-2 text-sm text-white/70 sm:grid-cols-2">
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#7c5cff]" /> Control total de tu página</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#7c5cff]" /> Sube tu música y videos</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#7c5cff]" /> Tienda y merch con IA</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#7c5cff]" /> Marketing y fans automatizados</li>
-              </ul>
+              {/* Irresistible offer — the full arsenal */}
+              <div className="mt-6">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[#e8c98a]" />
+                  <p className="text-sm font-semibold text-white">
+                    Al reclamarlo desbloqueas toda tu plataforma:
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {CLAIM_TOOLS.map((tool) => (
+                    <div
+                      key={tool.title}
+                      className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:border-[#7c5cff]/40 hover:bg-white/[0.06]"
+                    >
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c5cff]/25 to-[#ff2d95]/25 text-[#c9b6ff]">
+                        <tool.icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold leading-tight text-white">{tool.title}</p>
+                        <p className="mt-0.5 text-[11px] leading-tight text-white/45">{tool.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Value banner */}
+              <div className="mt-6 flex items-center gap-3 rounded-2xl border border-[#e8c98a]/25 bg-gradient-to-r from-[#e8c98a]/12 via-[#e8c98a]/5 to-transparent p-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e8c98a]/15 text-[#e8c98a]">
+                  <Gift className="h-6 w-6" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    Todo incluido — <span className="text-[#e8c98a]">gratis para siempre</span>
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/50">
+                    <span className="inline-flex items-center gap-1">
+                      <InfinityIcon className="h-3.5 w-3.5" /> Sin límites
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" /> Sin tarjeta de crédito
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Listo en 30 segundos
+                    </span>
+                  </p>
+                </div>
+              </div>
 
               <button
                 onClick={handleClaimClick}
                 disabled={phase === "claiming" || authLoading}
-                className="group mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#7c5cff] via-[#ff2d95] to-[#ff7b00] px-6 py-4 text-base font-semibold text-white shadow-lg transition-all hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e8c98a] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                className="group mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#7c5cff] via-[#ff2d95] to-[#ff7b00] px-6 py-4 text-base font-semibold text-white shadow-lg transition-all hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e8c98a] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {phase === "claiming" ? (
                   <>
@@ -203,8 +342,8 @@ export default function ClaimPage() {
                 )}
               </button>
 
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-white/40">
-                <ShieldCheck className="h-3.5 w-3.5" /> Gratis para siempre. Sin tarjeta de crédito.
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-white/40">
+                <ShieldCheck className="h-3.5 w-3.5" /> Tu perfil queda 100% bajo tu control. Cancela cuando quieras.
               </p>
             </>
           )}
