@@ -241,7 +241,7 @@ import agentGatewayRouter from './routes/agent-gateway'; // Artist Agent Gateway
 import seoRouter from './routes/seo'; // SEO — sitemap.xml, robots.txt, news-sitemap
 import { shouldRunSchedulers } from './bootstrap/role'; // Gate background schedulers by service role
 import { cacheRoute } from './middleware/cache-route'; // Short-TTL response cache for hot public reads
-import { startDailyNewsScheduler } from './services/news-generator'; // Daily news article auto-generation
+import { startDailyNewsScheduler, startArtistNewsAutopilot } from './services/news-generator'; // Daily news article auto-generation
 import { startReleasePublisher } from './services/release-publisher'; // Scheduled song release publisher
 import autoMusicRouter from './routes/auto-music'; // Music Auto-Pilot — scheduled auto-generation from catalog references
 import { startAutoMusicScheduler } from './services/auto-music-scheduler'; // Music Auto-Pilot scheduler
@@ -794,6 +794,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Boostify News — AI-generated daily articles about innovations & technologies
   app.use('/api/news', newsRouter);
   if (shouldRunSchedulers()) startDailyNewsScheduler();
+  if (shouldRunSchedulers()) startArtistNewsAutopilot();
   console.log('📰 Boostify News Engine registered at /api/news (daily auto-generation active)');
 
   // Artist profile social sharing — rich OG card + share page

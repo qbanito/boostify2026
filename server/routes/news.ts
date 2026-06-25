@@ -8,7 +8,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { newsArticles, newsGenerationLogs, newsComments, newsCommentLikes, newsReactions, newsDebates, newsDebatePositions, newsDebateVotes, users } from '../../db/schema';
 import { eq, desc, and, gte, lte, gt, ilike, sql, count, asc } from 'drizzle-orm';
-import { generateDailyArticle, autoPublishArticle, generateArtistNews } from '../services/news-generator';
+import { generateDailyArticle, autoPublishArticle, generateArtistNews, getArtistNewsSchedule, setArtistNewsSchedule } from '../services/news-generator';
 import { sendArticleNewsletter, sendNewsDigest } from '../services/news-newsletter';
 import { authenticate } from '../middleware/auth';
 import sharp from 'sharp';
@@ -523,6 +523,53 @@ router.post('/articles/:id/regenerate-content', authenticate, async (req: Reques
   }
 });
 
+// ─── ARTIST: Get news autopilot schedule ───────────────────────
+router.get('/schedule/:userId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isFinite(userId)) return res.status(400).json({ error: 'Invalid userId' });
+    const reqUser = (req as any).user;
+    const reqPgId = await resolvePgUserId(reqUser);
+    if (!reqUser?.isAdmin && reqPgId !== userId) {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+    const schedule = await getArtistNewsSchedule(userId);
+    res.json({
+      success: true,
+      schedule: schedule || { userId, enabled: false, frequency: 'weekly', category: null, lastRunAt: null, nextRunAt: null },
+    });
+  } catch (error: any) {
+    console.error('[News API] Get schedule error:', error);
+    res.status(500).json({ error: 'Failed to fetch schedule' });
+  }
+});
+
+// ─── ARTIST: Update news autopilot schedule (enable + cadence) ──
+router.post('/schedule/:userId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isFinite(userId)) return res.status(400).json({ error: 'Invalid userId' });
+    const reqUser = (req as any).user;
+    const reqPgId = await resolvePgUserId(reqUser);
+    if (!reqUser?.isAdmin && reqPgId !== userId) {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+    const { enabled, frequency, category } = req.body || {};
+    if (frequency && !['daily', 'weekly', 'monthly'].includes(frequency)) {
+      return res.status(400).json({ error: 'frequency must be daily, weekly or monthly' });
+    }
+    const schedule = await setArtistNewsSchedule(userId, {
+      enabled: typeof enabled === 'boolean' ? enabled : undefined,
+      frequency,
+      category,
+    });
+    res.json({ success: true, schedule });
+  } catch (error: any) {
+    console.error('[News API] Update schedule error:', error);
+    res.status(500).json({ error: 'Failed to update schedule', message: error?.message });
+  }
+});
+
 // ─── PUBLIC: Server-rendered SHARE PAGE with full OG/Twitter meta tags ──
 // Use this URL when sharing on Facebook/LinkedIn/Twitter for rich embeds.
 // Path: /api/news/share/:slug   (also mounted as /news-share/:slug below)
@@ -657,6 +704,131 @@ footer { color: #6b7280; text-align: center; margin-top: 60px; font-size: 13px; 
   } catch (error: any) {
     console.error('[News API] Share page error:', error);
     res.status(500).set('Content-Type', 'text/html; charset=utf-8').send('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Server error</h1>');
+  }
+});
+
+// ─── PUBLIC: Classic NEWSPAPER front-page HTML render ───────────
+// A standalone, printable broadsheet-style page for an article.
+// Path: /api/news/articles/:slug/newspaper
+router.get('/articles/:slug/newspaper', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const [article] = await db.select()
+      .from(newsArticles)
+      .where(and(eq(newsArticles.slug, slug), eq(newsArticles.status, 'published')))
+      .limit(1);
+    if (!article) {
+      res.status(404).set('Content-Type', 'text/html; charset=utf-8')
+        .send('<!doctype html><meta charset="utf-8"><title>Not found</title><h1>Article not found</h1>');
+      return;
+    }
+
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+    const host = (req.headers['x-forwarded-host'] as string) || req.get('host');
+    const base = `${proto}://${host}`;
+    const articleUrl = `${base}/news?article=${encodeURIComponent(article.slug)}`;
+    const coverImage = `${base}/api/news/articles/${article.id}/image`;
+
+    const title = escapeHtml(article.title);
+    const subtitle = escapeHtml(article.subtitle || article.summary || '');
+    const category = escapeHtml(String(article.category || 'News').replace(/[-_]/g, ' ').toUpperCase());
+    const published = article.publishedAt ? new Date(article.publishedAt) : new Date();
+    const dateline = published.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const issue = `Vol. ${published.getFullYear()} · No. ${String(article.id).padStart(4, '0')}`;
+    const readTime = article.readTimeMinutes ? `${article.readTimeMinutes} MIN READ` : '';
+    const byline = (() => {
+      const m = (article.generatedBy || '').match(/^artist:(\d+)$/);
+      return m ? 'By the Boostify Newsroom · Artist Desk' : 'By the Boostify Newsroom';
+    })();
+    // Sanitize the stored HTML lightly (strip script/style) for safe embedding.
+    const bodyHtml = String(article.htmlContent || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/ on[a-z]+="[^"]*"/gi, '');
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title} — The Boostify Times</title>
+<meta name="description" content="${escapeHtml(article.summary || article.subtitle || '')}" />
+<link rel="canonical" href="${articleUrl}" />
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #d9d4c5; color: #1a1712; font-family: Georgia, 'Times New Roman', 'Playfair Display', serif; line-height: 1.5; }
+  .paper { max-width: 1000px; margin: 24px auto; background: #f7f3e8; padding: 36px 44px 64px; box-shadow: 0 24px 60px -20px rgba(0,0,0,.5); border: 1px solid #cdc6b2; }
+  .masthead { text-align: center; border-bottom: 4px double #1a1712; padding-bottom: 12px; }
+  .masthead .eyebrow { font-size: 11px; letter-spacing: .42em; text-transform: uppercase; margin: 0 0 6px; color: #4a4334; }
+  .masthead h1.title-bar { font-family: 'Playfair Display', 'Times New Roman', Georgia, serif; font-weight: 900; font-size: clamp(40px, 8vw, 86px); line-height: .92; letter-spacing: -.02em; margin: 0; }
+  .masthead .strap { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1a1712; border-bottom: 1px solid #1a1712; margin-top: 12px; padding: 6px 2px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #2a2418; }
+  .kicker { text-align: center; margin: 26px 0 8px; font-size: 12px; letter-spacing: .35em; text-transform: uppercase; color: #8a2b1f; font-weight: 700; }
+  h2.headline { font-family: 'Playfair Display', 'Times New Roman', Georgia, serif; font-weight: 900; font-size: clamp(30px, 5.4vw, 58px); line-height: 1.02; text-align: center; margin: 4px 0 10px; }
+  .deck { text-align: center; font-size: clamp(16px, 2.4vw, 21px); font-style: italic; color: #3a3326; max-width: 760px; margin: 0 auto 18px; }
+  .byline { text-align: center; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #5a5240; border-top: 1px solid #c9c1ab; border-bottom: 1px solid #c9c1ab; padding: 8px 0; margin: 0 0 22px; }
+  figure { margin: 0 0 8px; }
+  figure img { width: 100%; display: block; filter: grayscale(.18) contrast(1.06) sepia(.06); border: 1px solid #b8b09a; }
+  figcaption { font-size: 12px; font-style: italic; color: #5a5240; padding: 6px 2px 0; border-bottom: 1px solid #c9c1ab; margin-bottom: 22px; }
+  .article-body { column-count: 2; column-gap: 34px; column-rule: 1px solid #cdc6b2; text-align: justify; hyphens: auto; font-size: 16.5px; }
+  .article-body > :first-child::first-letter { float: left; font-family: 'Playfair Display', Georgia, serif; font-size: 4.4em; line-height: .72; font-weight: 900; padding: 6px 10px 0 0; color: #1a1712; }
+  .article-body p { margin: 0 0 14px; }
+  .article-body h2, .article-body h3 { font-family: 'Playfair Display', Georgia, serif; column-span: all; text-align: left; border-bottom: 2px solid #1a1712; padding-bottom: 4px; margin: 18px 0 12px; }
+  .article-body img { width: 100%; margin: 10px 0; filter: grayscale(.2) contrast(1.05); border: 1px solid #b8b09a; }
+  .article-body blockquote { border-left: 3px solid #8a2b1f; margin: 12px 0; padding: 2px 0 2px 12px; font-style: italic; color: #2a2418; }
+  .article-body a { color: #8a2b1f; text-decoration: none; }
+  .endbar { column-span: all; border-top: 4px double #1a1712; margin-top: 24px; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #5a5240; }
+  .endbar a { color: #1a1712; font-weight: 700; text-decoration: none; }
+  .actions { text-align: center; margin: 18px auto 0; }
+  .actions button { font-family: inherit; background: #1a1712; color: #f7f3e8; border: none; padding: 10px 22px; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; cursor: pointer; }
+  @media (max-width: 680px) { .article-body { column-count: 1; } .paper { padding: 22px 18px 40px; } }
+  @media print { body { background: #fff; } .paper { box-shadow: none; margin: 0; border: none; } .actions { display: none; } }
+</style>
+</head>
+<body>
+<div class="paper">
+  <header class="masthead">
+    <p class="eyebrow">AI-Powered Music Journalism</p>
+    <h1 class="title-bar">The Boostify Times</h1>
+    <div class="strap">
+      <span>${escapeHtml(dateline)}</span>
+      <span>${escapeHtml(category)}</span>
+      <span>${escapeHtml(issue)}</span>
+    </div>
+  </header>
+
+  <p class="kicker">${escapeHtml(category)}${readTime ? ` &nbsp;·&nbsp; ${escapeHtml(readTime)}` : ''}</p>
+  <h2 class="headline">${title}</h2>
+  ${subtitle ? `<p class="deck">${subtitle}</p>` : ''}
+  <p class="byline">${escapeHtml(byline)} &nbsp;·&nbsp; Boostify Music</p>
+
+  <figure>
+    <img src="${coverImage}" alt="${title}" />
+    <figcaption>${title} — photographed for The Boostify Times.</figcaption>
+  </figure>
+
+  <div class="article-body">
+    ${bodyHtml || `<p>${escapeHtml(article.summary || '')}</p>`}
+    <div class="endbar">
+      <span>© ${published.getFullYear()} The Boostify Times</span>
+      <a href="${articleUrl}">Continue on Boostify →</a>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button onclick="window.print()">Print this edition</button>
+  </div>
+</div>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
+    res.send(html);
+  } catch (error: any) {
+    console.error('[News API] Newspaper render error:', error);
+    res.status(500).set('Content-Type', 'text/html; charset=utf-8')
+      .send('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Server error</h1>');
   }
 });
 

@@ -10,6 +10,7 @@ import {
   Newspaper, Sparkles, Loader2, ChevronDown, ChevronUp,
   Info, ArrowRight, BookOpen, Zap, Tag, RefreshCw, ExternalLink,
   Clock, CheckCircle2, AlertCircle, Pencil, Trash2, X, Save,
+  CalendarClock, Printer,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -139,6 +140,33 @@ export function ArtistNewsGenerator({ userId, artistName, isOwner, colors }: Art
       }
     },
     onError: (err: any) => setLastResult({ error: err.message || "Generation failed" }),
+  });
+
+  // ── News Autopilot schedule (daily / weekly / monthly) ──
+  const { data: scheduleData, refetch: refetchSchedule } = useQuery<{
+    success: boolean;
+    schedule: { enabled: boolean; frequency: "daily" | "weekly" | "monthly"; nextRunAt: number | null } | null;
+  }>({
+    queryKey: [`/api/news/schedule/${userId}`],
+    enabled: !!userId && expanded,
+    queryFn: async () => {
+      const res = await fetch(`/api/news/schedule/${userId}`, { credentials: "include" });
+      if (!res.ok) return { success: false, schedule: null };
+      return res.json();
+    },
+    staleTime: 30000,
+  });
+  const schedule = scheduleData?.schedule || null;
+  const autopilotOn = !!schedule?.enabled;
+  const frequency = schedule?.frequency || "weekly";
+
+  const scheduleMutation = useMutation({
+    mutationFn: (data: { enabled?: boolean; frequency?: "daily" | "weekly" | "monthly" }) =>
+      apiRequest({ url: `/api/news/schedule/${userId}`, method: "POST", data }),
+    onSuccess: () => {
+      refetchSchedule();
+      queryClient.invalidateQueries({ queryKey: [`/api/news/schedule/${userId}`] });
+    },
   });
 
   // ── Edit / Delete state + mutations ──
@@ -293,7 +321,59 @@ export function ArtistNewsGenerator({ userId, artistName, isOwner, colors }: Art
             </div>
           )}
 
-          {/* ── Smart Suggestions ── */}
+          {/* ── News Autopilot ── */}
+          <div className="rounded-xl border p-3.5" style={{ borderColor: autopilotOn ? colors.hexAccent + "50" : colors.hexBorder + "60", backgroundColor: autopilotOn ? colors.hexAccent + "0a" : "rgba(255,255,255,0.02)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: colors.hexAccent + "18", border: `1px solid ${colors.hexAccent}30` }}
+                >
+                  <CalendarClock className="h-4 w-4" style={{ color: colors.hexAccent }} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-white">News Autopilot</div>
+                  <div className="text-[10px] text-gray-500 truncate">
+                    {autopilotOn
+                      ? `Auto-publishing ${frequency}${schedule?.nextRunAt ? ` · next ${format(new Date(schedule.nextRunAt), "MMM d")}` : ""}`
+                      : "Auto-generate & publish news on a schedule"}
+                  </div>
+                </div>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => scheduleMutation.mutate({ enabled: !autopilotOn, frequency })}
+                disabled={scheduleMutation.isPending}
+                className="relative h-6 w-11 rounded-full flex-shrink-0 transition-colors disabled:opacity-50"
+                style={{ backgroundColor: autopilotOn ? colors.hexAccent : "rgba(255,255,255,0.12)" }}
+                title={autopilotOn ? "Turn off autopilot" : "Turn on autopilot"}
+              >
+                <span
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
+                  style={{ transform: autopilotOn ? "translateX(22px)" : "translateX(2px)" }}
+                />
+              </button>
+            </div>
+
+            {/* Frequency selector */}
+            <div className="grid grid-cols-3 gap-1.5 mt-3">
+              {(["daily", "weekly", "monthly"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => scheduleMutation.mutate({ enabled: autopilotOn, frequency: f })}
+                  disabled={scheduleMutation.isPending}
+                  className="py-1.5 rounded-lg text-[11px] font-medium capitalize transition-all disabled:opacity-50"
+                  style={
+                    frequency === f
+                      ? { backgroundColor: colors.hexAccent + "20", border: `1px solid ${colors.hexAccent}50`, color: colors.hexAccent }
+                      : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", color: "#9ca3af" }
+                  }
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
           {suggestions.length > 0 && (
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
@@ -565,6 +645,15 @@ export function ArtistNewsGenerator({ userId, artistName, isOwner, colors }: Art
                         </a>
                       </div>
                       <div className="flex flex-col gap-1 self-center">
+                        <a
+                          href={`/api/news/articles/${article.slug}/newspaper`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                          title="Open as classic newspaper (HTML)"
+                        >
+                          <Printer className="h-3 w-3" />
+                        </a>
                         <button
                           onClick={() => handleStartEdit(article)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"

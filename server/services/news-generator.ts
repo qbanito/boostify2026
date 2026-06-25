@@ -12,6 +12,7 @@ import { sendArticleNewsletter, sendArticleToIndustryContacts } from './news-new
 import { generateNewsImage } from './news-image-generator';
 import { callAI } from '../utils/smart-ai';
 import { buildSkillsOnlyPrompt } from '../utils/ai-skills-injector';
+import { db as firestore } from '../firebase';
 
 // ── Topic Pool ─────────────────────────────────────────────────
 const TOPIC_POOL = [
@@ -682,7 +683,7 @@ Style guide:
       prompt: angle,
       textmodel: 'smart-router',
       imageModel: image.provider === 'openai' ? 'gpt-image-1' : image.provider === 'fal' ? 'fal-centralized' : 'placeholder',
-      textTokensUsed: tokensUsed,
+      textTokensUsed: 0,
       success: true,
     });
 
@@ -795,5 +796,157 @@ export function stopDailyNewsScheduler() {
     clearInterval(dailyInterval);
     dailyInterval = null;
     console.log('[News-Gen] Daily scheduler stopped');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PER-ARTIST NEWS AUTOPILOT (Firestore-backed schedules)
+// ═══════════════════════════════════════════════════════════════
+// Each artist can turn ON an autopilot that auto-generates & publishes
+// a personalized news article at a chosen cadence (daily/weekly/monthly).
+// Config lives in Firestore collection `artistNewsSchedules/{userId}`.
+
+export type NewsFrequency = 'daily' | 'weekly' | 'monthly';
+
+export interface ArtistNewsSchedule {
+  userId: number;
+  enabled: boolean;
+  frequency: NewsFrequency;
+  category?: string | null;
+  lastRunAt: number | null;
+  nextRunAt: number;
+  updatedAt: number;
+}
+
+const FREQUENCY_MS: Record<NewsFrequency, number> = {
+  daily: 24 * 60 * 60 * 1000,
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
+};
+
+function normalizeFrequency(f: any): NewsFrequency {
+  return f === 'daily' || f === 'weekly' || f === 'monthly' ? f : 'weekly';
+}
+
+const SCHEDULE_COLLECTION = 'artistNewsSchedules';
+
+export async function getArtistNewsSchedule(userId: number): Promise<ArtistNewsSchedule | null> {
+  try {
+    if (!firestore) return null;
+    const snap = await firestore.collection(SCHEDULE_COLLECTION).doc(String(userId)).get();
+    if (!snap.exists) return null;
+    const d: any = snap.data() || {};
+    return {
+      userId,
+      enabled: !!d.enabled,
+      frequency: normalizeFrequency(d.frequency),
+      category: d.category ?? null,
+      lastRunAt: typeof d.lastRunAt === 'number' ? d.lastRunAt : null,
+      nextRunAt: typeof d.nextRunAt === 'number' ? d.nextRunAt : Date.now(),
+      updatedAt: typeof d.updatedAt === 'number' ? d.updatedAt : Date.now(),
+    };
+  } catch (err: any) {
+    console.warn('[News-Autopilot] getArtistNewsSchedule failed:', err?.message || err);
+    return null;
+  }
+}
+
+export async function setArtistNewsSchedule(
+  userId: number,
+  input: { enabled?: boolean; frequency?: NewsFrequency; category?: string | null }
+): Promise<ArtistNewsSchedule> {
+  if (!firestore) throw new Error('Firestore not available');
+  const existing = await getArtistNewsSchedule(userId);
+  const frequency = normalizeFrequency(input.frequency ?? existing?.frequency ?? 'weekly');
+  const enabled = input.enabled ?? existing?.enabled ?? false;
+  const now = Date.now();
+  // When (re)enabling or changing cadence, schedule the next run one interval out
+  // (so toggling on does not immediately fire). Keep prior nextRunAt if just re-saving.
+  const reschedule = enabled && (!existing?.enabled || existing?.frequency !== frequency);
+  const nextRunAt = reschedule
+    ? now + FREQUENCY_MS[frequency]
+    : (existing?.nextRunAt ?? now + FREQUENCY_MS[frequency]);
+
+  const payload: ArtistNewsSchedule = {
+    userId,
+    enabled,
+    frequency,
+    category: input.category ?? existing?.category ?? null,
+    lastRunAt: existing?.lastRunAt ?? null,
+    nextRunAt,
+    updatedAt: now,
+  };
+  await firestore.collection(SCHEDULE_COLLECTION).doc(String(userId)).set(payload, { merge: true });
+  return payload;
+}
+
+async function runDueArtistSchedules(): Promise<void> {
+  if (!firestore) return;
+  const now = Date.now();
+  let due: { userId: number; data: any }[] = [];
+  try {
+    const snap = await firestore.collection(SCHEDULE_COLLECTION).where('enabled', '==', true).get();
+    snap.forEach((doc) => {
+      const data: any = doc.data() || {};
+      const nextRunAt = typeof data.nextRunAt === 'number' ? data.nextRunAt : 0;
+      if (nextRunAt <= now) due.push({ userId: Number(doc.id), data });
+    });
+  } catch (err: any) {
+    console.warn('[News-Autopilot] query failed:', err?.message || err);
+    return;
+  }
+
+  if (due.length === 0) return;
+  console.log(`[News-Autopilot] ${due.length} artist schedule(s) due — generating...`);
+
+  for (const { userId, data } of due) {
+    const frequency = normalizeFrequency(data.frequency);
+    try {
+      const result = await generateArtistNews(userId, { category: data.category || undefined });
+      if (result.success && result.articleId) {
+        try { await autoPublishArticle(result.articleId); } catch { /* non-fatal */ }
+        console.log(`[News-Autopilot] ✅ Generated for artist ${userId}: "${result.title}"`);
+      } else {
+        console.warn(`[News-Autopilot] ⚠️ Generation failed for artist ${userId}: ${result.error}`);
+      }
+    } catch (err: any) {
+      console.error(`[News-Autopilot] error for artist ${userId}:`, err?.message || err);
+    } finally {
+      // Advance the schedule regardless of success so we don't hammer a failing artist.
+      try {
+        const after = Date.now();
+        await firestore.collection(SCHEDULE_COLLECTION).doc(String(userId)).set({
+          lastRunAt: after,
+          nextRunAt: after + FREQUENCY_MS[frequency],
+          updatedAt: after,
+        }, { merge: true });
+      } catch { /* ignore */ }
+    }
+  }
+}
+
+let autopilotInterval: ReturnType<typeof setInterval> | null = null;
+
+export function startArtistNewsAutopilot() {
+  if (autopilotInterval) return;
+  if (!firestore) {
+    console.warn('[News-Autopilot] Firestore unavailable — autopilot disabled');
+    return;
+  }
+  console.log('[News-Autopilot] 🤖 Per-artist news autopilot started');
+  autopilotInterval = setInterval(() => {
+    runDueArtistSchedules().catch((e) => console.error('[News-Autopilot] tick error:', e?.message || e));
+  }, 60 * 60 * 1000); // hourly
+  // Initial pass shortly after boot
+  setTimeout(() => {
+    runDueArtistSchedules().catch((e) => console.error('[News-Autopilot] initial error:', e?.message || e));
+  }, 45000);
+}
+
+export function stopArtistNewsAutopilot() {
+  if (autopilotInterval) {
+    clearInterval(autopilotInterval);
+    autopilotInterval = null;
+    console.log('[News-Autopilot] stopped');
   }
 }

@@ -27,7 +27,14 @@ import { storage } from '../firebase';
 
 const FAL_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const enableOpenAINewsFallbacks = process.env.ENABLE_OPENAI_NEWS_FALLBACKS === '1';
+// OpenAI gpt-image-1 is the strongest fallback model — it is now ON BY DEFAULT
+// whenever an API key is present (FAL stays first for cost). Set
+// DISABLE_OPENAI_NEWS_FALLBACKS=1 to force it off; ENABLE_OPENAI_NEWS_FALLBACKS=1
+// keeps working for backwards compatibility.
+const enableOpenAINewsFallbacks =
+  process.env.DISABLE_OPENAI_NEWS_FALLBACKS === '1'
+    ? false
+    : (process.env.ENABLE_OPENAI_NEWS_FALLBACKS === '1' || !!OPENAI_API_KEY);
 if (FAL_KEY) {
   try { fal.config({ credentials: FAL_KEY }); } catch { /* ignore */ }
 }
@@ -68,10 +75,16 @@ export interface NewsImageInput {
   referenceImageUrl?: string | null;
   /** Aspect ratio. Defaults to 16:9 for news covers. */
   aspectRatio?: '16:9' | '4:3' | '1:1' | '9:16';
-  /** OpenAI gpt-image-1 quality. Defaults to 'medium' (~$0.042/img). */
+  /** OpenAI gpt-image-1 quality. Defaults to 'high' for spectacular covers. */
   openaiQuality?: 'low' | 'medium' | 'high' | 'auto';
   /** OpenAI gpt-image-1 size. Defaults to '1536x1024' (landscape) for news covers. */
   openaiSize?: '1024x1024' | '1024x1536' | '1536x1024' | 'auto';
+  /**
+   * Visual treatment. 'newspaper' = dramatic classic front-page photojournalism
+   * (default — looks like a prestige newspaper front page). 'editorial' = the
+   * earlier natural magazine-style look.
+   */
+  style?: 'newspaper' | 'editorial';
 }
 
 export interface NewsImageResult {
@@ -83,33 +96,45 @@ export interface NewsImageResult {
 // ── Prompt Builder ─────────────────────────────────────────────
 export function buildNewsImagePrompt(input: NewsImageInput): string {
   const { title, artistName, genre, category, context, referenceImageUrl } = input;
+  const style = input.style || 'newspaper';
 
   const sceneByCategory: Record<string, string> = {
-    release: 'natural candid editorial photo of the artist holding or unveiling new music — light leak, soft sun, real-world location, no studio backdrop',
-    performance: 'live concert documentary photograph of the artist performing on stage, real venue lighting, hand-held DSLR feel, motion-blurred audience in background',
-    collaboration: 'natural editorial photograph of the artist with fellow musicians in a real recording studio or backstage, candid laughter and conversation, available light',
-    achievement: 'magazine-style portrait photograph of the artist celebrating a milestone, real environment, golden hour light, honest expression, no posed studio shot',
-    lifestyle: 'unposed lifestyle photograph of the artist in a real urban or nature setting going about their day, looks like a Magnum / Annie Leibovitz street portrait',
-    'artist-debut': 'natural arrival photograph of the artist stepping into the music scene, real venue lobby or rooftop, photojournalistic, golden hour',
-    song_released: 'natural editorial photograph of the artist on release day in a real environment, soft natural light, candid expression',
-    artist_debut: 'natural arrival photograph of the artist debuting at a real venue, photojournalistic, golden hour',
-    song_tokenized: 'natural editorial portrait of the artist next to a screen showing music data, real office or studio, available light',
-    album_complete: 'natural editorial photograph of the artist holding a vinyl record in a real listening room, warm tungsten light',
-    merch_launched: 'natural editorial photograph of the artist wearing their own merch in a real city street, candid lifestyle shot',
-    crowdfunding_started: 'natural editorial photograph of the artist with a small crowd of real-looking fans, community feel, available daylight',
-    milestone_reached: 'natural editorial photograph of the artist celebrating, real friends around, candid reaction shot',
-    collaboration_announced: 'natural editorial photograph of the artist with another musician in a real studio, hands shaking or laughing, available light',
-    distribution_live: 'natural editorial photograph of the artist with headphones at a real desk or studio, screens visible, available light',
+    release: 'the artist unveiling new music — caught mid-moment, real-world location, dramatic available light, a decisive front-page instant',
+    performance: 'the artist commanding a real stage mid-performance, sweat and stage haze, a sea of raised hands, a once-in-a-tour photograph',
+    collaboration: 'the artist with fellow musicians in a real recording studio or backstage, candid energy and conversation, available light',
+    achievement: 'the artist at the peak of a milestone, honest raw emotion, real environment, dramatic light breaking through — a defining career image',
+    lifestyle: 'the artist in a real urban or natural setting, an unguarded human moment, in the tradition of Magnum street photojournalism',
+    'artist-debut': 'the artist arriving on the music scene, real venue lobby or rooftop at dusk, the air of an event being witnessed',
+    song_released: 'the artist on release day caught in a candid, charged moment in a real environment, dramatic natural light',
+    artist_debut: 'the artist debuting at a real venue, photojournalistic, the energy of a breaking story',
+    song_tokenized: 'the artist beside glowing screens of music data in a real studio, late-night newsroom energy, available light',
+    album_complete: 'the artist holding a vinyl record in a real listening room, warm tungsten glow, reflective and historic',
+    merch_launched: 'the artist wearing their own merch on a real city street, candid documentary energy, motion in the frame',
+    crowdfunding_started: 'the artist surrounded by a small crowd of real-looking fans, a movement gathering, available daylight',
+    milestone_reached: 'the artist mid-celebration, real friends erupting around them, an unrepeatable reaction shot',
+    collaboration_announced: 'two musicians meeting in a real studio, a handshake or shared laugh that signals something historic',
+    distribution_live: 'the artist with headphones at a real console, screens aglow, the quiet intensity before a launch',
   };
 
   const scene = sceneByCategory[(category || '').toLowerCase()] ||
     sceneByCategory.lifestyle;
 
   const subject = referenceImageUrl
-    ? `The subject is ${artistName} — preserve the EXACT face, skin tone, hair, eye color and overall likeness from the reference photo. The person in the image must clearly look like the same real human in the reference, not a stylized or AI-looking version.`
+    ? `The subject is ${artistName} — preserve the EXACT face, skin tone, hair, eye color and overall likeness from the reference photo. The person must clearly be the same real human, photographed for real, NOT a stylized or AI-looking version.`
     : `The subject is a ${genre || 'music'} artist named ${artistName}.`;
 
-  const photoDirection = [
+  // CLASSIC NEWSPAPER (default): dramatic, timeless, prestige front-page photojournalism.
+  const newspaperDirection = [
+    'CLASSIC NEWSPAPER FRONT-PAGE PHOTOGRAPH — a single powerful press image as it would run above the fold on the front page of a prestige newspaper (The New York Times, The Guardian, Le Monde).',
+    'Timeless photojournalistic composition with a strong decisive moment, rich tonal range, deep blacks and luminous highlights, cinematic yet utterly believable.',
+    'Dramatic real-world lighting (raking sunlight, stage spill, tungsten, window light) sculpting the subject — high impact but natural, in the tradition of a Pulitzer-winning press photo.',
+    'Shot on a full-frame DSLR / Leica with a 35mm or 50mm prime, shallow depth of field, fine silver-halide film grain, slight vignette, accurate true-to-life color science (or rich classic black-and-white if it serves the drama).',
+    'Hyper-realistic natural skin with pores and texture, lifelike eyes with catchlights, real hair strands, honest human expression — looks PHOTOGRAPHED, never illustrated or rendered.',
+    'Leave a little clean negative space / sky so the image works as a front-page lead photo. Editorial, spectacular, emotionally arresting.',
+    'Strict rules: NO text, NO headlines, NO captions, NO logos, NO watermarks, NO newspaper layout or columns drawn in the image, NO illustration, NO 3D render, NO plastic airbrushed skin, NO neon cyberpunk glow, NO uncanny-valley features.',
+  ].join(' ');
+
+  const editorialDirection = [
     'Hyper-realistic natural photograph — looks like a real photo taken with a Sony A7 IV or Leica Q3 by a professional editorial photographer.',
     'Natural skin texture with visible pores and imperfections, realistic eyes with proper catchlights, natural body proportions, lifelike hair strands.',
     'Real-world ambient lighting (natural sunlight, tungsten, sodium street lights or stage lighting). NO neon glow, NO over-saturated cyberpunk colors, NO digital-art look.',
@@ -118,8 +143,12 @@ export function buildNewsImagePrompt(input: NewsImageInput): string {
     'Strict rules: NO text, NO captions, NO logos, NO watermarks, NO illustration, NO 3D render, NO airbrushed plastic skin, NO uncanny valley features.',
   ].join(' ');
 
-  const headline = `Editorial news photo for the article "${title}".`;
-  const grounding = context ? `Article context: ${String(context).slice(0, 240)}.` : '';
+  const photoDirection = style === 'editorial' ? editorialDirection : newspaperDirection;
+
+  const headline = style === 'editorial'
+    ? `Editorial news photo for the article "${title}".`
+    : `Front-page news photograph for the story "${title}". Show ${scene}.`;
+  const grounding = context ? `Story context: ${String(context).slice(0, 240)}.` : '';
 
   return [headline, subject, scene, grounding, photoDirection]
     .filter(Boolean)
@@ -230,13 +259,13 @@ export async function generateNewsImage(input: NewsImageInput): Promise<NewsImag
         const oaQuality: 'low' | 'medium' | 'high' | 'auto' =
           (input.openaiQuality as any) ||
           (process.env.OPENAI_IMAGE_QUALITY as any) ||
-          'medium';
+          'high';
         const oaSize: '1024x1024' | '1024x1536' | '1536x1024' | 'auto' =
           (input.openaiSize as any) ||
           (process.env.OPENAI_NEWS_IMAGE_SIZE as any) ||
           (aspectRatio === '9:16' ? '1024x1536' : aspectRatio === '1:1' ? '1024x1024' : '1536x1024');
 
-        logger.log(`[News-Image] 🤖 OpenAI DIRECT /v1/images/edits enabled via env (gpt-image-1, q=${oaQuality}, ${oaSize})`);
+        logger.log(`[News-Image] 🤖 OpenAI gpt-image-1 /v1/images/edits fallback (q=${oaQuality}, ${oaSize})`);
 
         const FormData = (await import('form-data')).default;
         const form = new FormData();
@@ -315,13 +344,13 @@ export async function generateNewsImage(input: NewsImageInput): Promise<NewsImag
       const oaQuality: 'low' | 'medium' | 'high' | 'auto' =
         (input.openaiQuality as any) ||
         (process.env.OPENAI_IMAGE_QUALITY as any) ||
-        'medium';
+        'high';
       const oaSize: '1024x1024' | '1024x1536' | '1536x1024' | 'auto' =
         (input.openaiSize as any) ||
         (process.env.OPENAI_NEWS_IMAGE_SIZE as any) ||
         (aspectRatio === '9:16' ? '1024x1536' : aspectRatio === '1:1' ? '1024x1024' : '1536x1024');
 
-      logger.log(`[News-Image] 🤖 OpenAI DIRECT /v1/images/generations enabled via env (q=${oaQuality}, ${oaSize})`);
+      logger.log(`[News-Image] 🤖 OpenAI gpt-image-1 /v1/images/generations fallback (q=${oaQuality}, ${oaSize})`);
       const oaResp = await axios.post(
         'https://api.openai.com/v1/images/generations',
         { model: 'gpt-image-1', prompt: prompt.slice(0, 32000), size: oaSize, quality: oaQuality, n: 1 },
