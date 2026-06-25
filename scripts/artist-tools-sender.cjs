@@ -652,7 +652,39 @@ async function main() {
   const fixedToolList = resolveToolList(TOOL_ARG); // array or null (random per recipient)
   let sent = 0, failed = 0;
 
+  // ── INTELLIGENT THROTTLE ────────────────────────────────────────────────
+  // Never saturate a single Resend account. Each account has a safe daily cap
+  // (70/day, see email-smart-router). We send only up to the *remaining* budget
+  // for the active account, then rotate to the next account with capacity.
+  // Tallies are persisted to email_daily_limits so every workflow shares the
+  // same daily ledger and we never exceed the provider's hard 100/day limit.
+  let active = provider;
+  let budget = Math.max(0, active.remainingToday || 0);
+  const sentByProvider = {}; // providerKey -> count pending persistence
+  if (!active.apiKey || budget <= 0) {
+    console.log('⚠️  No daily budget left on any artist provider — skipping run to protect deliverability.');
+    await closePools();
+    return;
+  }
+  console.log(`🧮 Daily budget on ${active.provider}: ${budget} sends remaining (safe cap)\n`);
+
   for (let i = 0; i < contacts.length; i++) {
+    // Rotate to a fresh account when the active one's safe budget is spent.
+    if (!DRY_RUN && budget <= 0) {
+      if (sentByProvider[active.provider]) {
+        await recordSends(pool, active.provider, sentByProvider[active.provider]);
+        sentByProvider[active.provider] = 0; // persisted
+      }
+      const next = await getBestArtistProvider(pool);
+      if (!next.apiKey || (next.remainingToday || 0) <= 0) {
+        console.log('🛑 All artist accounts reached their safe daily limit — stopping to avoid saturation.');
+        break;
+      }
+      active = next;
+      budget = Math.max(0, active.remainingToday || 0);
+      console.log(`🔄 Rotated to ${active.provider} (${budget} remaining)\n`);
+    }
+
     const c = contacts[i];
     const lang = pickLang(c);
     const toolKey = fixedToolList ? fixedToolList[i % fixedToolList.length] : pickToolKey();
@@ -660,27 +692,33 @@ async function main() {
     const subject = buildSubject(toolKey, lang, c);
     const html = buildHtml(toolKey, lang, c);
 
-    console.log(`📧 [${i + 1}/${contacts.length}] ${firstName} <${c.email}> | ${lang.toUpperCase()} | ${toolKey}`);
+    console.log(`📧 [${i + 1}/${contacts.length}] ${firstName} <${c.email}> | ${lang.toUpperCase()} | ${toolKey} | via ${active.provider}`);
 
     if (DRY_RUN) { console.log(`   [dry] ${subject}`); continue; }
 
     const res = await sendWithResend({
       to: c.email, subject, html,
-      apiKey: provider.apiKey, fromEmail: provider.fromEmail,
+      apiKey: active.apiKey, fromEmail: active.fromEmail,
       fromName: 'Neiver Alvarez · Boostify Music',
     });
     if (res.messageId) {
-      sent++;
+      sent++; budget--;
+      sentByProvider[active.provider] = (sentByProvider[active.provider] || 0) + 1;
       console.log(`   ✅ sent`);
       await markContacted(pool, c.id);
     } else {
       failed++;
       console.log(`   ❌ ${res.error}`);
+      // A rate/quota error means this account is full → force rotation next loop.
+      if (/rate|limit|429|quota|daily/i.test(res.error || '')) budget = 0;
     }
     await new Promise((r) => setTimeout(r, 900)); // gentle pacing
   }
 
-  if (sent > 0) await recordSends(pool, provider.provider, sent);
+  // Persist any per-account tallies not yet flushed during rotation.
+  for (const [pk, n] of Object.entries(sentByProvider)) {
+    if (n > 0) await recordSends(pool, pk, n);
+  }
   console.log(`\n✅ Sent: ${sent} · ❌ Failed: ${failed}`);
   await closePools();
 }
