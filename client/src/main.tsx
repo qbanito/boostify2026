@@ -35,7 +35,7 @@ window.addEventListener("error", (event) => {
 // Boostify-branded theme for all Clerk UI (sign-in / sign-up modal, user profile…).
 const clerkAppearance = {
   layout: {
-    logoImageUrl: "/btf_logo.png",
+    logoImageUrl: "/assets/freepik__boostify_music_organe_abstract_icon.png",
     logoPlacement: "inside" as const,
     socialButtonsVariant: "iconButton" as const,
     helpPageUrl: "/",
