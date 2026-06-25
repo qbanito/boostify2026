@@ -343,6 +343,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
             youtubeHandle: artistData.youtubeHandle,
             spotifyUrl: artistData.spotifyUrl,
             isAIGenerated: artistData.isAIGenerated,
+            isClaimed: Boolean(artistData.claimedAt),
             generatedBy: artistData.generatedBy,
             blockchainArtistId: artistData.blockchainArtistId,
             blockchainNetwork: artistData.blockchainNetwork,

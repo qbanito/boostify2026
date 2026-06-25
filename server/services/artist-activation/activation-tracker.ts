@@ -35,6 +35,8 @@ const SCORE_WEIGHTS: Record<string, number> = {
   upgrade_completed: 0, // score doesn't matter anymore, they converted
   referral_sent: 5,
   referral_converted: 10,
+  claim_viewed: 8,
+  profile_claimed: 30, // strongest signal: a real human took ownership of their pre-built profile
 };
 
 // ─── Segment thresholds ─────────────────────────────────────────
@@ -136,6 +138,9 @@ export interface MagicLinkPayload {
   spotifyUrl?: string;
   instagramHandle?: string;
   soundcloudUrl?: string;
+  /** Pre-built artist profile this link claims (Claim Loop). */
+  slug?: string;
+  userId?: number;
 }
 
 export function generateMagicLink(payload: MagicLinkPayload): string {
@@ -190,10 +195,38 @@ export function verifyMagicLink(token: string): MagicLinkPayload | null {
       spotifyUrl: decoded.sp,
       instagramHandle: decoded.ig,
       soundcloudUrl: decoded.sc,
+      slug: decoded.s,
+      userId: decoded.uid,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Claim Loop — mint a signed link that takes a pre-built profile's owner
+ * straight to the claim page. Reuses the 'artist_activation' token type so
+ * verifyMagicLink validates it. Stateless (JWT), so no per-row token column.
+ */
+export function generateClaimLink(payload: MagicLinkPayload): string {
+  const token = jwt.sign(
+    {
+      type: 'artist_activation',
+      cid: payload.contactId,
+      e: payload.email,
+      n: payload.name,
+      g: payload.genre,
+      c: payload.country,
+      sp: payload.spotifyUrl,
+      ig: payload.instagramHandle,
+      sc: payload.soundcloudUrl,
+      s: payload.slug,
+      uid: payload.userId,
+    },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+  return `${PLATFORM_URL}/claim?token=${token}`;
 }
 
 // ─── Get Unsubscribe URL ─────────────────────────────────────────

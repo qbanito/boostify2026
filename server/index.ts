@@ -463,6 +463,7 @@ app.use((req, res, next) => {
       // Define public routes that should NOT require authentication
       const publicApiRoutes = [
         '/api/artist/by-slug',
+        '/api/artist-activation/claim-info', // Public claim preview (POST /claim stays protected)
         '/api/platform-stats',
         '/api/subscription-plans',
         '/api/health',
@@ -486,6 +487,7 @@ app.use((req, res, next) => {
       const clerkPublicApiPrefixes = [
         '/api/og-image',
         '/api/artist/by-slug',
+        '/api/artist-activation/claim-info', // Public claim preview (POST /claim stays protected)
         '/api/platform-stats',
         '/api/subscription-plans',
         '/api/health',

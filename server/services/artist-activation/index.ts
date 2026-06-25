@@ -19,7 +19,7 @@ import {
   detectEngagedForReferral,
   getConversionFunnel,
 } from './conversion-intelligence';
-import { trackEvent, getActivationStats, getScoreByEmail, getHotLeads, generateMagicLink, verifyMagicLink, verifyUnsubscribeToken } from './activation-tracker';
+import { trackEvent, getActivationStats, getScoreByEmail, getHotLeads, generateMagicLink, generateClaimLink, verifyMagicLink, verifyUnsubscribeToken } from './activation-tracker';
 import { rescoreEngagedLeads } from '../artist-discovery/hunter-scoring';
 import { aiBatchScoreLeads, getAgentBrainStats } from '../artist-discovery/agent-brain';
 import { processGoalTick, getGoalsDashboard, evaluateWeeklyPerformance, computeSourceROI, getSourceROI } from '../artist-discovery/agent-goals';
@@ -51,6 +51,7 @@ export {
   getScoreByEmail,
   getHotLeads,
   generateMagicLink,
+  generateClaimLink,
   verifyMagicLink,
   verifyUnsubscribeToken,
   // Agent Brain (AI)

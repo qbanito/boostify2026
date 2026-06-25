@@ -149,6 +149,7 @@ export default function ArtistProfilePage() {
                 spotify: data.artist.spotifyUrl,
                 generatedBy: data.artist.generatedBy,
                 isAIGenerated: data.artist.isAIGenerated,
+                isClaimed: data.artist.isClaimed,
                 blockchainArtistId: data.artist.blockchainArtistId,
                 blockchainNetwork: data.artist.blockchainNetwork,
                 blockchainTxHash: data.artist.blockchainTxHash,
@@ -368,6 +369,21 @@ export default function ArtistProfilePage() {
         />
 
         <div className="relative z-10">
+          {/* Claim Loop banner — pre-built AI profile, not yet claimed, viewer is not the owner */}
+          {!isOwnProfile && artistData?.isAIGenerated && !artistData?.isClaimed && slug && (
+            <a
+              href={`/claim?slug=${encodeURIComponent(slug)}`}
+              className="group sticky top-0 z-30 flex items-center justify-center gap-2 bg-gradient-to-r from-[#7c5cff] via-[#ff2d95] to-[#ff7b00] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg transition-all hover:brightness-110"
+            >
+              <span>
+                ¿Eres <span className="underline decoration-white/60 underline-offset-2">{artistData?.displayName || artistData?.name || 'tú'}</span>? Este perfil es tuyo — recl&aacute;malo gratis
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs transition-transform group-hover:translate-x-0.5">
+                Reclamar →
+              </span>
+            </a>
+          )}
+
           {slug && (
             <CrowdfundingButton 
               artistSlug={slug} 

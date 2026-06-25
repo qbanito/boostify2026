@@ -186,6 +186,7 @@ const ArtistBlueprintPage = lazy(() => import("./pages/artist-blueprint-page"));
 const ArtistBusinessPlanPage = lazy(() => import("./pages/artist-business-plan-page"));
 const ArtistStorePage = lazy(() => import("./pages/artist-store"));
 const ArtistSetupPage = lazy(() => import("./pages/artist-setup"));
+const ClaimPage = lazy(() => import("./pages/claim"));
 const MyArtistPage = lazy(() => import("./pages/my-artist"));
 const MyArtistsPage = lazy(() => import("./pages/my-artists"));
 const ArticlePage = lazy(() => import("./pages/article"));
@@ -649,6 +650,8 @@ const Router = () => {
           {getRouteComponent("/event-creator", withPageWrapper(EventCreatorPage), 'free')}
           {/* Cinematic Event Landing — isolated guest experience, NO withPageWrapper */}
           <Route path="/event/:slug" component={EventLandingPage} />
+          {/* Claim Loop — reverse onboarding, public guest experience */}
+          <Route path="/claim" component={ClaimPage} />
           {getRouteComponent("/profile/:id", WrappedProfilePage, null)}
           {getRouteComponent("/artist/:slug/flow", ArtistNodeFlowPage, null)}
           {getRouteComponent("/artist/:slug/store", WrappedArtistStorePage, null)}

@@ -5,7 +5,7 @@
  */
 
 import { db } from '../../db';
-import { dripSequences, musicIndustryContacts, activationScores } from '../../db/schema';
+import { dripSequences, musicIndustryContacts, activationScores, users } from '../../db/schema';
 import { eq, and, lte, sql, isNotNull } from 'drizzle-orm';
 import { sendNotificationEmail, type EmailResult } from '../brevo-email-service';
 import {
@@ -13,7 +13,7 @@ import {
   type SequenceType, type TemplateData
 } from './email-templates';
 import {
-  trackEvent, generateMagicLink, getUnsubscribeUrl,
+  trackEvent, generateMagicLink, generateClaimLink, getUnsubscribeUrl,
 } from './activation-tracker';
 import { personalizeEmail, selectOptimalSequence } from '../artist-discovery/agent-brain';
 import { getABVariant, getWinningSubject, recordABEvent } from '../artist-discovery/agent-autonomy';
@@ -208,14 +208,37 @@ export async function processDripQueue(batchSize: number = 50): Promise<{
         continue;
       }
 
-      // Build template data
-      const magicLinkUrl = generateMagicLink({
-        contactId: contact.id,
-        email: contact.email,
-        name: contact.fullName,
-        genre: contact.keywords?.split(',')[0]?.trim(),
-        country: contact.country || undefined,
-      });
+      // Build template data.
+      // Claim Loop: if this contact already has a pre-built (AI) profile, send a
+      // CLAIM link straight to /claim so the owner takes ownership in one click.
+      // Otherwise fall back to the generic magic link → signup.
+      let prebuilt: { id: number; slug: string | null; claimedAt: Date | null } | undefined;
+      try {
+        [prebuilt] = await db
+          .select({ id: users.id, slug: users.slug, claimedAt: users.claimedAt })
+          .from(users)
+          .where(and(eq(users.email, contact.email), eq(users.isAIGenerated, true)))
+          .limit(1);
+      } catch { /* DB hiccup — fall through to magic link */ }
+
+      const isClaimable = Boolean(prebuilt && !prebuilt.claimedAt);
+      const magicLinkUrl = isClaimable
+        ? generateClaimLink({
+            contactId: contact.id,
+            email: contact.email,
+            name: contact.fullName,
+            genre: contact.keywords?.split(',')[0]?.trim(),
+            country: contact.country || undefined,
+            slug: prebuilt!.slug || undefined,
+            userId: prebuilt!.id,
+          })
+        : generateMagicLink({
+            contactId: contact.id,
+            email: contact.email,
+            name: contact.fullName,
+            genre: contact.keywords?.split(',')[0]?.trim(),
+            country: contact.country || undefined,
+          });
 
       const templateData: TemplateData = {
         artistName: contact.firstName || contact.fullName.split(' ')[0] || contact.fullName,
@@ -223,7 +246,9 @@ export async function processDripQueue(batchSize: number = 50): Promise<{
         genre: contact.keywords?.split(',')[0]?.trim(),
         country: contact.country || undefined,
         magicLinkUrl,
-        landingPageUrl: `${PLATFORM_URL}/artist/${contact.fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        landingPageUrl: prebuilt?.slug
+          ? `${PLATFORM_URL}/artist/${prebuilt.slug}`
+          : `${PLATFORM_URL}/artist/${contact.fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
         unsubscribeUrl: getUnsubscribeUrl(contact.email, contact.id),
       };
 

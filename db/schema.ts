@@ -117,6 +117,9 @@ export const users = pgTable("users", {
   amazonMarketplaceOverride: text("amazon_marketplace_override"),
   // Manual ASIN list (works without PA-API access). Shape: [{asin, title?, note?}]
   amazonManualPicks: jsonb("amazon_manual_picks").$type<Array<{asin: string; title?: string; note?: string}>>().default([]).notNull(),
+  // Claim Loop — when a real human claims a pre-built AI profile via magic link / banner
+  claimedAt: timestamp("claimed_at"), // NULL = unclaimed (pre-built AI profile waiting for its owner)
+  claimSource: text("claim_source"), // 'magic_link' | 'profile_banner' | 'email' | ...
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
@@ -7844,7 +7847,8 @@ export const activationEvents = pgTable("activation_events", {
       "credits_used", "pricing_visited", "page_shared",
       "upgrade_offered", "upgrade_clicked", "upgrade_completed",
       "referral_sent", "referral_converted",
-      "win_back_sent", "reactivated"
+      "win_back_sent", "reactivated",
+      "claim_viewed", "profile_claimed"
     ]
   }).notNull(),
   eventData: json("event_data").$type<Record<string, any>>().default({}),

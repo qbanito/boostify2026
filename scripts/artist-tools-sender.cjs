@@ -56,6 +56,30 @@ const PLATFORM_URL = 'https://www.boostifymusic.com';
 const ACTIVATE_URL = 'https://www.boostifymusic.com';
 const LOGO_URL = 'https://boostifymusic.com/assets/freepik__boostify_music_organe_abstract_icon.png';
 
+// ─── Claim Loop — per-contact magic link ───────────────────────────────────────
+// Mints a signed link to /claim so the recipient takes ownership of their
+// pre-built AI profile in one click. Must match server verifyMagicLink():
+// type 'artist_activation', same JWT secret fallback chain.
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'boostify-activation-2026';
+function claimUrlFor(contact) {
+  try {
+    if (!contact || !contact.email || !contact.id) return ACTIVATE_URL;
+    const name =
+      contact.full_name || contact.fullName ||
+      [contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+      contact.first_name || '';
+    const token = jwt.sign(
+      { type: 'artist_activation', cid: contact.id, e: contact.email, n: name },
+      JWT_SECRET,
+      { expiresIn: '30d' },
+    );
+    return `${PLATFORM_URL}/claim?token=${token}`;
+  } catch {
+    return ACTIVATE_URL;
+  }
+}
+
 // Real demo artists (images filled from DB at runtime via prefetchDemoImages).
 const DEMO = {
   redwine: { name: 'REDWINE', slug: 'redwineli', url: 'https://www.boostifymusic.com/artist/redwineli', profile: null, cover: null },
@@ -428,6 +452,7 @@ function buildHtml(toolKey, lang, contact) {
   const S = STRINGS[lang];
   const firstName = contact.first_name || (lang === 'es' ? 'artista' : 'there');
   const demo = demoFor(toolKey);
+  const ctaUrl = claimUrlFor(contact);
   const grad = `linear-gradient(135deg, ${tool.accent} 0%, ${tool.accent2} 100%)`;
 
   // Palette (LIGHT)
@@ -550,7 +575,7 @@ function buildHtml(toolKey, lang, contact) {
     <tr><td style="padding:24px 30px 6px;text-align:center;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>
         <td style="border-radius:12px;background:#f97316;box-shadow:0 6px 16px rgba(249,115,22,0.32);">
-          <a href="${ACTIVATE_URL}" style="display:inline-block;padding:17px 40px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.4px;border-radius:12px;">${S.activate} →</a>
+          <a href="${ctaUrl}" style="display:inline-block;padding:17px 40px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.4px;border-radius:12px;">${S.activate} →</a>
         </td>
       </tr></table>
       <p style="margin:14px 0 0;font-size:12px;color:${MUTED};font-family:Arial,sans-serif;line-height:1.6;">${t.cta} · boostifymusic.com</p>

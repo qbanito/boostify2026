@@ -5,8 +5,9 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { musicIndustryContacts, dripSequences, activationScores } from '../db/schema';
+import { musicIndustryContacts, dripSequences, activationScores, users } from '../db/schema';
 import { eq, sql, and } from 'drizzle-orm';
+import { isAuthenticated } from '../middleware/clerk-auth';
 import {
   getFullActivationDashboard,
   processActivationTick,
@@ -18,6 +19,7 @@ import {
   enrollInSequence,
   trackEvent,
   verifyMagicLink,
+  generateClaimLink,
   verifyUnsubscribeToken,
   getHotLeads,
   autoEnrollNewContacts,
@@ -95,6 +97,207 @@ router.get('/unsubscribe', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[Activation] Unsubscribe error:', err);
     res.status(500).send(unsubscribePage(false, 'Server error'));
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CLAIM LOOP — reverse onboarding for pre-built AI profiles
+// ═══════════════════════════════════════════════════════════════
+
+type ClaimProfile = typeof users.$inferSelect;
+
+/** Resolve the pre-built profile a claim refers to (by token payload, userId, or slug). */
+async function resolveClaimProfile(opts: {
+  userId?: number;
+  slug?: string;
+  email?: string;
+}): Promise<ClaimProfile | null> {
+  if (opts.userId) {
+    const [byId] = await db.select().from(users).where(eq(users.id, opts.userId)).limit(1);
+    if (byId) return byId;
+  }
+  if (opts.slug) {
+    const [bySlug] = await db.select().from(users).where(eq(users.slug, opts.slug)).limit(1);
+    if (bySlug) return bySlug;
+  }
+  if (opts.email) {
+    const [byEmail] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.email, opts.email), eq(users.isAIGenerated, true)))
+      .limit(1);
+    if (byEmail) return byEmail;
+  }
+  return null;
+}
+
+function publicArtist(p: ClaimProfile) {
+  return {
+    id: p.id,
+    slug: p.slug,
+    artistName: p.artistName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Artista',
+    profileImage: p.profileImage || p.profileImageUrl || null,
+    coverImage: p.coverImage || null,
+    genre: p.genre || (p.genres && p.genres[0]) || null,
+    biography: p.biography || null,
+    isAIGenerated: p.isAIGenerated,
+  };
+}
+
+// GET /api/artist-activation/claim-info?token=xxx  (or ?slug=xxx)
+// Public preview of the profile a magic-link / banner wants the owner to claim.
+router.get('/claim-info', async (req: Request, res: Response) => {
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token : undefined;
+    const slugParam = typeof req.query.slug === 'string' ? req.query.slug : undefined;
+
+    let payloadEmail: string | undefined;
+    let contactId: number | undefined;
+    let tokenValid = false;
+    let resolveOpts: { userId?: number; slug?: string; email?: string } = {};
+
+    if (token) {
+      const payload = verifyMagicLink(token);
+      if (!payload) {
+        return res.json({ ok: false, error: 'expired', tokenValid: false });
+      }
+      tokenValid = true;
+      payloadEmail = payload.email;
+      contactId = payload.contactId;
+      resolveOpts = { userId: payload.userId, slug: payload.slug, email: payload.email };
+    } else if (slugParam) {
+      resolveOpts = { slug: slugParam };
+    } else {
+      return res.status(400).json({ ok: false, error: 'missing_token_or_slug' });
+    }
+
+    const profile = await resolveClaimProfile(resolveOpts);
+    if (!profile) {
+      return res.json({ ok: false, error: 'profile_not_found', tokenValid });
+    }
+
+    const alreadyClaimed = Boolean(profile.claimedAt);
+
+    // Track the view (best-effort) when we know who is being addressed.
+    if (payloadEmail) {
+      trackEvent(payloadEmail, 'claim_viewed', { slug: profile.slug }, contactId, profile.id).catch(() => {});
+    }
+
+    res.json({
+      ok: true,
+      tokenValid,
+      alreadyClaimed,
+      artist: publicArtist(profile),
+    });
+  } catch (err: any) {
+    console.error('[Activation] claim-info error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// POST /api/artist-activation/claim  (Clerk-authenticated)
+// Body: { token?: string, slug?: string }
+// Attaches the signed-in Clerk user to the EXISTING pre-built profile row.
+router.post('/claim', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const authUser = (req as any).user as { clerkUserId?: string; email?: string } | undefined;
+    const clerkUserId = authUser?.clerkUserId;
+    const clerkEmail = (authUser?.email || '').toLowerCase() || undefined;
+    if (!clerkUserId) {
+      return res.status(401).json({ ok: false, error: 'not_authenticated' });
+    }
+
+    const token = typeof req.body?.token === 'string' ? req.body.token : undefined;
+    const slugBody = typeof req.body?.slug === 'string' ? req.body.slug : undefined;
+
+    let payloadEmail: string | undefined;
+    let contactId: number | undefined;
+    let resolveOpts: { userId?: number; slug?: string; email?: string } = {};
+    let claimSource = 'magic_link';
+
+    if (token) {
+      const payload = verifyMagicLink(token);
+      if (!payload) {
+        return res.status(400).json({ ok: false, error: 'expired' });
+      }
+      payloadEmail = payload.email;
+      contactId = payload.contactId;
+      resolveOpts = { userId: payload.userId, slug: payload.slug, email: payload.email };
+    } else if (slugBody) {
+      claimSource = 'profile_banner';
+      resolveOpts = { slug: slugBody };
+    } else {
+      return res.status(400).json({ ok: false, error: 'missing_token_or_slug' });
+    }
+
+    const profile = await resolveClaimProfile(resolveOpts);
+    if (!profile) {
+      return res.status(404).json({ ok: false, error: 'profile_not_found' });
+    }
+
+    // Already claimed by this same user → idempotent success.
+    if (profile.claimedAt && profile.clerkId === clerkUserId) {
+      return res.json({ ok: true, slug: profile.slug, alreadyOwned: true });
+    }
+    // Claimed by someone else → block.
+    if (profile.claimedAt && profile.clerkId && profile.clerkId !== clerkUserId) {
+      return res.status(409).json({ ok: false, error: 'already_claimed' });
+    }
+
+    // Banner path (no signed token) requires the signed-in email to match the
+    // profile's email, so a stranger can't seize someone else's profile.
+    if (!token) {
+      const profileEmail = (profile.email || '').toLowerCase();
+      if (!clerkEmail || !profileEmail || clerkEmail !== profileEmail) {
+        return res.status(403).json({ ok: false, error: 'email_mismatch' });
+      }
+    }
+
+    // Handle the auto-created stub: /api/auth/user inserts an empty users row
+    // keyed by clerkId on first login. clerkId is UNIQUE, so we must free it
+    // before assigning it to the pre-built profile.
+    await db.transaction(async (tx) => {
+      const [stub] = await tx.select().from(users).where(eq(users.clerkId, clerkUserId)).limit(1);
+      if (stub && stub.id !== profile.id) {
+        const isEmptyStub = !stub.slug && !stub.isAIGenerated && !stub.artistName;
+        if (!isEmptyStub) {
+          // The user already owns a real, different profile — refuse to merge.
+          throw Object.assign(new Error('already_have_profile'), { httpStatus: 409 });
+        }
+        await tx.delete(users).where(eq(users.id, stub.id));
+      }
+
+      await tx
+        .update(users)
+        .set({
+          clerkId: clerkUserId,
+          claimedAt: new Date(),
+          claimSource,
+          email: profile.email || clerkEmail || null,
+          isPublished: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, profile.id));
+    });
+
+    // Mark the funnel: converted score + claim event (best-effort).
+    const eventEmail = payloadEmail || profile.email || clerkEmail;
+    if (eventEmail) {
+      trackEvent(eventEmail, 'profile_claimed', { slug: profile.slug, clerkUserId, source: claimSource }, contactId, profile.id).catch(() => {});
+      db.update(activationScores)
+        .set({ userId: profile.id, segment: 'converted' as any, convertedAt: new Date(), updatedAt: new Date() })
+        .where(eq(activationScores.email, eventEmail))
+        .catch(() => {});
+    }
+
+    res.json({ ok: true, slug: profile.slug });
+  } catch (err: any) {
+    const status = err?.httpStatus || 500;
+    if (status === 409) {
+      return res.status(409).json({ ok: false, error: err.message });
+    }
+    console.error('[Activation] claim error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
   }
 });
 
