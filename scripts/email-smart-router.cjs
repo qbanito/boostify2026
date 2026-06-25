@@ -3,7 +3,7 @@
  * 
  * Manages daily send limits across all email providers:
  *   - Brevo:     300/day limit  → safe max = 200  (leaves 100 buffer)
- *   - Resend x7: 100/day each  → safe max =  70  (leaves 30 buffer)
+ *   - Resend x8: 100/day each  → safe max =  70  (leaves 30 buffer)
  * 
  * Rotates between Resend accounts automatically.
  * Tracks sends in Supabase `email_daily_limits` table.
@@ -96,6 +96,16 @@ const PROVIDERS = {
     fromName: 'Alex from Boostify',
     domain: 'boostifymusicusa.sbs',
   },
+  ARTISTS_8: {
+    key: 'ARTISTS_8',
+    type: 'resend',
+    dailyLimit: 100,
+    safeMax: 70,
+    envVar: 'RESEND_API_ARTISTS_8',
+    fromEmail: 'info@boostifymusicusa.space',
+    fromName: 'Alex from Boostify',
+    domain: 'boostifymusicusa.space',
+  },
 };
 
 /**
@@ -105,7 +115,7 @@ const PROVIDERS = {
  * @returns {{ provider, apiKey, fromEmail, fromName, remainingToday }}
  */
 async function getBestArtistProvider(pool) {
-  const resendKeys = ['ARTISTS_1', 'ARTISTS_2', 'ARTISTS_3', 'ARTISTS_4', 'ARTISTS_5', 'ARTISTS_6', 'ARTISTS_7'];
+  const resendKeys = ['ARTISTS_1', 'ARTISTS_2', 'ARTISTS_3', 'ARTISTS_4', 'ARTISTS_5', 'ARTISTS_6', 'ARTISTS_7', 'ARTISTS_8'];
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   let client;
 
