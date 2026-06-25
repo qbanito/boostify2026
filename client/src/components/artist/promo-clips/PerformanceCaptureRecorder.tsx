@@ -192,14 +192,14 @@ export const PerformanceCaptureRecorder: React.FC<PerformanceCaptureRecorderProp
           <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: value ? 'rgba(34,197,94,0.2)' : 'rgba(236,72,153,0.18)' }}>
             {value ? <CheckCircle size={13} style={{ color: '#22c55e' }} /> : <Video size={13} style={{ color: accent }} />}
           </div>
-          <span className="text-sm font-bold">Captura de Actuación</span>
-          {value && <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase" style={{ background: 'rgba(34,197,94,0.18)', color: '#86efac' }}>Listo</span>}
+          <span className="text-sm font-bold">Performance Capture</span>
+          {value && <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase" style={{ background: 'rgba(34,197,94,0.18)', color: '#86efac' }}>Ready</span>}
         </div>
-        <span className="text-[11px] text-white/35">opcional · máx {maxSeconds}s</span>
+        <span className="text-[11px] text-white/35">optional · max {maxSeconds}s</span>
       </div>
 
       <p className="text-[11px] leading-relaxed text-white/45">
-        Graba un clip cantando con la canción. La IA (Seedance) transferirá tu actuación real —timing, movimiento de cabeza y boca— a la imagen del look con micrófono.
+        Record a clip singing along to the song. The AI (Seedance) will transfer your real performance —timing, head and mouth movement— onto the look image with the microphone.
       </p>
 
       <div className="grid grid-cols-[1fr] gap-3">
@@ -236,7 +236,7 @@ export const PerformanceCaptureRecorder: React.FC<PerformanceCaptureRecorderProp
           {songAudioUrl && recording && (
             <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/70">
               <Music size={10} className="text-white/70" />
-              <span className="text-[9px] text-white/70">Canción sonando</span>
+              <span className="text-[9px] text-white/70">Song playing</span>
             </div>
           )}
         </div>
@@ -259,7 +259,7 @@ export const PerformanceCaptureRecorder: React.FC<PerformanceCaptureRecorderProp
             style={{ background: 'rgba(255,255,255,0.06)', color: '#fff' }}
           >
             {permissionState === 'requesting' ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}
-            Abrir cámara
+            Open camera
           </button>
         )}
 

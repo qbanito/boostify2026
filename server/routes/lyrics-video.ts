@@ -25,6 +25,7 @@ import {
   downloadLambdaRender,
 } from '../services/remotion-lambda';
 import type { LambdaRenderHandle } from '../services/remotion-lambda';
+import { loadBrandProfile } from '../services/artist-brand-profile';
 
 const router = Router();
 
@@ -280,10 +281,19 @@ async function runLambdaRender(params: {
   // partial output), whereas exceeding the concurrency quota is *soft* (handled
   // by the retry/backoff below). So we must never hand a single Lambda more
   // frames than it can render within its 900s timeout. At 720p a lyrics frame
-  // takes ~0.4-0.8s incl. Chrome/overhead, so ~350 frames (≈ under ~5 min) is a
-  // safe budget. Without this cap, a low maxFunctions (e.g. 1) would route a
-  // whole long song into ONE Lambda and time out ("1 out of 1" chunk missing).
-  const maxFramesPerLambda = Math.max(50, Number(process.env.REMOTION_LAMBDA_MAX_FRAMES_PER_LAMBDA) || 350);
+  // takes ~0.5-0.8s incl. Chrome/overhead, so ~600 frames (≈ under ~8 min) is a
+  // safe budget with margin. Without this cap, a low maxFunctions (e.g. 1) would
+  // route a whole long song into ONE Lambda and time out ("1 out of 1" chunk
+  // missing).
+  //
+  // ⚠️ Balance vs the AWS concurrency quota (this account = 10): a SMALLER cap
+  // means MORE parallel lambdas per song, which eats the quota and makes
+  // concurrent/batch renders fail with "Rate Exceeded". 600 keeps a ~76s song
+  // at ~4 chunks (≈5 concurrent incl. main), leaving room for ~2 songs in
+  // parallel under the 10-quota. Lower REMOTION_LAMBDA_MAX_FRAMES_PER_LAMBDA only
+  // if renders still time out; raise it (or request a quota increase) if batches
+  // hit the concurrency limit.
+  const maxFramesPerLambda = Math.max(50, Number(process.env.REMOTION_LAMBDA_MAX_FRAMES_PER_LAMBDA) || 600);
   const framesPerLambda = Math.min(
     maxFramesPerLambda,
     Math.max(20, Math.ceil(durationFrames / maxFunctions)),
@@ -506,25 +516,35 @@ function lyricStyleForGenre(genre?: string): 'glow' | 'kinetic' | 'neon' | 'eleg
   return 'glow';
 }
 
-// Gather a small pool of background images for the lyric video: the song cover
-// first, then the artist's image-gallery photos (Firestore image_galleries) and
-// profile photo. These rotate (cross-fade) behind the lyrics. Best-effort: any
-// failure just yields [coverArt].
-async function gatherBackgroundImages(userId: number, coverArt?: string): Promise<string[]> {
-  const out: string[] = [];
-  const push = (u?: string | null) => {
-    if (typeof u === 'string' && /^https?:\/\//.test(u) && !out.includes(u)) out.push(u);
+// Gather a pool of background MEDIA (photos + videos) for the lyric video: the
+// song cover first, then the artist's image-gallery photos AND clips (Firestore
+// image_galleries). Photos rotate (Ken-Burns cross-fade) and the videos play as
+// cinematic background segments behind the lyrics. Best-effort: any failure just
+// yields the cover art.
+async function gatherBackgroundMedia(
+  userId: number,
+  coverArt?: string,
+): Promise<{ images: string[]; videos: string[] }> {
+  const images: string[] = [];
+  const videos: string[] = [];
+  const isHttp = (u: unknown): u is string => typeof u === 'string' && /^https?:\/\//.test(u);
+  const isVideoUrl = (u: string) => /\.(mp4|webm|mov|m4v)(\?|$)/i.test(u);
+  const pushImg = (u?: string | null) => {
+    if (isHttp(u) && !isVideoUrl(u) && !images.includes(u)) images.push(u);
   };
-  push(coverArt);
+  const pushVid = (u?: string | null) => {
+    if (isHttp(u) && !videos.includes(u)) videos.push(u);
+  };
+  pushImg(coverArt);
 
   // Profile image (cheap, from the marketing context helper).
   try {
-    const ctx = await getArtistMarketingContext(userId);
-    push(ctx.profileImageUrl);
+    const ctx: any = await getArtistMarketingContext(userId);
+    pushImg(ctx?.profileImageUrl);
   } catch { /* optional */ }
 
-  // Artist gallery photos from Firestore image_galleries (skip our own
-  // hologram output and any video entries).
+  // Artist gallery photos + clips from Firestore image_galleries (skip our own
+  // hologram output). Videos are flagged via img.isVideo or a video file URL.
   if (firestoreDb) {
     try {
       const ref = firestoreDb.collection('image_galleries');
@@ -539,19 +559,22 @@ async function gatherBackgroundImages(userId: number, coverArt?: string): Promis
           seen.add(doc.id);
           const data = doc.data() as any;
           if (data?.source === 'hologram') return;
-          const imgs = Array.isArray(data?.generatedImages) ? data.generatedImages : [];
-          for (const img of imgs) {
-            if (!img || img.isVideo) continue;
-            push(typeof img === 'string' ? img : img?.url);
+          const items = Array.isArray(data?.generatedImages) ? data.generatedImages : [];
+          for (const item of items) {
+            if (!item) continue;
+            const url = typeof item === 'string' ? item : (item?.url || item?.videoUrl);
+            if (!isHttp(url)) continue;
+            if (item?.isVideo || isVideoUrl(url)) pushVid(url);
+            else pushImg(url);
           }
         });
       }
     } catch (e: any) {
-      console.warn('[LyricsVideo] gallery bg images fetch failed:', e?.message);
+      console.warn('[LyricsVideo] gallery media fetch failed:', e?.message);
     }
   }
 
-  return out.slice(0, 6);
+  return { images: images.slice(0, 8), videos: videos.slice(0, 3) };
 }
 
 router.post('/render', authenticate, async (req, res) => {
@@ -577,18 +600,44 @@ router.post('/render', authenticate, async (req, res) => {
     // Resolve the lyric style: explicit choice wins, else auto from genre.
     // Also resolve the real artist name: the job already stored the profile name
     // at transcribe time; fall back to a profile lookup only if it's missing.
-    const ctx = await getArtistMarketingContext(job.artist_id || userId);
+    const ctx: any = await getArtistMarketingContext(job.artist_id || userId);
     const resolvedArtistName = await resolveProfileArtistName(job.artist_name, job.artist_id, userId);
+
+    // Load the artist's brand profile for genre + signature palette so the video
+    // is coherent with their visual identity (gradients, accent glow).
+    const brandProfile = await loadBrandProfile(job.artist_id || userId).catch(() => null);
+    const genreStr =
+      brandProfile?.genre ||
+      (Array.isArray(ctx?.genre) ? ctx.genre.join(' ') : ctx?.genre || '');
+
     let lyricStyle = lyricStyleInput;
     if (lyricStyle === 'auto') {
-      lyricStyle = lyricStyleForGenre(ctx.genre || '');
+      lyricStyle = lyricStyleForGenre(genreStr);
     }
+
+    // Brand-coherent colors. The accent drives the karaoke glow + UI; the
+    // secondary feeds the animated aurora gradient. When the request kept the
+    // default purple and the artist has a brand palette, use the brand primary.
+    const hexRe = /^#[0-9a-fA-F]{6}$/;
+    const brandPrimary = brandProfile?.brandColors?.primary;
+    const brandSecondary = brandProfile?.brandColors?.secondary;
+    const brandAccent = brandProfile?.brandColors?.accent;
+    const resolvedAccent =
+      accentColor === '#7c3aed' && hexRe.test(brandPrimary || '') ? (brandPrimary as string) : accentColor;
+    const resolvedSecondary = hexRe.test(brandSecondary || '')
+      ? (brandSecondary as string)
+      : hexRe.test(brandAccent || '')
+      ? (brandAccent as string)
+      : resolvedAccent;
 
     const durationSecs = Number(job.duration_secs) || 180;
     const durationFrames = Math.ceil(durationSecs * 30) + 30; // +1 s buffer
 
-    // Rotating background pool: cover + artist gallery photos.
-    const backgroundImages = await gatherBackgroundImages(userId, job.cover_art_url ?? undefined);
+    // Rotating background pool: cover + artist gallery photos AND video clips.
+    const { images: backgroundImages, videos: backgroundVideos } = await gatherBackgroundMedia(
+      userId,
+      job.cover_art_url ?? undefined,
+    );
 
     const inputProps = {
       audioUrl: job.audio_url,
@@ -597,11 +646,14 @@ router.post('/render', authenticate, async (req, res) => {
       songTitle: job.song_title ?? 'Lyrics Video',
       segments,
       theme,
-      accentColor,
+      accentColor: resolvedAccent,
+      secondaryColor: resolvedSecondary,
+      genre: genreStr || undefined,
       fontFamily,
       lyricStyle,
       layout,
       backgroundImages,
+      backgroundVideos,
       showProgressBar,
       showWatermark,
       durationSecs,
@@ -611,7 +663,7 @@ router.post('/render', authenticate, async (req, res) => {
     await pool.query(
       `UPDATE lyrics_video_jobs SET status='rendering', progress=0, theme=$2, accent_color=$3,
        font_family=$4, input_props_json=$5, updated_at=NOW() WHERE id=$1`,
-      [jobId, theme, accentColor, fontFamily, JSON.stringify(inputProps)]
+      [jobId, theme, resolvedAccent, fontFamily, JSON.stringify(inputProps)]
     );
     renderProgress.set(jobId, { progress: 0, status: 'rendering', log: '' });
 

@@ -3,12 +3,16 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  OffthreadVideo,
+  Sequence,
   useCurrentFrame,
   useVideoConfig,
   interpolate,
   spring,
   staticFile,
 } from 'remotion';
+import { noise2D } from '@remotion/noise';
+import { Circle } from '@remotion/shapes';
 import { getSegmentTransitionStyle, type LyricsTransitionEffect } from './transitions/custom-transitions';
 import { resolveLyricPreset, type LyricStyle, type LyricStylePreset } from './lyric-fonts';
 
@@ -49,6 +53,14 @@ export interface LyricsVideoProps {
   /** Pool of background images that rotate (cross-fade) behind the lyrics.
    *  Falls back to [coverArt] when empty. */
   backgroundImages?: string[];
+  /** Pool of background VIDEO clips (artist gallery) interleaved with the
+   *  photos as cinematic moving backdrops. */
+  backgroundVideos?: string[];
+  /** Brand secondary color — feeds the animated aurora gradient so the look is
+   *  coherent with the artist's visual identity. */
+  secondaryColor?: string;
+  /** Artist genre — currently informational / future tuning. */
+  genre?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,8 +396,15 @@ const CenterLyrics: React.FC<{
   const breath = 0.85 + 0.15 * Math.sin(timeSec * 2.2);
   const glow = preset.glow * (0.6 + 0.4 * audioPulse) * breath;
 
-  const ACTIVE_SIZE = 92;
+  // Auto-fit the active line size so long lines never overflow the stage.
+  // Heuristic (render-safe, no DOM measurement): shrink as char count grows.
+  const activeText = active ? (preset.uppercase ? active.text.toUpperCase() : active.text) : '';
+  const activeChars = activeText.length;
+  const ACTIVE_SIZE = activeChars > 46 ? 58 : activeChars > 34 ? 70 : activeChars > 24 ? 82 : 96;
   const SIDE_SIZE = 40;
+
+  // Beat-driven punch applied to the whole active line.
+  const linePunch = 1 + 0.022 * (audioPulse - 0.5);
 
   const segStartFrame = active ? Math.round(active.start * fps) : 0;
   const lineIn = active
@@ -542,7 +561,9 @@ const CenterLyrics: React.FC<{
       }}
     >
       {sideLine(prev, 'up')}
-      <div style={{ minHeight: ACTIVE_SIZE * preset.lineHeight }}>{renderActiveLine()}</div>
+      <div style={{ minHeight: ACTIVE_SIZE * preset.lineHeight, transform: `scale(${linePunch})`, willChange: 'transform' }}>
+        {renderActiveLine()}
+      </div>
       {sideLine(next, 'down')}
     </div>
   );
@@ -595,6 +616,390 @@ const Watermark: React.FC = () => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MODERN CINEMATIC LAYERS (new)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Flowing aurora mesh gradient driven by Perlin noise, tinted with the
+ *  artist's brand palette. Cheap: only a handful of blurred radial blobs whose
+ *  centers drift via noise — no per-pixel sampling. */
+const AuroraGradient: React.FC<{
+  frame: number;
+  fps: number;
+  primary: string;
+  secondary: string;
+}> = ({ frame, fps, primary, secondary }) => {
+  const t = frame / fps;
+  const p = hexToRgb(primary);
+  const s = hexToRgb(secondary);
+  const blobs = [
+    { c: p, seed: 11, bx: 26, by: 30, r: 820 },
+    { c: s, seed: 23, bx: 74, by: 38, r: 880 },
+    { c: p, seed: 41, bx: 48, by: 78, r: 760 },
+    { c: s, seed: 57, bx: 84, by: 82, r: 700 },
+  ];
+  return (
+    <AbsoluteFill style={{ background: '#05030c' }}>
+      {blobs.map((b, i) => {
+        const nx = noise2D(b.seed, t * 0.06, 0.5);
+        const ny = noise2D(b.seed + 100, 0.5, t * 0.06);
+        const x = b.bx + nx * 15;
+        const y = b.by + ny * 15;
+        const pulse = 0.5 + 0.5 * Math.sin(t * 0.4 + i);
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${x}%`,
+              top: `${y}%`,
+              width: b.r,
+              height: b.r,
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              background: `radial-gradient(circle, rgba(${b.c.r},${b.c.g},${b.c.b},0.55) 0%, rgba(${b.c.r},${b.c.g},${b.c.b},0) 68%)`,
+              filter: 'blur(60px)',
+              opacity: 0.5 + 0.28 * pulse,
+              mixBlendMode: 'screen',
+            }}
+          />
+        );
+      })}
+      <AbsoluteFill
+        style={{ background: 'radial-gradient(ellipse at 50% 42%, transparent 38%, rgba(0,0,0,0.55) 100%)' }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+/** Subtle film grain overlay (re-seeded every few frames so it shimmers). */
+const FilmGrain: React.FC<{ frame: number; opacity?: number }> = ({ frame, opacity = 0.05 }) => {
+  const seed = Math.floor(frame / 3) % 6;
+  return (
+    <AbsoluteFill style={{ opacity, mixBlendMode: 'overlay', pointerEvents: 'none' }}>
+      <svg width="100%" height="100%">
+        <filter id={`grain-${seed}`}>
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={1} seed={seed} stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter={`url(#grain-${seed})`} />
+      </svg>
+    </AbsoluteFill>
+  );
+};
+
+/** A soft diagonal light-leak streak that sweeps slowly across the frame. */
+const LightLeak: React.FC<{ frame: number; fps: number; color: string }> = ({ frame, fps, color }) => {
+  const t = frame / fps;
+  const { r, g, b } = hexToRgb(color);
+  const x = interpolate(Math.sin(t * 0.16), [-1, 1], [-25, 120]);
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none', mixBlendMode: 'screen', opacity: 0.16 }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: '-20%',
+          left: `${x}%`,
+          width: 380,
+          height: '140%',
+          transform: 'rotate(18deg)',
+          background: `linear-gradient(90deg, transparent, rgba(${r},${g},${b},0.6), transparent)`,
+          filter: 'blur(42px)',
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+/** Thin decorative rings that rotate + breathe with the beat. */
+const DecorShapes: React.FC<{
+  frame: number;
+  fps: number;
+  accentColor: string;
+  secondaryColor: string;
+  pulse: number;
+}> = ({ frame, fps, accentColor, secondaryColor, pulse }) => {
+  const t = frame / fps;
+  const a = hexToRgb(accentColor);
+  const s = hexToRgb(secondaryColor);
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none' }}>
+      <div
+        style={{
+          position: 'absolute',
+          right: 130,
+          top: 150,
+          opacity: 0.16 + 0.1 * pulse,
+          transform: `rotate(${t * 7}deg) scale(${1 + 0.05 * pulse})`,
+        }}
+      >
+        <Circle radius={64} fill="transparent" stroke={`rgb(${a.r},${a.g},${a.b})`} strokeWidth={3} />
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          left: 150,
+          bottom: 170,
+          opacity: 0.13 + 0.1 * pulse,
+          transform: `rotate(${-t * 5}deg)`,
+        }}
+      >
+        <Circle radius={104} fill="transparent" stroke={`rgb(${s.r},${s.g},${s.b})`} strokeWidth={2} />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/** Unified cinematic background: interleaves artist photos (Ken-Burns) with
+ *  gallery video clips, cross-fading between slots. Falls back gracefully when
+ *  only photos (or nothing) are available. */
+const MediaBackground: React.FC<{
+  images: string[];
+  videos: string[];
+  frame: number;
+  fps: number;
+  accentColor: string;
+}> = ({ images, videos, frame, fps, accentColor }) => {
+  const { r, g, b } = hexToRgb(accentColor);
+  const t = frame / fps;
+
+  type Slot = { kind: 'image' | 'video'; src: string; hold: number };
+  const slots: Slot[] = [];
+  let vi = 0;
+  images.forEach((src, i) => {
+    slots.push({ kind: 'image', src, hold: 7 });
+    if (videos.length && (i + 1) % 2 === 0 && vi < videos.length) {
+      slots.push({ kind: 'video', src: videos[vi++], hold: 4 });
+    }
+  });
+  while (vi < videos.length) slots.push({ kind: 'video', src: videos[vi++], hold: 4 });
+  if (slots.length === 0) return null;
+
+  const FADE = 1.3;
+  const starts: number[] = [];
+  let acc = 0;
+  for (const sl of slots) {
+    starts.push(acc);
+    acc += sl.hold;
+  }
+  const loop = acc;
+
+  return (
+    <>
+      {slots.map((slot, i) => {
+        const start = starts[i];
+        const phase = (((t - start) % loop) + loop) % loop;
+        let opacity = 0;
+        if (phase < FADE) opacity = phase / FADE;
+        else if (phase < slot.hold) opacity = 1;
+        else if (phase < slot.hold + FADE) opacity = 1 - (phase - slot.hold) / FADE;
+        else opacity = 0;
+        if (opacity <= 0.001) return null;
+
+        const dir = i % 2 === 0 ? 1 : -1;
+        const scale = 1.06 + (phase / (slot.hold + FADE)) * 0.12;
+        const driftX = dir * interpolate(phase, [0, slot.hold + FADE], [-2, 2], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        });
+
+        const inner = (
+          <AbsoluteFill
+            style={{
+              filter: 'blur(14px) brightness(0.6) saturate(1.25)',
+              transform: `scale(${scale}) translate(${driftX}%, 0%)`,
+            }}
+          >
+            {slot.kind === 'image' ? (
+              <Img src={slot.src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <OffthreadVideo src={slot.src} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            )}
+          </AbsoluteFill>
+        );
+
+        // Videos must play from their own t=0 each time the slot appears: wrap
+        // in a Sequence offset so the clip's internal time = phase (constant
+        // `from` within a slot appearance, render-safe).
+        if (slot.kind === 'video') {
+          const fromFrame = frame - Math.round(phase * fps);
+          return (
+            <AbsoluteFill key={i} style={{ opacity }}>
+              <Sequence from={fromFrame} layout="none">
+                {inner}
+              </Sequence>
+            </AbsoluteFill>
+          );
+        }
+        return (
+          <AbsoluteFill key={i} style={{ opacity }}>
+            {inner}
+          </AbsoluteFill>
+        );
+      })}
+
+      {/* Legibility veils */}
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.24) 38%, rgba(0,0,0,0.30) 64%, rgba(0,0,0,0.66) 100%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{ background: 'radial-gradient(ellipse at 50% 48%, transparent 36%, rgba(0,0,0,0.42) 100%)' }}
+      />
+      <AbsoluteFill
+        style={{ background: `linear-gradient(120deg, rgba(${r},${g},${b},0.12) 0%, transparent 55%)` }}
+      />
+    </>
+  );
+};
+
+/** Cinematic intro title card: artist photo + song title reveal. */
+const IntroCard: React.FC<{
+  artistName: string;
+  songTitle: string;
+  coverArt?: string;
+  accentColor: string;
+  frame: number;
+  fps: number;
+  introSec: number;
+}> = ({ artistName, songTitle, coverArt, accentColor, frame, fps, introSec }) => {
+  const { r, g, b } = hexToRgb(accentColor);
+  const t = frame / fps;
+  const inP = spring({ frame, fps, config: { damping: 200 }, durationInFrames: Math.round(fps * 0.7) });
+  const out = interpolate(t, [introSec - 0.6, introSec], [1, 0], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const opacity = inP * out;
+  if (opacity <= 0.001) return null;
+  const rise = (1 - inP) * 40;
+
+  return (
+    <AbsoluteFill
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity,
+        background: 'rgba(0,0,0,0.28)',
+        backdropFilter: 'blur(2px)',
+      }}
+    >
+      {coverArt ? (
+        <div
+          style={{
+            width: 280,
+            height: 280,
+            borderRadius: '50%',
+            overflow: 'hidden',
+            transform: `translateY(${rise}px) scale(${0.9 + inP * 0.1})`,
+            boxShadow: `0 0 0 6px rgba(${r},${g},${b},0.5), 0 30px 80px rgba(0,0,0,0.6), 0 0 80px rgba(${r},${g},${b},0.45)`,
+            marginBottom: 44,
+          }}
+        >
+          <Img src={coverArt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      ) : null}
+      <div
+        style={{
+          fontSize: 96,
+          fontWeight: 900,
+          color: '#fff',
+          letterSpacing: -1,
+          textAlign: 'center',
+          transform: `translateY(${rise * 0.6}px)`,
+          textShadow: `0 0 50px rgba(${r},${g},${b},0.6), 0 10px 40px rgba(0,0,0,0.7)`,
+          maxWidth: 1500,
+          lineHeight: 1.05,
+        }}
+      >
+        {songTitle}
+      </div>
+      <div
+        style={{
+          marginTop: 18,
+          fontSize: 34,
+          fontWeight: 700,
+          letterSpacing: 6,
+          textTransform: 'uppercase',
+          color: `rgb(${r},${g},${b})`,
+          transform: `translateY(${rise * 0.4}px)`,
+        }}
+      >
+        {artistName}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/** Cinematic outro card: thanks + CTA + brand. */
+const OutroCard: React.FC<{
+  artistName: string;
+  accentColor: string;
+  frame: number;
+  fps: number;
+  startFrame: number;
+}> = ({ artistName, accentColor, frame, fps, startFrame }) => {
+  const { r, g, b } = hexToRgb(accentColor);
+  const local = frame - startFrame;
+  if (local < 0) return null;
+  const inP = spring({ frame: local, fps, config: { damping: 200 }, durationInFrames: Math.round(fps * 0.8) });
+  const rise = (1 - inP) * 36;
+  return (
+    <AbsoluteFill
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: inP,
+        background: 'rgba(0,0,0,0.45)',
+        backdropFilter: 'blur(3px)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 72,
+          fontWeight: 900,
+          color: '#fff',
+          letterSpacing: -0.5,
+          transform: `translateY(${rise}px)`,
+          textShadow: `0 0 50px rgba(${r},${g},${b},0.6)`,
+        }}
+      >
+        {artistName}
+      </div>
+      <div
+        style={{
+          marginTop: 22,
+          fontSize: 30,
+          fontWeight: 600,
+          letterSpacing: 3,
+          color: `rgb(${r},${g},${b})`,
+          transform: `translateY(${rise * 0.6}px)`,
+        }}
+      >
+        ♫ Thanks for listening
+      </div>
+      <div
+        style={{
+          marginTop: 50,
+          fontSize: 20,
+          fontWeight: 700,
+          letterSpacing: 6,
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.5)',
+        }}
+      >
+        BOOSTIFY MUSIC
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Composition
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -614,6 +1019,8 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
   lyricStyle = 'glow',
   layout = 'center',
   backgroundImages,
+  backgroundVideos,
+  secondaryColor,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -625,6 +1032,10 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
   // Resolve the lyric typography preset (font + animation flavor + glow).
   const preset = resolveLyricPreset(lyricStyle);
 
+  // Secondary brand color (aurora gradient). Falls back to the accent.
+  const isHex = (c?: string) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
+  const secondary = isHex(secondaryColor) ? (secondaryColor as string) : accentColor;
+
   // Background image pool: rotate the gallery photos when provided, otherwise
   // fall back to the single cover art. Dedupe + keep only valid http(s) URLs.
   const bgSources = (() => {
@@ -634,7 +1045,15 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
       ? [coverArt]
       : []
     ).filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u));
-    return Array.from(new Set(pool)).slice(0, 6);
+    return Array.from(new Set(pool)).slice(0, 8);
+  })();
+
+  // Background video pool (artist gallery clips) — interleaved with the photos.
+  const bgVideos = (() => {
+    const pool = (backgroundVideos || []).filter(
+      (u): u is string => typeof u === 'string' && /^https?:\/\//.test(u),
+    );
+    return Array.from(new Set(pool)).slice(0, 3);
   })();
 
   // Musical pulse for the glow. Deterministic (render-safe, no audio decode):
@@ -683,12 +1102,30 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Rotating artist photo background — uses the gallery pool when provided,
-          else the cover art. Cross-fades between images and stays clearly
-          defined (low blur) so the artist's photos shine behind the lyrics. */}
-      {bgSources.length > 0 ? (
-        <BlurredBackground sources={bgSources} frame={frame} fps={fps} accentColor={accentColor} />
+      {/* Animated aurora mesh gradient (brand palette) — cinematic depth base. */}
+      <AuroraGradient frame={frame} fps={fps} primary={accentColor} secondary={secondary} />
+
+      {/* Cinematic media background — artist photos (Ken-Burns) interleaved with
+          gallery video clips, cross-fading. Falls back gracefully. */}
+      {bgSources.length > 0 || bgVideos.length > 0 ? (
+        <MediaBackground
+          images={bgSources}
+          videos={bgVideos}
+          frame={frame}
+          fps={fps}
+          accentColor={accentColor}
+        />
       ) : null}
+
+      {/* Soft light-leak sweep + decorative beat-reactive rings */}
+      <LightLeak frame={frame} fps={fps} color={secondary} />
+      <DecorShapes
+        frame={frame}
+        fps={fps}
+        accentColor={accentColor}
+        secondaryColor={secondary}
+        pulse={audioPulse}
+      />
 
       {/* Ambient particle glow orbs */}
       {particles.map((p, i) => (
@@ -824,11 +1261,34 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
       {/* Segment transition overlay — fires for ~0.25s at each new lyric line */}
       {transitionOverlayStyle && <div style={transitionOverlayStyle} />}
 
+      {/* Film grain texture for a premium cinematic finish */}
+      <FilmGrain frame={frame} opacity={0.05} />
+
       {/* Progress bar */}
       {showProgressBar && <ProgressBar progress={totalProgress} accentColor={accentColor} />}
 
       {/* Watermark */}
       {showWatermark && <Watermark />}
+
+      {/* Cinematic intro title card (first ~2.6s) */}
+      <IntroCard
+        artistName={artistName}
+        songTitle={songTitle}
+        coverArt={coverArt}
+        accentColor={accentColor}
+        frame={frame}
+        fps={fps}
+        introSec={2.6}
+      />
+
+      {/* Cinematic outro card (last ~3.2s) */}
+      <OutroCard
+        artistName={artistName}
+        accentColor={accentColor}
+        frame={frame}
+        fps={fps}
+        startFrame={Math.max(0, durationInFrames - Math.round(fps * 3.2))}
+      />
 
       {/* Audio — only mount when a real URL is present; Remotion's <Audio>
           throws "No 'src' was passed" when src is empty (e.g. live preview). */}
