@@ -55,14 +55,42 @@ const COOLDOWN_DAYS = 7;
 const PLATFORM_URL = 'https://www.boostifymusic.com';
 const ACTIVATE_URL = 'https://www.boostifymusic.com';
 const LOGO_URL = 'https://boostifymusic.com/assets/freepik__boostify_music_organe_abstract_icon.png';
-const DEMO_REDWINE = 'https://www.boostifymusic.com/artist/redwineli';
-const DEMO_QBANITO = 'https://www.boostifymusic.com/artist/qbanito-nocturnal';
+
+// Real demo artists (images filled from DB at runtime via prefetchDemoImages).
+const DEMO = {
+  redwine: { name: 'REDWINE', slug: 'redwineli', url: 'https://www.boostifymusic.com/artist/redwineli', profile: null, cover: null },
+  qbanito: { name: 'QBANITO', slug: 'qbanito-nocturnal', url: 'https://www.boostifymusic.com/artist/qbanito-nocturnal', profile: null, cover: null },
+};
+// Which demo artist illustrates each tool.
+const TOOL_DEMO = { music_video: 'qbanito', avatar_talk: 'qbanito', karaoke: 'qbanito' };
+const demoFor = (toolKey) => DEMO[TOOL_DEMO[toolKey] || 'redwine'];
 
 // ─── Pool ─────────────────────────────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.SUPABASE_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
+// Artist profile images live on the consolidated Neon DB (DATABASE_URL).
+const neonPool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : pool;
+
+async function prefetchDemoImages() {
+  try {
+    const slugs = Object.values(DEMO).map((d) => d.slug);
+    const res = await neonPool.query(
+      'SELECT slug, profile_image, cover_image FROM users WHERE slug = ANY($1)',
+      [slugs]
+    );
+    for (const d of Object.values(DEMO)) {
+      const row = res.rows.find((r) => r.slug === d.slug);
+      if (row) { d.profile = row.profile_image || null; d.cover = row.cover_image || null; }
+    }
+    console.log(`📸 Demo images: ${Object.values(DEMO).filter((d) => d.cover || d.profile).length}/${slugs.length} loaded`);
+  } catch (e) {
+    console.warn('⚠️  Could not prefetch demo images:', e.message);
+  }
+}
 
 // ─── LATAM language detection (country/state → email TLD → job title) ───────────
 function isLatamContact(c) {
@@ -373,22 +401,47 @@ function buildSubject(toolKey, lang, contact) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-// ─── Elegant graphic HTML email ────────────────────────────────────────────────
+// ─── Premium LIGHT graphic HTML email ──────────────────────────────────────────
 function buildHtml(toolKey, lang, contact) {
   const tool = TOOLS[toolKey];
   const t = tool[lang];
   const S = STRINGS[lang];
   const firstName = contact.first_name || (lang === 'es' ? 'artista' : 'there');
-  const demoUrl = toolKey === 'music_video' || toolKey === 'avatar_talk' ? DEMO_QBANITO : DEMO_REDWINE;
+  const demo = demoFor(toolKey);
   const grad = `linear-gradient(135deg, ${tool.accent} 0%, ${tool.accent2} 100%)`;
+
+  // Palette (LIGHT)
+  const INK = '#0f172a', BODY = '#475569', MUTED = '#94a3b8', HAIR = '#e8eaf0', SOFT = '#f6f7fa';
 
   const benefitRows = t.benefits.map((b) => `
             <tr>
-              <td valign="top" style="padding:8px 12px 8px 0;width:30px;">
-                <div style="width:26px;height:26px;border-radius:50%;background:${grad};color:#fff;font-size:14px;font-weight:900;text-align:center;line-height:26px;font-family:Arial,sans-serif;">✓</div>
+              <td valign="top" style="padding:9px 13px 9px 0;width:30px;">
+                <div style="width:26px;height:26px;border-radius:50%;background:${grad};color:#fff;font-size:13px;font-weight:900;text-align:center;line-height:26px;font-family:Arial,sans-serif;">✓</div>
               </td>
-              <td valign="top" style="padding:8px 0;font-size:14px;color:#cbd5e1;font-family:Arial,sans-serif;line-height:1.6;">${b}</td>
+              <td valign="top" style="padding:9px 0;font-size:14px;color:${BODY};font-family:Arial,sans-serif;line-height:1.6;">${b}</td>
             </tr>`).join('');
+
+  // Real artist visual from DB (cover preferred, then profile). Rendered only if present.
+  const heroImg = demo.cover || demo.profile;
+  const visualBlock = heroImg ? `
+    <tr><td style="padding:22px 30px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius:16px;overflow:hidden;border:1px solid ${HAIR};">
+        <tr><td style="padding:0;line-height:0;position:relative;">
+          <img src="${heroImg}" alt="${demo.name} on Boostify" width="540" style="width:100%;max-width:540px;height:230px;object-fit:cover;display:block;" />
+        </td></tr>
+        <tr><td style="background:${INK};padding:13px 20px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="font-size:12px;color:#cbd5e1;font-family:Arial,sans-serif;letter-spacing:0.5px;">${tool.icon}&nbsp; <strong style="color:#fff;">${demo.name}</strong> &middot; ${lang === 'es' ? 'artista real en Boostify' : 'real artist on Boostify'}</td>
+            <td align="right"><a href="${demo.url}" style="font-size:12px;font-weight:700;color:${tool.accent2};text-decoration:none;font-family:Arial,sans-serif;">${S.seeLive} →</a></td>
+          </tr></table>
+        </td></tr>
+      </table>
+    </td></tr>` : '';
+
+  const profileThumb = demo.profile ? `
+              <td valign="top" style="width:54px;padding:0 14px 0 0;">
+                <img src="${demo.profile}" alt="${demo.name}" width="48" height="48" style="width:48px;height:48px;border-radius:50%;object-fit:cover;display:block;border:2px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.12);" />
+              </td>` : '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -397,104 +450,115 @@ function buildHtml(toolKey, lang, contact) {
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${t.name} — Boostify Music</title>
 </head>
-<body style="margin:0;padding:0;background:#0b1020;font-family:Arial,Helvetica,sans-serif;">
-<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#0b1020;">${t.tagline} — ${S.offerTitle}</div>
+<body style="margin:0;padding:0;background:#eef0f4;font-family:Arial,Helvetica,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#eef0f4;">${t.tagline} — ${S.offerTitle}</div>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0b1020;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef0f4;">
 <tr><td align="center" style="padding:26px 12px;">
 
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#0f1629;border-radius:18px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.06);">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,0.10);border:1px solid #e8eaf0;">
+
+    <!-- ACCENT TOP -->
+    <tr><td style="height:5px;background:${grad};font-size:0;line-height:0;">&nbsp;</td></tr>
 
     <!-- BRAND BAR -->
-    <tr><td style="padding:18px 36px;background:#0a0f1f;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <tr><td style="padding:16px 30px;border-bottom:1px solid ${HAIR};">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
         <td style="font-size:11px;font-weight:800;letter-spacing:2.5px;color:#f97316;font-family:Arial,sans-serif;">🎵 ${S.brandKicker}</td>
-        <td align="right" style="font-size:11px;color:#64748b;font-family:Arial,sans-serif;">boostifymusic.com</td>
+        <td align="right" style="font-size:11px;color:${MUTED};font-family:Arial,sans-serif;">boostifymusic.com</td>
       </tr></table>
     </td></tr>
 
     <!-- HERO -->
-    <tr><td style="background:${grad};padding:42px 36px 38px;text-align:center;">
-      <div style="font-size:54px;line-height:1;margin-bottom:10px;">${tool.icon}</div>
-      <h1 style="margin:0 0 10px;font-size:30px;font-weight:900;color:#ffffff;font-family:Arial,Helvetica,sans-serif;letter-spacing:-0.5px;line-height:1.2;">${t.name}</h1>
-      <p style="margin:0;font-size:16px;color:rgba(255,255,255,0.92);font-family:Georgia,'Times New Roman',serif;font-style:italic;line-height:1.5;">${t.tagline}</p>
+    <tr><td style="padding:34px 30px 8px;text-align:center;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;"><tr>
+        <td style="width:66px;height:66px;border-radius:18px;background:${grad};text-align:center;vertical-align:middle;font-size:32px;line-height:66px;box-shadow:0 6px 18px ${tool.accent}40;">${tool.icon}</td>
+      </tr></table>
+      <h1 style="margin:0 0 8px;font-size:29px;font-weight:900;color:${INK};font-family:Arial,Helvetica,sans-serif;letter-spacing:-0.5px;line-height:1.2;">${t.name}</h1>
+      <p style="margin:0;font-size:16px;color:${BODY};font-family:Georgia,'Times New Roman',serif;font-style:italic;line-height:1.5;">${t.tagline}</p>
     </td></tr>
 
+    ${visualBlock}
+
     <!-- GREETING + INTRO -->
-    <tr><td style="padding:30px 36px 0;">
-      <p style="margin:0 0 12px;font-size:15px;color:#e2e8f0;font-family:Arial,sans-serif;line-height:1.6;">${S.greeting(firstName)}</p>
-      <p style="margin:0 0 6px;font-size:14px;color:#94a3b8;font-family:Arial,sans-serif;line-height:1.7;">${S.intro}</p>
+    <tr><td style="padding:26px 30px 0;">
+      <p style="margin:0 0 12px;font-size:15px;color:${INK};font-family:Arial,sans-serif;line-height:1.6;">${S.greeting(firstName)}</p>
+      <p style="margin:0;font-size:14px;color:${BODY};font-family:Arial,sans-serif;line-height:1.7;">${S.intro}</p>
     </td></tr>
 
     <!-- HOOK -->
-    <tr><td style="padding:18px 36px 0;">
+    <tr><td style="padding:18px 30px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="background:rgba(255,255,255,0.04);border-left:4px solid ${tool.accent};border-radius:0 12px 12px 0;padding:18px 22px;">
-          <p style="margin:0;font-size:15px;color:#f1f5f9;font-family:Arial,sans-serif;line-height:1.7;">${t.hook}</p>
+        <td style="background:${SOFT};border-left:4px solid ${tool.accent};border-radius:0 12px 12px 0;padding:18px 22px;">
+          <p style="margin:0;font-size:15px;color:${INK};font-family:Arial,sans-serif;line-height:1.7;">${t.hook}</p>
         </td>
       </tr></table>
     </td></tr>
 
     <!-- BENEFITS -->
-    <tr><td style="padding:26px 36px 0;">
-      <p style="margin:0 0 8px;font-size:10px;font-weight:800;letter-spacing:2.5px;color:${tool.accent2};font-family:Arial,sans-serif;">${S.benefitsTitle}</p>
+    <tr><td style="padding:26px 30px 0;">
+      <p style="margin:0 0 8px;font-size:10px;font-weight:800;letter-spacing:2.5px;color:${tool.accent};font-family:Arial,sans-serif;">${S.benefitsTitle}</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${benefitRows}
       </table>
     </td></tr>
 
     <!-- EXAMPLE -->
-    <tr><td style="padding:24px 36px 0;">
+    <tr><td style="padding:24px 30px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="background:#0a0f1f;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px 22px;">
-          <p style="margin:0 0 8px;font-size:10px;font-weight:800;letter-spacing:2.5px;color:#f97316;font-family:Arial,sans-serif;">${S.exampleTitle}</p>
-          <p style="margin:0;font-size:14px;color:#cbd5e1;font-family:Arial,sans-serif;line-height:1.7;">${t.example}</p>
-          <p style="margin:12px 0 0;"><a href="${demoUrl}" style="font-size:13px;color:${tool.accent2};text-decoration:none;font-weight:700;font-family:Arial,sans-serif;">▶ ${S.seeLive} →</a></p>
+        <td style="background:${SOFT};border:1px solid ${HAIR};border-radius:14px;padding:20px 22px;">
+          <p style="margin:0 0 12px;font-size:10px;font-weight:800;letter-spacing:2.5px;color:#f97316;font-family:Arial,sans-serif;">${S.exampleTitle}</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${profileThumb}
+            <td valign="top">
+              <p style="margin:0;font-size:14px;color:${BODY};font-family:Arial,sans-serif;line-height:1.7;">${t.example}</p>
+              <p style="margin:10px 0 0;"><a href="${demo.url}" style="font-size:13px;color:${tool.accent};text-decoration:none;font-weight:700;font-family:Arial,sans-serif;">▶ ${S.seeLive} →</a></p>
+            </td>
+          </tr></table>
         </td>
       </tr></table>
     </td></tr>
 
     <!-- OFFER BANNER -->
-    <tr><td style="padding:28px 36px 0;">
+    <tr><td style="padding:28px 30px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="background:${grad};border-radius:16px;padding:26px 24px;text-align:center;">
-          <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,0.85);font-family:Arial,sans-serif;">⭐ ${S.offerKicker} ⭐</p>
+        <td style="background:${grad};border-radius:16px;padding:26px 24px;text-align:center;box-shadow:0 8px 22px ${tool.accent}33;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,0.9);font-family:Arial,sans-serif;">⭐ ${S.offerKicker} ⭐</p>
           <p style="margin:0 0 4px;font-size:38px;font-weight:900;color:#ffffff;font-family:Arial,Helvetica,sans-serif;letter-spacing:-1px;">${S.offerTitle}</p>
-          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.9);font-family:Arial,sans-serif;">${S.offerSub}</p>
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.92);font-family:Arial,sans-serif;">${S.offerSub}</p>
         </td>
       </tr></table>
     </td></tr>
 
     <!-- CTA -->
-    <tr><td style="padding:24px 36px 6px;text-align:center;">
+    <tr><td style="padding:24px 30px 6px;text-align:center;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>
-        <td style="border-radius:12px;background:#f97316;">
-          <a href="${ACTIVATE_URL}" style="display:inline-block;padding:17px 40px;font-size:15px;font-weight:800;color:#0a0f1f;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.4px;border-radius:12px;">${S.activate} →</a>
+        <td style="border-radius:12px;background:#f97316;box-shadow:0 6px 16px rgba(249,115,22,0.32);">
+          <a href="${ACTIVATE_URL}" style="display:inline-block;padding:17px 40px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.4px;border-radius:12px;">${S.activate} →</a>
         </td>
       </tr></table>
-      <p style="margin:14px 0 0;font-size:12px;color:#64748b;font-family:Arial,sans-serif;line-height:1.6;">${t.cta} · ${ACTIVATE_URL.replace('https://www.','')}</p>
+      <p style="margin:14px 0 0;font-size:12px;color:${MUTED};font-family:Arial,sans-serif;line-height:1.6;">${t.cta} · boostifymusic.com</p>
     </td></tr>
 
     <!-- MORE TOOLS -->
-    <tr><td style="padding:22px 36px 0;">
+    <tr><td style="padding:22px 30px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td style="border-top:1px solid rgba(255,255,255,0.07);padding-top:18px;">
-          <p style="margin:0;font-size:13px;color:#94a3b8;font-family:Arial,sans-serif;line-height:1.7;text-align:center;">${S.moreTools}</p>
+        <td style="border-top:1px solid ${HAIR};padding-top:18px;">
+          <p style="margin:0;font-size:13px;color:${BODY};font-family:Arial,sans-serif;line-height:1.7;text-align:center;">${S.moreTools}</p>
         </td>
       </tr></table>
     </td></tr>
 
     <!-- SIGNOFF -->
-    <tr><td style="padding:24px 36px 0;">
-      <p style="margin:0 0 14px;font-size:13px;color:#94a3b8;font-family:Arial,sans-serif;line-height:1.7;">${S.ps}</p>
-      <p style="margin:0;font-size:14px;color:#e2e8f0;font-family:Arial,sans-serif;line-height:1.5;"><strong style="color:#ffffff;">${S.signoff}</strong><br><span style="color:#64748b;font-size:12px;">${S.signTitle}</span></p>
+    <tr><td style="padding:22px 30px 0;">
+      <p style="margin:0 0 14px;font-size:13px;color:${BODY};font-family:Arial,sans-serif;line-height:1.7;">${S.ps}</p>
+      <p style="margin:0;font-size:14px;color:${INK};font-family:Arial,sans-serif;line-height:1.5;"><strong>${S.signoff}</strong><br><span style="color:${MUTED};font-size:12px;">${S.signTitle}</span></p>
     </td></tr>
 
     <!-- FOOTER -->
-    <tr><td style="padding:26px 36px 30px;text-align:center;">
-      <p style="margin:18px 0 8px;font-size:16px;font-weight:900;color:#f97316;font-family:Arial,sans-serif;letter-spacing:1px;">🎵 BOOSTIFY MUSIC</p>
-      <p style="margin:0 0 14px;font-size:11px;color:#475569;font-family:Arial,sans-serif;">The all-in-one platform for the modern artist · AI · Video · Merch · Fans</p>
-      <p style="margin:0;font-size:10px;color:#334155;font-family:Arial,sans-serif;line-height:1.7;">${S.unsub}<br>
-      <a href="mailto:${PREVIEW_EMAIL}" style="color:#475569;text-decoration:underline;">${PREVIEW_EMAIL}</a></p>
+    <tr><td style="padding:26px 30px 30px;text-align:center;border-top:1px solid ${HAIR};margin-top:22px;">
+      <p style="margin:14px 0 8px;font-size:16px;font-weight:900;color:#f97316;font-family:Arial,sans-serif;letter-spacing:1px;">🎵 BOOSTIFY MUSIC</p>
+      <p style="margin:0 0 14px;font-size:11px;color:${MUTED};font-family:Arial,sans-serif;">${lang === 'es' ? 'La plataforma todo-en-uno para el artista moderno · IA · Video · Merch · Fans' : 'The all-in-one platform for the modern artist · AI · Video · Merch · Fans'}</p>
+      <p style="margin:0;font-size:10px;color:#b6bcc8;font-family:Arial,sans-serif;line-height:1.7;">${S.unsub}<br>
+      <a href="mailto:${PREVIEW_EMAIL}" style="color:${MUTED};text-decoration:underline;">${PREVIEW_EMAIL}</a></p>
     </td></tr>
 
   </table>
@@ -514,6 +578,7 @@ async function main() {
   console.log(`Preview: ${PREVIEW_MODE}`);
   console.log(`Dry    : ${DRY_RUN}\n`);
 
+  await prefetchDemoImages();
   const provider = await getBestArtistProvider(pool);
 
   // PREVIEW — send one EN + one ES sample of the chosen (or first) tool
@@ -551,7 +616,7 @@ async function main() {
       else console.log(`   ❌ ${res.error}`);
     }
     if (ok > 0 && !DRY_RUN) await recordSends(pool, provider.provider, ok);
-    await pool.end().catch(() => {});
+    await closePools();
     return;
   }
 
@@ -564,7 +629,7 @@ async function main() {
     else throw err;
   }
   console.log(`👥 ${contacts.length} eligible artist contacts\n`);
-  if (contacts.length === 0) { await pool.end().catch(() => {}); return; }
+  if (contacts.length === 0) { await closePools(); return; }
 
   const fixedToolList = resolveToolList(TOOL_ARG); // array or null (random per recipient)
   let sent = 0, failed = 0;
@@ -599,11 +664,15 @@ async function main() {
 
   if (sent > 0) await recordSends(pool, provider.provider, sent);
   console.log(`\n✅ Sent: ${sent} · ❌ Failed: ${failed}`);
+  await closePools();
+}
+
+async function closePools() {
   await pool.end().catch(() => {});
+  if (neonPool !== pool) await neonPool.end().catch(() => {});
 }
 
 main().catch((err) => {
   console.error('💥 Fatal:', err);
-  pool.end().catch(() => {});
-  process.exit(1);
+  closePools().finally(() => process.exit(1));
 });
