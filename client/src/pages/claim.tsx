@@ -121,7 +121,7 @@ export default function ClaimPage() {
   const name = artist?.artistName || "tu perfil";
 
   return (
-    <div className="min-h-screen w-full bg-[#0b0b0f] text-white flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-[#0b0b0f] text-white flex items-center justify-center p-4 pb-28 sm:pb-12">
       <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-[#101016] shadow-[0_30px_120px_-20px_rgba(124,92,255,0.45)]">
         {/* Cover */}
         <div className="relative h-56 w-full sm:h-72">
