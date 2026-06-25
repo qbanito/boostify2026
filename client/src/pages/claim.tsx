@@ -21,7 +21,6 @@ import {
   TrendingUp,
   Bot,
   Gift,
-  Infinity as InfinityIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,20 +31,20 @@ interface ClaimTool {
 }
 
 // The full Boostify arsenal — shown on the claim page so the artist sees the
-// irresistible offer (everything they unlock for free).
+// whole platform they unlock when they claim their profile.
 const CLAIM_TOOLS: ClaimTool[] = [
-  { icon: Globe, title: "Página profesional", desc: "Tu sitio de artista listo" },
-  { icon: Music2, title: "Música y videos", desc: "Sube todo tu catálogo" },
-  { icon: Clapperboard, title: "Videos musicales IA", desc: "Clips cinematográficos" },
-  { icon: Mic2, title: "Karaoke y lyric videos", desc: "Engancha a tus fans" },
-  { icon: Store, title: "Tienda 3D + merch IA", desc: "Productos sin inventario" },
-  { icon: Ticket, title: "Conciertos y tickets", desc: "Vende entradas online" },
-  { icon: Users, title: "Club de fans", desc: "Monetiza tu comunidad" },
-  { icon: Megaphone, title: "Marketing automático", desc: "Redes en piloto" },
-  { icon: ImageIcon, title: "Arte e imágenes IA", desc: "Galería visual infinita" },
-  { icon: Radio, title: "Streaming y radio", desc: "Suena en todo el mundo" },
-  { icon: TrendingUp, title: "Motor económico", desc: "Ingresos y tesorería" },
-  { icon: Bot, title: "Agentes IA 24/7", desc: "Trabajan por ti sin parar" },
+  { icon: Globe, title: "Professional page", desc: "Your artist site, ready" },
+  { icon: Music2, title: "Music & videos", desc: "Upload your whole catalog" },
+  { icon: Clapperboard, title: "AI music videos", desc: "Cinematic clips" },
+  { icon: Mic2, title: "Karaoke & lyric videos", desc: "Hook your fans" },
+  { icon: Store, title: "3D store + AI merch", desc: "Products, zero inventory" },
+  { icon: Ticket, title: "Concerts & tickets", desc: "Sell tickets online" },
+  { icon: Users, title: "Fan club", desc: "Monetize your community" },
+  { icon: Megaphone, title: "Automated marketing", desc: "Social on autopilot" },
+  { icon: ImageIcon, title: "AI art & images", desc: "Endless visual gallery" },
+  { icon: Radio, title: "Streaming & radio", desc: "Be heard worldwide" },
+  { icon: TrendingUp, title: "Economic engine", desc: "Revenue & treasury" },
+  { icon: Bot, title: "AI agents 24/7", desc: "Work for you nonstop" },
 ];
 
 // AI pre-built profiles ship with throwaway placeholder covers (picsum / ui-avatars).
@@ -127,7 +126,7 @@ export default function ClaimPage() {
     (async () => {
       if (!token && !slug) {
         setPhase("error");
-        setErrorMsg("Enlace inválido. Falta el identificador del perfil.");
+        setErrorMsg("Invalid link. The profile identifier is missing.");
         return;
       }
       try {
@@ -139,8 +138,8 @@ export default function ClaimPage() {
           setPhase("error");
           setErrorMsg(
             data.error === "expired"
-              ? "Este enlace ha expirado. Pide uno nuevo o reclama tu perfil desde tu página pública."
-              : "No encontramos el perfil que intentas reclamar.",
+              ? "This link has expired. Request a new one or claim your profile from your public page."
+              : "We couldn't find the profile you're trying to claim.",
           );
           return;
         }
@@ -149,7 +148,7 @@ export default function ClaimPage() {
       } catch {
         if (!cancelled) {
           setPhase("error");
-          setErrorMsg("No pudimos cargar el perfil. Inténtalo de nuevo.");
+          setErrorMsg("We couldn't load the profile. Please try again.");
         }
       }
     })();
@@ -165,7 +164,7 @@ export default function ClaimPage() {
       const data = await apiRequest("POST", "/api/artist-activation/claim", token ? { token } : { slug });
       await refetch().catch(() => {});
       setPhase("claimed");
-      toast({ title: "¡Perfil reclamado!", description: "Bienvenido a Boostify. Tu carrera empieza ahora." });
+      toast({ title: "Profile claimed!", description: "Welcome to Boostify. Your career starts now." });
       const dest = data?.slug || artist?.slug;
       setTimeout(() => {
         window.location.href = dest ? `/artist/${dest}` : "/dashboard";
@@ -174,16 +173,16 @@ export default function ClaimPage() {
       const msg = String(err?.message || "");
       if (msg.includes("already_claimed")) {
         setPhase("error");
-        setErrorMsg("Este perfil ya fue reclamado por otra cuenta. Si crees que es un error, contáctanos.");
+        setErrorMsg("This profile was already claimed by another account. If you think this is a mistake, contact us.");
       } else if (msg.includes("already_have_profile")) {
         setPhase("error");
-        setErrorMsg("Tu cuenta ya tiene otro perfil de artista. Escríbenos para fusionarlos.");
+        setErrorMsg("Your account already has another artist profile. Contact us to merge them.");
       } else if (msg.includes("email_mismatch")) {
         setPhase("error");
-        setErrorMsg("El email de tu cuenta no coincide con el de este perfil. Inicia sesión con el email correcto.");
+        setErrorMsg("Your account email doesn't match this profile. Sign in with the correct email.");
       } else {
         setPhase("error");
-        setErrorMsg("No pudimos completar el reclamo. Inténtalo de nuevo en un momento.");
+        setErrorMsg("We couldn't complete the claim. Please try again in a moment.");
       }
     }
   };
@@ -212,7 +211,7 @@ export default function ClaimPage() {
     : !isPlaceholderCover(artist?.profileImage)
       ? artist?.profileImage
       : "";
-  const name = artist?.artistName || "tu perfil";
+  const name = artist?.artistName || "your profile";
 
   return (
     <div className="min-h-screen w-full bg-[#0b0b0f] text-white flex items-center justify-center p-4 pb-28 sm:pb-12">
@@ -232,7 +231,7 @@ export default function ClaimPage() {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#101016] via-[#101016]/40 to-transparent" />
           <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-medium backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-[#e8c98a]" />
-            Perfil creado por Boostify AI
+            Created by Boostify AI
           </div>
           <div className="absolute right-5 top-5 select-none text-xs font-extrabold tracking-[0.25em] text-white/70">
             BOOSTIFY
@@ -261,19 +260,19 @@ export default function ClaimPage() {
 
           {phase === "loading" && (
             <div className="mt-10 flex items-center justify-center gap-3 py-10 text-white/60">
-              <Loader2 className="h-5 w-5 animate-spin" /> Cargando tu perfil…
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading your profile…
             </div>
           )}
 
           {(phase === "ready" || phase === "claiming") && (
             <>
               <p className="mt-5 text-lg font-medium text-white">
-                ¿Eres <span className="text-[#e8c98a]">{name}</span>? Este perfil es tuyo.
+                Are you <span className="text-[#e8c98a]">{name}</span>? This profile is yours.
               </p>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/60">
                 {artist?.biography
                   ? artist.biography.slice(0, 160) + (artist.biography.length > 160 ? "…" : "")
-                  : "Ya construimos tu página de artista con IA. Reclámala gratis y desbloquea toda la plataforma para llevar tu carrera al siguiente nivel."}
+                  : "We already built your AI artist page. Claim it for free and unlock the full platform to take your career to the next level."}
               </p>
 
               {/* Irresistible offer — the full arsenal */}
@@ -281,7 +280,7 @@ export default function ClaimPage() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-[#e8c98a]" />
                   <p className="text-sm font-semibold text-white">
-                    Al reclamarlo desbloqueas toda tu plataforma:
+                    Claim it to unlock your full platform:
                   </p>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -309,17 +308,17 @@ export default function ClaimPage() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    Todo incluido — <span className="text-[#e8c98a]">gratis para siempre</span>
+                    Start with <span className="text-[#e8c98a]">50 free credits</span> to try every tool
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/50">
                     <span className="inline-flex items-center gap-1">
-                      <InfinityIcon className="h-3.5 w-3.5" /> Sin límites
+                      <Gift className="h-3.5 w-3.5" /> Free credits every month
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> Sin tarjeta de crédito
+                      <ShieldCheck className="h-3.5 w-3.5" /> No credit card required
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Listo en 30 segundos
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Ready in 30 seconds
                     </span>
                   </p>
                 </div>
@@ -332,18 +331,18 @@ export default function ClaimPage() {
               >
                 {phase === "claiming" ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" /> Reclamando…
+                    <Loader2 className="h-5 w-5 animate-spin" /> Claiming…
                   </>
                 ) : (
                   <>
-                    Reclamar mi perfil gratis
+                    Claim my profile — free
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
                   </>
                 )}
               </button>
 
               <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-white/40">
-                <ShieldCheck className="h-3.5 w-3.5" /> Tu perfil queda 100% bajo tu control. Cancela cuando quieras.
+                <ShieldCheck className="h-3.5 w-3.5" /> Your profile stays 100% under your control.
               </p>
             </>
           )}
@@ -351,21 +350,21 @@ export default function ClaimPage() {
           {phase === "claimed" && (
             <div className="mt-8 rounded-2xl border border-[#7c5cff]/30 bg-[#7c5cff]/10 p-6 text-center">
               <CheckCircle2 className="mx-auto h-10 w-10 text-[#7c5cff]" />
-              <p className="mt-3 text-lg font-semibold">¡Perfil reclamado!</p>
-              <p className="mt-1 text-sm text-white/60">Llevándote a tu página de artista…</p>
+              <p className="mt-3 text-lg font-semibold">Profile claimed!</p>
+              <p className="mt-1 text-sm text-white/60">Taking you to your artist page…</p>
             </div>
           )}
 
           {phase === "already" && (
             <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
               <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
-              <p className="mt-3 text-lg font-semibold">Este perfil ya fue reclamado.</p>
+              <p className="mt-3 text-lg font-semibold">This profile has already been claimed.</p>
               {artist?.slug && (
                 <a
                   href={`/artist/${artist.slug}`}
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium hover:bg-white/15"
                 >
-                  Ver el perfil <ArrowRight className="h-4 w-4" />
+                  View profile <ArrowRight className="h-4 w-4" />
                 </a>
               )}
             </div>
@@ -378,7 +377,7 @@ export default function ClaimPage() {
                 href="/"
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm font-medium hover:bg-white/15"
               >
-                Ir al inicio
+                Go home
               </a>
             </div>
           )}
