@@ -72,6 +72,8 @@ jobs:
       RESEND_API_ARTISTS_2: ${{ secrets.RESEND_API_ARTISTS_2 }}
       RESEND_API_ARTISTS_3: ${{ secrets.RESEND_API_ARTISTS_3 }}
       RESEND_API_ARTISTS_4: ${{ secrets.RESEND_API_ARTISTS_4 }}
+      RESEND_API_ARTISTS_5: ${{ secrets.RESEND_API_ARTISTS_5 }}
+      RESEND_API_ARTISTS_6: ${{ secrets.RESEND_API_ARTISTS_6 }}
 
     steps:
       - name: 📥 Checkout Repository
