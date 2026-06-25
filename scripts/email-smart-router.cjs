@@ -271,7 +271,7 @@ async function fetchContacts(pool, { audience = 'all', limit = 40, cooldownDays 
     }
     const res = await client.query(`
       SELECT id, email, first_name, last_name,
-             full_name AS name, company_name, job_title, industry, country,
+             full_name AS name, company_name, job_title, industry, country, city, state,
              import_source AS source,
              last_contacted_at AS last_email_at,
              COALESCE(emails_sent, 0) AS emails_sent,

@@ -77,9 +77,23 @@ console.log(`\n🔧 MODO: ${PREVIEW_MODE ? '⚠️ PREVIEW (emails a ' + PREVIEW
 console.log(`📧 Usando: ${emailProvider} para ${config.domain}`);
 
 // � Identidad del CEO + demo real de la plataforma
-const DEMO_ARTIST_NAME = 'REDWINE CONTROL';
-const DEMO_URL = 'https://www.boostifymusic.com/artist/control';
+const DEMO_ARTISTS = [
+  { name: 'REDWINE — "Vino con Sal"', genre: 'Pop / Hip-Hop / Reggaeton / R&B', url: 'https://www.boostifymusic.com/artist/redwine_vinoconsal' },
+  { name: 'REDWINE — "Life Vol. II"', genre: 'Pop / R&B / Urban', url: 'https://www.boostifymusic.com/artist/redwine_lifevol2' },
+  { name: 'REDWINE — full catalog', genre: 'Multi-genre (Pop, Blues, Hip-Hop, Electronic)', url: 'https://www.boostifymusic.com/artist/redwineli' },
+  { name: 'QBANITO — "Nocturnal"', genre: 'Electronic / Dark Pop / Synthwave', url: 'https://www.boostifymusic.com/artist/qbanito-nocturnal' },
+  { name: 'QBANITO — "Conciencia"', genre: 'Afrobeat / Deep House / Conscious Hip-Hop', url: 'https://www.boostifymusic.com/artist/qbanito_conciencia' },
+  { name: 'QBANITO — "Latin Bollywood"', genre: 'Latin Bollywood / Reggaeton fusion', url: 'https://www.boostifymusic.com/artist/qbanitobollwood' },
+];
 const PLATFORM_URL = 'https://www.boostifymusic.com';
+const pickDemo = () => DEMO_ARTISTS[Math.floor(Math.random() * DEMO_ARTISTS.length)];
+
+// Detecta contactos LATAM / hispanohablantes por país o estado. Si no se detecta → inglés.
+function isLatamContact(lead) {
+  const c = `${lead.country || ''} ${lead.state || ''}`.trim().toLowerCase();
+  if (!c) return false;
+  return /(m[eé]xic|colomb|argentin|chile|per[uú]|venezuel|ecuad|guatemal|\bcuba\b|boliv|dominic|hondur|paragu|el salvador|nicaragu|costa rica|panam|urugu|puerto ric|espa[nñ]|\bspain\b|\bmx\b|\bco\b|\bar\b|\bcl\b|\bpe\b|\bve\b|\bec\b|\bgt\b|\bcu\b|\bbo\b|\bdo\b|\bhn\b|\bpy\b|\bsv\b|\bni\b|\bcr\b|\bpa\b|\buy\b|\bpr\b|\bes\b)/.test(c);
+}
 
 // 🎲 SUBJECT TEMPLATES — directos, de negocio / alianza (CEO a la industria)
 const subjectTemplates = [
@@ -97,8 +111,30 @@ const subjectTemplates = [
   (lead) => `${lead.first_name} — ready when you are to talk partnership`,
 ];
 
+// Subjects en español para contactos LATAM
+const subjectTemplatesES = [
+  (lead) => `${lead.first_name}, una idea de alianza para ${lead.company_name || 'tu roster'}`,
+  (lead) => `${lead.first_name} — nosotros ponemos la plataforma, tú los artistas`,
+  (lead) => `${lead.first_name}, ¿15 minutos para hablar de una alianza?`,
+  (lead) => `Boostify × ${lead.company_name || 'ustedes'}, ${lead.first_name}?`,
+  (lead) => `${lead.first_name}, míralo desde un artista (demo de 2 min)`,
+  (lead) => `${lead.first_name} — una alianza que sí tiene sentido`,
+  (lead) => `pongamos a tus artistas en esto, ${lead.first_name}`,
+  (lead) => `${lead.first_name}, una propuesta directa de Boostify`,
+  (lead) => `${lead.first_name}, el lado de la plataforma del trato`,
+  (lead) => `${lead.first_name} — listo cuando quieras para hablar de alianza`,
+];
+
+function pickSubject(lead) {
+  const list = isLatamContact(lead) ? subjectTemplatesES : subjectTemplates;
+  return list[Math.floor(Math.random() * list.length)](lead);
+}
+
 async function generateBody(lead, stage = 1) {
   const isIndustry = USE_BREVO;
+  const spanish = isLatamContact(lead);
+  const demo = pickDemo();
+  console.log(`   🌎 Idioma: ${spanish ? 'ES (LATAM)' : 'EN'} | Demo: ${demo.name}`);
 
   const stageGuidance = {
     1: 'TOUCH 1 of 3 — break the ice and invite them to SEE the platform from an artist\'s perspective. Keep the ask tiny: just look at the demo.',
@@ -112,6 +148,10 @@ THE DEAL: Boostify provides the PLATFORM and technology (immersive artist profil
     : `You are writing to an ARTIST or their team.
 THE DEAL: Boostify provides the PLATFORM (a cinematic immersive profile, a 3D merch store, AI tools, distribution and monetization). They bring the music. Invite them to claim their space on the platform.`;
 
+  const languageRule = spanish
+    ? 'Write the ENTIRE email in NATURAL, PROFESSIONAL LATIN-AMERICAN SPANISH (tono cercano pero de negocio, tutea con "tú"). Do NOT translate literally — write like a native Spanish-speaking founder.'
+    : 'Write the ENTIRE email in NATURAL, PROFESSIONAL ENGLISH.';
+
   const prompt = `
 You are Neiver Alvarez, CEO and founder of Boostify Music (${PLATFORM_URL}).
 You are writing a real, direct, peer-to-peer email. You are a confident negotiator,
@@ -124,7 +164,9 @@ WHO YOU'RE WRITING TO:
 - Role: ${lead.job_title || 'Music Professional'}
 - Company: ${lead.company_name || 'their company'}
 - Industry: ${lead.industry || 'Music'}
-- Location: ${[lead.city, lead.state].filter(Boolean).join(', ') || 'N/A'}
+- Location: ${[lead.city, lead.state, lead.country].filter(Boolean).join(', ') || 'N/A'}
+
+LANGUAGE: ${languageRule}
 
 THIS EMAIL IS: ${stageGuidance}
 
@@ -132,8 +174,8 @@ HOW TO WRITE IT:
 1. Open with ONE specific line about THEM or their company (not generic praise).
 2. State the alliance in ONE concrete line: "we put the platform, you bring the artists" (adapt naturally).
 3. ${stage === 1
-      ? `Invite them to see it from an artist's point of view — point to ${DEMO_ARTIST_NAME}: ${DEMO_URL}`
-      : `Only mention the demo if it flows naturally: ${DEMO_URL}`}
+      ? `Invite them to see a real artist on the platform — point to ${demo.name} (${demo.genre}): ${demo.url}`
+      : `Only mention the demo if it flows naturally — ${demo.name}: ${demo.url}`}
 4. Close with ONE direct, low-friction question (a 15-min call, or "who handles partnerships on your side?").
 
 RULES:
@@ -141,7 +183,7 @@ RULES:
 - 60-90 words, short paragraphs.
 - At most ONE url in the whole email (the demo link above).
 - Sound like a real founder closing a deal — direct and human.
-- Sign EXACTLY like this (two lines):
+- Sign EXACTLY like this (two lines), in any language:
 Neiver Alvarez
 CEO, Boostify Music
 
@@ -151,7 +193,7 @@ Return ONLY the email body, no subject line.
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 320,
+    max_tokens: 340,
     temperature: 0.75
   });
 
@@ -277,9 +319,8 @@ async function sendWarmupEmails() {
       console.log(`\n📧 [${i+1}/${leadsResult.rows.length}] ${lead.first_name} ${lead.last_name} (${lead.company_name || 'N/A'})`);
       console.log(`   Stage: ${nextStage}/3`);
 
-      // Generar subject aleatorio
-      const subjectFn = subjectTemplates[Math.floor(Math.random() * subjectTemplates.length)];
-      const subject = subjectFn(lead);
+      // Generar subject aleatorio (ES para LATAM, EN si no se detecta)
+      const subject = pickSubject(lead);
       console.log(`   Subject: ${subject}`);
 
       // Generar body con OpenAI
