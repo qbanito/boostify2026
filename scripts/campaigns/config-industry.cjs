@@ -16,7 +16,7 @@ module.exports = {
   
   // Email (using Brevo)
   fromEmail: 'info@boostifymusic.com',
-  fromName: 'Alex from Boostify',
+  fromName: 'Neiver Alvarez · Boostify Music',
   emailProvider: 'brevo',
   
   // APIs (desde variables de entorno)

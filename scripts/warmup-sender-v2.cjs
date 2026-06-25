@@ -76,60 +76,74 @@ const emailProvider = USE_BREVO ? 'BREVO' : 'RESEND';
 console.log(`\n🔧 MODO: ${PREVIEW_MODE ? '⚠️ PREVIEW (emails a ' + PREVIEW_EMAIL + ')' : '✅ PRODUCCIÓN (emails reales)'}`);
 console.log(`📧 Usando: ${emailProvider} para ${config.domain}`);
 
-// 🎲 SUBJECT TEMPLATES aleatorios
+// � Identidad del CEO + demo real de la plataforma
+const DEMO_ARTIST_NAME = 'REDWINE CONTROL';
+const DEMO_URL = 'https://www.boostifymusic.com/artist/control';
+const PLATFORM_URL = 'https://www.boostifymusic.com';
+
+// 🎲 SUBJECT TEMPLATES — directos, de negocio / alianza (CEO a la industria)
 const subjectTemplates = [
-  (lead) => `${lead.first_name}, been following ${lead.company_name || 'your work'} - wow`,
-  (lead) => `${lead.first_name}, finally reaching out`,
-  (lead) => `man ${lead.first_name}, what you're building is 🔥`,
-  (lead) => `${lead.first_name} - your approach is different`,
-  (lead) => `${lead.first_name}, huge fan of what you do`,
-  (lead) => `been meaning to reach out ${lead.first_name}`,
-  (lead) => `${lead.first_name} - respect what you're doing`,
-  (lead) => `${lead.first_name}, had to say something`,
-  (lead) => `${lead.first_name} - can't believe we haven't connected`,
-  (lead) => `what you've built ${lead.first_name} 🔥`,
-  (lead) => `${lead.first_name}, quick thought`,
-  (lead) => `${lead.first_name} - been watching your work`,
-  (lead) => `hey ${lead.first_name}, finally writing`,
-  (lead) => `${lead.first_name}, this is overdue`,
-  (lead) => `${lead.first_name} - huge respect`
+  (lead) => `${lead.first_name}, a partnership idea for ${lead.company_name || 'your roster'}`,
+  (lead) => `${lead.first_name} — we bring the platform, you bring the artists`,
+  (lead) => `${lead.first_name}, CEO to ${lead.job_title ? lead.job_title.split(' ')[0] : 'CEO'} — worth 15 min?`,
+  (lead) => `Boostify × ${lead.company_name || 'you'}, ${lead.first_name}?`,
+  (lead) => `${lead.first_name}, see it from an artist's side (2-min demo)`,
+  (lead) => `${lead.first_name} — an alliance that actually makes sense`,
+  (lead) => `let's put your artists on this, ${lead.first_name}`,
+  (lead) => `${lead.first_name}, a direct proposal from Boostify`,
+  (lead) => `${lead.first_name} — building something ${lead.company_name || 'your artists'} will want`,
+  (lead) => `quick one ${lead.first_name}: strategic partnership`,
+  (lead) => `${lead.first_name}, the platform side of the deal`,
+  (lead) => `${lead.first_name} — ready when you are to talk partnership`,
 ];
 
-async function generateBody(lead) {
-  const prompt = `
-You are writing a WARM, PERSONAL email to someone in the music industry.
-Sound like you've been following their work and genuinely ADMIRE what they do.
+async function generateBody(lead, stage = 1) {
+  const isIndustry = USE_BREVO;
 
-Their info:
-- Name: ${lead.first_name} ${lead.last_name}
+  const stageGuidance = {
+    1: 'TOUCH 1 of 3 — break the ice and invite them to SEE the platform from an artist\'s perspective. Keep the ask tiny: just look at the demo.',
+    2: 'TOUCH 2 of 3 — they have seen (or heard of) the demo. Now make the CONCRETE alliance proposal: exactly what each side puts in, and propose a short call.',
+    3: 'TOUCH 3 of 3 — direct close. Assume mutual interest, remove friction, ask who handles partnerships on their side or propose a specific 15-min slot.',
+  }[stage] || 'TOUCH 1 of 3 — break the ice and invite them to see the demo.';
+
+  const audienceBlock = isIndustry
+    ? `You are writing to a DECISION-MAKER in the music industry (label, manager, A&R, publisher, distributor, agency).
+THE DEAL: Boostify provides the PLATFORM and technology (immersive artist profiles, AI tools, a 3D merch store, distribution and monetization). The partner brings ARTISTS, catalog and network. A clean win-win strategic alliance.`
+    : `You are writing to an ARTIST or their team.
+THE DEAL: Boostify provides the PLATFORM (a cinematic immersive profile, a 3D merch store, AI tools, distribution and monetization). They bring the music. Invite them to claim their space on the platform.`;
+
+  const prompt = `
+You are Neiver Alvarez, CEO and founder of Boostify Music (${PLATFORM_URL}).
+You are writing a real, direct, peer-to-peer email. You are a confident negotiator,
+not a fan. Be concrete and concise. No empty flattery, no buzzword salad.
+
+${audienceBlock}
+
+WHO YOU'RE WRITING TO:
+- Name: ${lead.first_name} ${lead.last_name || ''}
 - Role: ${lead.job_title || 'Music Professional'}
 - Company: ${lead.company_name || 'their company'}
-- Company Description: ${lead.company_description || 'N/A'}
 - Industry: ${lead.industry || 'Music'}
-- Location: ${lead.city || ''}, ${lead.state || ''}
+- Location: ${[lead.city, lead.state].filter(Boolean).join(', ') || 'N/A'}
 
-🎯 TONE: Like reaching out to someone you've admired from afar
+THIS EMAIL IS: ${stageGuidance}
 
-FLATTERY STRATEGY based on role:
-- IF ARTIST: Compliment their music, sound, artistic vision, growth
-- IF MANAGER/EXEC: Praise their business acumen, how they support artists
-- IF FOUNDER: Respect what they've built, their vision for the industry
+HOW TO WRITE IT:
+1. Open with ONE specific line about THEM or their company (not generic praise).
+2. State the alliance in ONE concrete line: "we put the platform, you bring the artists" (adapt naturally).
+3. ${stage === 1
+      ? `Invite them to see it from an artist's point of view — point to ${DEMO_ARTIST_NAME}: ${DEMO_URL}`
+      : `Only mention the demo if it flows naturally: ${DEMO_URL}`}
+4. Close with ONE direct, low-friction question (a 15-min call, or "who handles partnerships on your side?").
 
-Write a SHORT email (3-4 sentences max) that:
-1. START with a genuine compliment - something specific about them or their company
-2. Make them feel RECOGNIZED and SPECIAL
-3. Show you understand their world and challenges
-4. Ask ONE casual question that invites conversation
-5. Sign off like you're already friends
-
-Rules:
-- NO HTML, just plain text
-- NO links
-- NO sales pitch ever
-- Under 60 words
-- Make them FEEL GOOD about themselves
-
-Sign as: Alex
+RULES:
+- Plain text only. NO HTML.
+- 60-90 words, short paragraphs.
+- At most ONE url in the whole email (the demo link above).
+- Sound like a real founder closing a deal — direct and human.
+- Sign EXACTLY like this (two lines):
+Neiver Alvarez
+CEO, Boostify Music
 
 Return ONLY the email body, no subject line.
 `;
@@ -137,8 +151,8 @@ Return ONLY the email body, no subject line.
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 200,
-    temperature: 0.8
+    max_tokens: 320,
+    temperature: 0.75
   });
 
   return completion.choices[0].message.content.trim();
@@ -269,7 +283,7 @@ async function sendWarmupEmails() {
       console.log(`   Subject: ${subject}`);
 
       // Generar body con OpenAI
-      const body = await generateBody(lead);
+      const body = await generateBody(lead, nextStage);
       console.log(`   Body: ${body.substring(0, 50)}...`);
 
       // Enviar email

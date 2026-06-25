@@ -14,7 +14,7 @@ module.exports = {
   
   // Email
   fromEmail: 'info@boostifymusic.site',
-  fromName: 'Alex from Boostify',
+  fromName: 'Neiver Alvarez · Boostify Music',
   alternativeEmails: {
     artists: 'artists@boostifymusic.site',
     carlos: 'carlos@boostifymusic.site'

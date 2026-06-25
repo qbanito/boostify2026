@@ -15,7 +15,7 @@ module.exports = {
   
   // Email
   fromEmail: 'info@boostifymusic.site',
-  fromName: 'Alex from Boostify',
+  fromName: 'Neiver Alvarez · Boostify Music',
   resendEmail: 'rzofbevpsjqcakdzus@nespj.com',
   
   // APIs (desde variables de entorno)
