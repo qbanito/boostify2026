@@ -72,7 +72,9 @@ const AURORA_CSS = `
 @keyframes claimSpin{to{transform:rotate(360deg)}}
 @keyframes claimGrid{to{background-position:0 42px}}
 @keyframes claimRise{0%{transform:translateY(12px);opacity:0}15%{opacity:.6}85%{opacity:.6}100%{transform:translateY(-170px);opacity:0}}
-@media (prefers-reduced-motion:reduce){.claim-orb,.claim-sheen,.claim-grid,.claim-note{animation:none!important}}
+.claim-hero-img{will-change:transform;animation:claimZoom 20s ease-in-out infinite}
+@keyframes claimZoom{0%,100%{transform:scale(1.03)}50%{transform:scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.claim-orb,.claim-sheen,.claim-grid,.claim-note,.claim-hero-img{animation:none!important}}
 `;
 
 // Modern, Boostify-branded animated hero used when no real cover exists.
@@ -80,11 +82,14 @@ function BrandAurora() {
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0b0b0f]">
       <style>{AURORA_CSS}</style>
-      <div className="claim-orb claim-orb-1" />
-      <div className="claim-orb claim-orb-2" />
-      <div className="claim-orb claim-orb-3" />
+      <img
+        src="/images/signup-hero.png"
+        alt="Boostify Music"
+        className="claim-hero-img absolute inset-0 h-full w-full object-cover"
+        loading="eager"
+      />
+      <div className="absolute inset-0 mix-blend-overlay bg-gradient-to-tr from-[#7c5cff]/40 via-transparent to-[#ff2d95]/25" />
       <div className="claim-sheen" />
-      <div className="claim-grid" />
       <Music2 className="claim-note claim-note-1 h-5 w-5" />
       <Sparkles className="claim-note claim-note-2 h-4 w-4" />
       <Music2 className="claim-note claim-note-3 h-6 w-6" />
