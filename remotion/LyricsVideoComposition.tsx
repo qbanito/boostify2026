@@ -33,6 +33,69 @@ export interface LyricsSegment {
   words?: LyricsWord[];
 }
 
+/** All available lyric-video compositions (12 cinematic arrangements). */
+export type LyricsLayout =
+  | 'center'
+  | 'side'
+  | 'lower'
+  | 'top'
+  | 'minimal'
+  | 'left'
+  | 'karaoke'
+  | 'banner'
+  | 'spotlight'
+  | 'split'
+  | 'cover'
+  | 'stacked';
+
+/** Placement config that drives how the kinetic lyrics stage is positioned. */
+interface LyricPlacement {
+  vertical: 'center' | 'top' | 'bottom';
+  align: 'center' | 'left' | 'right';
+  context: boolean; // show ghost prev/next lines
+  sizeScale: number; // multiplier on the auto-fit active line size
+  band: boolean; // translucent rounded band behind the active line
+  maxWidth?: number;
+  area?: { left?: number; right?: number; top?: number; bottom?: number };
+}
+
+/** Distinct, animated background "engines". Each template gets its own so the
+ *  12 compositions look genuinely different (not all blurred the same way). */
+export type BgStyle =
+  | 'kenburns' // sharp slow zoom + pan, light cinematic grade
+  | 'bokeh' // soft dreamy blur (the only fully-blurred one)
+  | 'duotone' // brand-color duotone, beat-pulsing
+  | 'parallax' // 3 sliding vertical panels (depth)
+  | 'mirror' // mirrored kaleidoscope symmetry
+  | 'mosaic' // animated video-wall tile grid
+  | 'glitch' // RGB-split chromatic glitch
+  | 'cinematic' // teal/orange grade + letterbox push-in
+  | 'spotlight' // moving light reveal over a dark frame
+  | 'zoomburst' // scale punches on the beat
+  | 'panorama' // wide sharp horizontal pan
+  | 'filmstrip'; // hard diagonal wipe slideshow
+
+/** Per-layout recipe: which chrome to show + how to place the lyrics + which
+ *  animated background engine to use. */
+const LAYOUT_RECIPES: Record<
+  LyricsLayout,
+  { chip: boolean; cover: 'none' | 'full' | 'left' | 'circle-top'; bg: BgStyle; placement: LyricPlacement }
+> = {
+  center:    { chip: true,  cover: 'none',       bg: 'kenburns',  placement: { vertical: 'center', align: 'center', context: true,  sizeScale: 1,    band: false } },
+  side:      { chip: false, cover: 'none',       bg: 'bokeh',     placement: { vertical: 'center', align: 'center', context: true,  sizeScale: 1,    band: false } },
+  lower:     { chip: false, cover: 'none',       bg: 'cinematic', placement: { vertical: 'bottom', align: 'center', context: false, sizeScale: 0.78, band: true,  area: { bottom: 120 } } },
+  top:       { chip: true,  cover: 'none',       bg: 'panorama',  placement: { vertical: 'top',    align: 'center', context: true,  sizeScale: 0.92, band: false, area: { top: 150 } } },
+  minimal:   { chip: false, cover: 'none',       bg: 'spotlight', placement: { vertical: 'center', align: 'center', context: false, sizeScale: 1.08, band: false } },
+  left:      { chip: false, cover: 'none',       bg: 'parallax',  placement: { vertical: 'center', align: 'left',   context: true,  sizeScale: 0.95, band: false, maxWidth: 1200, area: { left: 110, right: 110 } } },
+  karaoke:   { chip: false, cover: 'none',       bg: 'duotone',   placement: { vertical: 'bottom', align: 'center', context: true,  sizeScale: 0.82, band: true,  area: { bottom: 90 } } },
+  banner:    { chip: false, cover: 'none',       bg: 'mosaic',    placement: { vertical: 'center', align: 'center', context: false, sizeScale: 0.9,  band: true } },
+  spotlight: { chip: false, cover: 'circle-top', bg: 'zoomburst', placement: { vertical: 'bottom', align: 'center', context: false, sizeScale: 0.8,  band: false, area: { bottom: 120 } } },
+  split:     { chip: false, cover: 'left',       bg: 'mirror',    placement: { vertical: 'center', align: 'left',   context: true,  sizeScale: 0.74, band: false, maxWidth: 920, area: { left: 920, right: 70 } } },
+  cover:     { chip: false, cover: 'full',       bg: 'kenburns',  placement: { vertical: 'bottom', align: 'center', context: false, sizeScale: 0.85, band: true,  area: { bottom: 130 } } },
+  stacked:   { chip: true,  cover: 'none',       bg: 'glitch',    placement: { vertical: 'center', align: 'left',   context: true,  sizeScale: 0.72, band: false, maxWidth: 1300, area: { left: 140, right: 140 } } },
+};
+
+
 export interface LyricsVideoProps {
   audioUrl: string;
   coverArt?: string;
@@ -48,8 +111,8 @@ export interface LyricsVideoProps {
   transitionEffect?: LyricsTransitionEffect;
   /** Visual style of the lyrics typography. Defaults to 'glow' (modern). */
   lyricStyle?: LyricStyle;
-  /** Layout of the lyrics: centered stage (modern) or side-by-side card. */
-  layout?: 'center' | 'side';
+  /** Layout / composition of the lyrics on screen. 12 cinematic arrangements. */
+  layout?: LyricsLayout;
   /** Pool of background images that rotate (cross-fade) behind the lyrics.
    *  Falls back to [coverArt] when empty. */
   backgroundImages?: string[];
@@ -384,11 +447,25 @@ const CenterLyrics: React.FC<{
   fps: number;
   preset: LyricStylePreset;
   audioPulse: number; // 0..1 reactive-ish energy for the glow
-}> = ({ segments, activeIdx, timeSec, accentColor, frame, fps, preset, audioPulse }) => {
+  placement?: LyricPlacement;
+}> = ({ segments, activeIdx, timeSec, accentColor, frame, fps, preset, audioPulse, placement }) => {
   const { r, g, b } = hexToRgb(accentColor);
   const active = activeIdx >= 0 ? segments[activeIdx] : null;
   const prev = activeIdx - 1 >= 0 ? segments[activeIdx - 1] : null;
   const next = activeIdx + 1 < segments.length ? segments[activeIdx + 1] : null;
+
+  // Placement (drives the 12 composition variants). Falls back to centered.
+  const place: LyricPlacement = placement ?? {
+    vertical: 'center',
+    align: 'center',
+    context: true,
+    sizeScale: 1,
+    band: false,
+  };
+  const alignItems = place.align === 'left' ? 'flex-start' : place.align === 'right' ? 'flex-end' : 'center';
+  const justifyContent = place.vertical === 'top' ? 'flex-start' : place.vertical === 'bottom' ? 'flex-end' : 'center';
+  const wordsJustify = place.align === 'left' ? 'flex-start' : place.align === 'right' ? 'flex-end' : 'center';
+  const textAlign = place.align as 'left' | 'right' | 'center';
 
   const tx = (s: string) => (preset.uppercase ? s.toUpperCase() : s);
 
@@ -400,8 +477,9 @@ const CenterLyrics: React.FC<{
   // Heuristic (render-safe, no DOM measurement): shrink as char count grows.
   const activeText = active ? (preset.uppercase ? active.text.toUpperCase() : active.text) : '';
   const activeChars = activeText.length;
-  const ACTIVE_SIZE = activeChars > 46 ? 58 : activeChars > 34 ? 70 : activeChars > 24 ? 82 : 96;
-  const SIDE_SIZE = 40;
+  const baseSize = activeChars > 46 ? 58 : activeChars > 34 ? 70 : activeChars > 24 ? 82 : 96;
+  const ACTIVE_SIZE = Math.round(baseSize * place.sizeScale);
+  const SIDE_SIZE = Math.round(40 * place.sizeScale);
 
   // Beat-driven punch applied to the whole active line.
   const linePunch = 1 + 0.022 * (audioPulse - 0.5);
@@ -442,10 +520,10 @@ const CenterLyrics: React.FC<{
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          justifyContent: 'center',
+          justifyContent: wordsJustify,
           alignItems: 'baseline',
           gap: '6px 20px',
-          maxWidth: 1500,
+          maxWidth: place.maxWidth ?? 1500,
           lineHeight: preset.lineHeight,
         }}
       >
@@ -535,8 +613,8 @@ const CenterLyrics: React.FC<{
           color: 'rgba(255,255,255,0.32)',
           letterSpacing: preset.letterSpacing,
           lineHeight: 1.25,
-          maxWidth: 1300,
-          textAlign: 'center',
+          maxWidth: place.maxWidth ?? 1300,
+          textAlign,
           transform: `translateY(${dir === 'up' ? -4 : 4}px)`,
           filter: 'blur(0.4px)',
         }}
@@ -546,25 +624,47 @@ const CenterLyrics: React.FC<{
     );
   };
 
+  // Translucent legibility band (used by subtitle/karaoke/cover layouts).
+  const bandStyle: React.CSSProperties = place.band
+    ? {
+        background: 'rgba(8,6,18,0.46)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: 26,
+        padding: '22px 46px',
+        border: `1px solid rgba(${r},${g},${b},0.22)`,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      }
+    : {};
+
   return (
     <div
       style={{
         position: 'absolute',
-        inset: 0,
+        left: place.area?.left ?? 0,
+        right: place.area?.right ?? 0,
+        top: place.area?.top ?? 0,
+        bottom: place.area?.bottom ?? 0,
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems,
+        justifyContent,
         gap: 34,
         padding: '0 90px',
-        textAlign: 'center',
+        textAlign,
       }}
     >
-      {sideLine(prev, 'up')}
-      <div style={{ minHeight: ACTIVE_SIZE * preset.lineHeight, transform: `scale(${linePunch})`, willChange: 'transform' }}>
+      {place.context ? sideLine(prev, 'up') : null}
+      <div
+        style={{
+          minHeight: ACTIVE_SIZE * preset.lineHeight,
+          transform: `scale(${linePunch})`,
+          willChange: 'transform',
+          ...bandStyle,
+        }}
+      >
         {renderActiveLine()}
       </div>
-      {sideLine(next, 'down')}
+      {place.context ? sideLine(next, 'down') : null}
     </div>
   );
 };
@@ -749,17 +849,175 @@ const DecorShapes: React.FC<{
   );
 };
 
-/** Unified cinematic background: interleaves artist photos (Ken-Burns) with
- *  gallery video clips, cross-fading between slots. Falls back gracefully when
- *  only photos (or nothing) are available. */
+/** Renders a single still photo with a chosen animated treatment. Pure helper
+ *  used by MediaBackground so every template can have its own look. */
+const StyledPhoto: React.FC<{
+  src: string;
+  bg: BgStyle;
+  t: number;
+  phase: number;
+  progress: number;
+  dir: number;
+  pulse: number;
+  a: { r: number; g: number; b: number };
+  s: { r: number; g: number; b: number };
+}> = ({ src, bg, t, phase, progress, dir, pulse, a, s }) => {
+  const cover: React.CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' };
+  const grade = 'brightness(0.86) contrast(1.07) saturate(1.16)';
+
+  switch (bg) {
+    case 'bokeh': {
+      const scale = 1.06 + progress * 0.14;
+      const dx = dir * (progress * 5 - 2.5);
+      return (
+        <Img src={src} style={{ ...cover, filter: 'blur(18px) brightness(0.58) saturate(1.35)', transform: `scale(${scale}) translate(${dx}%, 0)` }} />
+      );
+    }
+    case 'duotone': {
+      const p = 0.78 + 0.28 * pulse;
+      const scale = 1.04 + progress * 0.14;
+      return (
+        <>
+          <Img src={src} style={{ ...cover, filter: `grayscale(1) contrast(1.18) brightness(${p})`, transform: `scale(${scale})` }} />
+          <AbsoluteFill style={{ background: `linear-gradient(135deg, rgba(${a.r},${a.g},${a.b},0.92), rgba(${s.r},${s.g},${s.b},0.78))`, mixBlendMode: 'color' }} />
+          <AbsoluteFill style={{ background: `radial-gradient(circle at 50% 50%, rgba(${a.r},${a.g},${a.b},${0.16 + 0.18 * pulse}), transparent 60%)`, mixBlendMode: 'screen' }} />
+        </>
+      );
+    }
+    case 'parallax': {
+      const scale = 1.1 + progress * 0.1;
+      return (
+        <AbsoluteFill style={{ display: 'flex' }}>
+          {[0, 1, 2].map((si) => {
+            const ty = Math.sin(t * 0.32 * (1 + si * 0.5) + si * 1.7) * 3.5;
+            return (
+              <div key={si} style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+                <Img src={src} style={{ position: 'absolute', top: 0, left: `${-si * 100}%`, width: '300%', height: '100%', objectFit: 'cover', filter: grade, transform: `translateY(${ty}%) scale(${scale})` }} />
+              </div>
+            );
+          })}
+        </AbsoluteFill>
+      );
+    }
+    case 'mirror': {
+      const scale = 1.06 + progress * 0.12;
+      const drift = Math.sin(t * 0.4) * 2.5;
+      const half: React.CSSProperties = { position: 'absolute', inset: 0, width: '200%', height: '100%', objectFit: 'cover', filter: grade, transform: `scale(${scale}) translateX(${drift}%)` };
+      return (
+        <AbsoluteFill style={{ display: 'flex' }}>
+          <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+            <Img src={src} style={half} />
+          </div>
+          <div style={{ position: 'relative', flex: 1, overflow: 'hidden', transform: 'scaleX(-1)' }}>
+            <Img src={src} style={half} />
+          </div>
+        </AbsoluteFill>
+      );
+    }
+    case 'mosaic': {
+      return (
+        <AbsoluteFill style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'repeat(2,1fr)', gap: 6, background: '#000' }}>
+          {Array.from({ length: 6 }).map((_, ti) => {
+            const tp = 0.5 + 0.5 * Math.sin(t * 1.3 + ti * 0.9);
+            const sc = 1.02 + progress * 0.06 + 0.07 * tp;
+            return (
+              <div key={ti} style={{ position: 'relative', overflow: 'hidden' }}>
+                <Img src={src} style={{ ...cover, filter: grade, transform: `scale(${sc})`, opacity: 0.82 + 0.18 * tp }} />
+              </div>
+            );
+          })}
+        </AbsoluteFill>
+      );
+    }
+    case 'glitch': {
+      const scale = 1.05 + progress * 0.12;
+      const tick = Math.floor(t * 12);
+      const jit = tick % 5 === 0 ? noise2D('glitch', tick, dir) * 9 : 0;
+      return (
+        <>
+          <Img src={src} style={{ ...cover, filter: grade, transform: `scale(${scale})` }} />
+          <AbsoluteFill style={{ mixBlendMode: 'screen', transform: `translate(${7 + jit}px, ${jit * 0.4}px)`, opacity: 0.55 }}>
+            <Img src={src} style={{ ...cover, filter: 'sepia(1) hue-rotate(-55deg) saturate(7) brightness(1)' }} />
+          </AbsoluteFill>
+          <AbsoluteFill style={{ mixBlendMode: 'screen', transform: `translate(${-7 - jit}px, ${-jit * 0.4}px)`, opacity: 0.55 }}>
+            <Img src={src} style={{ ...cover, filter: 'sepia(1) hue-rotate(130deg) saturate(7) brightness(1)' }} />
+          </AbsoluteFill>
+          <AbsoluteFill style={{ background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.0) 0px, rgba(0,0,0,0.22) 2px, rgba(0,0,0,0.0) 4px)', opacity: 0.5 }} />
+        </>
+      );
+    }
+    case 'cinematic': {
+      const scale = 1.04 + progress * 0.11;
+      const dx = dir * (progress * 3 - 1.5);
+      return (
+        <>
+          <Img src={src} style={{ ...cover, filter: 'contrast(1.14) saturate(1.12) brightness(0.82)', transform: `scale(${scale}) translateX(${dx}%)` }} />
+          <AbsoluteFill style={{ background: 'linear-gradient(120deg, rgba(0,70,95,0.40), rgba(95,45,0,0.34))', mixBlendMode: 'soft-light' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '9%', background: '#000' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '9%', background: '#000' }} />
+        </>
+      );
+    }
+    case 'spotlight': {
+      const scale = 1.05 + progress * 0.1;
+      const sx = 50 + Math.sin(t * 0.5) * 24;
+      const sy = 46 + Math.cos(t * 0.42) * 18;
+      const mask = `radial-gradient(circle at ${sx}% ${sy}%, black 0%, black 20%, transparent 42%)`;
+      return (
+        <>
+          <Img src={src} style={{ ...cover, filter: 'brightness(0.34) contrast(1.12) saturate(1.05)', transform: `scale(${scale})` }} />
+          <AbsoluteFill style={{ WebkitMaskImage: mask, maskImage: mask }}>
+            <Img src={src} style={{ ...cover, filter: 'brightness(1.08) contrast(1.12) saturate(1.18)', transform: `scale(${scale})` }} />
+          </AbsoluteFill>
+          <AbsoluteFill style={{ background: `radial-gradient(circle at ${sx}% ${sy}%, rgba(${a.r},${a.g},${a.b},0.22) 0%, transparent 34%)`, mixBlendMode: 'screen' }} />
+        </>
+      );
+    }
+    case 'zoomburst': {
+      const base = 1.06 + progress * 0.1;
+      const burst = base + 0.12 * pulse;
+      const rot = Math.sin(t * 0.3) * 1.6;
+      return (
+        <>
+          <Img src={src} style={{ ...cover, filter: grade, transform: `scale(${burst}) rotate(${rot}deg)` }} />
+          <AbsoluteFill style={{ background: `radial-gradient(circle at 50% 50%, rgba(${a.r},${a.g},${a.b},${0.1 + 0.16 * pulse}) 0%, transparent 45%)`, mixBlendMode: 'screen' }} />
+        </>
+      );
+    }
+    case 'panorama': {
+      const px = interpolate(progress, [0, 1], [0, -26]) * dir;
+      return (
+        <Img src={src} style={{ position: 'absolute', top: 0, left: `${dir > 0 ? 0 : -28}%`, width: '128%', height: '100%', objectFit: 'cover', filter: grade, transform: `translateX(${px}%) scale(1.12)` }} />
+      );
+    }
+    case 'filmstrip':
+    case 'kenburns':
+    default: {
+      const scale = 1.05 + progress * 0.17;
+      const panX = dir * (progress * 4.5 - 2.25);
+      const panY = progress * 3 - 1.5;
+      return <Img src={src} style={{ ...cover, filter: grade, transform: `scale(${scale}) translate(${panX}%, ${panY}%)` }} />;
+    }
+  }
+};
+
+/** Unified cinematic background: interleaves artist photos with gallery video
+ *  clips, cross-fading between slots, and applies the per-template animated
+ *  treatment selected by `bgStyle`. Falls back gracefully when only photos (or
+ *  nothing) are available. */
 const MediaBackground: React.FC<{
   images: string[];
   videos: string[];
   frame: number;
   fps: number;
   accentColor: string;
-}> = ({ images, videos, frame, fps, accentColor }) => {
-  const { r, g, b } = hexToRgb(accentColor);
+  secondaryColor: string;
+  pulse: number;
+  bgStyle: BgStyle;
+}> = ({ images, videos, frame, fps, accentColor, secondaryColor, pulse, bgStyle }) => {
+  const a = hexToRgb(accentColor);
+  const s = hexToRgb(secondaryColor);
+  const { r, g, b } = a;
   const t = frame / fps;
 
   type Slot = { kind: 'image' | 'video'; src: string; hold: number };
@@ -774,7 +1032,8 @@ const MediaBackground: React.FC<{
   while (vi < videos.length) slots.push({ kind: 'video', src: videos[vi++], hold: 4 });
   if (slots.length === 0) return null;
 
-  const FADE = 1.3;
+  // Hard-cut style wipes fast; glitch snaps; everything else cross-fades.
+  const FADE = bgStyle === 'filmstrip' ? 0.45 : bgStyle === 'glitch' ? 0.4 : 1.2;
   const starts: number[] = [];
   let acc = 0;
   for (const sl of slots) {
@@ -796,56 +1055,58 @@ const MediaBackground: React.FC<{
         if (opacity <= 0.001) return null;
 
         const dir = i % 2 === 0 ? 1 : -1;
-        const scale = 1.06 + (phase / (slot.hold + FADE)) * 0.12;
-        const driftX = dir * interpolate(phase, [0, slot.hold + FADE], [-2, 2], {
-          extrapolateLeft: 'clamp',
-          extrapolateRight: 'clamp',
-        });
+        const progress = phase / (slot.hold + FADE);
 
-        const inner = (
-          <AbsoluteFill
-            style={{
-              filter: 'blur(14px) brightness(0.6) saturate(1.25)',
-              transform: `scale(${scale}) translate(${driftX}%, 0%)`,
-            }}
-          >
-            {slot.kind === 'image' ? (
-              <Img src={slot.src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <OffthreadVideo src={slot.src} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            )}
-          </AbsoluteFill>
-        );
+        // Diagonal hard-wipe entrance for the filmstrip engine.
+        let clipPath: string | undefined;
+        if (bgStyle === 'filmstrip') {
+          const w = phase < FADE ? phase / FADE : 1;
+          const edge = w * 150;
+          clipPath = `polygon(0 0, ${edge}% 0, ${edge - 30}% 100%, 0 100%)`;
+        }
 
-        // Videos must play from their own t=0 each time the slot appears: wrap
-        // in a Sequence offset so the clip's internal time = phase (constant
-        // `from` within a slot appearance, render-safe).
         if (slot.kind === 'video') {
+          // Videos keep a sharp Ken-Burns treatment (tiling/mirroring a live
+          // clip is too costly); still graded + moving.
           const fromFrame = frame - Math.round(phase * fps);
+          const scale = 1.06 + progress * 0.14;
+          const dx = dir * (progress * 4 - 2);
+          const vfilter = bgStyle === 'bokeh' ? 'blur(16px) brightness(0.6) saturate(1.3)' : 'brightness(0.84) contrast(1.06) saturate(1.15)';
           return (
-            <AbsoluteFill key={i} style={{ opacity }}>
+            <AbsoluteFill key={i} style={{ opacity, clipPath }}>
               <Sequence from={fromFrame} layout="none">
-                {inner}
+                <AbsoluteFill style={{ filter: vfilter, transform: `scale(${scale}) translate(${dx}%, 0)` }}>
+                  <OffthreadVideo src={slot.src} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </AbsoluteFill>
               </Sequence>
             </AbsoluteFill>
           );
         }
+
         return (
-          <AbsoluteFill key={i} style={{ opacity }}>
-            {inner}
+          <AbsoluteFill key={i} style={{ opacity, clipPath }}>
+            <StyledPhoto src={slot.src} bg={bgStyle} t={t} phase={phase} progress={progress} dir={dir} pulse={pulse} a={a} s={s} />
           </AbsoluteFill>
         );
       })}
 
-      {/* Legibility veils */}
+      {/* Legibility veils — lighter for sharp engines so the photo reads, the
+          lyrics carry their own shadow/band on top. */}
       <AbsoluteFill
         style={{
           background:
-            'linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.24) 38%, rgba(0,0,0,0.30) 64%, rgba(0,0,0,0.66) 100%)',
+            bgStyle === 'bokeh'
+              ? 'linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.24) 38%, rgba(0,0,0,0.30) 64%, rgba(0,0,0,0.66) 100%)'
+              : 'linear-gradient(180deg, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.08) 34%, rgba(0,0,0,0.14) 60%, rgba(0,0,0,0.52) 100%)',
         }}
       />
       <AbsoluteFill
-        style={{ background: 'radial-gradient(ellipse at 50% 48%, transparent 36%, rgba(0,0,0,0.42) 100%)' }}
+        style={{
+          background:
+            bgStyle === 'bokeh'
+              ? 'radial-gradient(ellipse at 50% 48%, transparent 36%, rgba(0,0,0,0.42) 100%)'
+              : 'radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(0,0,0,0.26) 100%)',
+        }}
       />
       <AbsoluteFill
         style={{ background: `linear-gradient(120deg, rgba(${r},${g},${b},0.12) 0%, transparent 55%)` }}
@@ -1000,6 +1261,150 @@ const OutroCard: React.FC<{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Layout chrome helpers (cover art arrangements + now-playing chip)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Now-playing chip with cover thumbnail + song title + artist. */
+const NowPlayingChip: React.FC<{
+  coverArt?: string;
+  songTitle: string;
+  artistName: string;
+  accentColor: string;
+  position?: 'top' | 'top-left';
+}> = ({ coverArt, songTitle, artistName, accentColor, position = 'top' }) => {
+  const { r, g, b } = hexToRgb(accentColor);
+  const posStyle: React.CSSProperties =
+    position === 'top-left'
+      ? { top: 56, left: 70 }
+      : { top: 56, left: '50%', transform: 'translateX(-50%)' };
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        ...posStyle,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '12px 26px',
+        borderRadius: 999,
+        background: 'rgba(0,0,0,0.35)',
+        border: `1px solid rgba(${r},${g},${b},0.45)`,
+        backdropFilter: 'blur(8px)',
+        boxShadow: `0 6px 30px rgba(0,0,0,0.45)`,
+      }}
+    >
+      {coverArt ? (
+        <Img src={coverArt} style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover' }} />
+      ) : null}
+      <div style={{ textAlign: 'left' }}>
+        <div style={{ color: '#fff', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>{songTitle}</div>
+        <div style={{ color: `rgba(${r},${g},${b},1)`, fontSize: 15, fontWeight: 600, marginTop: 2, letterSpacing: 1 }}>
+          {artistName}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Full-bleed cover artwork backdrop with a dark legibility veil. */
+const FullCoverBg: React.FC<{ src?: string; frame: number; fps: number }> = ({ src, frame, fps }) => {
+  if (!src) return null;
+  const t = frame / fps;
+  const scale = 1.08 + 0.05 * Math.sin(t * 0.12); // slow Ken-Burns breathing
+  return (
+    <AbsoluteFill style={{ overflow: 'hidden' }}>
+      <Img
+        src={src}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${scale})`, filter: 'brightness(0.7)' }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.55) 100%)',
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+/** Left-half cover panel (split layout) with a soft fade into the lyrics side. */
+const LeftCoverPanel: React.FC<{ src?: string; accentColor: string; frame: number; fps: number }> = ({
+  src,
+  accentColor,
+  frame,
+  fps,
+}) => {
+  if (!src) return null;
+  const { r, g, b } = hexToRgb(accentColor);
+  const t = frame / fps;
+  const scale = 1.06 + 0.04 * Math.sin(t * 0.1);
+  return (
+    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 840, overflow: 'hidden' }}>
+      <Img
+        src={src}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${scale})` }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: `linear-gradient(to right, rgba(0,0,0,0.15), rgba(8,6,18,0.0) 55%, rgba(8,6,18,1) 100%)`,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: 4,
+          background: `linear-gradient(to bottom, transparent, rgba(${r},${g},${b},0.6), transparent)`,
+        }}
+      />
+    </div>
+  );
+};
+
+/** Large circular cover near the top-center (spotlight layout). */
+const CircleCoverTop: React.FC<{ src?: string; accentColor: string; frame: number; fps: number }> = ({
+  src,
+  accentColor,
+  frame,
+  fps,
+}) => {
+  if (!src) return null;
+  const { r, g, b } = hexToRgb(accentColor);
+  const t = frame / fps;
+  const float = Math.sin(t * 0.8) * 8;
+  const spin = (t * 6) % 360;
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 140,
+        left: '50%',
+        transform: `translateX(-50%) translateY(${float}px)`,
+      }}
+    >
+      <div
+        style={{
+          width: 360,
+          height: 360,
+          borderRadius: '50%',
+          overflow: 'hidden',
+          boxShadow: `0 0 0 5px rgba(${r},${g},${b},0.5), 0 30px 90px rgba(0,0,0,0.6), 0 0 90px rgba(${r},${g},${b},0.4)`,
+        }}
+      >
+        <Img
+          src={src}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `rotate(${spin}deg)` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Composition
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1031,6 +1436,9 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
 
   // Resolve the lyric typography preset (font + animation flavor + glow).
   const preset = resolveLyricPreset(lyricStyle);
+
+  // Resolve the composition recipe (one of 12 cinematic arrangements).
+  const recipe = LAYOUT_RECIPES[layout] ?? LAYOUT_RECIPES.center;
 
   // Secondary brand color (aurora gradient). Falls back to the accent.
   const isHex = (c?: string) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
@@ -1114,6 +1522,9 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
           frame={frame}
           fps={fps}
           accentColor={accentColor}
+          secondaryColor={secondary}
+          pulse={audioPulse}
+          bgStyle={recipe.bg}
         />
       ) : null}
 
@@ -1185,42 +1596,28 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
         </>
       )}
 
-      {/* ── CENTER layout (modern default): big centered kinetic lyrics ── */}
-      {layout === 'center' && (
+      {/* ── CENTER-family layouts (all non-side compositions) ── */}
+      {layout !== 'side' && (
         <>
-          {/* Now-playing chip with the song title + artist */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 56,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-              padding: '12px 26px',
-              borderRadius: 999,
-              background: 'rgba(0,0,0,0.35)',
-              border: `1px solid rgba(${r},${g},${b},0.45)`,
-              backdropFilter: 'blur(8px)',
-              boxShadow: `0 6px 30px rgba(0,0,0,0.45)`,
-            }}
-          >
-            {coverArt ? (
-              <Img
-                src={coverArt}
-                style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover' }}
-              />
-            ) : null}
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ color: '#fff', fontSize: 22, fontWeight: 800, letterSpacing: 0.2 }}>
-                {songTitle}
-              </div>
-              <div style={{ color: `rgba(${r},${g},${b},1)`, fontSize: 15, fontWeight: 600, marginTop: 2, letterSpacing: 1 }}>
-                {artistName}
-              </div>
-            </div>
-          </div>
+          {/* Optional cover-art chrome per recipe */}
+          {recipe.cover === 'full' && <FullCoverBg src={coverArt} frame={frame} fps={fps} />}
+          {recipe.cover === 'left' && (
+            <LeftCoverPanel src={coverArt} accentColor={accentColor} frame={frame} fps={fps} />
+          )}
+          {recipe.cover === 'circle-top' && (
+            <CircleCoverTop src={coverArt} accentColor={accentColor} frame={frame} fps={fps} />
+          )}
+
+          {/* Now-playing chip (only for recipes that want it) */}
+          {recipe.chip && (
+            <NowPlayingChip
+              coverArt={coverArt}
+              songTitle={songTitle}
+              artistName={artistName}
+              accentColor={accentColor}
+              position={layout === 'stacked' ? 'top-left' : 'top'}
+            />
+          )}
 
           {activeIdx >= 0 && (
             <CenterLyrics
@@ -1232,6 +1629,7 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
               fps={fps}
               preset={preset}
               audioPulse={audioPulse}
+              placement={recipe.placement}
             />
           )}
         </>
@@ -1242,7 +1640,7 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
         <div
           style={{
             position: 'absolute',
-            ...(layout === 'center'
+            ...(layout !== 'side'
               ? { left: 0, right: 0, textAlign: 'center' as const }
               : { left: 620, right: 60 }),
             top: '50%',

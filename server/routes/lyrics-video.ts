@@ -499,7 +499,22 @@ const renderSchema = z.object({
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#7c3aed'),
   fontFamily: z.string().default('Inter'),
   lyricStyle: z.enum(['glow', 'kinetic', 'neon', 'elegant', 'bold', 'clean', 'auto']).default('auto'),
-  layout: z.enum(['center', 'side']).default('center'),
+  layout: z
+    .enum([
+      'center',
+      'side',
+      'lower',
+      'top',
+      'minimal',
+      'left',
+      'karaoke',
+      'banner',
+      'spotlight',
+      'split',
+      'cover',
+      'stacked',
+    ])
+    .default('center'),
   showProgressBar: z.boolean().default(true),
   showWatermark: z.boolean().default(true),
 });

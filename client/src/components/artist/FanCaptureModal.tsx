@@ -2,6 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Zap, Star, Music2, Bell } from 'lucide-react';
 import { apiRequest } from '../../lib/queryClient';
+import { useAudioPlayer } from '../../contexts/audio-player-context';
 
 interface FanCaptureModalProps {
   artistId: number;
@@ -68,10 +69,32 @@ export function FanCaptureModal({
     accentGlow: hexToRgba(accent, 0.3),
   };
 
+  // Live audio player state — used to surface the modal after the visitor has
+  // genuinely listened to a song for a while (not just sat on the page).
+  const { currentTrack, isPlaying } = useAudioPlayer();
+  const isPlayingRef = useRef(isPlaying);
+  const trackRef = useRef(currentTrack);
+  isPlayingRef.current = isPlaying;
+  trackRef.current = currentTrack;
+  const listenedRef = useRef(0);
+
   useEffect(() => {
     if (localStorage.getItem(storageKey)) return;
-    timerRef.current = setTimeout(() => setVisible(true), 12000);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    // Show the modal once the visitor has actually been listening to a song
+    // for ~30 seconds (cumulative real playback time, only counted while a
+    // track is playing). Robust to seeking and song changes.
+    const TRIGGER_SECONDS = 30;
+    const interval = setInterval(() => {
+      if (isPlayingRef.current && trackRef.current) {
+        listenedRef.current += 1;
+        if (listenedRef.current >= TRIGGER_SECONDS) {
+          setVisible(true);
+          clearInterval(interval);
+        }
+      }
+    }, 1000);
+    timerRef.current = interval;
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [storageKey]);
 
   const handleClose = () => {

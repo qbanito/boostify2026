@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Trash2, TrendingUp, ShoppingBag,
 } from 'lucide-react';
 import { LyricsVideoComposition } from '../../../../remotion/LyricsVideoComposition';
-import type { LyricsVideoProps, LyricsSegment } from '../../../../remotion/LyricsVideoComposition';
+import type { LyricsVideoProps, LyricsSegment, LyricsLayout } from '../../../../remotion/LyricsVideoComposition';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -83,19 +83,36 @@ const FONT_OPTIONS = [
   { label: 'Josefin Sans', value: 'Josefin Sans' },
 ];
 
-// Estilos de letra modernos para el video lírico (mapeados a presets de
-// tipografía + animación en remotion/lyric-fonts.ts).
+// Modern lyric styles for the lyric video (mapped to typography + animation
+// presets in remotion/lyric-fonts.ts).
 const LYRIC_STYLE_OPTIONS = [
-  { value: 'auto', label: 'Auto (por género)', desc: 'Elige el estilo ideal según tu música', emoji: '✨' },
-  { value: 'glow', label: 'Glow', desc: 'Moderno y luminoso (Outfit)', emoji: '🌟' },
-  { value: 'kinetic', label: 'Kinetic', desc: 'Dinámico palabra a palabra (Sora)', emoji: '⚡' },
-  { value: 'neon', label: 'Neon Club', desc: 'Impacto electrónico (Unbounded)', emoji: '🔮' },
-  { value: 'elegant', label: 'Elegante', desc: 'Serif refinada (Playfair)', emoji: '🕊️' },
-  { value: 'bold', label: 'Bold Urbano', desc: 'Fuerte tipo trap/rap (Anton)', emoji: '🔥' },
-  { value: 'clean', label: 'Clean', desc: 'Minimalista nítido (Montserrat)', emoji: '◻️' },
+  { value: 'auto', label: 'Auto (by genre)', desc: 'Picks the ideal style for your music', emoji: '✨' },
+  { value: 'glow', label: 'Glow', desc: 'Modern and luminous (Outfit)', emoji: '🌟' },
+  { value: 'kinetic', label: 'Kinetic', desc: 'Dynamic word by word (Sora)', emoji: '⚡' },
+  { value: 'neon', label: 'Neon Club', desc: 'Electronic impact (Unbounded)', emoji: '🔮' },
+  { value: 'elegant', label: 'Elegant', desc: 'Refined serif (Playfair)', emoji: '🕊️' },
+  { value: 'bold', label: 'Urban Bold', desc: 'Strong trap/rap vibe (Anton)', emoji: '🔥' },
+  { value: 'clean', label: 'Clean', desc: 'Crisp minimalist (Montserrat)', emoji: '◻️' },
 ] as const;
 
 type LyricStyleValue = (typeof LYRIC_STYLE_OPTIONS)[number]['value'];
+
+// Lyric video compositions / layouts (12 cinematic arrangements).
+// Each one repositions the lyrics + cover art differently.
+const LAYOUT_OPTIONS: { value: LyricsLayout; label: string; desc: string; emoji: string }[] = [
+  { value: 'center', label: 'Centered', desc: 'Big lyrics in the center', emoji: '🎯' },
+  { value: 'side', label: 'Classic', desc: 'Cover art + karaoke list', emoji: '💿' },
+  { value: 'lower', label: 'Subtitles', desc: 'Cinema-style bottom band', emoji: '🎬' },
+  { value: 'top', label: 'Headline', desc: 'Lyrics anchored at the top', emoji: '⬆️' },
+  { value: 'minimal', label: 'Minimal', desc: 'One line, no chrome', emoji: '◻️' },
+  { value: 'left', label: 'Left', desc: 'Left-aligned lyrics', emoji: '⬅️' },
+  { value: 'karaoke', label: 'Karaoke', desc: 'Current line + next', emoji: '🎤' },
+  { value: 'banner', label: 'Banner', desc: 'Translucent center band', emoji: '🏷️' },
+  { value: 'spotlight', label: 'Spotlight', desc: 'Circular cover + lyric', emoji: '🔦' },
+  { value: 'split', label: 'Split', desc: 'Cover left + lyrics right', emoji: '🪟' },
+  { value: 'cover', label: 'Full Cover', desc: 'Full-screen cover art', emoji: '🖼️' },
+  { value: 'stacked', label: 'Stacked', desc: 'Side-scrolling list', emoji: '📜' },
+];
 
 
 // Safe JSON — the dev server restarts (tsx watch) and proxies (502/504) can
@@ -385,7 +402,7 @@ interface StyleOptions {
   accentColor: string;
   fontFamily: string;
   lyricStyle: LyricStyleValue;
-  layout: 'center' | 'side';
+  layout: LyricsLayout;
   showProgressBar: boolean;
   showWatermark: boolean;
 }
@@ -402,7 +419,7 @@ const Step2Preview: React.FC<Step2Props> = ({
   const [accentColor, setAccentColor] = useState('#7c3aed');
   const [fontFamily, setFontFamily] = useState('Inter');
   const [lyricStyle, setLyricStyle] = useState<LyricStyleValue>('auto');
-  const [layout, setLayout] = useState<'center' | 'side'>('center');
+  const [layout, setLayout] = useState<LyricsLayout>('center');
   const [showProgressBar, setShowProgressBar] = useState(true);
   const [showWatermark, setShowWatermark] = useState(true);
   const [editingSegments, setEditingSegments] = useState<LyricsSegment[]>(transcription.segments);
@@ -412,8 +429,8 @@ const Step2Preview: React.FC<Step2Props> = ({
   const durationSecs = transcription.duration || 180;
   const durationFrames = Math.ceil(durationSecs * 30) + 30;
 
-  // En el preview 'auto' no resuelve género (eso lo hace el server) → usamos
-  // 'glow' como representación visual por defecto.
+  // In the preview 'auto' doesn't resolve the genre (the server does) → we use
+  // 'glow' as the default visual representation.
   const previewLyricStyle = lyricStyle === 'auto' ? 'glow' : lyricStyle;
 
   const compositionProps: LyricsVideoProps = {
@@ -520,10 +537,10 @@ const Step2Preview: React.FC<Step2Props> = ({
           </select>
         </div>
 
-        {/* Estilo de letra (tipografía + animación modernas) */}
+        {/* Lyric style (modern typography + animation) */}
         <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700 md:col-span-2">
           <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">
-            Estilo de letra ✨
+            Lyric Style ✨
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {LYRIC_STYLE_OPTIONS.map(s => (
@@ -545,14 +562,13 @@ const Step2Preview: React.FC<Step2Props> = ({
           </div>
         </div>
 
-        {/* Composición / layout */}
-        <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700">
-          <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">Composición</label>
-          <div className="grid grid-cols-2 gap-2">
-            {([
-              { value: 'center', label: 'Centrado', desc: 'Letras grandes al centro' },
-              { value: 'side', label: 'Clásico', desc: 'Portada + lista' },
-            ] as const).map(l => (
+        {/* Composition / layout */}
+        <div className="bg-zinc-800/60 rounded-xl p-4 border border-zinc-700 md:col-span-2">
+          <label className="block text-xs font-medium text-zinc-400 mb-3 uppercase tracking-wider">
+            Composition — {LAYOUT_OPTIONS.length} styles
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {LAYOUT_OPTIONS.map(l => (
               <button
                 key={l.value}
                 onClick={() => setLayout(l.value)}
@@ -562,7 +578,9 @@ const Step2Preview: React.FC<Step2Props> = ({
                     : 'border-zinc-600 bg-zinc-700/40 hover:border-zinc-500'
                 }`}
               >
-                <div className="text-sm font-semibold text-white">{l.label}</div>
+                <div className="text-sm font-semibold text-white flex items-center gap-1">
+                  <span>{l.emoji}</span>{l.label}
+                </div>
                 <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">{l.desc}</div>
               </button>
             ))}
@@ -700,7 +718,7 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
   const [ytUploading, setYtUploading] = useState(false);
   const [ytError, setYtError] = useState('');
 
-  // Tendencias de búsqueda reales (autocompletado de YouTube/Google) para este tema.
+  // Real search trends (YouTube/Google autocomplete) for this track.
   const [trends, setTrends] = useState<string[]>([]);
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
@@ -871,11 +889,11 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
                   className="text-violet-400 ml-1">developers.google.com/oauthplayground</a>.
               </p>
 
-              {/* Tendencias de búsqueda reales (YouTube/Google autocomplete) */}
+              {/* Real search trends (YouTube/Google autocomplete) */}
               <div className="bg-zinc-900/60 rounded-xl p-3 border border-zinc-700/70 space-y-2">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-white">Tendencias de búsqueda</span>
+                  <span className="text-xs font-semibold text-white">Search trends</span>
                   <button
                     type="button"
                     onClick={fetchTrends}
@@ -883,11 +901,11 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
                     className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-50"
                   >
                     {trendsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    {trendsLoaded ? 'Actualizar' : 'Detectar'}
+                    {trendsLoaded ? 'Refresh' : 'Detect'}
                   </button>
                 </div>
                 <p className="text-[11px] text-zinc-500">
-                  Lo que la gente busca ahora mismo en YouTube/Google. Toca una para añadirla a la descripción.
+                  What people are searching right now on YouTube/Google. Tap one to add it to the description.
                 </p>
                 {trends.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
@@ -897,7 +915,7 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
                         type="button"
                         onClick={() => addTrendKeyword(t)}
                         className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-[11px] hover:bg-emerald-500/20 transition-colors"
-                        title="Añadir a la descripción"
+                        title="Add to description"
                       >
                         {t}
                       </button>
@@ -905,7 +923,7 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
                   </div>
                 ) : trendsLoaded && !trendsLoading ? (
                   <p className="text-[11px] text-zinc-500">
-                    Sin tendencias para este término todavía. Igual aplicamos keywords del género al publicar.
+                    No trends for this term yet. We'll still apply genre keywords when publishing.
                   </p>
                 ) : null}
               </div>
@@ -973,7 +991,7 @@ const Step3Render: React.FC<Step3Props> = ({ jobId, styleOpts, songTitle, artist
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Album Autopilot — genera lyric videos de TODO el álbum en 2do plano
+// Album Autopilot — generates lyric videos for the WHOLE album in the background
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AlbumSongEntry {
@@ -1021,7 +1039,7 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
   const eligible = songs.filter((s) => !!s.audioUrl);
   const queryClient = useQueryClient();
 
-  // Estado de conexión de YouTube del artista
+  // Artist's YouTube connection status
   const { data: yt, refetch: refetchYt } = useQuery<YtConnection>({
     queryKey: ['ytConnection'],
     queryFn: async () => {
@@ -1050,8 +1068,8 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
     } catch { alert('Could not connect to YouTube'); }
   };
 
-  // YouTube no permite CREAR canales por API: abrimos el conmutador de canales de
-  // Google para que el artista cree uno nuevo y luego lo conecte aquí.
+  // YouTube doesn't allow CREATING channels via API: we open Google's channel
+  // switcher so the artist can create a new one and then connect it here.
   const createNewChannel = () => {
     window.open('https://www.youtube.com/channel_switcher', '_blank', 'noopener');
   };
@@ -1065,7 +1083,7 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
     },
   });
 
-  // ── Google Merchant Center: estado + conectar + sincronizar productos ──
+  // ── Google Merchant Center: status + connect + sync products ──
   const { data: merchant, refetch: refetchMerchant } = useQuery<any>({
     queryKey: ['merchantStatus', artistId],
     queryFn: async () => {
@@ -1080,8 +1098,8 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
       const res = await fetch(`/api/merchant/connect${artistId ? `?artistId=${artistId}` : ''}`, { credentials: 'include' });
       const data = await readJsonSafe<{ authUrl?: string; error?: string }>(res);
       if (data?.authUrl) window.open(data.authUrl, '_blank', 'noopener');
-      else alert(data?.error || 'No se pudo iniciar la conexión con Merchant Center');
-    } catch { alert('No se pudo conectar con Merchant Center'); }
+      else alert(data?.error || 'Could not start the Merchant Center connection');
+    } catch { alert('Could not connect to Merchant Center'); }
   };
 
   const syncMerchantMutation = useMutation({
@@ -1093,7 +1111,7 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
         body: JSON.stringify({ artistId }),
       });
       const data = await readJsonSafe<any>(res);
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'No se pudo sincronizar');
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Could not sync');
       return data;
     },
     onSuccess: () => refetchMerchant(),
@@ -1108,12 +1126,12 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
       return data;
     },
     onSuccess: () => {
-      // Reabre el polling del estado (se había detenido al quedar 'failed').
+      // Reopen the status polling (it had stopped once it went 'failed').
       queryClient.invalidateQueries({ queryKey: ['lyricsAlbumStatus', albumId] });
     },
   });
 
-  // Reconecta con un álbum en proceso al recargar la página
+  // Reconnect to an in-progress album when the page reloads
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1259,19 +1277,19 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
           </span>
         </div>
 
-        {/* Google Merchant Center: vender el merch de la tienda dentro de YouTube */}
+        {/* Google Merchant Center: sell the store's merch inside YouTube */}
         {artistId ? (
           <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
             <div className="flex items-center gap-2 flex-wrap">
               <ShoppingBag className="w-4 h-4 text-emerald-400 flex-shrink-0" />
               {merchant?.connected ? (
                 <span className="text-xs text-zinc-300">
-                  Merchant Center conectado{merchant?.merchantId ? <> · <span className="font-semibold text-white">ID {merchant.merchantId}</span></> : null}
-                  {typeof merchant?.active === 'number' ? <> · <span className="text-emerald-400">{merchant.active} activos</span>{merchant.pending ? `, ${merchant.pending} pendientes` : ''}{merchant.disapproved ? `, ${merchant.disapproved} rechazados` : ''}</> : null}
+                  Merchant Center connected{merchant?.merchantId ? <> · <span className="font-semibold text-white">ID {merchant.merchantId}</span></> : null}
+                  {typeof merchant?.active === 'number' ? <> · <span className="text-emerald-400">{merchant.active} active</span>{merchant.pending ? `, ${merchant.pending} pending` : ''}{merchant.disapproved ? `, ${merchant.disapproved} disapproved` : ''}</> : null}
                 </span>
               ) : (
                 <span className="text-xs text-zinc-300">
-                  Conecta tu tienda con <span className="font-semibold text-white">Google Merchant Center</span> para subir tu merch automáticamente y venderlo en YouTube y Google Shopping.
+                  Connect your store with <span className="font-semibold text-white">Google Merchant Center</span> to upload your merch automatically and sell it on YouTube and Google Shopping.
                 </span>
               )}
               <div className="ml-auto flex items-center gap-2">
@@ -1280,18 +1298,18 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
                     onClick={() => syncMerchantMutation.mutate()}
                     disabled={syncMerchantMutation.isPending}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5"
-                    title="Sube/actualiza tus productos en Google Merchant Center"
+                    title="Upload/update your products on Google Merchant Center"
                   >
                     {syncMerchantMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Sincronizar productos
+                    Sync products
                   </button>
                 ) : (
                   <button
                     onClick={connectMerchant}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
-                    title="Conecta tu cuenta de Google Merchant Center por OAuth"
+                    title="Connect your Google Merchant Center account via OAuth"
                   >
-                    <ShoppingBag className="w-3.5 h-3.5" /> Conectar automático
+                    <ShoppingBag className="w-3.5 h-3.5" /> Connect automatically
                   </button>
                 )}
                 <a
@@ -1299,9 +1317,9 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-semibold"
-                  title="Abrir la guía paso a paso (feed manual)"
+                  title="Open the step-by-step guide (manual feed)"
                 >
-                  Ver guía
+                  View guide
                 </a>
               </div>
             </div>
@@ -1424,7 +1442,7 @@ const AlbumAutopilot: React.FC<{ songs: Song[]; artistId?: number }> = ({ songs,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// My Videos — galería de lyric videos ya generados (vista del owner)
+// My Videos — gallery of already-generated lyric videos (owner view)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface MyVideoJob {
@@ -1459,7 +1477,7 @@ const MyVideosGallery: React.FC<{ refreshKey?: number; artistId?: number }> = ({
     refetchInterval: 15_000,
   });
 
-  // Estado de conexión de YouTube (se comparte por key con AlbumAutopilot).
+  // YouTube connection status (shared by key with AlbumAutopilot).
   const { data: yt } = useQuery<YtConnection>({
     queryKey: ['ytConnection'],
     queryFn: async () => {
