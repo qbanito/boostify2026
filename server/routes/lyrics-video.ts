@@ -538,6 +538,7 @@ function lyricStyleForGenre(genre?: string): 'glow' | 'kinetic' | 'neon' | 'eleg
 // yields the cover art.
 async function gatherBackgroundMedia(
   userId: number,
+  artistId?: number,
   coverArt?: string,
 ): Promise<{ images: string[]; videos: string[] }> {
   const images: string[] = [];
@@ -554,19 +555,28 @@ async function gatherBackgroundMedia(
 
   // Profile image (cheap, from the marketing context helper).
   try {
-    const ctx: any = await getArtistMarketingContext(userId);
+    const ctx: any = await getArtistMarketingContext(artistId || userId);
     pushImg(ctx?.profileImageUrl);
   } catch { /* optional */ }
 
   // Artist gallery photos + clips from Firestore image_galleries (skip our own
   // hologram output). Videos are flagged via img.isVideo or a video file URL.
+  // Galleries are saved with `userId` in several id formats (String/number of the
+  // pgId OR the artist id), so we query EVERY candidate id — mirroring the
+  // ImageGalleryDisplay component — otherwise most photos never reach the video.
   if (firestoreDb) {
     try {
       const ref = firestoreDb.collection('image_galleries');
-      const snaps = await Promise.all([
-        ref.where('userId', '==', String(userId)).get(),
-        ref.where('userId', '==', userId).get(),
-      ]);
+      const candidates = new Set<string | number>();
+      for (const raw of [userId, artistId]) {
+        if (raw === undefined || raw === null) continue;
+        candidates.add(String(raw));
+        const n = Number(raw);
+        if (!Number.isNaN(n)) candidates.add(n);
+      }
+      const snaps = await Promise.all(
+        Array.from(candidates).map((cid) => ref.where('userId', '==', cid).get()),
+      );
       const seen = new Set<string>();
       for (const snap of snaps) {
         snap.forEach((doc: any) => {
@@ -589,7 +599,7 @@ async function gatherBackgroundMedia(
     }
   }
 
-  return { images: images.slice(0, 8), videos: videos.slice(0, 3) };
+  return { images: images.slice(0, 16), videos: videos.slice(0, 4) };
 }
 
 router.post('/render', authenticate, async (req, res) => {
@@ -651,6 +661,7 @@ router.post('/render', authenticate, async (req, res) => {
     // Rotating background pool: cover + artist gallery photos AND video clips.
     const { images: backgroundImages, videos: backgroundVideos } = await gatherBackgroundMedia(
       userId,
+      job.artist_id ?? undefined,
       job.cover_art_url ?? undefined,
     );
 

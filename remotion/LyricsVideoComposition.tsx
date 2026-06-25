@@ -1453,7 +1453,7 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
       ? [coverArt]
       : []
     ).filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u));
-    return Array.from(new Set(pool)).slice(0, 8);
+    return Array.from(new Set(pool)).slice(0, 16);
   })();
 
   // Background video pool (artist gallery clips) — interleaved with the photos.
@@ -1461,7 +1461,7 @@ export const LyricsVideoComposition: React.FC<LyricsVideoProps> = ({
     const pool = (backgroundVideos || []).filter(
       (u): u is string => typeof u === 'string' && /^https?:\/\//.test(u),
     );
-    return Array.from(new Set(pool)).slice(0, 3);
+    return Array.from(new Set(pool)).slice(0, 4);
   })();
 
   // Musical pulse for the glow. Deterministic (render-safe, no audio decode):
