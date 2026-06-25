@@ -24,7 +24,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env.secrets') });
 
-const { sendWithBrevo, sendWithResend, getBestArtistProvider, recordSends, getBrevoQuota, REPLY_TO } = require('./email-smart-router.cjs');
+const { sendWithBrevo, sendWithResend, getBestArtistProvider, recordSends, getBrevoQuota, REPLY_TO, fetchContacts, markContacted, isMissingRelation } = require('./email-smart-router.cjs');
 
 // ─── Args ──────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2).reduce((acc, a) => {
@@ -41,9 +41,10 @@ const PREVIEW_MODE = args.preview === 'true';
 const PREVIEW_EMAIL = 'convoycubano@gmail.com';
 
 // ─── Database ──────────────────────────────────────────────────────────────────
-// Leads + email tracking → Supabase
+// Recipients + email tracking. Falls back to the main DB (DATABASE_URL) when the
+// legacy Supabase leads CRM is not configured.
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_CONNECTION_STRING,
+  connectionString: process.env.SUPABASE_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 // News articles → NeonDB (main app writes articles here via Drizzle)
@@ -321,17 +322,24 @@ async function fetchLeads(client, audience, limit) {
   }
   // 'all' = no filter
 
-  const res = await client.query(`
-    SELECT l.*, ls.id as status_id
-    FROM leads l
-    LEFT JOIN lead_status ls ON l.id = ls.lead_id
-    WHERE l.email IS NOT NULL
-      ${filter}
-      AND (ls.last_email_at IS NULL OR ls.last_email_at < NOW() - INTERVAL '4 days')
-    ORDER BY RANDOM()
-    LIMIT $1
-  `, [limit]);
-  return res.rows;
+  try {
+    const res = await client.query(`
+      SELECT l.*, ls.id as status_id
+      FROM leads l
+      LEFT JOIN lead_status ls ON l.id = ls.lead_id
+      WHERE l.email IS NOT NULL
+        ${filter}
+        AND (ls.last_email_at IS NULL OR ls.last_email_at < NOW() - INTERVAL '4 days')
+      ORDER BY RANDOM()
+      LIMIT $1
+    `, [limit]);
+    return res.rows;
+  } catch (err) {
+    if (!isMissingRelation(err)) throw err;
+    // Legacy `leads` CRM not present → use music_industry_contacts.
+    console.log('ℹ️  leads table not found — using music_industry_contacts');
+    return fetchContacts(pool, { audience, limit, cooldownDays: 4 });
+  }
 }
 
 // ─── Determine provider by audience ───────────────────────────────────────────
@@ -445,6 +453,9 @@ async function run() {
               UPDATE lead_status SET last_email_at = NOW(), emails_sent = COALESCE(emails_sent,0)+1 WHERE id = $1
             `, [lead.status_id]).catch(() => {});
           }
+
+          // Mark contact (music_industry_contacts cooldown + counters)
+          await markContacted(pool, lead.id);
         }
 
         if (sent < leads.length) {

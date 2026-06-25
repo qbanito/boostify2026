@@ -16,8 +16,8 @@ const secrets = {
   // OpenAI (compartido por todas las campañas)
   openai: process.env.OPENAI_API_KEY || '',
   
-  // Supabase
-  supabase: process.env.SUPABASE_CONNECTION_STRING || '',
+  // Supabase (falls back to the main DB when the legacy Supabase string is unset)
+  supabase: process.env.SUPABASE_CONNECTION_STRING || process.env.DATABASE_URL || '',
   
   // Brevo API (para todas las campañas - reemplaza Resend)
   brevo: {

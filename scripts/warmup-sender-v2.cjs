@@ -22,6 +22,7 @@ const { Pool } = require('pg');
 const OpenAI = require('openai');
 const { Resend } = require('resend');
 const loadCampaign = require('./campaigns/campaign-loader.cjs');
+const { fetchContacts, markContacted, isMissingRelation } = require('./email-smart-router.cjs');
 
 // Obtener campaña desde argumentos
 const campaignArg = process.argv[2] || 'ARTISTS_1';
@@ -156,6 +157,16 @@ async function sendWarmupEmails() {
 
   try {
     // 1. Verificar/crear config de warmup para este dominio
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS warmup_config (
+        domain TEXT PRIMARY KEY,
+        daily_limit INTEGER DEFAULT 20,
+        warmup_day INTEGER DEFAULT 1,
+        warmup_week INTEGER DEFAULT 1,
+        sent_today INTEGER DEFAULT 0,
+        last_reset DATE
+      )
+    `).catch(() => {});
     let configResult = await client.query(`
       SELECT * FROM warmup_config WHERE domain = $1
     `, [config.domain]);
@@ -185,7 +196,13 @@ async function sendWarmupEmails() {
       warmupConfig.sent_today = 0;
     }
 
-    const remaining = warmupConfig.daily_limit - warmupConfig.sent_today;
+    let remaining = warmupConfig.daily_limit - warmupConfig.sent_today;
+    // Optional --max=N cap (testing / rate control)
+    const maxArg = process.argv.find(a => a.startsWith('--max='));
+    if (maxArg) {
+      const capped = parseInt(maxArg.split('=')[1], 10);
+      if (!Number.isNaN(capped) && capped >= 0) remaining = Math.min(remaining, capped);
+    }
     console.log(`\n📊 LÍMITE DIARIO (${config.domain}):`);
     console.log(`   • Límite: ${warmupConfig.daily_limit}/día`);
     console.log(`   • Enviados hoy: ${warmupConfig.sent_today}`);
@@ -197,7 +214,9 @@ async function sendWarmupEmails() {
     }
 
     // 2. Obtener leads pendientes (filtrar por source/campaign si es necesario)
-    const leadsResult = await client.query(`
+    let leadsResult;
+    try {
+      leadsResult = await client.query(`
       SELECT l.*, ls.warmup_stage, ls.id as status_id
       FROM leads l
       JOIN lead_status ls ON l.id = ls.lead_id
@@ -207,6 +226,17 @@ async function sendWarmupEmails() {
       ORDER BY ls.warmup_stage ASC, l.created_at ASC
       LIMIT $1
     `, [remaining]);
+    } catch (err) {
+      if (!isMissingRelation(err)) throw err;
+      console.log('ℹ️  leads table not found — using music_industry_contacts');
+      const audience = config.id === 'INDUSTRY' ? 'industry' : 'artists';
+      const rows = (await fetchContacts(pool, {
+        audience,
+        limit: remaining,
+        cooldownDays: config.warmup.daysBetweenEmails || 2,
+      })).map(r => ({ ...r, warmup_stage: 0 }));
+      leadsResult = { rows };
+    }
 
     if (leadsResult.rows.length === 0) {
       console.log('\n✅ No hay leads pendientes de warmup');
@@ -289,25 +319,30 @@ async function sendWarmupEmails() {
         await client.query(`
           INSERT INTO email_sends (lead_id, resend_id, from_email, to_email, subject, body, email_type, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent')
-        `, [lead.id, messageId, config.fromEmail, toEmail, subject, body, emailType]);
+        `, [lead.id, messageId, config.fromEmail, toEmail, subject, body, emailType]).catch(() => {});
 
         // Actualizar lead_status
-        await client.query(`
-          UPDATE lead_status
-          SET status = 'warming',
-              warmup_stage = $1,
-              emails_sent = emails_sent + 1,
-              last_email_at = NOW(),
-              next_email_at = NOW() + INTERVAL '${config.warmup.daysBetweenEmails} days'
-          WHERE id = $2
-        `, [nextStage, lead.status_id]);
+        if (lead.status_id) {
+          await client.query(`
+            UPDATE lead_status
+            SET status = 'warming',
+                warmup_stage = $1,
+                emails_sent = emails_sent + 1,
+                last_email_at = NOW(),
+                next_email_at = NOW() + INTERVAL '${config.warmup.daysBetweenEmails} days'
+            WHERE id = $2
+          `, [nextStage, lead.status_id]).catch(() => {});
+        }
+
+        // Marcar contacto (music_industry_contacts cooldown + counters)
+        if (!PREVIEW_MODE) await markContacted(pool, lead.id);
 
         // Actualizar contador diario
         await client.query(`
           UPDATE warmup_config
           SET sent_today = sent_today + 1
           WHERE domain = $1
-        `, [config.domain]);
+        `, [config.domain]).catch(() => {});
 
         sent++;
         console.log(`   ✅ Enviado a ${toEmail}`);

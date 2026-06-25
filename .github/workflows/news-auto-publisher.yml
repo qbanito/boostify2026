@@ -51,6 +51,7 @@ jobs:
     env:
       OPENAI_API_KEY:              ${{ secrets.OPENAI_API_KEY }}
       SUPABASE_CONNECTION_STRING:  ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      DATABASE_URL:                ${{ secrets.DATABASE_URL }}
       BREVO_API_KEY:               ${{ secrets.BREVO_API_KEY }}
       FAL_KEY:                     ${{ secrets.FAL_KEY }}
       PREVIEW_EMAIL:               convoycubano@gmail.com

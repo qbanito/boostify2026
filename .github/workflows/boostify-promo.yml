@@ -61,6 +61,7 @@ jobs:
 
     env:
       SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
       # Resend accounts for artist rotation (4 accounts × 70/day safe limit = 280/day)
       RESEND_API_ARTISTS_1: ${{ secrets.RESEND_API_ARTISTS_1 }}

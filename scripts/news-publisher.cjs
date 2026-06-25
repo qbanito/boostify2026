@@ -29,6 +29,11 @@
 
 'use strict';
 
+// Load local env (.env) for local runs; in CI env vars are set directly.
+try {
+  require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+} catch (e) { /* dotenv unavailable — env vars set directly in CI */ }
+
 const { Pool } = require('pg');
 
 // ─── Parse CLI Arguments ──────────────────────────────────────────────────────
@@ -69,9 +74,9 @@ const CATEGORY_COLORS = {
   'artist-news':         '#f97316',
 };
 
-// ─── Database Pool ────────────────────────────────────────────────────────────
+// ─── Database Pool ──────────────────────────────────────────────────────
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_CONNECTION_STRING,
+  connectionString: process.env.SUPABASE_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
@@ -153,7 +158,7 @@ async function generateCoverImage(title) {
   }
 
   try {
-    const { default: fal } = await import('@fal-ai/client');
+    const { fal } = await import('@fal-ai/client');
     fal.config({ credentials: process.env.FAL_KEY });
 
     const result = await fal.subscribe('fal-ai/flux/schnell', {
@@ -216,7 +221,7 @@ async function storeArticle(client, article, coverImageUrl) {
     ) VALUES (
       $1, $2, $3, $4, $5,
       $6, $7, $8::text[], $9,
-      $10, $11, $12, $12, $12
+      $10, $11, $12, NOW(), NOW()
     )
     RETURNING id, slug
   `, [
@@ -473,10 +478,15 @@ async function main() {
         try {
           recipients = await getNewsletterRecipients(client, campaignId);
         } catch (err) {
-          // If query fails (missing column etc), fall back to all recent leads
-          console.warn('   ⚠️  newsletter_opt_in query failed, falling back to recent leads');
+          // leads table/columns missing on the consolidated DB — use music_industry_contacts
+          console.warn('   ⚠️  leads/newsletter query failed, falling back to music_industry_contacts');
           const fallback = await client.query(
-            `SELECT id, email, first_name, name FROM leads WHERE email IS NOT NULL ORDER BY created_at DESC LIMIT $1`,
+            `SELECT id, email, first_name, full_name AS name
+             FROM music_industry_contacts
+             WHERE email IS NOT NULL AND email <> ''
+               AND COALESCE(email_status, 'valid') NOT IN ('bounced', 'invalid', 'unsubscribed')
+             ORDER BY COALESCE(last_contacted_at, '1970-01-01'::timestamp) ASC, RANDOM()
+             LIMIT $1`,
             [MAX_RECIPS]
           );
           recipients = fallback.rows;

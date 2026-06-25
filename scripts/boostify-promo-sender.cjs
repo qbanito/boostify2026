@@ -18,7 +18,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env.secrets') });
 
-const { sendWithBrevo, sendWithResend, getBestArtistProvider, recordSends, getBrevoQuota, REPLY_TO } = require('./email-smart-router.cjs');
+const { sendWithBrevo, sendWithResend, getBestArtistProvider, recordSends, getBrevoQuota, REPLY_TO, fetchContacts, markContacted, isMissingRelation } = require('./email-smart-router.cjs');
 
 // ─── Parse Args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2).reduce((acc, arg) => {
@@ -35,7 +35,7 @@ const TARGET = args.target || 'artists'; // 'artists' | 'industry'
 
 // ─── Database ──────────────────────────────────────────────────────────────────
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_CONNECTION_STRING,
+  connectionString: process.env.SUPABASE_CONNECTION_STRING || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
@@ -459,19 +459,29 @@ async function run() {
       ? `AND (l.source IN ('linkedin_scrape','industry_contact','csv_import') OR l.job_title IS NOT NULL)`
       : `AND (l.source IN ('apify_leads','csv_import','manual') OR l.industry IS NULL OR l.industry ILIKE '%music%' OR l.industry ILIKE '%artist%')`;
 
-    const res = await client.query(`
-      SELECT l.*, ls.id as status_id, ls.emails_sent, ls.last_email_at
-      FROM leads l
-      LEFT JOIN lead_status ls ON l.id = ls.lead_id
-      WHERE l.email IS NOT NULL
-        AND l.unsubscribed IS NOT TRUE
-        ${segmentFilter}
-        AND (ls.last_email_at IS NULL OR ls.last_email_at < NOW() - INTERVAL '5 days')
-      ORDER BY RANDOM()
-      LIMIT $1
-    `, [effectiveMax]);
-
-    const leads = res.rows;
+    let leads;
+    try {
+      const res = await client.query(`
+        SELECT l.*, ls.id as status_id, ls.emails_sent, ls.last_email_at
+        FROM leads l
+        LEFT JOIN lead_status ls ON l.id = ls.lead_id
+        WHERE l.email IS NOT NULL
+          AND l.unsubscribed IS NOT TRUE
+          ${segmentFilter}
+          AND (ls.last_email_at IS NULL OR ls.last_email_at < NOW() - INTERVAL '5 days')
+        ORDER BY RANDOM()
+        LIMIT $1
+      `, [effectiveMax]);
+      leads = res.rows;
+    } catch (err) {
+      if (!isMissingRelation(err)) throw err;
+      console.log('ℹ️  leads table not found — using music_industry_contacts');
+      leads = await fetchContacts(pool, {
+        audience: TARGET === 'industry' ? 'industry' : 'artists',
+        limit: effectiveMax,
+        cooldownDays: 5,
+      });
+    }
     console.log(`\n📋 Leads disponibles: ${leads.length}`);
 
     if (!leads.length) {
@@ -510,6 +520,9 @@ async function run() {
               WHERE id = $1
             `, [lead.status_id]).catch(() => {});
           }
+
+          // Mark contact (music_industry_contacts cooldown + counters)
+          await markContacted(pool, lead.id);
         }
 
         if (sent < leads.length) {

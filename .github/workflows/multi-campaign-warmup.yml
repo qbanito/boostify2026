@@ -61,6 +61,7 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
       # Smart limits (via email-smart-router.cjs):
       #   BREVO (INDUSTRY):   300/day hard → safe max 200/day

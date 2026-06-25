@@ -246,6 +246,79 @@ async function sendWithResend({ to, subject, html, apiKey, fromEmail, fromName }
   }
 }
 
+/**
+ * 📇 RESILIENT RECIPIENT FETCH
+ *
+ * The original campaigns queried a `leads` + `lead_status` CRM (Supabase).
+ * That table no longer exists on the consolidated DB — the real outreach
+ * audience lives in `music_industry_contacts`. This helper queries that table
+ * with a lead-compatible shape so all senders keep working.
+ *
+ * @param {object} pool - pg Pool
+ * @param {{ audience?: 'all'|'artists'|'industry'|'investors', limit?: number, cooldownDays?: number }} opts
+ * @returns {Promise<Array>} rows: { id, email, first_name, last_name, name, company_name, job_title, industry, country, source, last_email_at, emails_sent, status_id }
+ */
+async function fetchContacts(pool, { audience = 'all', limit = 40, cooldownDays = 4 } = {}) {
+  const client = await pool.connect();
+  try {
+    let filter = '';
+    if (audience === 'industry') {
+      filter = `AND (job_title IS NOT NULL OR seniority_level IS NOT NULL OR company_name IS NOT NULL)`;
+    } else if (audience === 'investors') {
+      filter = `AND (LOWER(COALESCE(industry,'') || ' ' || COALESCE(job_title,'') || ' ' || COALESCE(category,'') || ' ' || COALESCE(keywords,'')) ~ 'invest|venture|capital|angel|fund')`;
+    } else if (audience === 'artists') {
+      filter = `AND (industry IS NULL OR LOWER(COALESCE(industry,'') || ' ' || COALESCE(category,'') || ' ' || COALESCE(keywords,'')) ~ 'music|artist|entertain|record|label|sound|audio')`;
+    }
+    const res = await client.query(`
+      SELECT id, email, first_name, last_name,
+             full_name AS name, company_name, job_title, industry, country,
+             import_source AS source,
+             last_contacted_at AS last_email_at,
+             COALESCE(emails_sent, 0) AS emails_sent,
+             NULL::int AS status_id
+      FROM music_industry_contacts
+      WHERE email IS NOT NULL AND email <> ''
+        AND COALESCE(status, '') NOT IN ('unsubscribed', 'bounced', 'invalid', 'complained')
+        AND COALESCE(email_status, '') NOT IN ('invalid', 'bounced', 'unsubscribed')
+        AND (last_contacted_at IS NULL OR last_contacted_at < NOW() - ($2 || ' days')::interval)
+        ${filter}
+      ORDER BY RANDOM()
+      LIMIT $1
+    `, [limit, String(cooldownDays)]);
+    return res.rows;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Best-effort: mark a contact as emailed so cooldown + counters stay accurate.
+ * Silently ignores any error (counters are non-critical).
+ */
+async function markContacted(pool, contactId) {
+  if (!contactId) return;
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query(
+        `UPDATE music_industry_contacts
+           SET last_contacted_at = NOW(),
+               emails_sent = COALESCE(emails_sent, 0) + 1,
+               status = CASE WHEN COALESCE(status,'') IN ('', 'new', 'imported') THEN 'contacted' ELSE status END
+         WHERE id = $1`,
+        [contactId]
+      );
+    } finally {
+      client.release();
+    }
+  } catch (_) { /* best effort */ }
+}
+
+/** True when a pg error means "relation/column does not exist" (legacy leads schema). */
+function isMissingRelation(err) {
+  return !!err && (err.code === '42P01' || err.code === '42703');
+}
+
 module.exports = {
   REPLY_TO,
   PROVIDERS,
@@ -254,4 +327,7 @@ module.exports = {
   recordSends,
   sendWithBrevo,
   sendWithResend,
+  fetchContacts,
+  markContacted,
+  isMissingRelation,
 };

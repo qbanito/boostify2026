@@ -352,31 +352,31 @@ export function DiscoveryAgentPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-full overflow-x-hidden">
       {/* ═══ HEADER ═══ */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg sm:text-2xl font-bold text-white flex items-center gap-2">
-            <Crosshair className="h-5 w-5 sm:h-6 sm:w-6 text-violet-400" />
-            Artist Hunter Agent
+      <div className="flex flex-col gap-2.5 sm:gap-3 min-w-0">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-2xl font-bold text-white flex items-center gap-2 min-w-0">
+            <Crosshair className="h-5 w-5 sm:h-6 sm:w-6 text-violet-400 shrink-0" />
+            <span className="truncate">Artist Hunter Agent</span>
           </h2>
-          <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Automated discovery, scoring & lead management
+          <p className="text-slate-400 text-[11px] leading-snug sm:text-sm mt-1">
+            Automated discovery, scoring &amp; lead management
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {status?.discoveryInProgress && (
-            <Badge className="bg-amber-500/20 text-amber-300 animate-pulse">Hunting...</Badge>
+            <Badge className="bg-amber-500/20 text-amber-300 animate-pulse text-[10px] sm:text-xs px-2 py-0.5">Hunting...</Badge>
           )}
           {status?.schedulerRunning ? (
-            <Badge className="bg-green-500/20 text-green-300">Discovery: ON (6h)</Badge>
+            <Badge className="bg-green-500/20 text-green-300 text-[10px] sm:text-xs px-2 py-0.5">Discovery: ON (6h)</Badge>
           ) : (
-            <Badge className="bg-red-500/20 text-red-300">Discovery: OFF</Badge>
+            <Badge className="bg-red-500/20 text-red-300 text-[10px] sm:text-xs px-2 py-0.5">Discovery: OFF</Badge>
           )}
           {status?.autoGenRunning ? (
-            <Badge className="bg-emerald-500/20 text-emerald-300">Auto-Gen: ON</Badge>
+            <Badge className="bg-emerald-500/20 text-emerald-300 text-[10px] sm:text-xs px-2 py-0.5">Auto-Gen: ON</Badge>
           ) : (
-            <Badge className="bg-slate-500/20 text-slate-400">Auto-Gen: OFF</Badge>
+            <Badge className="bg-slate-500/20 text-slate-400 text-[10px] sm:text-xs px-2 py-0.5">Auto-Gen: OFF</Badge>
           )}
         </div>
       </div>
@@ -561,38 +561,38 @@ export function DiscoveryAgentPanel() {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                 <Button onClick={handleManualRun} disabled={running || status?.discoveryInProgress}
-                  className="bg-violet-600 hover:bg-violet-500 text-white">
+                  className="bg-violet-600 hover:bg-violet-500 text-white w-full sm:w-auto">
                   {status?.discoveryInProgress ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Hunting...</>
                     : <><Play className="w-4 h-4 mr-2" />Run Discovery</>}
                 </Button>
 
                 {status?.schedulerRunning ? (
                   <Button onClick={() => handleToggleScheduler(false)} variant="outline"
-                    className="border-red-500/40 text-red-300 hover:bg-red-900/30">
+                    className="border-red-500/40 text-red-300 hover:bg-red-900/30 w-full sm:w-auto">
                     <Pause className="w-4 h-4 mr-2" />Stop Auto
                   </Button>
                 ) : (
                   <Button onClick={() => handleToggleScheduler(true)} variant="outline"
-                    className="border-green-500/40 text-green-300 hover:bg-green-900/30">
+                    className="border-green-500/40 text-green-300 hover:bg-green-900/30 w-full sm:w-auto">
                     <Play className="w-4 h-4 mr-2" />Start Auto (6h)
                   </Button>
                 )}
 
                 <Button onClick={handleScore} disabled={scoring} variant="outline"
-                  className="border-yellow-500/40 text-yellow-300 hover:bg-yellow-900/30">
+                  className="border-yellow-500/40 text-yellow-300 hover:bg-yellow-900/30 w-full sm:w-auto">
                   {scoring ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Scoring...</>
                     : <><Star className="w-4 h-4 mr-2" />Score Leads</>}
                 </Button>
 
                 <Button onClick={handleFixNames} disabled={fixingNames} variant="outline"
-                  className="border-amber-500/40 text-amber-300 hover:bg-amber-900/30">
+                  className="border-amber-500/40 text-amber-300 hover:bg-amber-900/30 w-full sm:w-auto">
                   {fixingNames ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Fixing...</>
                     : <><Wrench className="w-4 h-4 mr-2" />Fix Names</>}
                 </Button>
 
-                <Button onClick={loadStatus} variant="ghost" size="sm" className="text-slate-400">
+                <Button onClick={loadStatus} variant="ghost" size="sm" className="text-slate-400 col-span-2 sm:col-auto w-full sm:w-auto">
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               </div>
