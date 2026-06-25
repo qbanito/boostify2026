@@ -1,12 +1,12 @@
 /**
  * 📬 EMAIL SMART ROUTER
  * 
- * Healthy GLOBAL daily ceiling across ALL providers: 600 emails/day
+ * Healthy GLOBAL daily ceiling across ALL providers: 700 emails/day
  * (override per-run with env DAILY_SEND_TARGET). The router rotates intelligently,
  * always picking the least-used domain so every account stays warm and far below
  * its hard cap. Per-account safe maxes:
  *   - Brevo (boostifymusic.com):        300/day hard → safe 120
- *   - Resend FREE x6 (established):      100/day hard → safe  60 each
+ *   - Resend FREE x6 (established):      100/day hard → safe  70 each
  *   - Resend PAID x5 (new, warming up):  paid acct   → safe  40 each
  * 
  * Tracks sends in `email_daily_limits` table (shared by every GitHub Action).
@@ -17,7 +17,7 @@ const REPLY_TO = 'convoycubano@gmail.com';
 
 // 🎯 Global healthy daily ceiling across ALL providers (Resend + Brevo combined).
 // Intelligent rotation keeps every domain warm and well under its hard cap.
-const GLOBAL_DAILY_TARGET = parseInt(process.env.DAILY_SEND_TARGET || '600', 10);
+const GLOBAL_DAILY_TARGET = parseInt(process.env.DAILY_SEND_TARGET || '700', 10);
 
 const PROVIDERS = {
   // Brevo — used for industry/investor domain (boostifymusic.com)
@@ -37,7 +37,7 @@ const PROVIDERS = {
     key: 'ARTISTS_1',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_1',
     fromEmail: 'info@boostifymusic.site',
     fromName: 'Alex from Boostify',
@@ -47,7 +47,7 @@ const PROVIDERS = {
     key: 'ARTISTS_2',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_2',
     fromEmail: 'info@boostifymusic.space',
     fromName: 'Alex from Boostify',
@@ -57,7 +57,7 @@ const PROVIDERS = {
     key: 'ARTISTS_3',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_3',
     fromEmail: 'info@boostifymusic.sbs',
     fromName: 'Alex from Boostify',
@@ -67,7 +67,7 @@ const PROVIDERS = {
     key: 'ARTISTS_4',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_4',
     fromEmail: 'info@boostifymusic.online',
     fromName: 'Alex from Boostify',
@@ -77,7 +77,7 @@ const PROVIDERS = {
     key: 'ARTISTS_5',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_5',
     fromEmail: 'info@boostifymusica.space',
     fromName: 'Alex from Boostify',
@@ -87,7 +87,7 @@ const PROVIDERS = {
     key: 'ARTISTS_6',
     type: 'resend',
     dailyLimit: 100,
-    safeMax: 60,
+    safeMax: 70,
     envVar: 'RESEND_API_ARTISTS_6',
     fromEmail: 'info@boostifymusica.site',
     fromName: 'Alex from Boostify',
