@@ -1,0 +1,133 @@
+name: 🚀 Artist Tools Promo
+
+on:
+  # Rotate one key Artist Profile tool per day (Mon–Sat)
+  schedule:
+    - cron: '0 16 * * 1'   # Mon → Lyric Video Studio
+    - cron: '0 16 * * 2'   # Tue → AI Music Video Creator
+    - cron: '0 16 * * 3'   # Wed → Smart Merch Engine
+    - cron: '0 16 * * 4'   # Thu → Virtual 3D Store
+    - cron: '0 16 * * 5'   # Fri → Fan Club & Monetization
+    - cron: '0 16 * * 6'   # Sat → Talk-to-Me AI Avatar
+
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: 'Which Artist Profile tool to promote'
+        required: true
+        default: 'random'
+        type: choice
+        options:
+          - random
+          - all
+          - lyrics_video
+          - music_video
+          - smart_merch
+          - store_3d
+          - fan_club
+          - avatar_talk
+          - karaoke
+          - epk
+      max_emails:
+        description: 'Max emails to send'
+        required: false
+        default: '50'
+        type: string
+      lang:
+        description: 'Language (auto = detect LATAM→ES else EN)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - en
+          - es
+      preview_mode:
+        description: 'Preview only (send EN+ES sample to convoycubano@gmail.com)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      dry_run:
+        description: 'Dry run — log only, do NOT send'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  promote-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      TOOL:    ${{ github.event.inputs.tool || 'random' }}
+      MAX:     ${{ github.event.inputs.max_emails || '50' }}
+      LANG:    ${{ github.event.inputs.lang || 'auto' }}
+      PREVIEW: ${{ github.event.inputs.preview_mode || 'false' }}
+      DRY:     ${{ github.event.inputs.dry_run || 'false' }}
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🗓️ Resolve tool for scheduled run
+        if: github.event_name == 'schedule'
+        run: |
+          DAY=$(date +%u)   # 1=Mon ... 6=Sat
+          case $DAY in
+            1) TOOL="lyrics_video" ;;
+            2) TOOL="music_video" ;;
+            3) TOOL="smart_merch" ;;
+            4) TOOL="store_3d" ;;
+            5) TOOL="fan_club" ;;
+            6) TOOL="avatar_talk" ;;
+            *) TOOL="random" ;;
+          esac
+          echo "TOOL=$TOOL" >> $GITHUB_ENV
+          echo "📅 Day $DAY → promoting tool: $TOOL"
+
+      - name: 🚀 Run Artist Tools Promo
+        env:
+          DATABASE_URL:               ${{ secrets.DATABASE_URL }}
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+          RESEND_API_ARTISTS_1:       ${{ secrets.RESEND_API_ARTISTS_1 }}
+          RESEND_API_ARTISTS_2:       ${{ secrets.RESEND_API_ARTISTS_2 }}
+          RESEND_API_ARTISTS_3:       ${{ secrets.RESEND_API_ARTISTS_3 }}
+          RESEND_API_ARTISTS_4:       ${{ secrets.RESEND_API_ARTISTS_4 }}
+        run: |
+          echo "🚀 BOOSTIFY ARTIST TOOLS PROMO"
+          echo "Tool   : $TOOL"
+          echo "Max    : $MAX"
+          echo "Lang   : $LANG"
+          echo "Preview: $PREVIEW"
+          echo "Dry    : $DRY"
+          node scripts/artist-tools-sender.cjs \
+            --tool=$TOOL \
+            --max=$MAX \
+            --lang=$LANG \
+            --preview=$PREVIEW \
+            --dry=$DRY
+
+      - name: 📊 Upload logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-tools-logs-${{ github.run_id }}
+          path: |
+            *.log
+            logs/
+          if-no-files-found: ignore

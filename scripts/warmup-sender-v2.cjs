@@ -88,11 +88,24 @@ const DEMO_ARTISTS = [
 const PLATFORM_URL = 'https://www.boostifymusic.com';
 const pickDemo = () => DEMO_ARTISTS[Math.floor(Math.random() * DEMO_ARTISTS.length)];
 
-// Detecta contactos LATAM / hispanohablantes por país o estado. Si no se detecta → inglés.
+// Detecta contactos LATAM / hispanohablantes. Orden: país/estado → TLD del email → idioma del cargo.
+// Si nada lo confirma → inglés (default).
 function isLatamContact(lead) {
   const c = `${lead.country || ''} ${lead.state || ''}`.trim().toLowerCase();
-  if (!c) return false;
-  return /(m[eé]xic|colomb|argentin|chile|per[uú]|venezuel|ecuad|guatemal|\bcuba\b|boliv|dominic|hondur|paragu|el salvador|nicaragu|costa rica|panam|urugu|puerto ric|espa[nñ]|\bspain\b|\bmx\b|\bco\b|\bar\b|\bcl\b|\bpe\b|\bve\b|\bec\b|\bgt\b|\bcu\b|\bbo\b|\bdo\b|\bhn\b|\bpy\b|\bsv\b|\bni\b|\bcr\b|\bpa\b|\buy\b|\bpr\b|\bes\b)/.test(c);
+  if (c && /(m[eé]xic|colomb|argentin|chile|per[uú]|venezuel|ecuad|guatemal|\bcuba\b|boliv|dominic|hondur|paragu|el salvador|nicaragu|costa rica|panam|urugu|puerto ric|espa[nñ]|\bspain\b|\bmx\b|\bco\b|\bar\b|\bcl\b|\bpe\b|\bve\b|\bec\b|\bgt\b|\bcu\b|\bbo\b|\bdo\b|\bhn\b|\bpy\b|\bsv\b|\bni\b|\bcr\b|\bpa\b|\buy\b|\bpr\b|\bes\b)/.test(c)) {
+    return true;
+  }
+  // Respaldo 1: TLD del email de un país hispanohablante.
+  const email = (lead.email || '').toLowerCase();
+  if (/\.(mx|co|ar|cl|pe|ve|ec|gt|cu|bo|do|hn|py|sv|ni|cr|pa|uy|es)(\b|$)/.test(email)) {
+    return true;
+  }
+  // Respaldo 2: el cargo viene en español (señal fuerte de contacto hispanohablante).
+  const title = `${lead.job_title || ''} ${lead.company_name || ''}`.toLowerCase();
+  if (/(directora|gerente|productor|representante|due[nñ]o|fundador|gesti[oó]n|m[uú]sica|sello|discogr[aá]fic|propietari|encargad)/.test(title)) {
+    return true;
+  }
+  return false;
 }
 
 // 🎲 SUBJECT TEMPLATES — directos, de negocio / alianza (CEO a la industria)
