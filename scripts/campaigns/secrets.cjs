@@ -39,6 +39,9 @@ const secrets = {
     ARTISTS_6: process.env.RESEND_API_ARTISTS_6 || '',
     ARTISTS_7: process.env.RESEND_API_ARTISTS_7 || '',
     ARTISTS_8: process.env.RESEND_API_ARTISTS_8 || '',
+    ARTISTS_9: process.env.RESEND_API_ARTISTS_9 || '',
+    ARTISTS_10: process.env.RESEND_API_ARTISTS_10 || '',
+    ARTISTS_11: process.env.RESEND_API_ARTISTS_11 || '',
   },
   
   // Apify APIs por campaña

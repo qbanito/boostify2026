@@ -103,6 +103,9 @@ jobs:
           RESEND_API_ARTISTS_6: ${{ secrets.RESEND_API_ARTISTS_6 }}
           RESEND_API_ARTISTS_7: ${{ secrets.RESEND_API_ARTISTS_7 }}
           RESEND_API_ARTISTS_8: ${{ secrets.RESEND_API_ARTISTS_8 }}
+          RESEND_API_ARTISTS_9: ${{ secrets.RESEND_API_ARTISTS_9 }}
+          RESEND_API_ARTISTS_10: ${{ secrets.RESEND_API_ARTISTS_10 }}
+          RESEND_API_ARTISTS_11: ${{ secrets.RESEND_API_ARTISTS_11 }}
           PREVIEW_MODE: ${{ steps.pick_seq.outputs.preview }}
 
       - name: ✅ Sequence Complete

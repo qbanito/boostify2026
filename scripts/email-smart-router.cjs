@@ -3,7 +3,7 @@
  * 
  * Manages daily send limits across all email providers:
  *   - Brevo:     300/day limit  → safe max = 200  (leaves 100 buffer)
- *   - Resend x8: 100/day each  → safe max =  70  (leaves 30 buffer)
+ *   - Resend x11: 100/day each → safe max =  70  (leaves 30 buffer)
  * 
  * Rotates between Resend accounts automatically.
  * Tracks sends in Supabase `email_daily_limits` table.
@@ -106,6 +106,36 @@ const PROVIDERS = {
     fromName: 'Alex from Boostify',
     domain: 'boostifymusicusa.space',
   },
+  ARTISTS_9: {
+    key: 'ARTISTS_9',
+    type: 'resend',
+    dailyLimit: 100,
+    safeMax: 70,
+    envVar: 'RESEND_API_ARTISTS_9',
+    fromEmail: 'info@boostifymusicusa.online',
+    fromName: 'Alex from Boostify',
+    domain: 'boostifymusicusa.online',
+  },
+  ARTISTS_10: {
+    key: 'ARTISTS_10',
+    type: 'resend',
+    dailyLimit: 100,
+    safeMax: 70,
+    envVar: 'RESEND_API_ARTISTS_10',
+    fromEmail: 'info@boostifymusic.shop',
+    fromName: 'Alex from Boostify',
+    domain: 'boostifymusic.shop',
+  },
+  ARTISTS_11: {
+    key: 'ARTISTS_11',
+    type: 'resend',
+    dailyLimit: 100,
+    safeMax: 70,
+    envVar: 'RESEND_API_ARTISTS_11',
+    fromEmail: 'info@boostifymusic.xyz',
+    fromName: 'Alex from Boostify',
+    domain: 'boostifymusic.xyz',
+  },
 };
 
 /**
@@ -115,7 +145,7 @@ const PROVIDERS = {
  * @returns {{ provider, apiKey, fromEmail, fromName, remainingToday }}
  */
 async function getBestArtistProvider(pool) {
-  const resendKeys = ['ARTISTS_1', 'ARTISTS_2', 'ARTISTS_3', 'ARTISTS_4', 'ARTISTS_5', 'ARTISTS_6', 'ARTISTS_7', 'ARTISTS_8'];
+  const resendKeys = ['ARTISTS_1', 'ARTISTS_2', 'ARTISTS_3', 'ARTISTS_4', 'ARTISTS_5', 'ARTISTS_6', 'ARTISTS_7', 'ARTISTS_8', 'ARTISTS_9', 'ARTISTS_10', 'ARTISTS_11'];
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   let client;
 
