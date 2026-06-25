@@ -37,7 +37,7 @@ const clerkAppearance = {
   layout: {
     logoImageUrl: "/btf_logo.png",
     logoPlacement: "inside" as const,
-    socialButtonsVariant: "blockButton" as const,
+    socialButtonsVariant: "iconButton" as const,
     helpPageUrl: "/",
   },
   variables: {
@@ -56,8 +56,8 @@ const clerkAppearance = {
     card: "bg-[#101016] border border-white/10 shadow-[0_30px_120px_-20px_rgba(124,92,255,0.45)]",
     headerTitle: "text-white",
     headerSubtitle: "text-white/60",
-    socialButtonsBlockButton: "border border-white/10 bg-white/5 text-white hover:bg-white/10",
-    socialButtonsBlockButtonText: "text-white",
+    socialButtonsIconButton: "border border-white/10 bg-white/5 hover:bg-white/10",
+    socialButtonsProviderIcon__apple: "brightness-0 invert",
     dividerLine: "bg-white/10",
     dividerText: "text-white/40",
     formFieldLabel: "text-white/80",
