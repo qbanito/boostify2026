@@ -366,9 +366,9 @@ export function InstagramLeadsPanel() {
                 <div className="text-xs text-slate-500 mb-2">Por fuente</div>
                 <div className="space-y-1.5">
                   {funnel.bySource.map((s) => (
-                    <div key={s.source} className="flex items-center justify-between text-xs gap-2">
-                      <span className="text-slate-300 truncate">{s.source}</span>
-                      <span className="text-slate-400 shrink-0">
+                    <div key={s.source} className="flex flex-wrap items-center justify-between text-xs gap-x-2 gap-y-0.5">
+                      <span className="text-slate-300 truncate min-w-0">{s.source}</span>
+                      <span className="text-slate-400">
                         {s.imported.toLocaleString()} imp · {s.sent.toLocaleString()} env ·{' '}
                         <span className="text-orange-400 font-semibold">{s.claimed.toLocaleString()} recl</span>
                         {s.sent > 0 && <span className="text-slate-500"> ({s.claimRate}%)</span>}
@@ -416,7 +416,7 @@ export function InstagramLeadsPanel() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
 
             <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
                     <Radar className="h-3.5 w-3.5 text-violet-400" /> Descubrimiento automático (Hunter)
@@ -429,7 +429,7 @@ export function InstagramLeadsPanel() {
                   </p>
                 </div>
                 <Button size="sm" variant="outline" disabled={ingesting}
-                  className="h-8 px-2.5 border-violet-700/60 text-violet-200 hover:bg-violet-500/10 shrink-0"
+                  className="h-8 px-2.5 border-violet-700/60 text-violet-200 hover:bg-violet-500/10 w-full sm:w-auto justify-center shrink-0"
                   onClick={ingestDiscovery}>
                   {ingesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
                   <span className="ml-1.5">Importar del Hunter</span>
@@ -500,7 +500,7 @@ export function InstagramLeadsPanel() {
                   </p>
                 </div>
                 <Button size="sm" disabled={emailing || !(emailInfo?.emailable)}
-                  className="h-8 px-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shrink-0"
+                  className="h-8 px-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white w-full sm:w-auto justify-center shrink-0"
                   onClick={sendEmails}>
                   {emailing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                   <span className="ml-1.5">Enviar emails {emailInfo?.emailable ? `(${emailInfo.emailable})` : ''}</span>

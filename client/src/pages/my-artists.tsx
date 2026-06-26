@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "../hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -506,6 +506,32 @@ export default function MyArtistsPage() {
     
     return result;
   }, [artists, searchQuery, filterType, sortBy]);
+
+  // ─── Windowed rendering ───────────────────────────────────────────────────
+  // Rendering every artist at once (each card is an animated motion.div with an
+  // image) overloads the page and can blank it out for users with many artists.
+  // We render a growing window and load the next page as the sentinel scrolls in.
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [searchQuery, filterType, sortBy, viewMode]);
+  const visibleArtists = useMemo(() => filteredArtists.slice(0, visibleCount), [filteredArtists, visibleCount]);
+  const hasMore = visibleCount < filteredArtists.length;
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const loadMore = useCallback(
+    () => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filteredArtists.length)),
+    [filteredArtists.length],
+  );
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = loadMoreRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting) loadMore(); },
+      { rootMargin: "600px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadMore, visibleCount]);
 
   const handleEditArtist = (artist: Artist) => {
     setEditingArtist(artist);
@@ -1024,7 +1050,7 @@ export default function MyArtistsPage() {
             const compact = zoom >= 4;
             return (
             <div className={`grid ${colClass} gap-4`}>
-              {filteredArtists.map((artist, index) => (
+              {visibleArtists.map((artist, index) => (
                 <motion.div key={artist.id}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1175,7 +1201,7 @@ export default function MyArtistsPage() {
           );})() : (
             /* LIST VIEW */
             <div className="space-y-2">
-              {filteredArtists.map((artist, index) => (
+              {visibleArtists.map((artist, index) => (
                 <div
                   key={artist.id}
                   style={{ animation: `fadeSlideIn 0.18s ease both`, animationDelay: `${Math.min(index * 20, 150)}ms` }}
@@ -1276,6 +1302,19 @@ export default function MyArtistsPage() {
                   </Card>
                 </div>
               ))}
+            </div>
+          )}
+
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-8">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                className="border-white/15 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cargar más ({filteredArtists.length - visibleCount} restantes)
+              </Button>
             </div>
           )}
           </div>

@@ -114,10 +114,10 @@ export function SendingDomainsPanel() {
     <div className="space-y-4">
       <Card className="bg-slate-900/50 border-slate-700/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
             <Mail className="w-5 h-5 text-emerald-400" />
             Sending Domains
-            <Badge variant="outline" className="ml-2 bg-emerald-500/10 text-emerald-300 border-emerald-500/40">
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/40">
               {poolSize} en rotación
             </Badge>
           </CardTitle>
@@ -141,13 +141,15 @@ export function SendingDomainsPanel() {
               disabled={provisioning}
               className="flex-1 min-w-0 px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-sm text-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
             />
-            <Button onClick={provision} disabled={provisioning || !newDomain.trim()} className="bg-emerald-600 hover:bg-emerald-500 cursor-pointer">
-              {provisioning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-              Provisionar
-            </Button>
-            <Button variant="outline" onClick={load} disabled={loading} className="cursor-pointer">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={provision} disabled={provisioning || !newDomain.trim()} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 cursor-pointer">
+                {provisioning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                Provisionar
+              </Button>
+              <Button variant="outline" onClick={load} disabled={loading} className="cursor-pointer shrink-0">
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
             <input
@@ -179,9 +181,9 @@ export function SendingDomainsPanel() {
               {domains.map((d) => {
                 const Icon = STATUS_ICON[d.status] || Clock;
                 return (
-                  <div key={d.id} className="p-4 flex items-center gap-3 flex-wrap">
+                  <div key={d.id} className="p-4 flex items-start gap-3 flex-wrap">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-white truncate">{d.domain}</span>
                         <Badge variant="outline" className={STATUS_STYLE[d.status] || STATUS_STYLE.pending}>
                           <Icon className={`w-3 h-3 mr-1 ${d.status === 'provisioning' ? 'animate-spin' : ''}`} />
@@ -189,9 +191,9 @@ export function SendingDomainsPanel() {
                         </Badge>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5 truncate">{d.from_email}</p>
-                      {d.last_error && <p className="text-xs text-red-400 mt-1">{d.last_error}</p>}
+                      {d.last_error && <p className="text-xs text-red-400 mt-1 break-words">{d.last_error}</p>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:ml-auto justify-end">
                       {(d.status === 'pending' || d.status === 'failed') && (
                         <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => check(d.id)} className="cursor-pointer">
                           {busyId === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
