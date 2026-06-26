@@ -16,6 +16,7 @@
 
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
+import { isSendingPaused } from '../email-controls';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -243,6 +244,11 @@ async function viaBrevo(to: string, subject: string, html: string): Promise<Outr
 export async function sendOutreachEmail(to: string, subject: string, html: string): Promise<OutreachResult> {
   const addr = String(to || '').trim().toLowerCase();
   if (!EMAIL_RE.test(addr)) return { success: false, error: 'invalid_email' };
+
+  // Kill switch — admin can pause all platform outreach from the Email Command Center.
+  if (await isSendingPaused('platform-outreach')) {
+    return { success: false, error: 'paused_by_admin' };
+  }
 
   // Try the next account in rotation; on failure, try one more account so a
   // single throttled/exhausted account never blocks the send.

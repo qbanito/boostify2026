@@ -16,7 +16,7 @@ import {
   Shield, RefreshCw, Activity, Upload, Sparkles, Link as LinkIcon,
   TrendingUp, Zap, Users2, AreaChart, PieChart as PieChartIcon, CreditCard, Terminal, FileText,
   Download, ScrollText, Settings, Loader2, Search, AlertTriangle, Key, Crown,
-  MoreVertical, ChevronRight, Truck, Instagram, Mail
+  MoreVertical, ChevronRight, Truck, Instagram, Mail, Inbox
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -48,6 +48,7 @@ import { ContentModerationQueue } from '../components/admin/content-moderation-q
 import { MCPApiKeysManager } from '../components/admin/mcp-api-keys';
 import { InstagramLeadsPanel } from '../components/admin/instagram-leads-panel';
 import { SendingDomainsPanel } from '../components/admin/sending-domains-panel';
+import { EmailCommandCenter } from '../components/admin/email-command-center';
 import { AdminSongAnalyzer } from '../components/admin/admin-song-analyzer';
 import { ConcertsManager } from '../components/admin/concerts-manager';
 import { CreditPricingAdmin } from '../components/admin/credit-pricing-admin';
@@ -297,6 +298,7 @@ export default function AdminDashboard() {
                       { value: 'artists', label: 'Leads CRM', icon: Music },
                       { value: 'instagram-leads', label: 'Instagram Leads', icon: Instagram },
                       { value: 'sending-domains', label: 'Sending Domains', icon: Mail },
+                      { value: 'email-command', label: 'Email Center', icon: Inbox },
                       { value: 'affiliates', label: 'Affiliates', icon: TrendingUp },
                       { value: 'investors', label: 'Investors', icon: Target },
                     ],
@@ -581,6 +583,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="sending-domains" className="w-full">
                 <SendingDomainsPanel />
+              </TabsContent>
+
+              <TabsContent value="email-command" className="w-full">
+                <EmailCommandCenter />
               </TabsContent>
 
               <TabsContent value="affiliates" className="w-full">

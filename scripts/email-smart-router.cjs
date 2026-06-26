@@ -168,11 +168,43 @@ async function getGlobalSentToday(pool) {
 }
 
 /**
+ * Global kill switch — true when the admin has paused all automated sending
+ * from the Email Command Center (DB row email_command_settings.controls.global).
+ * Fails OPEN (returns false) if the table/row is missing so a DB blip never
+ * silently halts every campaign.
+ * @param {object} pool - pg Pool instance
+ * @returns {Promise<boolean>}
+ */
+async function isSendingPaused(pool) {
+  let client;
+  try {
+    client = await pool.connect();
+    const res = await client.query(
+      `SELECT value FROM email_command_settings WHERE key = 'controls' LIMIT 1`
+    );
+    const v = res.rows[0]?.value;
+    if (!v) return false;
+    const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+    if (parsed?.global === true) return true;
+    if (parsed?.channels && parsed.channels['github-actions'] === true) return true;
+    return false;
+  } catch (e) {
+    return false;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
  * Remaining emails allowed today under the GLOBAL ceiling (across every provider).
  * @param {object} pool - pg Pool instance
  * @returns {Promise<{ sentToday: number, target: number, remaining: number }>}
  */
 async function getDailyBudget(pool) {
+  if (await isSendingPaused(pool)) {
+    const sentToday = await getGlobalSentToday(pool);
+    return { sentToday, target: GLOBAL_DAILY_TARGET, remaining: 0, paused: true };
+  }
   const sentToday = await getGlobalSentToday(pool);
   return { sentToday, target: GLOBAL_DAILY_TARGET, remaining: Math.max(GLOBAL_DAILY_TARGET - sentToday, 0) };
 }
@@ -186,6 +218,13 @@ async function getDailyBudget(pool) {
 async function getBestArtistProvider(pool) {
   const resendKeys = ['ARTISTS_1', 'ARTISTS_2', 'ARTISTS_3', 'ARTISTS_4', 'ARTISTS_5', 'ARTISTS_6', 'ARTISTS_7', 'ARTISTS_8', 'ARTISTS_9', 'ARTISTS_10', 'ARTISTS_11'];
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Honor the admin kill switch before doing any work.
+  if (await isSendingPaused(pool)) {
+    console.log('⏸️  Sending PAUSED by admin (Email Command Center) — Resend router returns 0.');
+    return { provider: 'PAUSED', apiKey: null, fromEmail: PROVIDERS.ARTISTS_1.fromEmail, fromName: PROVIDERS.ARTISTS_1.fromName, remainingToday: 0, paused: true };
+  }
+
   let client;
 
   // Try to get counts from DB; fall back to 0 if table doesn't exist
@@ -252,6 +291,13 @@ async function getBestArtistProvider(pool) {
  */
 async function getBrevoQuota(pool) {
   const today = new Date().toISOString().slice(0, 10);
+
+  // Honor the admin kill switch before doing any work.
+  if (await isSendingPaused(pool)) {
+    console.log('⏸️  Sending PAUSED by admin (Email Command Center) — Brevo quota returns 0.');
+    return { remainingToday: 0, paused: true };
+  }
+
   let sent = 0;
   let client;
   try {
@@ -442,6 +488,7 @@ module.exports = {
   getBrevoQuota,
   getGlobalSentToday,
   getDailyBudget,
+  isSendingPaused,
   recordSends,
   sendWithBrevo,
   sendWithResend,

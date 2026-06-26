@@ -179,6 +179,8 @@ import adminArtistAcquisitionRouter from './routes/admin-artist-acquisition'; //
 import adminArtistIdentityRouter from './routes/admin-artist-identity'; // Artist Identity & Account Provisioning System (AIAPS)
 import adminInstagramLeadsRouter, { startLeadBridgeScheduler } from './routes/admin-instagram-leads'; // Instagram leads → claimable profiles + DM packs
 import adminSendingDomainsRouter from './routes/admin-sending-domains'; // One-click cold-email sending domain provisioning
+import adminEmailCommandRouter from './routes/admin-email-command'; // Email Command Center: control + stats + replies + AI analyst
+import emailInboundRouter from './routes/email-inbound'; // Public: inbound email reply capture (Resend inbound webhook)
 import webhooksAiapsRouter from './routes/webhooks-aiaps'; // Public webhooks for AIAPS (Twilio SMS, inbound email)
 import { startScheduler as startAiapsScheduler } from './services/aiaps/scheduler';
 import adminBoostifyAlliancesRouter from './routes/admin-boostify-alliances'; // Boostify Alliances admin dashboard aggregator
@@ -690,6 +692,8 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/admin/artist-identity', adminArtistIdentityRouter); // Admin: Artist Identity & Account Provisioning System (AIAPS)
   app.use('/api/admin/instagram-leads', adminInstagramLeadsRouter); // Admin: Instagram leads → claimable profiles + DM packs
   app.use('/api/admin/sending-domains', adminSendingDomainsRouter); // Admin: One-click cold-email sending domain provisioning
+  app.use('/api/admin/email-command', adminEmailCommandRouter); // Admin: Email Command Center (control + stats + replies + AI analyst)
+  app.use('/api/email-inbound', emailInboundRouter); // Public: inbound email reply capture (path ends /webhook → bypasses auth)
   app.use('/api/webhooks/aiaps', webhooksAiapsRouter); // Public: AIAPS webhooks (Twilio SMS / inbound email)
   if (shouldRunSchedulers()) startAiapsScheduler(); // Start AIAPS health + warm-up scheduler
   app.use('/api/admin/boostify-alliances', adminBoostifyAlliancesRouter); // Admin: Boostify Alliances dashboard
