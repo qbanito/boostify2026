@@ -14,6 +14,9 @@
  * Resend first, Brevo as automatic fallback. Returns a normalized result.
  */
 
+import { db } from '../../db';
+import { sql } from 'drizzle-orm';
+
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
@@ -54,7 +57,11 @@ function buildPool(): ResendAccount[] {
   return pool;
 }
 
-const RESEND_POOL = buildPool();
+// Env-defined accounts (static, from RESEND_OUTREACH_POOL). Admin-provisioned
+// sending domains are layered on top from the DB so new domains go live
+// WITHOUT an env edit or restart (works on Render's ephemeral fs too).
+const ENV_POOL = buildPool();
+let RESEND_POOL: ResendAccount[] = [...ENV_POOL];
 let rotIndex = Math.floor(Math.random() * Math.max(RESEND_POOL.length, 1));
 function nextAccount(): ResendAccount | null {
   if (RESEND_POOL.length === 0) return null;
@@ -64,6 +71,53 @@ function nextAccount(): ResendAccount | null {
 }
 
 export function outreachPoolSize(): number { return RESEND_POOL.length; }
+
+// ─── DB-backed pool (admin-provisioned sending domains) ─────────────────────
+// Reloads RESEND_POOL = env accounts + every DB domain with status='active'
+// (deduped by from address). Call after provisioning/verifying a domain.
+export async function refreshOutreachPool(): Promise<number> {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS outreach_sending_domains (
+        id                SERIAL PRIMARY KEY,
+        domain            TEXT UNIQUE NOT NULL,
+        from_email        TEXT NOT NULL,
+        reply_to          TEXT,
+        api_key           TEXT NOT NULL,
+        resend_domain_id  TEXT,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        hostinger_bought  BOOLEAN DEFAULT false,
+        dns_written       BOOLEAN DEFAULT false,
+        verified_at       TIMESTAMPTZ,
+        last_error        TEXT,
+        created_at        TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    const res: any = await db.execute(sql`
+      SELECT api_key, from_email, reply_to FROM outreach_sending_domains WHERE status = 'active'`);
+    const rows: any[] = res?.rows || res || [];
+    const dbPool: ResendAccount[] = [];
+    for (const r of rows) {
+      if (r?.api_key && r?.from_email && EMAIL_RE.test(r.from_email)) {
+        const domain = String(r.from_email).split('@')[1];
+        dbPool.push({ key: r.api_key, from: r.from_email, replyTo: r.reply_to || `info@${domain}` });
+      }
+    }
+    const seen = new Set<string>();
+    const merged: ResendAccount[] = [];
+    for (const a of [...ENV_POOL, ...dbPool]) {
+      if (seen.has(a.from)) continue;
+      seen.add(a.from);
+      merged.push(a);
+    }
+    RESEND_POOL = merged.length ? merged : ENV_POOL;
+  } catch (e: any) {
+    console.warn('[Outreach] refreshOutreachPool failed:', e?.message || e);
+  }
+  return RESEND_POOL.length;
+}
+
+// Warm the DB-backed pool at startup (non-blocking).
+refreshOutreachPool().catch(() => {});
 
 export interface OutreachResult {
   success: boolean;
