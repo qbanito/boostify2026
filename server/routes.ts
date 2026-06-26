@@ -177,6 +177,7 @@ import adminArtistLeadsRouter from './routes/admin-artist-leads'; // Import admi
 import adminArtistDiscoveryRouter from './routes/admin-artist-discovery'; // Import Artist Discovery Agent routes
 import adminArtistAcquisitionRouter from './routes/admin-artist-acquisition'; // Artist Acquisition System dashboard aggregator
 import adminArtistIdentityRouter from './routes/admin-artist-identity'; // Artist Identity & Account Provisioning System (AIAPS)
+import adminInstagramLeadsRouter, { startLeadBridgeScheduler } from './routes/admin-instagram-leads'; // Instagram leads → claimable profiles + DM packs
 import webhooksAiapsRouter from './routes/webhooks-aiaps'; // Public webhooks for AIAPS (Twilio SMS, inbound email)
 import { startScheduler as startAiapsScheduler } from './services/aiaps/scheduler';
 import adminBoostifyAlliancesRouter from './routes/admin-boostify-alliances'; // Boostify Alliances admin dashboard aggregator
@@ -686,6 +687,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/admin/artist-discovery', adminArtistDiscoveryRouter); // Admin: Artist Discovery Agent (auto-find artists)
   app.use('/api/admin/artist-acquisition', adminArtistAcquisitionRouter); // Admin: Artist Acquisition System dashboard
   app.use('/api/admin/artist-identity', adminArtistIdentityRouter); // Admin: Artist Identity & Account Provisioning System (AIAPS)
+  app.use('/api/admin/instagram-leads', adminInstagramLeadsRouter); // Admin: Instagram leads → claimable profiles + DM packs
   app.use('/api/webhooks/aiaps', webhooksAiapsRouter); // Public: AIAPS webhooks (Twilio SMS / inbound email)
   if (shouldRunSchedulers()) startAiapsScheduler(); // Start AIAPS health + warm-up scheduler
   app.use('/api/admin/boostify-alliances', adminBoostifyAlliancesRouter); // Admin: Boostify Alliances dashboard
@@ -696,6 +698,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
     startDiscoveryScheduler(); // Start artist discovery every 6 hours
     startActivationScheduler(); // Start activation drip engine every 30 minutes
     startAutoGeneration(); // Start auto-generation: contacts → artist pages every 4 hours
+    startLeadBridgeScheduler(); // Bridge: Hunter-discovered IG artists → instagram_leads every 2 hours
   } else {
     console.log('⏸️  [Schedulers] Discovery/Activation/AutoGen disabled (role/env)');
   }

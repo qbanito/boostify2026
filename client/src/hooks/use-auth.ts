@@ -44,12 +44,13 @@ export function useAuth() {
       userSubscription: null,
       logout: async () => {},
       login: () => {},
+      register: () => {},
       refetch: async () => ({ data: null }),
     };
   }
 
   const { user: clerkUser, isLoaded: clerkLoaded, isSignedIn } = useUser();
-  const { signOut: clerkSignOut, openSignIn } = useClerk();
+  const { signOut: clerkSignOut, openSignIn, openSignUp } = useClerk();
   
   // Fetch full user data from our API once Clerk is loaded and user is signed in
   const { data: dbUser, isLoading: dbLoading, refetch } = useQuery<User | null>({
@@ -103,6 +104,13 @@ export function useAuth() {
     openSignIn();
   };
 
+  // Opens the Clerk SIGN-UP modal (with OAuth one-click + optional email prefill).
+  // Cold artists arriving from outreach have no account yet, so registration is
+  // the right first step — far less friction than showing a sign-in form.
+  const register = (opts?: Record<string, any>) => {
+    openSignUp(opts);
+  };
+
   return {
     user,
     isLoading,
@@ -112,6 +120,7 @@ export function useAuth() {
     userSubscription,
     logout,
     login,
+    register,
     refetch,
   };
 }

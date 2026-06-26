@@ -16,7 +16,7 @@ import {
   Shield, RefreshCw, Activity, Upload, Sparkles, Link as LinkIcon,
   TrendingUp, Zap, Users2, AreaChart, PieChart as PieChartIcon, CreditCard, Terminal, FileText,
   Download, ScrollText, Settings, Loader2, Search, AlertTriangle, Key, Crown,
-  MoreVertical, ChevronRight, Truck
+  MoreVertical, ChevronRight, Truck, Instagram
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -46,6 +46,7 @@ import { EconomicEngineManager } from '../components/admin/economic-engine-manag
 import { SmartMerchSupplierAdmin } from '../components/admin/smart-merch-supplier-admin';
 import { ContentModerationQueue } from '../components/admin/content-moderation-queue';
 import { MCPApiKeysManager } from '../components/admin/mcp-api-keys';
+import { InstagramLeadsPanel } from '../components/admin/instagram-leads-panel';
 import { AdminSongAnalyzer } from '../components/admin/admin-song-analyzer';
 import { ConcertsManager } from '../components/admin/concerts-manager';
 import { CreditPricingAdmin } from '../components/admin/credit-pricing-admin';
@@ -293,6 +294,7 @@ export default function AdminDashboard() {
                     tabs: [
                       { value: 'users', label: 'Users', icon: Users },
                       { value: 'artists', label: 'Leads CRM', icon: Music },
+                      { value: 'instagram-leads', label: 'Instagram Leads', icon: Instagram },
                       { value: 'affiliates', label: 'Affiliates', icon: TrendingUp },
                       { value: 'investors', label: 'Investors', icon: Target },
                     ],
@@ -569,6 +571,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="artists" className="w-full">
                 <ArtistsManager onRefresh={loadAllData} />
+              </TabsContent>
+
+              <TabsContent value="instagram-leads" className="w-full">
+                <InstagramLeadsPanel />
               </TabsContent>
 
               <TabsContent value="affiliates" className="w-full">

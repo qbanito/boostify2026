@@ -74,22 +74,42 @@ const AURORA_CSS = `
 @keyframes claimRise{0%{transform:translateY(12px);opacity:0}15%{opacity:.6}85%{opacity:.6}100%{transform:translateY(-170px);opacity:0}}
 .claim-hero-img{will-change:transform;animation:claimZoom 20s ease-in-out infinite}
 @keyframes claimZoom{0%,100%{transform:scale(1.03)}50%{transform:scale(1.12)}}
-@media (prefers-reduced-motion:reduce){.claim-orb,.claim-sheen,.claim-grid,.claim-note,.claim-hero-img{animation:none!important}}
+.claim-ring{background:conic-gradient(from 0deg,#7c5cff,#ff2d95,#ff7b00,#e8c98a,#7c5cff);animation:claimSpin 6s linear infinite}
+.claim-grad-text{background:linear-gradient(90deg,#c9b6ff,#ff7bc2,#ffc77b,#c9b6ff);background-size:220% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:claimShine 5s linear infinite}
+@keyframes claimShine{to{background-position:220% center}}
+.claim-eyebrow-tag{background:linear-gradient(90deg,rgba(124,92,255,.18),rgba(255,45,149,.18));}
+@media (prefers-reduced-motion:reduce){.claim-orb,.claim-sheen,.claim-grid,.claim-note,.claim-hero-img,.claim-ring,.claim-grad-text{animation:none!important}}
 `;
 
-// Modern, Boostify-branded animated hero used when no real cover exists.
-function BrandAurora() {
+// Modern, Boostify-branded animated hero stage. The artist's photo is only used
+// as a BLURRED ambient layer (so a tiny low-res Instagram thumbnail never looks
+// pixelated) — the sharp version shows only in the small avatar below.
+function BrandStage({ image }: { image?: string | null }) {
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0b0b0f]">
       <style>{AURORA_CSS}</style>
-      <img
-        src="/images/signup-hero.png"
-        alt="Boostify Music"
-        className="claim-hero-img absolute inset-0 h-full w-full object-cover"
-        loading="eager"
-      />
-      <div className="absolute inset-0 mix-blend-overlay bg-gradient-to-tr from-[#7c5cff]/40 via-transparent to-[#ff2d95]/25" />
+      {image ? (
+        <img
+          src={image}
+          alt=""
+          aria-hidden="true"
+          className="claim-hero-img absolute inset-0 h-full w-full scale-[1.6] object-cover opacity-45 blur-2xl"
+          loading="eager"
+        />
+      ) : (
+        <img
+          src="/images/signup-hero.png"
+          alt="Boostify Music"
+          className="claim-hero-img absolute inset-0 h-full w-full object-cover opacity-60"
+          loading="eager"
+        />
+      )}
+      <div className="claim-orb claim-orb-1" />
+      <div className="claim-orb claim-orb-2" />
+      <div className="claim-orb claim-orb-3" />
+      <div className="claim-grid" />
       <div className="claim-sheen" />
+      <div className="absolute inset-0 mix-blend-overlay bg-gradient-to-tr from-[#7c5cff]/40 via-transparent to-[#ff2d95]/25" />
       <Music2 className="claim-note claim-note-1 h-5 w-5" />
       <Sparkles className="claim-note claim-note-2 h-4 w-4" />
       <Music2 className="claim-note claim-note-3 h-6 w-6" />
@@ -112,12 +132,13 @@ interface ClaimArtist {
 type Phase = "loading" | "ready" | "claiming" | "claimed" | "already" | "error";
 
 export default function ClaimPage() {
-  const { isAuthenticated, isLoading: authLoading, login, refetch } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, register, refetch } = useAuth();
   const { toast } = useToast();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [artist, setArtist] = useState<ClaimArtist | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [prefillEmail, setPrefillEmail] = useState<string | undefined>(undefined);
   const pendingClaim = useRef(false);
 
   // Read token / slug from the URL once.
@@ -149,6 +170,7 @@ export default function ClaimPage() {
           return;
         }
         setArtist(data.artist);
+        if (data.prefillEmail) setPrefillEmail(String(data.prefillEmail));
         setPhase(data.alreadyClaimed ? "already" : "ready");
       } catch {
         if (!cancelled) {
@@ -205,7 +227,15 @@ export default function ClaimPage() {
     if (authLoading) return;
     if (!isAuthenticated) {
       pendingClaim.current = true;
-      login(); // opens the Clerk sign-in / sign-up modal
+      // Cold artists from outreach have no account → open SIGN-UP (one-click
+      // Google/OAuth + email prefilled) instead of a sign-in form. After they
+      // finish, Clerk returns to this page and the auto-claim effect fires.
+      const returnUrl = window.location.href;
+      register({
+        ...(prefillEmail ? { initialValues: { emailAddress: prefillEmail } } : {}),
+        afterSignUpUrl: returnUrl,
+        afterSignInUrl: returnUrl,
+      });
       return;
     }
     submitClaim();
@@ -221,45 +251,58 @@ export default function ClaimPage() {
   return (
     <div className="min-h-screen w-full bg-[#0b0b0f] text-white flex items-center justify-center p-4 pb-28 sm:pb-12">
       <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-white/10 bg-[#101016] shadow-[0_30px_120px_-20px_rgba(124,92,255,0.45)]">
-        {/* Cover */}
-        <div className="relative h-56 w-full overflow-hidden sm:h-72">
-          {realCoverUrl ? (
-            <img
-              src={realCoverUrl}
-              alt={name}
-              className="h-full w-full object-cover"
-              style={{ objectPosition: "center top" }}
-            />
-          ) : (
-            <BrandAurora />
-          )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#101016] via-[#101016]/40 to-transparent" />
-          <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-[#e8c98a]" />
-            Created by Boostify AI
+        {/* Hero stage */}
+        <div className="relative h-60 w-full overflow-hidden sm:h-72">
+          <BrandStage image={realCoverUrl || artist?.profileImage || null} />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#101016] via-[#101016]/45 to-transparent" />
+
+          {/* Early-access pill */}
+          <div className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full border border-[#e8c98a]/30 bg-black/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#e8c98a] backdrop-blur">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#e8c98a]/70" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#e8c98a]" />
+            </span>
+            Early Access
           </div>
           <div className="absolute right-5 top-5 select-none text-xs font-extrabold tracking-[0.25em] text-white/70">
             BOOSTIFY
+          </div>
+
+          {/* New-platform tagline */}
+          <div className="absolute left-5 top-1/2 -translate-y-1/2 max-w-[80%] sm:left-10">
+            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/55">
+              The first network for artists
+            </p>
+            <p className="mt-1 text-2xl font-black leading-[1.05] sm:text-[2rem]">
+              <span className="claim-grad-text">Music has a</span>
+              <br />
+              <span className="claim-grad-text">new home.</span>
+            </p>
           </div>
         </div>
 
         {/* Body */}
         <div className="relative -mt-14 px-6 pb-8 sm:px-10">
           <div className="flex items-end gap-4">
-            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-[#101016] bg-[#1a1a24] shadow-xl sm:h-28 sm:w-28">
-              {artist?.profileImage ? (
-                <img src={artist.profileImage} alt={name} className="h-full w-full object-cover" style={{ objectPosition: "center top" }} />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Music2 className="h-8 w-8 text-white/40" />
-                </div>
-              )}
+            <div className="claim-ring shrink-0 rounded-[1.3rem] p-[2px] shadow-xl">
+              <div className="h-24 w-24 overflow-hidden rounded-[1.15rem] border-4 border-[#101016] bg-[#1a1a24] sm:h-28 sm:w-28">
+                {artist?.profileImage ? (
+                  <img src={artist.profileImage} alt={name} className="h-full w-full object-cover" style={{ objectPosition: "center top" }} />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#2a1c10] to-[#101016] p-4">
+                    <img src="/assets/boostify-logo.svg" alt="Boostify" className="h-full w-full object-contain opacity-90" />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="pb-1">
               {artist?.genre && (
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#e8c98a]">{artist.genre}</span>
               )}
               <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{name}</h1>
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Spot reserved
+              </span>
             </div>
           </div>
 
@@ -271,14 +314,19 @@ export default function ClaimPage() {
 
           {(phase === "ready" || phase === "claiming") && (
             <>
-              <p className="mt-5 text-lg font-medium text-white">
-                Are you <span className="text-[#e8c98a]">{name}</span>? This profile is yours.
+              <p className="mt-5 text-xl font-bold leading-tight text-white sm:text-2xl">
+                Are you <span className="claim-grad-text">{name}</span>? Your spot is waiting.
               </p>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/60">
-                {artist?.biography
-                  ? artist.biography.slice(0, 160) + (artist.biography.length > 160 ? "…" : "")
-                  : "We already built your AI artist page. Claim it for free and unlock the full platform to take your career to the next level."}
+                Boostify is the first social network &amp; platform built{" "}
+                <span className="font-medium text-white/80">only for artists and the music industry</span>{" "}
+                — no algorithm to fight, no noise. We already reserved your profile; claim it free and step in before everyone else.
               </p>
+              {artist?.biography && (
+                <p className="mt-2 max-w-xl text-xs italic leading-relaxed text-white/40">
+                  “{artist.biography.slice(0, 140)}{artist.biography.length > 140 ? "…" : ""}”
+                </p>
+              )}
 
               {/* Irresistible offer — the full arsenal */}
               <div className="mt-6">
@@ -340,7 +388,7 @@ export default function ClaimPage() {
                   </>
                 ) : (
                   <>
-                    Claim my profile — free
+                    Claim my spot — free
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
                   </>
                 )}

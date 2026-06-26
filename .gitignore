@@ -140,3 +140,6 @@ public/attached_assets/
 
 # Backups
 .git-backup-*/
+
+# One-off script with hardcoded secrets — never commit
+scripts/_set-gh-secrets.cjs

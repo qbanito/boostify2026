@@ -187,6 +187,10 @@ router.get('/claim-info', async (req: Request, res: Response) => {
       ok: true,
       tokenValid,
       alreadyClaimed,
+      // Only expose the email for token-based claims (the link proves the
+      // recipient owns it) so the sign-up modal can be prefilled. Never leak it
+      // on the public slug path.
+      prefillEmail: tokenValid && payloadEmail ? payloadEmail : undefined,
       artist: publicArtist(profile),
     });
   } catch (err: any) {
@@ -289,6 +293,16 @@ router.post('/claim', isAuthenticated, async (req: Request, res: Response) => {
         .where(eq(activationScores.email, eventEmail))
         .catch(() => {});
     }
+
+    // Close the Instagram-leads funnel loop: if this profile came from the IG
+    // outreach pipeline (instagram_leads.user_id was set during /generate),
+    // mark that lead as claimed so the leads funnel shows real conversions.
+    // Best-effort — the table is created lazily elsewhere and must never break a claim.
+    db.execute(sql`
+      UPDATE instagram_leads
+         SET dm_status = 'claimed', claimed_at = NOW()
+       WHERE user_id = ${profile.id} AND dm_status <> 'claimed'
+    `).catch(() => {});
 
     res.json({ ok: true, slug: profile.slug });
   } catch (err: any) {
