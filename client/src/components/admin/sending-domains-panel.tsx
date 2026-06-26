@@ -43,6 +43,7 @@ export function SendingDomainsPanel() {
   const [provisioning, setProvisioning] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [newDomain, setNewDomain] = useState('');
+  const [alreadyBought, setAlreadyBought] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +68,7 @@ export function SendingDomainsPanel() {
     if (!domain) return;
     setProvisioning(true);
     try {
-      const d = await apiRequest('POST', '/api/admin/sending-domains/provision', { domain });
+      const d = await apiRequest('POST', '/api/admin/sending-domains/provision', { domain, skipBuy: alreadyBought });
       if (d?.success) {
         toast({ title: 'Dominio provisionado', description: d.message || `${domain} en verificación` });
         setNewDomain('');
@@ -124,6 +125,10 @@ export function SendingDomainsPanel() {
             Provisiona un dominio nuevo de envío de un clic: compra en Hostinger, lo registra en Resend, escribe el DNS,
             dispara la verificación y lo agrega al workflow de envíos cuando verifica.
           </p>
+          <p className="text-xs text-amber-300/80 mt-1">
+            ⚠️ Si el banco rechaza la compra por API (3D Secure), cómpralo manualmente en hpanel.hostinger.com y marca
+            “Ya comprado” — el panel hace el resto (Resend + DNS + verificación) automático.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -144,6 +149,15 @@ export function SendingDomainsPanel() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
+          <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={alreadyBought}
+              onChange={(e) => setAlreadyBought(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-800 accent-emerald-500 cursor-pointer"
+            />
+            Ya comprado en Hostinger (saltar compra, solo configurar envíos)
+          </label>
           {supportedTlds.length > 0 && (
             <p className="text-xs text-slate-500">
               TLDs soportados: {supportedTlds.map((t) => `.${t}`).join(', ')} · {activeCount} activos · {domains.length} totales
