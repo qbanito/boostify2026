@@ -757,7 +757,7 @@ const Router = () => {
           {getRouteComponent("/vrl", WrappedVirtualRecordLabelPage, 'premium')}
           {getRouteComponent("/record-label-services", WrappedRecordLabelServices, 'premium')}
           {getRouteComponent("/artist-generator", WrappedArtistGeneratorPage, 'premium')}
-          {getRouteComponent("/motion-dna", WrappedMotionDNAPage, 'premium')}
+          {getRouteComponent("/motion-dna", WrappedMotionDNAPage, null)}
           {getRouteComponent("/kling-tools", WrappedKlingToolsPage, 'premium')}
           {getRouteComponent("/kling-store", WrappedKlingStorePage, 'premium')}
           {getRouteComponent("/ecosystem", WrappedEcosystemPage, 'premium')}
