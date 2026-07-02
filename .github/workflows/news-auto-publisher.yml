@@ -34,12 +34,12 @@ on:
       max_recipients:
         description: 'Max newsletter recipients (production mode only)'
         required: false
-        default: '20'
+        default: '70'
         type: string
       preview_mode:
         description: 'Preview mode — sends only to convoycubano@gmail.com'
         required: false
-        default: 'true'
+        default: 'false'
         type: boolean
 
 jobs:
@@ -54,6 +54,17 @@ jobs:
       DATABASE_URL:                ${{ secrets.DATABASE_URL }}
       BREVO_API_KEY:               ${{ secrets.BREVO_API_KEY }}
       FAL_KEY:                     ${{ secrets.FAL_KEY }}
+      RESEND_API_ARTISTS_1:        ${{ secrets.RESEND_API_ARTISTS_1 }}
+      RESEND_API_ARTISTS_2:        ${{ secrets.RESEND_API_ARTISTS_2 }}
+      RESEND_API_ARTISTS_3:        ${{ secrets.RESEND_API_ARTISTS_3 }}
+      RESEND_API_ARTISTS_4:        ${{ secrets.RESEND_API_ARTISTS_4 }}
+      RESEND_API_ARTISTS_5:        ${{ secrets.RESEND_API_ARTISTS_5 }}
+      RESEND_API_ARTISTS_6:        ${{ secrets.RESEND_API_ARTISTS_6 }}
+      RESEND_API_ARTISTS_7:        ${{ secrets.RESEND_API_ARTISTS_7 }}
+      RESEND_API_ARTISTS_8:        ${{ secrets.RESEND_API_ARTISTS_8 }}
+      RESEND_API_ARTISTS_9:        ${{ secrets.RESEND_API_ARTISTS_9 }}
+      RESEND_API_ARTISTS_10:       ${{ secrets.RESEND_API_ARTISTS_10 }}
+      RESEND_API_ARTISTS_11:       ${{ secrets.RESEND_API_ARTISTS_11 }}
       PREVIEW_EMAIL:               convoycubano@gmail.com
 
     steps:
@@ -75,8 +86,8 @@ jobs:
             --category="${{ github.event.inputs.category || 'platform-updates' }}" \
             --topic="${{ github.event.inputs.topic_override || '' }}" \
             --send-newsletter="${{ github.event.inputs.send_newsletter || 'true' }}" \
-            --max-recipients="${{ github.event.inputs.max_recipients || '20' }}" \
-            --preview="${{ github.event.inputs.preview_mode || 'true' }}"
+            --max-recipients="${{ github.event.inputs.max_recipients || '70' }}" \
+            --preview="${{ github.event.inputs.preview_mode || 'false' }}"
 
       - name: ✅ Summary
         if: success()
@@ -84,7 +95,7 @@ jobs:
           echo "### 📰 News Article Published Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Category**: ${{ github.event.inputs.category || 'platform-updates' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Mode**: ${{ github.event.inputs.preview_mode == 'false' && 'PRODUCTION' || 'PREVIEW' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: ${{ github.event.inputs.preview_mode == 'true' && 'PREVIEW' || 'PRODUCTION' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Newsletter**: ${{ github.event.inputs.send_newsletter || 'true' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **View**: [boostifymusic.com/news](https://boostifymusic.com/news)" >> $GITHUB_STEP_SUMMARY
 

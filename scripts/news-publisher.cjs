@@ -3,8 +3,9 @@
  * 📰 BOOSTIFY NEWS AUTO-PUBLISHER
  * ─────────────────────────────────────────────────────────────────────────────
  * Generates a new article via OpenAI gpt-4o, stores it in the newsArticles
- * table on Supabase, then sends a newsletter email via Brevo to recent
- * newsletter subscribers that haven't received this campaign yet.
+ * table, then sends the newsletter to music-industry contacts and artists,
+ * intelligently distributed across ALL sending domains (Brevo + Resend x11)
+ * via the shared email smart router (same ledger as every other campaign).
  *
  * Usage:
  *   node scripts/news-publisher.cjs [options]
@@ -13,7 +14,7 @@
  *   --category=<category>         Article category (default: platform-updates)
  *   --topic=<text>                Optional topic override for AI generation
  *   --send-newsletter=<bool>      Whether to send newsletter email (default: true)
- *   --max-recipients=<n>          Max newsletter recipients (default: 20)
+ *   --max-recipients=<n>          Max newsletter recipients (default: 70)
  *   --preview=<bool>              If true, sends only to PREVIEW_EMAIL (default: true)
  *
  * Required env vars:
@@ -35,6 +36,16 @@ try {
 } catch (e) { /* dotenv unavailable — env vars set directly in CI */ }
 
 const { Pool } = require('pg');
+const {
+  getDailyBudget,
+  getBestArtistProvider,
+  getBrevoQuota,
+  recordSends,
+  sendWithBrevo,
+  sendWithResend,
+  fetchContacts,
+  markContacted,
+} = require('./email-smart-router.cjs');
 
 // ─── Parse CLI Arguments ──────────────────────────────────────────────────────
 const args = process.argv.slice(2).reduce((acc, arg) => {
@@ -46,7 +57,7 @@ const args = process.argv.slice(2).reduce((acc, arg) => {
 const CATEGORY      = args['category']          || 'platform-updates';
 const TOPIC_HINT    = args['topic']             || '';
 const SEND_NL       = (args['send-newsletter']  || 'true') !== 'false';
-const MAX_RECIPS    = parseInt(args['max-recipients'] || '20', 10);
+const MAX_RECIPS    = parseInt(args['max-recipients'] || '70', 10);
 const PREVIEW_MODE  = (args['preview']          || 'true') !== 'false';
 const PREVIEW_EMAIL = process.env.PREVIEW_EMAIL || 'convoycubano@gmail.com';
 
@@ -197,15 +208,18 @@ function generateSlug(title) {
 }
 
 // ─── Check for Existing Article Today ────────────────────────────────────────
-async function articleExistsToday(client) {
+async function todaysArticle(client) {
   const res = await client.query(`
-    SELECT id FROM news_articles
+    SELECT id, slug, title, subtitle, summary, cover_image_url, category,
+           COALESCE(read_time_minutes, 4) AS read_time_minutes
+    FROM news_articles
     WHERE published_at >= CURRENT_DATE
       AND published_at < CURRENT_DATE + INTERVAL '1 day'
       AND status = 'published'
+    ORDER BY published_at DESC
     LIMIT 1
   `);
-  return res.rows.length > 0;
+  return res.rows[0] || null;
 }
 
 // ─── Store Article in Database ────────────────────────────────────────────────
@@ -360,7 +374,7 @@ function buildNewsletterEmail(article, coverImageUrl) {
 </html>`;
 }
 
-// ─── Send Email via Brevo ─────────────────────────────────────────────────────
+// ─── Send Email via Brevo (preview / owner copy) ─────────────────────────────
 async function sendEmail({ to, toName, subject, html }) {
   const res = await fetch(BREVO_ENDPOINT, {
     method: 'POST',
@@ -378,29 +392,141 @@ async function sendEmail({ to, toName, subject, html }) {
     }),
   });
 
-  const body = await res.json();
+  let body;
+  try {
+    body = await res.json();
+  } catch (_) {
+    body = { message: `Brevo HTTP ${res.status}` };
+  }
   if (body.messageId) return { ok: true, messageId: body.messageId };
   return { ok: false, error: body.message || JSON.stringify(body) };
 }
 
-// ─── Get Newsletter Recipients ────────────────────────────────────────────────
-async function getNewsletterRecipients(client, campaignId) {
-  // Get leads that opted in to newsletter and haven't received this article
-  const res = await client.query(`
-    SELECT l.id, l.email, l.first_name, l.name
-    FROM leads l
-    WHERE l.email IS NOT NULL
-      AND l.newsletter_opt_in = true
-      AND l.id NOT IN (
-        SELECT lead_id FROM newsletter_outreach_log WHERE campaign_id = $1
-      )
-    ORDER BY l.created_at DESC
-    LIMIT $2
-  `, [campaignId, MAX_RECIPS]);
+// ─── Smart Recipients: industry + artists, deduped & interleaved ─────────────
+async function getSmartRecipients(target) {
+  const wantIndustry = Math.ceil(target / 2);
+  const wantArtists  = target - wantIndustry;
 
-  // Fallback: query without newsletter_opt_in if column doesn't exist
-  if (res.rows) return res.rows;
-  return [];
+  const [industry, artists] = await Promise.all([
+    fetchContacts(pool, { audience: 'industry', limit: wantIndustry * 2, cooldownDays: 3 }),
+    fetchContacts(pool, { audience: 'artists',  limit: wantArtists  * 2, cooldownDays: 3 }),
+  ]);
+
+  const seen = new Set();
+  const out = [];
+  const take = (row, segment) => {
+    const e = (row.email || '').trim().toLowerCase();
+    if (!e || seen.has(e)) return false;
+    seen.add(e);
+    out.push({ ...row, segment });
+    return true;
+  };
+
+  // Interleave both audiences so each gets fair coverage even if we stop early
+  let i = 0, a = 0, ic = 0, ac = 0;
+  while (out.length < target && (i < industry.length || a < artists.length)) {
+    if (ic <= ac && i < industry.length) { if (take(industry[i++], 'industry')) ic++; continue; }
+    if (a < artists.length)              { if (take(artists[a++],  'artists'))  ac++; continue; }
+    if (i < industry.length)             { if (take(industry[i++], 'industry')) ic++; }
+  }
+
+  // Fill any shortfall from the general audience with a shorter cooldown
+  if (out.length < target) {
+    const fill = await fetchContacts(pool, { audience: 'all', limit: (target - out.length) * 3, cooldownDays: 1 });
+    for (const row of fill) {
+      if (out.length >= target) break;
+      take(row, 'general');
+    }
+  }
+
+  return out.slice(0, target);
+}
+
+// ─── Production Blast: rotate intelligently across ALL sending domains ───────
+async function sendNewsletterBlast(client, { subject, html, campaignId, articleId }) {
+  const budget = await getDailyBudget(pool);
+  if (budget.paused) {
+    console.log('   ⏸️  Sending paused by admin (Email Command Center) — skipping newsletter.');
+    return { sent: 0, failed: 0, target: 0 };
+  }
+  const target = Math.min(MAX_RECIPS, budget.remaining);
+  if (target <= 0) {
+    console.log(`   ⚠️  Global daily budget exhausted (${budget.sentToday}/${budget.target}) — skipping newsletter.`);
+    return { sent: 0, failed: 0, target: 0 };
+  }
+
+  const recipients = await getSmartRecipients(target);
+  const nIndustry = recipients.filter(r => r.segment === 'industry').length;
+  const nArtists  = recipients.filter(r => r.segment === 'artists').length;
+  console.log(`   📋 Recipients: ${recipients.length} (target ${target}) → ${nIndustry} industry / ${nArtists} artists / ${recipients.length - nIndustry - nArtists} general`);
+
+  // Chunked rotation: max sends per domain before rotating → the blast is
+  // spread across many sending domains instead of burning a single one.
+  const CHUNK = 15;
+  const brevoQuota = await getBrevoQuota(pool);
+  let brevoLeft = brevoQuota.remainingToday;
+  let resendProv = null;
+  let resendChunkLeft = 0;
+  const perProvider = {};
+
+  let sent = 0, failed = 0;
+
+  for (const lead of recipients) {
+    // Pick provider: industry → Brevo (official boostifymusic.com) while it has
+    // quota; everyone else → Resend rotation (lowest-used domain, CHUNK cap).
+    let choice = null;
+    if (lead.segment === 'industry' && brevoLeft > 0) {
+      choice = { type: 'brevo', key: 'BREVO' };
+    } else {
+      if (!resendProv || resendChunkLeft <= 0) {
+        const p = await getBestArtistProvider(pool);
+        resendProv = (p && p.apiKey && p.remainingToday > 0) ? p : null;
+        resendChunkLeft = resendProv ? Math.min(resendProv.remainingToday, CHUNK) : 0;
+      }
+      if (resendProv) choice = { type: 'resend', key: resendProv.provider, p: resendProv };
+      else if (brevoLeft > 0) choice = { type: 'brevo', key: 'BREVO' };
+    }
+
+    if (!choice) {
+      console.log('   ⚠️  All sending accounts at capacity — stopping blast.');
+      break;
+    }
+
+    let result;
+    if (choice.type === 'brevo') {
+      result = await sendWithBrevo({ to: lead.email, subject, html, fromEmail: FROM_EMAIL, fromName: FROM_NAME });
+    } else {
+      result = await sendWithResend({
+        to: lead.email, subject, html,
+        apiKey: choice.p.apiKey, fromEmail: choice.p.fromEmail, fromName: FROM_NAME,
+      });
+    }
+
+    if (result.messageId) {
+      sent++;
+      if (choice.type === 'brevo') brevoLeft--; else resendChunkLeft--;
+      perProvider[choice.key] = (perProvider[choice.key] || 0) + 1;
+      await recordSends(pool, choice.key, 1);
+      await markContacted(pool, lead.id);
+      await logNewsletterSend(client, lead.id, campaignId, articleId, result.messageId);
+      console.log(`   ✅ [${choice.key}] ${lead.segment} → ${lead.email}`);
+    } else {
+      failed++;
+      console.error(`   ❌ [${choice.key}] ${lead.email}: ${result.error}`);
+      // Rate-limit style errors → drop this provider immediately and rotate
+      if (/rate|limit|429|quota|daily/i.test(String(result.error))) {
+        if (choice.type === 'brevo') brevoLeft = 0;
+        else resendChunkLeft = 0;
+      }
+    }
+
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  const dist = Object.entries(perProvider).map(([k, n]) => `${k}:${n}`).join('  ') || 'none';
+  console.log(`\n   📊 Results: ${sent} sent, ${failed} failed`);
+  console.log(`   🔀 Distribution: ${dist}`);
+  return { sent, failed, target };
 }
 
 // ─── Log Newsletter Send ──────────────────────────────────────────────────────
@@ -428,27 +554,41 @@ async function main() {
 
   const client = await pool.connect();
   try {
-    // 1. Check if article already generated today
-    const alreadyPublished = await articleExistsToday(client);
-    if (alreadyPublished && !TOPIC_HINT) {
-      console.log('\n⚠️  An article was already published today. Skipping generation.');
-      console.log('   Pass --topic= to force a second article.\n');
-      return;
+    let article, coverImageUrl, articleId, slug;
+
+    // 1. Reuse today's article if one was already published (platform scheduler
+    //    or a previous run) — the newsletter must still go out either way.
+    const existing = TOPIC_HINT ? null : await todaysArticle(client);
+    if (existing) {
+      console.log(`\n♻️  Reusing today's article: "${existing.title}" (id=${existing.id})`);
+      article = {
+        title:           existing.title,
+        subtitle:        existing.subtitle || '',
+        summary:         existing.summary || '',
+        category:        existing.category || 'platform-updates',
+        readTimeMinutes: existing.read_time_minutes,
+      };
+      coverImageUrl = existing.cover_image_url || 'https://boostifymusic.com/assets/freepik__boostify_music_organe_abstract_icon.png';
+      articleId = existing.id;
+      slug = existing.slug;
+    } else {
+      // 2. Generate article via OpenAI
+      article = await generateArticle();
+      console.log(`\n✅ Article generated: "${article.title}"`);
+      console.log(`   Read time: ${article.readTimeMinutes} min`);
+      console.log(`   Tags: ${article.tags.join(', ')}`);
+
+      // 3. Generate cover image
+      console.log('\n🖼️  Generating cover image...');
+      coverImageUrl = await generateCoverImage(article.title);
+
+      // 4. Store article in database
+      console.log('\n💾 Storing article in database...');
+      const stored = await storeArticle(client, article, coverImageUrl);
+      articleId = stored.id;
+      slug = stored.slug;
     }
 
-    // 2. Generate article via OpenAI
-    const article = await generateArticle();
-    console.log(`\n✅ Article generated: "${article.title}"`);
-    console.log(`   Read time: ${article.readTimeMinutes} min`);
-    console.log(`   Tags: ${article.tags.join(', ')}`);
-
-    // 3. Generate cover image
-    console.log('\n🖼️  Generating cover image...');
-    const coverImageUrl = await generateCoverImage(article.title);
-
-    // 4. Store article in database
-    console.log('\n💾 Storing article in database...');
-    const { id: articleId, slug } = await storeArticle(client, article, coverImageUrl);
     const articleUrl = `${NEWS_URL}`;
 
     console.log(`\n🔗 Article URL: ${articleUrl}`);
@@ -474,53 +614,26 @@ async function main() {
           console.error(`   ❌ Preview email failed: ${result.error}`);
         }
       } else {
-        // Production: send to newsletter subscribers
-        let recipients;
+        // Production: intelligent blast — industry + artists, rotated across
+        // every sending domain, exact same HTML design as the preview email.
+        let blast = { sent: 0, failed: 0, target: 0 };
         try {
-          recipients = await getNewsletterRecipients(client, campaignId);
+          blast = await sendNewsletterBlast(client, { subject, html, campaignId, articleId });
         } catch (err) {
-          // leads table/columns missing on the consolidated DB — use music_industry_contacts
-          console.warn('   ⚠️  leads/newsletter query failed, falling back to music_industry_contacts');
-          const fallback = await client.query(
-            `SELECT id, email, first_name, full_name AS name
-             FROM music_industry_contacts
-             WHERE email IS NOT NULL AND email <> ''
-               AND COALESCE(email_status, 'valid') NOT IN ('bounced', 'invalid', 'unsubscribed')
-             ORDER BY COALESCE(last_contacted_at, '1970-01-01'::timestamp) ASC, RANDOM()
-             LIMIT $1`,
-            [MAX_RECIPS]
-          );
-          recipients = fallback.rows;
+          console.error(`   ❌ Newsletter blast crashed: ${err.message}`);
         }
 
-        console.log(`   📋 Recipients found: ${recipients.length}`);
+        // Owner copy — you keep receiving the exact email your audience got
+        try {
+          const copy = await sendEmail({ to: PREVIEW_EMAIL, toName: 'Boostify Team', subject, html });
+          console.log(copy.ok
+            ? `   📬 Owner copy sent to ${PREVIEW_EMAIL}`
+            : `   ⚠️  Owner copy failed: ${copy.error}`);
+        } catch (_) { /* non-critical */ }
 
-        let sentCount = 0, failCount = 0;
-        for (const lead of recipients) {
-          const firstName = lead.first_name || lead.name?.split(' ')[0] || 'there';
-          const personalizedSubject = subject;
-
-          const result = await sendEmail({
-            to:     lead.email,
-            toName: firstName,
-            subject: personalizedSubject,
-            html,
-          });
-
-          if (result.ok) {
-            sentCount++;
-            await logNewsletterSend(client, lead.id, campaignId, articleId, result.messageId);
-            console.log(`   ✅ Sent to ${lead.email}`);
-          } else {
-            failCount++;
-            console.error(`   ❌ Failed for ${lead.email}: ${result.error}`);
-          }
-
-          // Rate limiting: wait 400ms between sends
-          await new Promise(r => setTimeout(r, 400));
+        if (blast.target > 0 && blast.sent === 0) {
+          throw new Error(`Newsletter blast failed: 0 of ${blast.target} emails sent`);
         }
-
-        console.log(`\n   📊 Results: ${sentCount} sent, ${failCount} failed`);
       }
     }
 
