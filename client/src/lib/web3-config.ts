@@ -3,11 +3,11 @@ import { http, fallback } from 'wagmi';
 import { polygon, polygonMumbai } from 'wagmi/chains';
 
 // Custom Polygon RPCs — override wagmi defaults that include dead endpoints (e.g. polygon.llamarpc.com)
+// NOTE: polygon-rpc.com removed — it now returns 401 and spammed the console.
 const POLYGON_TRANSPORTS = fallback([
   http('https://polygon-bor-rpc.publicnode.com', { timeout: 10000, retryCount: 2 }),
   http('https://rpc.ankr.com/polygon', { timeout: 10000, retryCount: 2 }),
   http('https://1rpc.io/matic', { timeout: 10000, retryCount: 2 }),
-  http('https://polygon-rpc.com', { timeout: 10000, retryCount: 2 }),
 ]);
 
 // WalletConnect Project ID - debe ser válido de https://cloud.walletconnect.com

@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useArtistTokens } from "@/hooks/use-artist-tokens";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { seededRange } from "@/lib/seeded";
 import { TrendingUp, Droplets, Loader2 } from "lucide-react";
 import { AddLiquidityModal } from "./add-liquidity-modal";
 import { PoolAnalytics } from "./pool-analytics";
@@ -11,19 +12,25 @@ import { PoolAnalytics } from "./pool-analytics";
 export function PoolsView() {
   const artistTokens = useArtistTokens();
 
-  // Generate mock pools from artist tokens
-  const mockPools = artistTokens.slice(0, 6).map((token, idx) => ({
-    id: idx + 1,
-    name: `${token.symbol} / USDC`,
-    token1: token.symbol,
-    token2: "USDC",
-    tvl: `$${(Math.random() * 500000 + 100000).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-    apy: `${(Math.random() * 30 + 5).toFixed(1)}%`,
-    volume24h: `$${(Math.random() * 100000 + 10000).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-    liquidity: Math.random() * 500000 + 100000,
-    token1Reserve: Math.random() * 1000 + 100,
-    token2Reserve: Math.random() * 50000 + 5000,
-  }));
+  // Display pools derived deterministically from artist token data (stable across renders)
+  const mockPools = useMemo(() => artistTokens.slice(0, 6).map((token, idx) => {
+    const liquidity = Math.round(seededRange(`tvl-${token.symbol}`, 100000, 600000));
+    const token2Reserve = liquidity / 2;
+    const token1Reserve = token.price > 0 ? token2Reserve / token.price : 0;
+    const volume = token.volume24h || Math.round(seededRange(`v24-${token.symbol}`, 10000, 110000));
+    return {
+      id: idx + 1,
+      name: `${token.symbol} / USDC`,
+      token1: token.symbol,
+      token2: "USDC",
+      tvl: `$${liquidity.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+      apy: `${seededRange(`apy-${token.symbol}`, 5, 35).toFixed(1)}%`,
+      volume24h: `$${Math.round(volume).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+      liquidity,
+      token1Reserve,
+      token2Reserve,
+    };
+  }), [artistTokens]);
 
   return (
     <div className="space-y-6">

@@ -26,14 +26,12 @@ const POLYGON_RPCS = [
   'https://polygon-bor-rpc.publicnode.com',
   'https://rpc.ankr.com/polygon',
   'https://1rpc.io/matic',
-  'https://polygon-rpc.com',
 ];
 
 const publicClient = createPublicClient({
   chain: polygon,
   transport: fallback(
-    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 })),
-    { rank: true }
+    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 }))
   ),
 });
 

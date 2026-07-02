@@ -1,9 +1,10 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Search,
   Play,
+  Pause,
   Plus,
   Sparkles,
   TrendingUp,
@@ -26,6 +27,7 @@ import {
   UserPlus,
   UserCheck,
   Disc3,
+  Radio,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -294,6 +296,12 @@ export default function StreamingPage() {
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
+  // Debounced query value so we don't fire a request on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 280);
+    return () => clearTimeout(t);
+  }, [search]);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [view, setView] = useState<"home" | "search" | "library" | "admin">("home");
   const [openPlaylistId, setOpenPlaylistId] = useState<number | null>(null);
@@ -302,7 +310,7 @@ export default function StreamingPage() {
   const [searchTab, setSearchTab] = useState<"artists" | "songs" | "playlists">("artists");
 
   // ─── Home feed ─────────────────────────────────────────────────────────────
-  const { data: home } = useQuery<StreamHome>({
+  const { data: home, isLoading: homeLoading } = useQuery<StreamHome>({
     queryKey: ["/api/streaming/home"],
     queryFn: async () => {
       const r = await apiRequest("/api/streaming/home");
@@ -316,11 +324,11 @@ export default function StreamingPage() {
 
   // ─── Artist search ─────────────────────────────────────────────────────────
   const { data: searchResults = [], isFetching: searching } = useQuery<StreamArtist[]>({
-    queryKey: ["/api/streaming/artists", search, activeGenre],
-    enabled: view === "search" || !!search || !!activeGenre,
+    queryKey: ["/api/streaming/artists", debouncedSearch, activeGenre],
+    enabled: view === "search" || !!debouncedSearch || !!activeGenre,
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (activeGenre) params.set("genre", activeGenre);
       params.set("limit", "40");
       const r = await apiRequest(`/api/streaming/artists?${params.toString()}`);
@@ -419,10 +427,10 @@ export default function StreamingPage() {
   });
 
   const { data: fullSearch, isFetching: fullSearching } = useQuery<SearchAllResult>({
-    queryKey: ["/api/streaming/search", search],
-    enabled: view === "search" && search.trim().length > 0,
+    queryKey: ["/api/streaming/search", debouncedSearch],
+    enabled: view === "search" && debouncedSearch.length > 0,
     queryFn: async () => {
-      const r = await apiRequest(`/api/streaming/search?q=${encodeURIComponent(search.trim())}`);
+      const r = await apiRequest(`/api/streaming/search?q=${encodeURIComponent(debouncedSearch)}`);
       return { artists: r?.artists || [], songs: r?.songs || [], playlists: r?.playlists || [] };
     },
   });
@@ -511,14 +519,32 @@ export default function StreamingPage() {
 
   // ─── Playback ──────────────────────────────────────────────────────────────
   const playSong = useCallback(
-    (song: StreamSong, list: StreamSong[]) => {
+    async (song: StreamSong, list: StreamSong[]) => {
       if (!song.audioUrl) {
         toast({ title: "Sin audio disponible", variant: "destructive" });
         return;
       }
-      const playable = list.filter((s) => s.audioUrl);
-      const startIndex = Math.max(0, playable.findIndex((s) => s.id === song.id));
-      player.playQueue(playable.map(songToTrack), { startIndex, autoplay: true });
+      // If this exact track is already loaded, just toggle play/pause.
+      if (String(player.currentTrack?.id) === String(song.id)) {
+        player.toggle();
+        return;
+      }
+      let queueSongs = list.filter((s) => s.audioUrl);
+      // Playing a lone track? Extend it into an endless radio of similar songs
+      // so the music never stops after a single tap.
+      if (queueSongs.length <= 1) {
+        try {
+          const r = await apiRequest(`/api/streaming/radio/${song.id}`);
+          const radio = (r?.songs || []).filter(
+            (s: StreamSong) => s.audioUrl && s.id !== song.id,
+          );
+          if (radio.length) queueSongs = [song, ...radio];
+        } catch {
+          /* radio is optional */
+        }
+      }
+      const startIndex = Math.max(0, queueSongs.findIndex((s) => s.id === song.id));
+      player.playQueue(queueSongs.map(songToTrack), { startIndex, autoplay: true });
     },
     [player, toast],
   );
@@ -595,6 +621,16 @@ export default function StreamingPage() {
         {/* ─── HOME ─────────────────────────────────────────────────────── */}
         {view === "home" && (
           <>
+            {homeLoading && !home && <HomeSkeleton />}
+
+            {!homeLoading && home?.featured?.[0] && (
+              <HeroSpotlight
+                artist={home.featured[0]}
+                following={isAuthenticated ? followIds.has(home.featured[0].id) : undefined}
+                onToggleFollow={isAuthenticated ? toggleFollow : undefined}
+              />
+            )}
+
             {(home?.featured?.length ?? 0) > 0 && (
               <section>
                 <SectionHeader icon={<Star className="w-5 h-5 text-amber-400" />} title="Artistas destacados" subtitle="Curados por el algoritmo de IA + el equipo" />
@@ -971,6 +1007,112 @@ function SectionHeader({ icon, title, subtitle }: { icon?: React.ReactNode; titl
   );
 }
 
+/** Big cinematic banner featuring the top artist of the moment. */
+function HeroSpotlight({
+  artist,
+  following,
+  onToggleFollow,
+}: {
+  artist: StreamArtist;
+  following?: boolean;
+  onToggleFollow?: (artistId: number) => void;
+}) {
+  const href = artist.slug ? `/artist/${artist.slug}` : `/artist/${artist.id}`;
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-white/10 min-h-[220px] sm:min-h-[280px]">
+      {artist.image ? (
+        <div
+          className="absolute inset-0 bg-cover bg-center scale-105 blur-[2px]"
+          style={{ backgroundImage: `url(${artist.image})` }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/40 via-amber-500/20 to-fuchsia-500/20" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/30" />
+      <div className="relative flex flex-col sm:flex-row items-start sm:items-end gap-5 p-6 sm:p-8 h-full">
+        <div className="w-24 h-24 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shrink-0 shadow-2xl ring-1 ring-white/20 bg-white/10">
+          <SmartImage
+            src={artist.image}
+            alt={artist.name}
+            className="w-full h-full object-cover"
+            fallback={
+              <div className="w-full h-full grid place-items-center text-3xl font-bold text-white/40">
+                {initials(artist.name)}
+              </div>
+            }
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+            <Star className="w-3.5 h-3.5 fill-amber-300" /> Artista destacado
+          </span>
+          <h1 className="mt-1.5 text-3xl sm:text-5xl font-black tracking-tight truncate">{artist.name}</h1>
+          <p className="mt-1 text-white/60 text-sm">
+            {artist.genre || "Artista"} · {artist.songCount} {artist.songCount === 1 ? "tema" : "temas"}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <Link href={href}>
+              <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-orange-500 hover:bg-orange-400 text-black text-sm font-bold transition shadow-lg shadow-orange-500/30 cursor-pointer">
+                <Play className="w-4 h-4 fill-black" /> Escuchar
+              </span>
+            </Link>
+            {onToggleFollow && (
+              <button
+                onClick={() => onToggleFollow(artist.id)}
+                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition backdrop-blur-md ${
+                  following
+                    ? "bg-white/15 text-white hover:bg-white/20"
+                    : "bg-white/[0.08] text-white/90 hover:bg-white/15"
+                }`}
+              >
+                {following ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                {following ? "Siguiendo" : "Seguir"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Shimmering placeholder shown while the home feed loads. */
+function HomeSkeleton() {
+  return (
+    <div className="space-y-8 animate-pulse">
+      <div className="h-[220px] sm:h-[280px] rounded-3xl bg-white/[0.04]" />
+      {[0, 1].map((row) => (
+        <div key={row}>
+          <div className="h-6 w-48 rounded-lg bg-white/[0.06] mb-4" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5">
+                <div className="aspect-square rounded-xl bg-white/[0.06] mb-3" />
+                <div className="h-3.5 w-3/4 rounded bg-white/[0.06] mb-2" />
+                <div className="h-3 w-1/2 rounded bg-white/[0.05]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div>
+        <div className="h-6 w-40 rounded-lg bg-white/[0.06] mb-4" />
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 p-2.5">
+              <div className="w-11 h-11 rounded-lg bg-white/[0.06] shrink-0" />
+              <div className="flex-1">
+                <div className="h-3.5 w-1/3 rounded bg-white/[0.06] mb-2" />
+                <div className="h-3 w-1/4 rounded bg-white/[0.05]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ArtistCard({
   artist,
   following,
@@ -1077,7 +1219,19 @@ function SongRow({
   if (songs.length === 0) return null;
   return (
     <section>
-      <SectionHeader icon={icon} title={title} />
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+        </div>
+        <button
+          onClick={() => onPlay(songs[0], songs)}
+          className="flex items-center gap-1.5 shrink-0 px-3.5 py-1.5 rounded-full bg-orange-500 hover:bg-orange-400 text-black text-xs font-semibold transition shadow-lg shadow-orange-500/20"
+        >
+          <Play className="w-3.5 h-3.5 fill-black" />
+          Reproducir todo
+        </button>
+      </div>
       <div className="space-y-1">
         {songs.map((s, i) => (
           <SongListItem
@@ -1112,21 +1266,53 @@ function SongListItem({
   liked?: boolean;
   onToggleLike?: () => void;
 }) {
+  const { currentTrack, isPlaying } = useAudioPlayer();
+  const isCurrent = String(currentTrack?.id) === String(song.id);
+  const playing = isCurrent && isPlaying;
   return (
-    <div className="group flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.05] transition">
-      <button onClick={onPlay} className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-white/10 grid place-items-center">
+    <div
+      className={`group flex items-center gap-3 p-2.5 rounded-xl transition ${
+        isCurrent ? "bg-orange-500/10 ring-1 ring-orange-400/30" : "hover:bg-white/[0.05]"
+      }`}
+    >
+      <button
+        onClick={onPlay}
+        className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-white/10 grid place-items-center"
+        aria-label={playing ? "Pausar" : "Reproducir"}
+      >
         <SmartImage
           src={song.coverArt || song.artist?.image || ""}
           alt={song.title}
           className="w-full h-full object-cover"
           fallback={<Music2 className="w-5 h-5 text-white/40" />}
         />
-        <div className="absolute inset-0 bg-black/50 grid place-items-center opacity-0 group-hover:opacity-100 transition">
-          <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+        <div
+          className={`absolute inset-0 bg-black/50 grid place-items-center transition ${
+            playing || isCurrent ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          {playing ? (
+            <Pause className="w-5 h-5 fill-white text-white" />
+          ) : (
+            <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+          )}
         </div>
       </button>
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onPlay}>
-        <p className="font-medium text-sm truncate">{song.title}</p>
+        <p className={`font-medium text-sm truncate flex items-center gap-2 ${isCurrent ? "text-orange-300" : ""}`}>
+          {playing && (
+            <span className="flex h-3 items-end gap-[2px] shrink-0" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="cs-eq-bar w-[2px] rounded-full bg-orange-400"
+                  style={{ height: "100%", animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </span>
+          )}
+          <span className="truncate">{song.title}</span>
+        </p>
         <p className="text-white/40 text-xs truncate">
           {song.artist?.name}
           {song.genre ? ` · ${song.genre}` : ""}

@@ -1244,6 +1244,9 @@ export default function CrowdSyncDJPage() {
   const [currentTrack, setCurrentTrack] = useState<BoostifySong | null>(null);
   const [isGeneratingMusic, setIsGeneratingMusic] = useState(false);
   const musicPollRef = useRef<number | null>(null);
+  const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
+  const visualPollRef = useRef<number | null>(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const [toggles, setToggles] = useState({ voice: true, visuals: true, autonomous: true, human: true });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>("offline");
@@ -1280,6 +1283,17 @@ export default function CrowdSyncDJPage() {
   );
   const selectedSong = artistSongs.find((song) => Number(song.id) === Number(selectedSongId)) || artistSongs[0] || null;
   const activeFullEvent = bootstrapQuery.data?.activeEvent as CrowdSyncFullEvent | undefined;
+
+  // AI-generated stage visuals for this event (real GPT Image 1 assets), shown
+  // ahead of the built-in presets in the Live Visuals grid.
+  const generatedVisuals = useMemo(
+    () =>
+      ((activeFullEvent?.generatedAssets as any[]) || [])
+        .filter((asset) => asset?.type === "visual" && asset?.status === "ready" && asset?.imageUrl)
+        .map((asset) => ({ name: String(asset.title || "AI Visual"), image: String(asset.imageUrl) })),
+    [activeFullEvent?.generatedAssets],
+  );
+  const allVisuals = useMemo(() => [...generatedVisuals, ...visualAssets].slice(0, 8), [generatedVisuals]);
 
   const mobileCameraUrl = useMemo(() => {
     if (typeof window === "undefined") return "/boostify-crowdsync-dj?camera=mobile";
@@ -1427,6 +1441,8 @@ export default function CrowdSyncDJPage() {
 
   useEffect(() => () => {
     if (musicPollRef.current) window.clearInterval(musicPollRef.current);
+    if (visualPollRef.current) window.clearInterval(visualPollRef.current);
+    voiceAudioRef.current?.pause();
   }, []);
 
   const createEventMutation = useMutation({
@@ -1652,15 +1668,52 @@ export default function CrowdSyncDJPage() {
     onError: (error: any) => toast({ title: t.musicEngine, description: error.message, variant: "destructive" }),
   });
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get("session_id");
-    if (params.get("payment") === "success" && sessionId && !verifyCheckoutMutation.isPending && !verifyCheckoutMutation.isSuccess) {
-      verifyCheckoutMutation.mutate(sessionId);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, [verifyCheckoutMutation]);
+  // Real artist voice drop: the server synthesizes a hype MC line (ElevenLabs →
+  // OpenAI TTS fallback) and returns a ready asset with audioUrl, which we play
+  // over the live set while ducking the music.
+  const artistVoiceMutation = useMutation({
+    mutationFn: async () => {
+      const id = await ensureEvent();
+      return apiRequest(`/api/crowdsync-dj/events/${id}/artist-voice`, {
+        method: "POST",
+        data: { lang, artistName: selectedArtist?.name || config.artist },
+      });
+    },
+    onSuccess: (res: any) => {
+      refetchCrowdSync();
+      const asset = res?.asset;
+      if (asset?.audioUrl) {
+        playVoiceDrop(asset.audioUrl);
+        addLog(lang === "en" ? "Artist voice drop" : "Voz del artista", asset.detail || asset.title || "");
+        toast({ title: t.artistVoice, description: lang === "en" ? "Voice drop is playing over the set." : "La voz está sonando sobre el set." });
+      }
+    },
+    onError: (error: any) => toast({ title: t.artistVoice, description: error.message, variant: "destructive" }),
+  });
+
+  // Real AI stage visual: async server job (GPT Image 1) polled until the image
+  // is ready, then it appears first in the Live Visuals grid.
+  const generateVisualMutation = useMutation({
+    mutationFn: async () => {
+      const id = await ensureEvent();
+      return apiRequest(`/api/crowdsync-dj/events/${id}/generate-visual`, {
+        method: "POST",
+        data: { name: config.visualStyle },
+      });
+    },
+    onSuccess: (res: any) => {
+      const jobId: string | undefined = res?.jobId || res?.asset?.id;
+      const eventId: string | undefined = res?.event?.id || activeEventId || undefined;
+      if (jobId && eventId) {
+        setIsGeneratingVisual(true);
+        pollVisualJob(eventId, jobId);
+        toast({ title: t.liveVisuals, description: lang === "en" ? "Generating AI visual…" : "Generando visual AI…" });
+      } else {
+        refetchCrowdSync();
+      }
+    },
+    onError: (error: any) => toast({ title: t.liveVisuals, description: error.message, variant: "destructive" }),
+  });
 
   const addLog = (label: string, detail: string) => setLog((items) => [{ id: Date.now(), label, detail, time: fmt() }, ...items].slice(0, 6));
   const runAction = (label: string, detail: string, type = "action") => {
@@ -1818,6 +1871,13 @@ export default function CrowdSyncDJPage() {
         persistAction(apiLabel, detail, "music", "set_bpm", 2);
         return;
       }
+      case 5: // Artist voice — real TTS voice drop played over the set
+        if (!toggles.voice) {
+          toast({ title: t.artistVoice, description: lang === "en" ? "Enable voice interaction in the DJ agent first." : "Activa la interacción por voz en el agente DJ primero." });
+          return;
+        }
+        if (!artistVoiceMutation.isPending) artistVoiceMutation.mutate();
+        return;
       case 6: // Create drop
         djc.triggerDrop();
         persistAction(apiLabel, detail, "music", "create_drop");
@@ -1857,6 +1917,75 @@ export default function CrowdSyncDJPage() {
 
   const fmtClock = (s: number) =>
     Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "0:00";
+
+  // Play a generated artist voice drop over the set, ducking the music while
+  // the voice speaks and restoring the volume when it ends.
+  const playVoiceDrop = (url: string) => {
+    try {
+      voiceAudioRef.current?.pause();
+    } catch { /* noop */ }
+    const prevVolume = dj.volume;
+    const audio = new Audio(url);
+    voiceAudioRef.current = audio;
+    const restore = () => {
+      djc.setVolume(prevVolume);
+      if (voiceAudioRef.current === audio) voiceAudioRef.current = null;
+    };
+    djc.setVolume(Math.min(prevVolume, 0.22));
+    audio.volume = 1;
+    audio.onended = restore;
+    audio.onerror = restore;
+    void audio.play().catch(restore);
+  };
+
+  // Poll a background visual-generation job until its asset is ready/failed.
+  const pollVisualJob = (eventId: string, jobId: string) => {
+    if (visualPollRef.current) window.clearInterval(visualPollRef.current);
+    let attempts = 0;
+    const finish = () => {
+      if (visualPollRef.current) window.clearInterval(visualPollRef.current);
+      visualPollRef.current = null;
+      setIsGeneratingVisual(false);
+    };
+    const check = async () => {
+      attempts += 1;
+      if (attempts > 45) {
+        finish();
+        toast({ title: t.liveVisuals, description: lang === "en" ? "Visual generation is taking longer than expected." : "La generación del visual está tardando más de lo esperado.", variant: "destructive" });
+        return;
+      }
+      try {
+        const res: any = await apiRequest(`/api/crowdsync-dj/events/${eventId}`, { method: "GET" });
+        const asset = (res?.generatedAssets || []).find((a: any) => a.id === jobId);
+        if (!asset) return;
+        if (asset.status === "failed") {
+          finish();
+          toast({ title: t.liveVisuals, description: asset.error || (lang === "en" ? "Visual generation failed." : "Falló la generación del visual."), variant: "destructive" });
+          return;
+        }
+        if (asset.status === "ready" && asset.imageUrl) {
+          finish();
+          refetchCrowdSync();
+          addLog(lang === "en" ? "AI visual ready" : "Visual AI listo", asset.title || "");
+          toast({ title: t.liveVisuals, description: lang === "en" ? `"${asset.title}" is live in the visuals grid.` : `"${asset.title}" ya está en la galería de visuales.` });
+        }
+      } catch {
+        /* transient — keep polling */
+      }
+    };
+    void check();
+    visualPollRef.current = window.setInterval(check, 4000);
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    if (params.get("payment") === "success" && sessionId && !verifyCheckoutMutation.isPending && !verifyCheckoutMutation.isSuccess) {
+      verifyCheckoutMutation.mutate(sessionId);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [verifyCheckoutMutation]);
 
   // Poll a background music-generation job until its asset is ready/failed, then
   // auto-cue the finished track into the engine (mood → create → auto-mix).
@@ -2239,9 +2368,9 @@ export default function CrowdSyncDJPage() {
                     {musicActions.map(([Icon, label, apiLabel, detail], index) => (
                       <ActionButton
                         key={label}
-                        icon={index === 0 && (generateMusicMutation.isPending || isGeneratingMusic) ? Loader2 : Icon}
-                        label={index === 0 && (generateMusicMutation.isPending || isGeneratingMusic) ? "Generating" : label}
-                        active={(index === 0 && (generateMusicMutation.isPending || isGeneratingMusic)) || (index === 7 && dj.loop)}
+                        icon={(index === 0 && (generateMusicMutation.isPending || isGeneratingMusic)) || (index === 5 && artistVoiceMutation.isPending) ? Loader2 : Icon}
+                        label={index === 0 && (generateMusicMutation.isPending || isGeneratingMusic) ? "Generating" : index === 5 && artistVoiceMutation.isPending ? (lang === "en" ? "Voicing…" : "Generando…") : label}
+                        active={(index === 0 && (generateMusicMutation.isPending || isGeneratingMusic)) || (index === 5 && artistVoiceMutation.isPending) || (index === 7 && dj.loop)}
                         onClick={() => handleMusicAction(index, apiLabel, detail)}
                       />
                     ))}
@@ -2377,18 +2506,32 @@ export default function CrowdSyncDJPage() {
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                         <ActionButton icon={dj.isPlaying && String(dj.current?.id) === String(selectedSong?.id) ? Pause : Headphones} label={dj.isPlaying && String(dj.current?.id) === String(selectedSong?.id) ? (lang === "en" ? "Pause" : "Pausa") : (lang === "en" ? "Play" : "Play")} active={dj.isPlaying && String(dj.current?.id) === String(selectedSong?.id)} onClick={() => { if (dj.isPlaying && String(dj.current?.id) === String(selectedSong?.id)) { djc.pause(); } else { cueSong(selectedSong, true); } }} />
                         <ActionButton icon={generateMusicMutation.isPending || isGeneratingMusic ? Loader2 : Wand2} label={generateMusicMutation.isPending || isGeneratingMusic ? (lang === "en" ? "Generating" : "Generando") : (lang === "en" ? "AI Track" : "IA Track")} onClick={() => generateMusicMutation.mutate()} active={generateMusicMutation.isPending || isGeneratingMusic} />
-                        <ActionButton icon={Mic2} label={lang === "en" ? "Voice" : "Voz"} onClick={() => runAction("Artist voice", `${selectedArtist?.name || config.artist} voice activated`, "artist")} />
-                        <ActionButton icon={Repeat2} label={lang === "en" ? "Remix" : "Remix"} onClick={() => runAction("Artist remix", "Artist catalog remix created", "artist")} />
+                        <ActionButton icon={artistVoiceMutation.isPending ? Loader2 : Mic2} label={artistVoiceMutation.isPending ? (lang === "en" ? "Voice…" : "Voz…") : (lang === "en" ? "Voice" : "Voz")} active={artistVoiceMutation.isPending} onClick={() => { if (!artistVoiceMutation.isPending) artistVoiceMutation.mutate(); }} />
+                        <ActionButton icon={Repeat2} label={lang === "en" ? "Remix" : "Remix"} onClick={() => { djc.next("shuffle"); persistAction("Artist remix", "Artist catalog remix mixed live", "music", "live_remix"); }} />
                         <ActionButton icon={ShoppingBag} label={t.promote} onClick={() => runAction("Merch promotion", "Merch and music QR prepared", "commerce")} />
                       </div>
                     </div>
                   </div>
                 </Panel>
 
-                <Panel id="section-content" title={t.liveVisuals} icon={Image} right={<span className="text-[9px] text-zinc-500">{t.sync}</span>}>
+                <Panel
+                  id="section-content"
+                  title={t.liveVisuals}
+                  icon={Image}
+                  right={(
+                    <button
+                      onClick={() => { if (!generateVisualMutation.isPending && !isGeneratingVisual) generateVisualMutation.mutate(); }}
+                      disabled={generateVisualMutation.isPending || isGeneratingVisual}
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase text-orange-400 transition hover:text-orange-300 disabled:opacity-60"
+                    >
+                      {generateVisualMutation.isPending || isGeneratingVisual ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                      {generateVisualMutation.isPending || isGeneratingVisual ? (lang === "en" ? "Generating…" : "Generando…") : (lang === "en" ? "AI Visual" : "Visual IA")}
+                    </button>
+                  )}
+                >
                   <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
-                    {visualAssets.map((asset) => (
-                      <button key={asset.name} onClick={() => runAction(asset.name, `${asset.name} visual synced to music`, "visual")} className="cs-scanline group relative overflow-hidden rounded-xl border border-white/10 bg-black/30 transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:shadow-[0_8px_22px_-8px_rgba(249,115,22,0.55)]">
+                    {allVisuals.map((asset) => (
+                      <button key={`${asset.name}-${asset.image}`} onClick={() => { addLog(asset.name, `${asset.name} visual synced to music`); persistAction(asset.name, `${asset.name} visual synced to music`, "visual", "visual_sync"); }} className="cs-scanline group relative overflow-hidden rounded-xl border border-white/10 bg-black/30 transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:shadow-[0_8px_22px_-8px_rgba(249,115,22,0.55)]">
                         <img src={asset.image} alt={asset.name} className="h-24 w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105" />
                         <div className="cs-holo pointer-events-none absolute inset-0 opacity-30 mix-blend-screen transition-opacity duration-300 group-hover:opacity-50" />
                         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-white">{asset.name}</div>

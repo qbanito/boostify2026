@@ -203,6 +203,20 @@ const INDUSTRY_CATEGORIES = [
   'media', 'pr', 'sync', 'radio', 'distribution', 'streaming',
 ];
 
+// ─── Ensure text campaign tracking column ───────────────────────────────────────
+// outreach_email_log.campaign_id is an INTEGER FK to outreach_campaigns(id), so it
+// cannot hold a text campaign slug like 'artist_press_qbanito-nocturnal'. We track
+// these ad-hoc press campaigns in a dedicated nullable TEXT column instead.
+async function ensureCampaignKeyColumn() {
+  const client = await pool.connect();
+  try {
+    await client.query(`ALTER TABLE outreach_email_log ADD COLUMN IF NOT EXISTS campaign_key text`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_email_log_campaign_key ON outreach_email_log (campaign_key)`);
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Fetch contacts ─────────────────────────────────────────────────────────────
 async function fetchContacts(limit) {
   const client = await pool.connect();
@@ -218,7 +232,7 @@ async function fetchContacts(limit) {
         AND NOT EXISTS (
           SELECT 1 FROM outreach_email_log oel
           WHERE oel.contact_id = c.id
-            AND oel.campaign_id LIKE 'artist_press_%'
+            AND oel.campaign_key LIKE 'artist_press_%'
             AND oel.status = 'sent'
             AND oel.sent_at > NOW() - INTERVAL '30 days'
         )
@@ -237,7 +251,7 @@ async function logSend(contactId, toEmail, toName, subject, status, messageId = 
   try {
     await client.query(`
       INSERT INTO outreach_email_log
-        (campaign_id, contact_id, to_email, to_name, subject, status, brevo_message_id, error_message, sent_at, created_at)
+        (campaign_key, contact_id, to_email, to_name, subject, status, brevo_message_id, error_message, sent_at, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
     `, [`artist_press_${ARTIST_ARG}`, contactId, toEmail, toName, subject, status, messageId, errorMsg]);
   } finally {
@@ -448,6 +462,9 @@ async function main() {
   console.log(`Preview mode: ${PREVIEW_MODE}`);
   console.log(`Campaign ID:  artist_press_${ARTIST_ARG}`);
   console.log('');
+
+  // Ensure the text campaign tracking column exists (campaign_id is an integer FK)
+  await ensureCampaignKeyColumn();
 
   // Prefetch artist profile images from NeonDB
   await prefetchArtistImages();

@@ -38,6 +38,7 @@ import { ArtistProfile } from "@/data/artist-profiles";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TOKEN_PREFIXES, CONTRACT_PRICE_MATIC, getContractTokenId } from "@/lib/btf2300-token-mapping";
 import { ArtistProgressWidget } from "./artist-progress-widget";
+import { RoadmapTimeline } from "./roadmap-timeline";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 interface ArtistDetailModalProps {
@@ -88,6 +89,12 @@ function ArtistDetailModalContent({
   const [cardSuccess, setCardSuccess] = useState(false);
   const [cardTxHash, setCardTxHash] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
+  const [heroError, setHeroError] = useState(false);
+
+  // Reset hero fallback when the artist image changes
+  useEffect(() => {
+    setHeroError(false);
+  }, [artistImage]);
 
   // Fetch artist data from blockchain
   useEffect(() => {
@@ -259,25 +266,55 @@ function ArtistDetailModalContent({
     Exceptional: "Top Creator",
   };
 
+  const showHero = Boolean(artistImage) && !heroError;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700/50 text-white max-h-[90vh] overflow-y-auto">
-        {/* Artist Image Header */}
-        {artistImage && (
-          <div className="relative w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] h-56 sm:h-64 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 mb-4 rounded-t-lg overflow-hidden">
-            <img 
-              src={artistImage} 
-              alt={artist.name}
-              className="w-full h-full object-cover object-top"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
+      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700/50 text-white [&>button]:z-40 [&>button]:rounded-full [&>button]:bg-slate-950/60 [&>button]:p-2 [&>button]:text-white [&>button]:opacity-100 [&>button]:backdrop-blur-md [&>button]:border [&>button]:border-white/15 [&>button]:shadow-lg [&>button]:transition-all [&>button:hover]:bg-slate-900/90 [&>button:hover]:scale-110">
+        <div className="max-h-[90vh] overflow-y-auto overscroll-contain">
+        {/* Hero: full artist image, NEVER cropped — blur-fill backdrop + object-contain foreground */}
+        {showHero && (
+          <div className="relative w-full h-64 sm:h-80 overflow-hidden bg-slate-950">
+            {/* Blurred cover backdrop fills the frame behind the full image */}
+            <img
+              src={artistImage}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-50 saturate-150"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900" />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-900/60" />
+            {/* Full image — object-contain guarantees no cropping for any aspect ratio */}
+            <img
+              src={artistImage}
+              alt={artist.name}
+              className="relative z-10 w-full h-full object-contain drop-shadow-[0_16px_48px_rgba(0,0,0,0.65)]"
+              onError={() => setHeroError(true)}
+            />
+            {/* Bottom veil + artist identity overlay */}
+            <div className="absolute inset-x-0 bottom-0 h-36 z-20 bg-gradient-to-t from-slate-900 via-slate-900/75 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 z-30 px-4 sm:px-6 pb-4 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold tracking-[0.28em] text-orange-400/90 uppercase mb-1">
+                  Artist Access Pack
+                </p>
+                <h2 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-orange-300 via-amber-200 to-orange-400 bg-clip-text text-transparent leading-tight truncate">
+                  {artist.name}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 mt-1 flex items-center gap-1.5">
+                  <Music2 className="h-3.5 w-3.5 text-orange-400 flex-shrink-0" />
+                  {artist.genre}
+                </p>
+              </div>
+              <Badge
+                className={`${potentialColors[artist.investmentPotential]} border text-xs sm:text-sm py-1 px-3 backdrop-blur-md flex-shrink-0 mb-1`}
+              >
+                {engagementLabels[artist.investmentPotential] ?? artist.investmentPotential}
+              </Badge>
+            </div>
           </div>
         )}
-        
-        <DialogHeader className={`${artistImage ? 'border-t border-slate-700/30' : 'border-b border-slate-700/30'} pb-4`}>
+
+        <DialogHeader className={showHero ? "sr-only" : "border-b border-slate-700/30 px-4 sm:px-6 pt-6 pb-4"}>
           <div className="flex items-start justify-between w-full">
             <div className="flex-1">
               <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
@@ -293,7 +330,7 @@ function ArtistDetailModalContent({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 py-6">
+        <div className="space-y-6 px-4 sm:px-6 py-6">
           {/* Artist Progress Milestones */}
           <ArtistProgressWidget 
             milestones={artist.milestones}
@@ -433,29 +470,15 @@ function ArtistDetailModalContent({
             </div>
           </div>
 
-          {/* Roadmap */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Rocket className="h-5 w-5 text-orange-400" />
-              <h3 className="font-semibold">Roadmap</h3>
-            </div>
-            <div className="space-y-2">
-              {artist.roadmap.map((milestone, idx) => (
-                <div
-                  key={idx}
-                  className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 rounded-lg p-3 border border-orange-500/20 flex items-start gap-3"
-                >
-                  <div className="bg-orange-500/30 rounded-full p-1.5 mt-0.5">
-                    <div className="w-2 h-2 bg-orange-400 rounded-full" />
-                  </div>
-                  <p className="text-sm">{milestone}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Roadmap — live timeline connected to the platform */}
+          <RoadmapTimeline
+            artistId={artist.id}
+            artistName={artist.name}
+            roadmap={artist.roadmap}
+          />
 
           {/* Artist Profile Link */}
-          <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/10 rounded-lg p-4 border border-blue-500/30">
+          <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/10 rounded-xl p-4 border border-blue-500/30">
             <p className="text-sm text-muted-foreground mb-3">
               Learn more about{" "}
               <span className="font-semibold text-blue-300">
@@ -476,14 +499,16 @@ function ArtistDetailModalContent({
             </a>
           </div>
 
-          {/* Investment Call to Action */}
-          <div className="bg-gradient-to-r from-orange-500/20 to-amber-500/10 rounded-lg p-4 border border-orange-500/30">
-            <p className="text-sm text-muted-foreground mb-3">
-              Ready to invest in{" "}
-              <span className="font-semibold text-orange-300">
-                {artist.name}
-              </span>
-              's future?
+          {/* Access Pack Activation */}
+          <div className="bg-gradient-to-r from-orange-500/20 to-amber-500/10 rounded-xl p-4 sm:p-5 border border-orange-500/30">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="h-5 w-5 text-orange-400 flex-shrink-0" />
+              <h3 className="font-semibold text-orange-200">
+                Activate {artist.name}'s Access Pack
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Unlock AI tools, promotions and exclusive services from this artist.
             </p>
             
             {/* User Balance Display */}
@@ -735,6 +760,7 @@ function ArtistDetailModalContent({
               )}
             </div>
           </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -10,10 +10,10 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { isAuthenticated, getUserId } from '../middleware/clerk-auth';
-import { db, FieldValue } from '../firebase';
+import { db, FieldValue, storage } from '../firebase';
 import { db as pgDb } from '../../db';
 import { songs, subscriptions, users } from '../../db/schema';
-import { generateArtistSongWithFAL } from '../services/fal-service';
+import { generateArtistSongWithFAL, generateImageWithGPTImage1 } from '../services/fal-service';
 import { chargeCredits } from '../services/credit-engine';
 
 const router = Router();
@@ -1039,6 +1039,226 @@ router.post('/events/:id/actions', isAuthenticated, async (req: Request, res: Re
   }
 });
 
+// ─── Real artist voice drops (TTS) ──────────────────────────────────────────
+// Synthesizes a hype MC line with ElevenLabs (OpenAI TTS fallback), uploads the
+// MP3 to Firebase Storage, and stores it as a ready `voice` asset with audioUrl
+// so the client can actually play it over the live set.
+
+const CROWDSYNC_VOICE_ID = process.env.CROWDSYNC_VOICE_ID || process.env.BOUTIQUE_VOICE_ID || 'XB0fDUnXU5powFXDhCwa';
+
+async function uploadCrowdSyncMedia(buffer: Buffer, eventId: string, tag: string, contentType: string, ext: string): Promise<string | null> {
+  try {
+    if (!storage) return null;
+    const bucket = storage.bucket();
+    const fileName = `crowdsync-media/${eventId}/${Date.now()}_${tag}.${ext}`;
+    const file = bucket.file(fileName);
+    await file.save(buffer, { metadata: { contentType }, validation: false });
+    return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(fileName)}?alt=media`;
+  } catch (err: any) {
+    console.error('[CrowdSyncDJ] media upload failed:', err?.message || err);
+    return null;
+  }
+}
+
+async function synthCrowdSyncVoice(text: string, lang: 'en' | 'es'): Promise<{ buffer: Buffer; provider: string } | null> {
+  const elevenKey = process.env.ELEVENLABS_API_KEY || '';
+  if (elevenKey) {
+    try {
+      const axios = (await import('axios')).default;
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${CROWDSYNC_VOICE_ID}`,
+        {
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.35, similarity_boost: 0.7, style: 0.85, use_speaker_boost: true },
+        },
+        { headers: { 'xi-api-key': elevenKey, 'Content-Type': 'application/json' }, responseType: 'arraybuffer', timeout: 60000 },
+      );
+      return { buffer: Buffer.from(response.data), provider: 'elevenlabs' };
+    } catch (err: any) {
+      const msg = err.response?.data ? Buffer.from(err.response.data).toString().slice(0, 200) : err.message;
+      console.warn('[CrowdSyncDJ] ElevenLabs TTS failed, falling back to OpenAI:', msg);
+    }
+  }
+  const openaiKey = process.env.OPENAI_API_KEY || '';
+  if (!openaiKey) return null;
+  try {
+    const axios = (await import('axios')).default;
+    const response = await axios.post(
+      'https://api.openai.com/v1/audio/speech',
+      {
+        model: 'gpt-4o-mini-tts',
+        voice: 'ash',
+        input: text,
+        response_format: 'mp3',
+        instructions:
+          lang === 'es'
+            ? 'Habla como un MC de festival en vivo: energico, carismatico, con hype maximo, gritando con emocion sobre la musica.'
+            : 'Speak like a live festival hype MC: energetic, charismatic, maximum hype, shouting with excitement over the music.',
+      },
+      { headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' }, responseType: 'arraybuffer', timeout: 60000 },
+    );
+    return { buffer: Buffer.from(response.data), provider: 'openai-tts' };
+  } catch (err: any) {
+    const msg = err.response?.data ? Buffer.from(err.response.data).toString().slice(0, 200) : err.message;
+    console.error('[CrowdSyncDJ] OpenAI TTS failed:', msg);
+    return null;
+  }
+}
+
+function buildVoiceLine(artistName: string, eventName: string, city: string, mood: string, energy: number, lang: 'en' | 'es'): string {
+  const hot = energy >= 85;
+  const es = [
+    `¡${city || 'Boostify'}! ¿Estan listos? ¡${artistName} esta en la casa y esto apenas comienza!`,
+    hot
+      ? `¡La energia esta al maximo! ¡Quiero ver esas manos arriba, ${eventName} no se detiene!`
+      : `Sube la temperatura, ${city || 'mi gente'}... ${artistName} trae el proximo drop solo para ustedes.`,
+    `Esto es ${eventName}, con la maquina CrowdSync leyendo cada latido de la pista. ¡Que suene!`,
+    `¡Tres, dos, uno! ${artistName} al control... ¡nadie se queda quieto esta noche!`,
+    `El mood es ${mood}. La pista manda y nosotros respondemos. ¡Vamos con todo!`,
+  ];
+  const en = [
+    `${city || 'Boostify'}! Are you ready? ${artistName} is in the house and this is just getting started!`,
+    hot
+      ? `Energy is peaking! Hands up right now — ${eventName} does not stop!`
+      : `Warm it up, ${city || 'people'}... ${artistName} is loading the next drop just for you.`,
+    `This is ${eventName}, with the CrowdSync engine reading every heartbeat on the floor. Turn it up!`,
+    `Three, two, one! ${artistName} takes control... nobody stands still tonight!`,
+    `The mood is ${mood}. The floor commands and we deliver. Let's go all in!`,
+  ];
+  const pool = lang === 'es' ? es : en;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+router.post('/events/:id/artist-voice', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const userId = currentUser(req, res);
+    if (!userId) return;
+    const access = await assertEventAccess(userId, req.params.id);
+    if (!access.ok) return res.status(access.status).json({ success: false, error: access.error });
+
+    const lang: 'en' | 'es' = req.body?.lang === 'es' ? 'es' : 'en';
+    const state = access.data.currentState || {};
+    const artistName = String(req.body?.artistName || access.data?.config?.artist || 'the artist').slice(0, 80);
+    const customText = typeof req.body?.text === 'string' && req.body.text.trim() ? req.body.text.trim().slice(0, 280) : null;
+    const text = customText || buildVoiceLine(
+      artistName,
+      access.data?.name || 'CrowdSync Live',
+      String(access.data?.config?.city || ''),
+      String(state.mood || 'Euforico'),
+      Number(state.energy || 87),
+      lang,
+    );
+
+    const synth = await synthCrowdSyncVoice(text, lang);
+    if (!synth) return res.status(502).json({ success: false, error: 'Voice synthesis unavailable (TTS providers failed)' });
+    const audioUrl = await uploadCrowdSyncMedia(synth.buffer, req.params.id, 'voice', 'audio/mpeg', 'mp3');
+    if (!audioUrl) return res.status(502).json({ success: false, error: 'Voice upload failed' });
+
+    const asset = await addGeneratedAsset(req.params.id, {
+      type: 'voice',
+      title: `${artistName} — Voice drop`,
+      detail: text,
+      status: 'ready',
+      provider: synth.provider,
+      audioUrl,
+      bpm: state.bpm || 122,
+      energy: state.energy || 87,
+    });
+    await addAction(req.params.id, {
+      label: lang === 'es' ? 'Voz del artista generada' : 'Artist voice generated',
+      detail: text,
+      type: 'voice',
+      payload: { assetId: asset.id, provider: synth.provider },
+    });
+
+    const email = currentEmail(req);
+    if (email) {
+      void chargeCredits(email, 'voice.tts', {
+        description: `CrowdSync artist voice drop: ${artistName}`,
+        metadata: { crowdSyncEventId: req.params.id, assetId: asset.id },
+      }).catch((creditError: any) => console.warn('[CrowdSyncDJ] voice credit charge failed:', creditError?.message || creditError));
+    }
+
+    res.json({ success: true, asset, ...(await getFullEvent(req.params.id)) });
+  } catch (err: any) {
+    console.error('[CrowdSyncDJ] artist voice failed:', err);
+    res.status(500).json({ success: false, error: err?.message || 'artist voice failed' });
+  }
+});
+
+// ─── Real AI visuals (GPT Image 1) ──────────────────────────────────────────
+// Generates a stage/LED-wall visual themed on the event's style, genre, and
+// live crowd mood. Async job (image gen can exceed the HTTP timeout): responds
+// with a "processing" asset; the client polls GET /events/:id until ready.
+
+router.post('/events/:id/generate-visual', isAuthenticated, async (req: Request, res: Response) => {
+  if (!requireDb(res)) return;
+  try {
+    const userId = currentUser(req, res);
+    if (!userId) return;
+    const access = await assertEventAccess(userId, req.params.id);
+    if (!access.ok) return res.status(access.status).json({ success: false, error: access.error });
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'Visual generation unavailable (OPENAI_API_KEY not configured)' });
+    }
+
+    const eventId = req.params.id;
+    const state = access.data.currentState || {};
+    const config = access.data.config || {};
+    const styleName = String(req.body?.name || config.visualStyle || 'Neon Pulse').slice(0, 60);
+    const mood = String(state.mood || 'Euforico');
+    const energy = Number(state.energy || 87);
+    const genre = String(config.genres || 'electronic').split(',')[0].trim() || 'electronic';
+    const prompt =
+      `Massive live concert LED-wall visual for a DJ set. Style: "${styleName}". Music genre: ${genre}. ` +
+      `Crowd mood: ${mood}, energy ${energy}/100. Epic stage backdrop artwork, volumetric lights, lasers, ` +
+      `atmospheric haze, cinematic wide 16:9 composition, ultra detailed. No text, no words, no letters, no logos.`;
+
+    const asset = await addGeneratedAsset(eventId, {
+      type: 'visual',
+      title: styleName,
+      detail: `Generating AI visual (${mood} / ${genre})…`,
+      status: 'processing',
+      provider: 'gpt-image-1',
+      bpm: state.bpm || 122,
+      energy,
+    });
+
+    res.json({ success: true, status: 'processing', jobId: asset.id, asset, ...(await getFullEvent(eventId)) });
+
+    const email = currentEmail(req);
+    void (async () => {
+      const assetRef = db.collection(EVENTS_COL).doc(eventId).collection('generated_assets').doc(asset.id);
+      try {
+        const result = await generateImageWithGPTImage1(prompt, { size: '1536x1024', quality: 'medium' });
+        if (!result.success || !result.imageUrl) throw new Error(result.error || 'No image generated');
+        await assetRef.set({
+          status: 'ready',
+          imageUrl: result.imageUrl,
+          detail: `${styleName} — ${mood} / ${genre}`,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        await addAction(eventId, { label: 'AI visual generated', detail: `${styleName} ready (${mood} / ${genre})`, type: 'visual', payload: { assetId: asset.id, imageUrl: result.imageUrl } });
+        if (email) {
+          await chargeCredits(email, 'image.gemini_native', {
+            description: `CrowdSync AI stage visual: ${styleName}`,
+            metadata: { crowdSyncEventId: eventId, assetId: asset.id },
+          }).catch((creditError: any) => console.warn('[CrowdSyncDJ] visual credit charge failed:', creditError?.message || creditError));
+        }
+      } catch (jobErr: any) {
+        console.error('[CrowdSyncDJ] visual generation job failed:', jobErr?.message || jobErr);
+        await assetRef.set({ status: 'failed', error: jobErr?.message || 'visual generation failed', updatedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => undefined);
+        await addAction(eventId, { label: 'Visual generation failed', detail: jobErr?.message || 'visual generation failed', type: 'visual', payload: { assetId: asset.id } }).catch(() => undefined);
+      }
+    })();
+  } catch (err: any) {
+    console.error('[CrowdSyncDJ] generate visual failed:', err);
+    res.status(500).json({ success: false, error: err?.message || 'visual generation failed' });
+  }
+});
+
 router.post('/events/:id/generate-music', isAuthenticated, async (req: Request, res: Response) => {
   if (!requireDb(res)) return;
   try {
@@ -1282,19 +1502,38 @@ router.post('/events/:id/reports', isAuthenticated, async (req: Request, res: Re
     const assets = full.generatedAssets || [];
     const peak = readings.reduce((max: any, reading: any) => Number(reading.energy || 0) > Number(max.energy || 0) ? reading : max, readings[0] || access.data.currentState || {});
     const reportRef = access.ref.collection('event_reports').doc(shortId('report'));
+    // Best genre = the event's configured genre lineup (first entry), not a hardcoded value.
+    const configGenres = String(access.data?.config?.genres || '')
+      .split(',')
+      .map((g: string) => g.trim())
+      .filter(Boolean);
+    const bestGenre = configGenres[0] || 'Open format';
+    const generatedTracks = assets.filter((asset: any) => asset.type === 'audio').length;
+    const socialClips = assets.filter((asset: any) => asset.type === 'social_clip').length;
+    const voiceDrops = assets.filter((asset: any) => asset.type === 'voice').length;
+    const visuals = assets.filter((asset: any) => asset.type === 'visual').length;
+    const recommendations = [
+      generatedTracks > 0
+        ? `Guardar el mejor de los ${generatedTracks} tracks AI como single promocional`
+        : 'Generar un track AI durante el proximo set para capitalizar el peak',
+      socialClips > 0
+        ? `Publicar los ${socialClips} clips en Boostify Network y Reels`
+        : 'Publicar un recap corto en Boostify Network y Reels',
+      readings.length >= 3
+        ? `Repetir la franja de mayor energia (peak ${peak.energy || '—'}) en el proximo evento`
+        : 'Activar la camara movil para lecturas de crowd mas precisas',
+    ];
     const report = {
       id: reportRef.id,
       eventId: req.params.id,
       peakEnergy: peak.energy || access.data.currentState?.energy || 87,
       peakMood: peak.mood || access.data.currentState?.mood || 'Euforico',
-      bestGenre: 'Latin afro house',
-      generatedTracks: assets.filter((asset: any) => asset.type === 'audio').length,
-      socialClips: assets.filter((asset: any) => asset.type === 'social_clip').length,
-      recommendations: [
-        'Guardar el drop de mayor energia como single promocional',
-        'Publicar recap corto en Boostify Network y Reels',
-        'Crear playlist post-evento con los remixes generados',
-      ],
+      bestGenre,
+      generatedTracks,
+      socialClips,
+      voiceDrops,
+      visuals,
+      recommendations,
       createdAt: FieldValue.serverTimestamp(),
     };
     await reportRef.set(report);
@@ -1713,7 +1952,8 @@ router.post('/waitlist', async (req: Request, res: Response) => {
   try {
     const normalizedEmail = email.trim().toLowerCase();
     const joinedAt = new Date().toISOString();
-    const launchDate = 'June 5, 2026';
+    // Keep in sync with LAUNCH_DATE in client/src/pages/boostify-crowdsync-dj.tsx
+    const launchDate = 'August 1, 2026';
 
     // Check for duplicate
     const existing = await db.collection(WAITLIST_COL).where('email', '==', normalizedEmail).limit(1).get();
@@ -1733,7 +1973,7 @@ router.post('/waitlist', async (req: Request, res: Response) => {
     // Send confirmation to subscriber (non-blocking)
     sendCrowdSyncEmail(
       normalizedEmail,
-      "🎧 You're on the CrowdSync DJ Waitlist — Launch in 30 days!",
+      "🎧 You're on the CrowdSync DJ Waitlist — Launching August 2026!",
       buildWelcomeEmail(normalizedEmail, launchDate),
     ).catch((e) => console.error('❌ Brevo welcome email failed:', e?.message));
 

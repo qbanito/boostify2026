@@ -23,19 +23,17 @@ import {
   type StakingTier,
 } from '@/lib/btf-token-config';
 
-// RPC fallbacks
+// RPC fallbacks (polygon-rpc.com removed — returns 401; rank:true pinged all RPCs constantly)
 const POLYGON_RPCS = [
   'https://polygon-bor-rpc.publicnode.com',
   'https://rpc.ankr.com/polygon',
   'https://1rpc.io/matic',
-  'https://polygon-rpc.com',
 ];
 
 const publicClient = createPublicClient({
   chain: polygon,
   transport: fallback(
-    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 })),
-    { rank: true }
+    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 }))
   ),
 });
 

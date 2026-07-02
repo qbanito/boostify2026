@@ -31,19 +31,17 @@ const WMATIC = '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270' as const;
 // QuickSwap Factory V2
 const QUICKSWAP_FACTORY = '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32' as const;
 
-// Polygon RPC fallbacks
+// Polygon RPC fallbacks (polygon-rpc.com removed — returns 401)
 const POLYGON_RPCS = [
   'https://polygon-bor-rpc.publicnode.com',
   'https://rpc.ankr.com/polygon',
   'https://1rpc.io/matic',
-  'https://polygon-rpc.com',
 ];
 
 const publicClient = createPublicClient({
   chain: polygon,
   transport: fallback(
-    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 })),
-    { rank: true }
+    POLYGON_RPCS.map(url => http(url, { timeout: 10000, retryCount: 2 }))
   ),
 });
 

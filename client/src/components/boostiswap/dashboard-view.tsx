@@ -8,7 +8,8 @@ import { useWeb3 } from "@/hooks/use-web3";
 import { useBTF2300 } from "@/hooks/use-btf2300";
 import { useArtistTokens } from "@/hooks/use-artist-tokens";
 import { TOKEN_PREFIXES, BTF2300_DEX_ABI, getBTF2300Addresses } from "@/lib/btf2300-config";
-import { formatEther, createPublicClient, http } from "viem";
+import { seededUnit, seededRange } from "@/lib/seeded";
+import { formatEther, createPublicClient, http, fallback } from "viem";
 import { polygon } from "viem/chains";
 import {
   AreaChart,
@@ -55,10 +56,14 @@ import {
   Headphones,
 } from "lucide-react";
 
-// Create public client for reading contract state
+// Create public client for reading contract state (working RPCs with fallback)
 const publicClient = createPublicClient({
   chain: polygon,
-  transport: http('https://polygon-rpc.com'),
+  transport: fallback([
+    http('https://polygon-bor-rpc.publicnode.com', { timeout: 10000, retryCount: 2 }),
+    http('https://rpc.ankr.com/polygon', { timeout: 10000, retryCount: 2 }),
+    http('https://1rpc.io/matic', { timeout: 10000, retryCount: 2 }),
+  ]),
 });
 
 const contracts = getBTF2300Addresses(137);
@@ -190,7 +195,7 @@ export function DashboardView() {
   const marketCapData = useMemo(() => {
     return artistTokens.slice(0, 8).map((token, i) => ({
       name: token.symbol,
-      value: token.marketCap || Math.random() * 100000 + 10000,
+      value: token.marketCap || seededRange(`mcap-${token.symbol}`, 10000, 110000),
       fill: COLORS[i % COLORS.length],
     }));
   }, [artistTokens]);
@@ -201,9 +206,9 @@ export function DashboardView() {
     const baseVolume = totalVolume24h / 7;
     return days.map((day, i) => ({
       day,
-      volume: Math.floor(baseVolume * (0.8 + Math.random() * 0.4)),
-      trades: Math.floor(50 + Math.random() * 200),
-      fees: Math.floor(baseVolume * 0.003 * (0.8 + Math.random() * 0.4)),
+      volume: Math.floor(baseVolume * (0.8 + seededUnit(`voltrend-${day}`) * 0.4)),
+      trades: Math.floor(50 + seededUnit(`trades-${day}`) * 200),
+      fees: Math.floor(baseVolume * 0.003 * (0.8 + seededUnit(`feetrend-${day}`) * 0.4)),
     }));
   }, [totalVolume24h]);
   
@@ -213,7 +218,7 @@ export function DashboardView() {
       token: token.symbol,
       volume: Math.min(100, (token.volume24h / 50000) * 100),
       liquidity: Math.min(100, (token.liquidity / 50000) * 100),
-      holders: Math.min(100, Math.random() * 100),
+      holders: Math.min(100, seededUnit(`holders-${token.symbol}`) * 100),
       growth: Math.min(100, Math.max(0, 50 + token.change24h * 2)),
       stability: Math.min(100, 100 - Math.abs(token.change24h) * 2),
     }));

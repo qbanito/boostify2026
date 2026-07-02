@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Music2, TrendingUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import { seededUnit } from "@/lib/seeded";
 
 interface Track {
   id: string;
@@ -35,18 +36,18 @@ export function TokenCardVisual({
   const [avatarError, setAvatarError] = useState(false);
   // Prefer the song-specific image for the card background; fallback to artist image.
   const backgroundImage = songImageUrl || artistImage;
-  const [chartData] = useState(() => {
-    const data = [];
-    for (let i = 0; i < 24; i++) {
-      const basePrice = price * (1 + (Math.random() - 0.5) * 0.15);
-      data.push({
-        time: i,
-        value: basePrice,
-        pv: basePrice * 1.1
-      });
-    }
-    return data;
-  });
+  // Deterministic 24h sparkline seeded by token symbol (stable across renders,
+  // trends toward the real change24h instead of random noise)
+  const chartData = React.useMemo(() => {
+    const phase = seededUnit(tokenSymbol) * Math.PI * 2;
+    return Array.from({ length: 24 }, (_, i) => {
+      const wave = Math.sin(i * 0.55 + phase) * 0.05;
+      const noise = (seededUnit(`${tokenSymbol}-pt-${i}`) - 0.5) * 0.06;
+      const trend = (i / 23) * (change24h / 100);
+      const value = price * (1 + wave + noise + trend);
+      return { time: i, value, pv: value * 1.1 };
+    });
+  }, [tokenSymbol, price, change24h]);
 
   React.useEffect(() => {
     setImageError(false);
@@ -63,17 +64,17 @@ export function TokenCardVisual({
     setAvatarError(false);
   }, [artistImage]);
 
-  // Animated spectrum bars
-  const [spectrumHeights, setSpectrumHeights] = useState(Array(12).fill(0.3));
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSpectrumHeights(prev => 
-        prev.map(() => 0.2 + Math.random() * 0.8)
-      );
-    }, 200);
-    return () => clearInterval(interval);
-  }, []);
+  // Animated spectrum bars: deterministic heights + pure CSS animation
+  // (replaces a 200ms setState interval that re-rendered the card 5x/second)
+  const spectrumBars = React.useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => ({
+        height: 0.25 + seededUnit(`${tokenSymbol}-bar-${i}`) * 0.7,
+        delay: (i % 5) * 0.12,
+        duration: 0.8 + seededUnit(`${tokenSymbol}-dur-${i}`) * 0.6,
+      })),
+    [tokenSymbol]
+  );
 
   return (
     <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-slate-900 shadow-xl hover:shadow-2xl transition-all duration-300 group">
@@ -98,11 +99,16 @@ export function TokenCardVisual({
       {/* Animated Spectrum Bars - Middle Section */}
       <div className="absolute inset-0 flex items-center justify-center z-5 opacity-40">
         <div className="flex items-end gap-1 h-32">
-          {spectrumHeights.map((height, i) => (
+          {spectrumBars.map((bar, i) => (
             <div
               key={i}
-              className="w-1 bg-gradient-to-t from-orange-500 via-purple-500 to-cyan-500 rounded-full transition-all duration-200 ease-out"
-              style={{ height: `${height * 100}%`, minHeight: '4px' }}
+              className="w-1 bg-gradient-to-t from-orange-500 via-purple-500 to-cyan-500 rounded-full cs-eq-bar"
+              style={{
+                height: `${bar.height * 100}%`,
+                minHeight: '4px',
+                animationDelay: `${bar.delay}s`,
+                animationDuration: `${bar.duration}s`,
+              }}
             />
           ))}
         </div>

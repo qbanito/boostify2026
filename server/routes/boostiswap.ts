@@ -7,6 +7,28 @@ import { calculateDEXFees, BOOSTISWAP_FEE_PERCENTAGE } from "../utils/web3-contr
 const router = Router();
 
 /**
+ * Deterministic pseudo-random in [0,1) from a string seed (FNV-1a).
+ * Market metrics (volume/holders/change24h) must be STABLE across requests —
+ * seeding by token id (+ current day for daily variation) instead of
+ * Math.random() prevents numbers from jumping on every refresh.
+ */
+function seededUnit(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 100000) / 100000;
+}
+const dayKey = () => new Date().toISOString().slice(0, 10);
+const dailyVolume = (id: string | number, max: number, min: number) =>
+  Math.floor(seededUnit(`vol-${id}-${dayKey()}`) * max) + min;
+const stableHolders = (id: string | number, max: number, min: number) =>
+  Math.floor(seededUnit(`hold-${id}`) * max) + min;
+const dailyChange = (id: string | number) =>
+  Number((seededUnit(`chg-${id}-${dayKey()}`) * 30 - 5).toFixed(2));
+
+/**
  * Calcula el monto de salida de un swap con 5% DEX fee para Boostify
  * Fórmula AMM: x * y = k (Constant Product)
  * Fee: 5% para Boostify
@@ -79,11 +101,11 @@ router.get("/tokenized-songs", async (req, res) => {
           pricePerTokenEth: song.pricePerTokenEth ? parseFloat(song.pricePerTokenEth) : 0.005,
           totalSupply: song.totalSupply,
           availableSupply: song.availableSupply,
-          volume24h: Math.floor(Math.random() * 50000) + 10000,
-          holders: Math.floor(Math.random() * 1000) + 100,
+          volume24h: dailyVolume(song.id, 50000, 10000),
+          holders: stableHolders(song.id, 1000, 100),
           imageUrl: artistProfileImage || song.imageUrl || "",
           description: song.description || "",
-          change24h: Math.random() * 30 - 5,
+          change24h: dailyChange(song.id),
           contractAddress: song.contractAddress,
           tokenId: song.tokenId,
           blockchainTokenId: song.tokenId,
@@ -130,12 +152,12 @@ router.get("/tokenized-songs", async (req, res) => {
         pricePerTokenEth: artist.pricePerTokenUsd / 2000, // Approximate conversion
         totalSupply: 10000 + (idx * 1000),
         availableSupply: 3500 + (idx * 500),
-        volume24h: Math.floor(Math.random() * 50000) + 10000,
-        holders: Math.floor(Math.random() * 1000) + 100,
+        volume24h: dailyVolume(`static-${idx}`, 50000, 10000),
+        holders: stableHolders(`static-${idx}`, 1000, 100),
         imageUrl: artist.imageUrl,
         description: artist.description,
-        change24h: Math.random() * 30 - 5,
-        contractAddress: `0x${Math.random().toString(16).substring(2).padEnd(40, '0')}`,
+        change24h: dailyChange(`static-${idx}`),
+        contractAddress: `0x${(seededUnit(`addr-${artist.tokenSymbol}`) * 1e16).toString(16).replace('.', '').padEnd(40, '0').slice(0, 40)}`,
         tokenId: 1000 + idx,
         blockchainTokenId: 1000 + idx,
         benefits: ['Exclusive Access', 'Revenue Share', 'Creator Rights'],
@@ -200,11 +222,11 @@ router.get("/artist-tokens", async (req, res) => {
           pricePerTokenUsd: parseFloat(song.pricePerTokenUsd),
           totalSupply: song.totalSupply,
           availableSupply: song.availableSupply,
-          volume24h: Math.floor(Math.random() * 100000) + 5000,
-          holders: Math.floor(Math.random() * 1000) + 50,
+          volume24h: dailyVolume(song.id, 100000, 5000),
+          holders: stableHolders(song.id, 1000, 50),
           imageUrl: artistProfileImage || song.imageUrl,
           description: song.description || `${artistName} Artist Token`,
-          change24h: Math.random() * 30 - 5,
+          change24h: dailyChange(song.id),
           slug: artistSlug,
           artistSlug: artistSlug,
         };
@@ -248,14 +270,14 @@ router.get("/artist-tokens", async (req, res) => {
           id: 100 + idx,
           name: artist.artistName || 'Unknown Artist',
           tokenSymbol: tokenSymbolMap[artist.slug || ''] || (artist.artistName || 'TKN').substring(0, 4).toUpperCase(),
-          pricePerTokenUsd: 1.5 + Math.random() * 5,
+          pricePerTokenUsd: Number((1.5 + seededUnit(`price-${artist.slug}`) * 5).toFixed(2)),
           totalSupply: 10000 + (idx * 1000),
           availableSupply: 3500 + (idx * 500),
-          volume24h: Math.floor(Math.random() * 100000) + 5000,
-          holders: Math.floor(Math.random() * 1000) + 50,
+          volume24h: dailyVolume(artist.slug || idx, 100000, 5000),
+          holders: stableHolders(artist.slug || idx, 1000, 50),
           imageUrl: artist.profileImage || '',
           description: artist.biography || `${artist.artistName} Artist Token`,
-          change24h: Math.random() * 30 - 5,
+          change24h: dailyChange(artist.slug || idx),
           slug: artist.slug || '',
           artistSlug: artist.slug || '',
         }));
@@ -295,11 +317,11 @@ router.get("/artist-tokens", async (req, res) => {
           pricePerTokenUsd: a.price,
           totalSupply: 10000 + (idx * 1000),
           availableSupply: 3500 + (idx * 500),
-          volume24h: Math.floor(Math.random() * 100000) + 5000,
-          holders: Math.floor(Math.random() * 1000) + 50,
+          volume24h: dailyVolume(a.slug, 100000, 5000),
+          holders: stableHolders(a.slug, 1000, 50),
           imageUrl: a.img,
           description: a.desc,
-          change24h: Math.random() * 30 - 5,
+          change24h: dailyChange(a.slug),
           slug: a.slug,
           artistSlug: a.slug,
         }));
@@ -365,10 +387,10 @@ router.get("/artist-token/:artistId", async (req, res) => {
       pricePerTokenUsd: parseFloat(song[0].pricePerTokenUsd),
       totalSupply: song[0].totalSupply,
       availableSupply: song[0].availableSupply,
-      volume24h: Math.floor(Math.random() * 100000) + 5000,
-      holders: Math.floor(Math.random() * 1000) + 50,
+      volume24h: dailyVolume(song[0].id, 100000, 5000),
+      holders: stableHolders(song[0].id, 1000, 50),
       imageUrl: artistProfileImage || song[0].imageUrl,
-      change24h: (Math.random() * 30 - 5).toFixed(2),
+      change24h: dailyChange(song[0].id).toFixed(2),
       contractAddress: song[0].contractAddress,
       benefits: song[0].benefits || []
     };

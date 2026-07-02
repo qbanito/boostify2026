@@ -9,6 +9,7 @@ import { TokenCardVisual } from "./token-card-visual";
 import { ArtistDetailModal } from "./artist-detail-modal";
 import { artistProfiles, ArtistProfile } from "@/data/artist-profiles";
 import { getArtistImage } from "@/data/artist-images";
+import { seededUnit } from "@/lib/seeded";
 import { UtilityDisclaimer } from "../btf/utility-disclaimer";
 
 export function ArtistTokensMarketplace() {
@@ -31,14 +32,14 @@ export function ArtistTokensMarketplace() {
           id: i + 1,
           name: p.name,
           tokenSymbol: p.name.substring(0, 3).toUpperCase(),
-          pricePerTokenUsd: 1.5 + Math.random() * 4,
+          pricePerTokenUsd: Number((1.5 + seededUnit(`p-${p.name}`) * 4).toFixed(2)),
           totalSupply: 50000,
-          availableSupply: Math.floor(Math.random() * 20000),
-          volume24h: Math.floor(Math.random() * 100000),
-          holders: Math.floor(Math.random() * 1000),
+          availableSupply: Math.floor(seededUnit(`av-${p.name}`) * 20000),
+          volume24h: Math.floor(seededUnit(`v-${p.name}`) * 100000),
+          holders: Math.floor(seededUnit(`h-${p.name}`) * 1000),
           imageUrl: getArtistImage(i + 1),
           description: `${p.name} Artist Access Pack`,
-          change24h: Math.random() * 30 - 5
+          change24h: Number((seededUnit(`c-${p.name}`) * 30 - 5).toFixed(2))
         }));
       }
     },

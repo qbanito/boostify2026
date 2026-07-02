@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { SwapInterface } from "../components/boostiswap/swap-interface";
 import { BTFSwapWidget } from "../components/boostiswap/btf-swap-widget";
@@ -15,12 +15,27 @@ import { LimitOrders } from "../components/boostiswap/limit-orders";
 import { UtilityDisclaimer } from "../components/btf/utility-disclaimer";
 import { useWeb3 } from "../hooks/use-web3";
 import { useBTFToken } from "../hooks/use-btf-token";
+import { useArtistTokens } from "../hooks/use-artist-tokens";
 import { Zap, Droplets, BarChart2, Wallet, AlertCircle, Music2, Music, Coins, AlarmClock, ShieldCheck } from "lucide-react";
+
+const fmtCompactUsd = (n: number) =>
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M`
+  : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K`
+  : `$${n.toFixed(0)}`;
 
 export default function BoostiSwapPage() {
   const { isConnected, address, balanceFormatted, symbol } = useWeb3();
   const { balance: btfBalance } = useBTFToken();
   const [activeTab, setActiveTab] = useState("artists");
+  const artistTokens = useArtistTokens();
+
+  // Real platform stats derived from live token data (no hardcoded numbers)
+  const stats = useMemo(() => {
+    const totalVolume = artistTokens.reduce((s, t) => s + (t.volume24h || 0), 0);
+    const totalMarketCap = artistTokens.reduce((s, t) => s + (t.marketCap || 0), 0);
+    const gainers = artistTokens.filter(t => (t.change24h || 0) > 0).length;
+    return { count: artistTokens.length, totalVolume, totalMarketCap, gainers };
+  }, [artistTokens]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-900/20 to-slate-900">
@@ -82,27 +97,27 @@ export default function BoostiSwapPage() {
           <CryptoPriceWidget />
         </div>
 
-        {/* Stats Bar */}
+        {/* Stats Bar — real data from live artist tokens */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border border-slate-700 rounded-lg p-2 sm:p-4 hover:border-orange-500/50 transition">
-            <div className="text-xs sm:text-sm text-muted-foreground">Platform Service Usage</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-400">12K+</div>
-            <div className="text-xs text-green-400 mt-0.5 sm:mt-1">Services activated</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">Artist Packs</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-400">{stats.count > 0 ? stats.count : "—"}</div>
+            <div className="text-xs text-blue-400 mt-0.5 sm:mt-1">Live on platform</div>
           </div>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border border-slate-700 rounded-lg p-2 sm:p-4 hover:border-orange-500/50 transition">
-            <div className="text-xs sm:text-sm text-muted-foreground">Credits Circulating</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-400">8.2M</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">Credits Market Cap</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-400">{stats.count > 0 ? fmtCompactUsd(stats.totalMarketCap) : "—"}</div>
             <div className="text-xs text-green-400 mt-0.5 sm:mt-1">BTF Credits active</div>
           </div>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border border-slate-700 rounded-lg p-2 sm:p-4 hover:border-orange-500/50 transition">
-            <div className="text-xs sm:text-sm text-muted-foreground">Artist Packs</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-400">24</div>
-            <div className="text-xs text-blue-400 mt-0.5 sm:mt-1">+3 new</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">24h Volume</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-400">{stats.count > 0 ? fmtCompactUsd(stats.totalVolume) : "—"}</div>
+            <div className="text-xs text-green-400 mt-0.5 sm:mt-1">Across all packs</div>
           </div>
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 border border-slate-700 rounded-lg p-2 sm:p-4 hover:border-orange-500/50 transition">
-            <div className="text-xs sm:text-sm text-muted-foreground">Utility Score Avg</div>
-            <div className="text-lg sm:text-2xl font-bold text-orange-400">High</div>
-            <div className="text-xs text-green-400 mt-0.5 sm:mt-1">Service engagement</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">Trending Up</div>
+            <div className="text-lg sm:text-2xl font-bold text-orange-400">{stats.count > 0 ? `${stats.gainers}/${stats.count}` : "—"}</div>
+            <div className="text-xs text-green-400 mt-0.5 sm:mt-1">Packs gaining 24h</div>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { seededRange } from '@/lib/seeded';
 
 export interface ArtistToken {
   id: string;
@@ -40,17 +41,11 @@ export function useArtistTokens(): ArtistToken[] {
     symbol: song.tokenSymbol,
     artist: song.artist || song.songName,
     price: parseFloat(song.pricePerTokenUsd || '0'),
-    change24h: song.change24h || (Math.random() * 30 - 5),
+    change24h: song.change24h ?? Number(seededRange(`chg-${song.id}`, -5, 25).toFixed(2)),
     marketCap: (parseFloat(song.pricePerTokenUsd || '0') * song.totalSupply) || 0,
-    volume24h: song.volume24h || Math.floor(Math.random() * 50000) + 10000,
+    volume24h: song.volume24h ?? Math.floor(seededRange(`vol-${song.id}`, 10000, 60000)),
     liquidity: (parseFloat(song.pricePerTokenUsd || '0') * song.availableSupply * 0.3) || 0,
     image: song.imageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${song.songName}`,
     genre: song.genre || 'Music'
   }));
-}
-
-export function getArtistTokenById(id: string): ArtistToken | undefined {
-  // This will need to be called within a component to use the hook
-  // For now, return undefined - caller should use useArtistTokens hook
-  return undefined;
 }

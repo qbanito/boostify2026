@@ -307,8 +307,30 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
     console.log('Accediendo a clave publicable de Stripe (ruta global)');
     res.json({
       key: process.env.STRIPE_PUBLISHABLE_KEY || '',
+      // Alias: los widgets de BoostiSwap (buy-btf-card-widget, artist-detail-modal) leen "publishableKey"
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
       success: true
     });
+  });
+
+  // Placeholder SVG público: algunas filas antiguas de BD guardaron imageUrl como
+  // "/api/placeholder/500/500?text=..." — sin este endpoint esas imágenes daban 404.
+  app.get('/api/placeholder/:width/:height', (req, res) => {
+    const w = Math.min(Math.max(parseInt(req.params.width) || 500, 16), 2000);
+    const h = Math.min(Math.max(parseInt(req.params.height) || 500, 16), 2000);
+    const rawText = typeof req.query.text === 'string' ? req.query.text.slice(0, 40) : '';
+    const safeText = rawText.replace(/[<>&"']/g, '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/>
+  </linearGradient></defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>
+  <text x="50%" y="48%" text-anchor="middle" fill="#f97316" font-family="sans-serif" font-size="${Math.round(Math.min(w, h) * 0.18)}">&#9835;</text>
+  ${safeText ? `<text x="50%" y="62%" text-anchor="middle" fill="#94a3b8" font-family="sans-serif" font-size="${Math.round(Math.min(w, h) * 0.05)}">${safeText}</text>` : ''}
+</svg>`;
+    res.set('Content-Type', 'image/svg+xml');
+    res.set('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(svg);
   });
   
   // Auth middleware is configured via Clerk in server/index.ts

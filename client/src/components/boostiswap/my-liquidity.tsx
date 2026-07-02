@@ -8,7 +8,8 @@ import { useWeb3 } from "@/hooks/use-web3";
 import { useBTF2300 } from "@/hooks/use-btf2300";
 import { useArtistTokens } from "@/hooks/use-artist-tokens";
 import { TOKEN_PREFIXES, BTF2300_DEX_ABI, getBTF2300Addresses } from "@/lib/btf2300-config";
-import { formatEther, createPublicClient, http, createWalletClient, custom } from "viem";
+import { seededRange } from "@/lib/seeded";
+import { formatEther, createPublicClient, http, fallback, createWalletClient, custom } from "viem";
 import { polygon } from "viem/chains";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
@@ -35,10 +36,14 @@ interface LiquidityPosition {
   apy: string;
 }
 
-// Create public client for reading contract state
+// Create public client for reading contract state (working RPCs with fallback)
 const publicClient = createPublicClient({
   chain: polygon,
-  transport: http('https://polygon-rpc.com'),
+  transport: fallback([
+    http('https://polygon-bor-rpc.publicnode.com', { timeout: 10000, retryCount: 2 }),
+    http('https://rpc.ankr.com/polygon', { timeout: 10000, retryCount: 2 }),
+    http('https://1rpc.io/matic', { timeout: 10000, retryCount: 2 }),
+  ]),
 });
 
 const contracts = getBTF2300Addresses(137);
@@ -125,7 +130,7 @@ export function MyLiquidity({ userId }: MyLiquidityProps) {
                 estimatedValue: `$${valueUsd.toFixed(2)}`,
                 estimatedTokens: estimatedTokens.toFixed(2),
                 estimatedMatic: estimatedMatic.toFixed(4),
-                apy: `${(Math.random() * 15 + 5).toFixed(1)}%`,
+                apy: `${seededRange(`apy-${tokenId}`, 5, 20).toFixed(1)}%`,
               });
             }
           }

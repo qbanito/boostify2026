@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useArtistTokens, ArtistToken } from "../../../hooks/use-artist-tokens";
+import { seededUnit } from "@/lib/seeded";
 import { TrendingUp, TrendingDown, Search } from "lucide-react";
 import {
   LineChart,
@@ -19,12 +20,17 @@ export function ArtistTokensDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedToken, setSelectedToken] = useState<ArtistToken | null>(null);
 
-  // Generate mock price history for selected token
+  // Deterministic 24h price history for selected token (stable per symbol)
   const priceHistory = useMemo(() => {
     if (!selectedToken) return [];
+    const phase = seededUnit(selectedToken.symbol) * Math.PI * 2;
     return Array.from({ length: 24 }, (_, i) => ({
       time: `${i}:00`,
-      price: selectedToken.price * (1 + (Math.random() - 0.5) * 0.15),
+      price: selectedToken.price * (
+        1 +
+        Math.sin(i * 0.5 + phase) * 0.05 +
+        (seededUnit(`${selectedToken.symbol}-h${i}`) - 0.5) * 0.06
+      ),
     }));
   }, [selectedToken]);
 
