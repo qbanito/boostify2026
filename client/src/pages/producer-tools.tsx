@@ -73,6 +73,20 @@ async function getStoredMusicianImages(): Promise<{ url: string; category: strin
   }
 }
 
+// Hosts de imágenes que ya no existen (URLs temporales caducadas).
+// fal.media dejó de resolver DNS — todas las fotos guardadas ahí están muertas.
+const DEAD_IMAGE_HOSTS = ['fal.media'];
+
+function isLivePhotoUrl(url?: string | null): boolean {
+  if (!url || !/^(https?:|data:|blob:)/.test(url)) return false;
+  try {
+    const host = new URL(url, window.location.origin).hostname;
+    return !DEAD_IMAGE_HOSTS.some(dead => host === dead || host.endsWith(`.${dead}`));
+  } catch {
+    return false;
+  }
+}
+
 const musicians: MusicianService[] = [
   // Guitarists
   {
@@ -353,11 +367,12 @@ export default function ProducerToolsPage() {
         const data = doc.data();
         logger.info("Firestore musician doc:", doc.id, data);
         
+        const rawPhoto = data.photo || data.photoURL;
         firestoreMusicians.push({
           id: `firestore-${doc.id}`,
           userId: data.userId || doc.id,
           title: data.name || data.title,
-          photo: data.photo || data.photoURL,
+          photo: isLivePhotoUrl(rawPhoto) ? rawPhoto : undefined,
           instrument: data.instrument,
           category: data.category,
           description: data.description,
@@ -372,6 +387,13 @@ export default function ProducerToolsPage() {
       imagesSnapshot.forEach(doc => {
         const data = doc.data();
         logger.info("Firestore musician image doc:", doc.id, data);
+        
+        // Estas entradas SOLO aportan la imagen — si la URL está muerta
+        // (p.ej. fal.media caducó), la tarjeta no aporta nada: se omite.
+        if (!isLivePhotoUrl(data.url)) {
+          logger.warn(`Skipping musician image ${doc.id}: dead/invalid photo URL`, data.url);
+          return;
+        }
         
         // Create a musician from the image data
         firestoreMusicians.push({
@@ -428,7 +450,7 @@ export default function ProducerToolsPage() {
           id: String(m.id),
           userId: m.userId || `user-${m.id}`,
           title: m.name,
-          photo: m.photo,
+          photo: isLivePhotoUrl(m.photo) ? m.photo : undefined,
           instrument: m.instrument,
           category: m.category,
           description: m.description,
