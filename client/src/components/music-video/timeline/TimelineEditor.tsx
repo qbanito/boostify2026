@@ -78,6 +78,7 @@ import {
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { apiRequest } from '@/lib/queryClient';
+import { importOpenMontageProject } from '@/lib/services/openmontage-import';
 import type { MusicVideoScene } from '@/types/music-video-scene';
 import {
   type MicroCutConfig,
@@ -339,6 +340,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const omFileInputRef = useRef<HTMLInputElement>(null); // Import OpenMontage (JSON + media)
   const [importType, setImportType] = useState<'image' | 'audio' | 'video' | 'all'>('all');
   
   // 📂 Imported media files — shown in gallery panel alongside generated images
@@ -2638,7 +2640,105 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   }, [clips, currentTime, duration, detectFileType, pushHistory, toast]);
 
   // ==========================================
-  // 🎬 PREMIERE-STYLE DRAG & DROP SYSTEM
+  // �️ IMPORT OPENMONTAGE (JSON + media opcional)
+  // ==========================================
+  const handleOpenMontagePicker = useCallback(() => {
+    setShowImportMenu(false);
+    omFileInputRef.current?.click();
+  }, []);
+
+  const handleOpenMontageImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsImporting(true);
+    try {
+      const docs: any[] = [];
+      const mediaByName = new Map<string, { url: string; mimeType: string }>();
+      const mediaItems: ImportedMediaItem[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isJson = file.type === 'application/json' || /\.json$/i.test(file.name);
+        if (isJson) {
+          try {
+            docs.push(JSON.parse(await file.text()));
+          } catch {
+            toast({
+              title: 'JSON inválido',
+              description: `No se pudo parsear "${file.name}"`,
+              variant: 'destructive',
+            });
+          }
+        } else {
+          const kind = detectFileType(file);
+          if (!kind) continue;
+          const objectUrl = URL.createObjectURL(file);
+          mediaByName.set(file.name.toLowerCase(), { url: objectUrl, mimeType: file.type });
+          mediaItems.push({
+            id: `om-media-${Date.now()}-${i}`,
+            url: objectUrl,
+            name: file.name,
+            type: kind,
+            mimeType: file.type,
+            addedAt: Date.now(),
+          });
+        }
+      }
+
+      if (docs.length === 0) {
+        toast({
+          title: 'Sin artefactos OpenMontage',
+          description: 'Selecciona al menos un JSON (edit_decisions.json, scene_plan.json o asset_manifest.json)',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const maxClipId = clips.reduce((max, c) => Math.max(max, typeof c.id === 'number' ? c.id : 0), 0);
+      const result = importOpenMontageProject(docs, {
+        nextClipId: maxClipId + 2000,
+        mediaByName,
+        startOffset: currentTime > 0 ? currentTime : 0,
+      });
+
+      if (result.clips.length === 0) {
+        toast({
+          title: 'Nada que importar',
+          description: result.warnings[0] || 'Los artefactos no contienen escenas ni cortes válidos',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      pushHistory([...clips, ...result.clips], 'openmontage-import');
+      if (mediaItems.length > 0) setImportedMedia(prev => [...prev, ...mediaItems]);
+
+      logger.info(`🎞️ [OpenMontage] Importados ${result.clips.length} clips (${result.detectedArtifacts.join(', ')})`, {
+        warnings: result.warnings,
+      });
+      toast({
+        title: '✅ Proyecto OpenMontage importado',
+        description: `${result.clips.length} clip(s) añadidos${result.warnings.length > 0 ? ` · ${result.warnings.length} aviso(s), ver consola` : ''}`,
+      });
+      if (result.warnings.length > 0) {
+        result.warnings.forEach(w => logger.warn(`⚠️ [OpenMontage] ${w}`));
+      }
+    } catch (error) {
+      logger.error('❌ [OpenMontage] Error importando proyecto:', error);
+      toast({
+        title: 'Error de importación',
+        description: 'No se pudo importar el proyecto OpenMontage',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsImporting(false);
+      if (omFileInputRef.current) omFileInputRef.current.value = '';
+    }
+  }, [clips, currentTime, detectFileType, pushHistory, toast]);
+
+  // ==========================================
+  // �🎬 PREMIERE-STYLE DRAG & DROP SYSTEM
   // ==========================================
   const RULER_HEIGHT = 48;
   const TOTAL_LAYERS = 3;
@@ -3726,6 +3826,16 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         onChange={handleFileImport}
         accept={getAcceptedFileTypes('all')}
       />
+
+      {/* 🎞️ Input oculto para importar proyectos OpenMontage (JSON + media) */}
+      <input
+        ref={omFileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleOpenMontageImport}
+        accept=".json,application/json,image/*,video/*,audio/*"
+      />
       
       <div 
         ref={containerRef} 
@@ -3916,6 +4026,15 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
                   >
                     <FileVideo size={12} className="text-purple-400" />
                     Video
+                  </button>
+                  <div className="h-px bg-white/10 my-1" />
+                  <button
+                    onClick={handleOpenMontagePicker}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-white/10 active:bg-white/20 flex items-center gap-2 text-white/90"
+                    title="Importa edit_decisions.json / scene_plan.json (+ media) de un proyecto OpenMontage"
+                  >
+                    <Film size={12} className="text-orange-400" />
+                    Proyecto OpenMontage
                   </button>
                 </div>,
                 document.body
