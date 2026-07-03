@@ -79,7 +79,6 @@ import {
   ChevronDown, ChevronUp
 } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { apiRequest } from '@/lib/queryClient';
 import { importOpenMontageProject } from '@/lib/services/openmontage-import';
 import type { MusicVideoScene } from '@/types/music-video-scene';
 import {
