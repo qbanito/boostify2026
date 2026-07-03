@@ -863,9 +863,9 @@ export default function ProducerToolsPage() {
           {/* Service Categories */}
           <div className="mb-5 sm:mb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
             <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-              {["all", "Guitar", "Drums", "Piano", "Vocals", "Production", "Other"].map((category) => {
+              {["all", "Guitar", "Bass", "Drums", "Piano", "Brass", "Wind", "Strings", "Vocals", "Production", "Other"].map((category) => {
                 const isActive = selectedCategory.toLowerCase() === category.toLowerCase();
-                const Icon = category === "Guitar" ? Guitar : category === "Drums" ? Drum : category === "Piano" ? Piano : category === "Vocals" ? Mic2 : category === "Production" ? Music4 : Music2;
+                const Icon = category === "Guitar" || category === "Bass" ? Guitar : category === "Drums" ? Drum : category === "Piano" ? Piano : category === "Vocals" ? Mic2 : category === "Production" ? Music4 : Music2;
                 return (
                   <button
                     key={category}

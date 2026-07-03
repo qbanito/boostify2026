@@ -69,6 +69,56 @@ const INSTRUMENT_SVGS: Record<string, { svg: string; gradient: string; emoji: st
 
 const getInstrumentIcon = (instrument: string) => INSTRUMENT_SVGS[instrument] || INSTRUMENT_SVGS.Production;
 
+// ── Map tile styles (user-selectable) ──
+interface MapStyleDef {
+  label: string;
+  url: string;
+  subdomains?: string;
+  maxZoom: number;
+  bg: string;      // leaflet container background while tiles load
+  swatch: string;  // CSS gradient for the picker swatch
+  dark: boolean;   // is this a dark basemap? (for attribution contrast)
+}
+const MAP_STYLES: Record<string, MapStyleDef> = {
+  dark: {
+    label: "Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    subdomains: "abcd", maxZoom: 19, bg: "#16181d",
+    swatch: "linear-gradient(135deg,#1b1e26,#3d434f)", dark: true,
+  },
+  light: {
+    label: "Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    subdomains: "abcd", maxZoom: 19, bg: "#e9e9e7",
+    swatch: "linear-gradient(135deg,#f5f5f3,#c9d2da)", dark: false,
+  },
+  voyager: {
+    label: "Voyager",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    subdomains: "abcd", maxZoom: 19, bg: "#d5e3ea",
+    swatch: "linear-gradient(135deg,#cfe3da,#f3e7cd)", dark: false,
+  },
+  streets: {
+    label: "Streets",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    subdomains: "abc", maxZoom: 19, bg: "#dee5e9",
+    swatch: "linear-gradient(135deg,#e8eef2,#b8d4a8)", dark: false,
+  },
+  satellite: {
+    label: "Satellite",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    maxZoom: 19, bg: "#0b0f14",
+    swatch: "linear-gradient(135deg,#233a22,#3a5b74)", dark: true,
+  },
+  terrain: {
+    label: "Terrain",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    subdomains: "abc", maxZoom: 17, bg: "#dfe8dc",
+    swatch: "linear-gradient(135deg,#d9e6cf,#a9c4b0)", dark: false,
+  },
+};
+const MAP_STYLE_KEY = "boostify_producer_map_style";
+
 // ── Create Leaflet divIcon per instrument ──
 function makeInstrumentMarker(instrument: string, isRequest: boolean, sizeFactor = 1) {
   const info = getInstrumentIcon(instrument);
@@ -156,7 +206,7 @@ interface ExternalSource {
   enabled: boolean;
 }
 
-const INSTRUMENT_KEYS = ["Guitar", "Drums", "Piano", "Bass", "Vocals", "Production", "Mixing", "Violin"];
+const INSTRUMENT_KEYS = ["Guitar", "Drums", "Piano", "Bass", "Vocals", "Production", "Mixing", "Violin", "Trumpet", "Saxophone", "Trombone", "Brass", "Wind", "Strings"];
 function normalizeInstrument(v: any): string {
   if (!v) return "Production";
   const s = String(v);
@@ -219,6 +269,15 @@ export function ProducerMap() {
   const [mapZoom, setMapZoom] = useState(3);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const styleRef = useRef<HTMLStyleElement | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [mapStyle, setMapStyle] = useState<string>(() => {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const saved = localStorage.getItem(MAP_STYLE_KEY);
+      return saved && MAP_STYLES[saved] ? saved : "dark";
+    } catch { return "dark"; }
+  });
+  const [styleMenuOpen, setStyleMenuOpen] = useState(false);
   const { toast } = useToast();
 
   // ── External database / data-source integrations ──
@@ -311,12 +370,14 @@ export function ProducerMap() {
       worldCopyJump: true,
     });
 
-    // Modern dark GRAY styled tile layer (gray + orange palette)
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    // User-selectable tile style (persisted). Default: modern dark gray.
+    const initialStyle = MAP_STYLES[mapStyle] || MAP_STYLES.dark;
+    tileLayerRef.current = L.tileLayer(initialStyle.url, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
+      ...(initialStyle.subdomains ? { subdomains: initialStyle.subdomains } : {}),
+      maxZoom: initialStyle.maxZoom,
     }).addTo(map);
+    map.getContainer().style.background = initialStyle.bg;
 
     // Custom zoom control position
     L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -358,7 +419,6 @@ export function ProducerMap() {
       }
       .boostify-marker { background: none !important; border: none !important; }
       .boostify-marker div:hover { transform: scale(1.22) !important; z-index: 9999 !important; }
-      .leaflet-container { background: #16181d !important; }
       .leaflet-popup-content-wrapper {
         background: rgba(23,23,26,0.96) !important;
         border: 1px solid rgba(249,115,22,0.25) !important;
@@ -379,9 +439,25 @@ export function ProducerMap() {
     return () => {
       map.remove();
       mapRef.current = null;
+      tileLayerRef.current = null;
       style.remove();
     };
   }, []);
+
+  // ── Swap tile layer when the user picks a different map style ──
+  useEffect(() => {
+    const map = mapRef.current;
+    const st = MAP_STYLES[mapStyle];
+    if (!map || !st) return;
+    try { localStorage.setItem(MAP_STYLE_KEY, mapStyle); } catch { /* noop */ }
+    if (tileLayerRef.current) map.removeLayer(tileLayerRef.current);
+    tileLayerRef.current = L.tileLayer(st.url, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      ...(st.subdomains ? { subdomains: st.subdomains } : {}),
+      maxZoom: st.maxZoom,
+    }).addTo(map);
+    map.getContainer().style.background = st.bg;
+  }, [mapStyle]);
 
   // ── Smart Proposals: supply/demand intelligence for current viewport ──
   type SmartProposal = {
@@ -1013,7 +1089,7 @@ export function ProducerMap() {
             </div>
           )}
           {/* Top-left overlay stats */}
-          <div className="absolute top-3 left-3 z-[400] flex flex-col gap-1.5">
+          <div className="absolute top-3 left-3 z-[650] flex flex-col gap-1.5">
             <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700/40 rounded-xl px-3 py-2 flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
@@ -1031,92 +1107,45 @@ export function ProducerMap() {
             </div>
           </div>
 
-          {/* ═════════ SMART PROPOSALS PANEL (top-right overlay) ═════════ */}
-          <div className="absolute top-3 right-3 z-[400] w-[200px] sm:w-[320px] max-w-[calc(100%-1.5rem)]">
-            <div className="bg-gradient-to-br from-slate-900/95 to-slate-950/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden">
-              {/* Header */}
-              <button
-                onClick={() => setProposalsOpen(o => !o)}
-                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-purple-500/5 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                    <Sparkles className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-[11px] sm:text-xs font-bold text-white flex items-center gap-1.5">
-                      Smart Proposals
-                      <span className="bg-purple-500/20 text-purple-300 text-[8px] px-1.5 py-0.5 rounded-full border border-purple-500/30 font-semibold">AI</span>
-                    </div>
-                    <div className="text-[9px] text-slate-400">{smartProposals.length} insights · {regionLabel}</div>
-                  </div>
-                </div>
-                {proposalsOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-              </button>
-
-              {/* Body */}
-              <AnimatePresence initial={false}>
-                {proposalsOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-2 pb-2 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                      {smartProposals.map((p, idx) => {
-                        const isHighlighted = idx === activeProposalIdx % smartProposals.length;
-                        return (
-                          <motion.button
-                            key={p.id}
-                            layout
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.2, delay: idx * 0.03 }}
-                            onClick={() => {
-                              if (p.action) p.action();
-                              else if (p.instrument) setInstrumentFilter(p.instrument);
-                            }}
-                            className={`w-full text-left p-2.5 rounded-xl border transition-all hover:scale-[1.01] group relative overflow-hidden ${
-                              isHighlighted
-                                ? "bg-gradient-to-br from-purple-500/15 to-fuchsia-500/10 border-purple-500/40 shadow-lg shadow-purple-500/10"
-                                : "bg-slate-800/40 border-slate-700/30 hover:bg-slate-800/70 hover:border-slate-600/40"
-                            }`}
-                          >
-                            {isHighlighted && (
-                              <div className={`absolute inset-0 opacity-10 bg-gradient-to-br ${p.color} pointer-events-none`} />
-                            )}
-                            <div className="flex items-start gap-2 relative">
-                              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${p.color} flex items-center justify-center flex-shrink-0 text-sm shadow-md`}>
-                                {p.icon}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-[11px] font-bold text-white leading-tight">{p.title}</div>
-                                <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2 leading-snug">{p.subtitle}</div>
-                                <div className="flex items-center gap-1 mt-1.5 text-[10px] text-purple-300 font-semibold group-hover:text-purple-200">
-                                  {p.cta} <ChevronRight className="h-3 w-3" />
-                                </div>
-                              </div>
-                            </div>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                    <div className="px-3 py-1.5 bg-slate-950/60 border-t border-slate-800/60 flex items-center justify-between">
-                      <span className="text-[9px] text-slate-500">Updates as you move the map</span>
+          {/* ── Map style picker (top-right overlay) ── */}
+          <div className="absolute top-3 right-3 z-[650] flex flex-col items-end gap-1.5">
+            <button
+              onClick={() => setStyleMenuOpen(o => !o)}
+              title="Map style"
+              className="w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur-md border border-slate-600/40 text-slate-300 hover:text-orange-300 hover:border-orange-500/30 flex items-center justify-center transition-colors shadow-lg"
+            >
+              <Layers className="h-4 w-4" />
+            </button>
+            <AnimatePresence>
+              {styleMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                  className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl p-2 w-44"
+                >
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold px-1.5 pb-1.5">Map style</div>
+                  <div className="space-y-1">
+                    {Object.entries(MAP_STYLES).map(([key, st]) => (
                       <button
-                        onClick={() => setProposalsTick(v => v + 1)}
-                        className="text-[9px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
+                        key={key}
+                        onClick={() => { setMapStyle(key); setStyleMenuOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors border ${
+                          mapStyle === key
+                            ? "bg-orange-500/10 border-orange-500/30 text-orange-300"
+                            : "border-transparent text-slate-300 hover:bg-slate-800/70"
+                        }`}
                       >
-                        <RefreshCw className="h-2.5 w-2.5" /> Re-roll
+                        <span className="w-5 h-5 rounded-md border border-white/10 flex-shrink-0" style={{ background: st.swatch }} />
+                        <span className="text-[11px] font-medium flex-1">{st.label}</span>
+                        {mapStyle === key && <CheckCircle2 className="h-3.5 w-3.5 text-orange-400" />}
                       </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div ref={mapContainerRef} className="boostify-map-canvas h-[420px] sm:h-[500px] lg:h-[560px] w-full" />
@@ -1125,15 +1154,101 @@ export function ProducerMap() {
           <button
             onClick={toggleFullscreen}
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            className="absolute bottom-3 left-3 z-[400] w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur-md border border-orange-500/30 text-orange-400 hover:bg-orange-500/15 hover:text-orange-300 flex items-center justify-center transition-colors shadow-lg"
+            className="absolute bottom-3 left-3 z-[650] w-9 h-9 rounded-xl bg-slate-900/85 backdrop-blur-md border border-orange-500/30 text-orange-400 hover:bg-orange-500/15 hover:text-orange-300 flex items-center justify-center transition-colors shadow-lg"
           >
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
         </div>
 
         {/* Live Feed Sidebar */}
-        <div className="w-full lg:w-80 xl:w-96 flex flex-col gap-2 max-h-[420px] sm:max-h-[500px] lg:max-h-[560px] overflow-hidden">
-          <div className="bg-slate-900/60 backdrop-blur border border-slate-700/40 rounded-2xl p-3 flex-1 overflow-hidden flex flex-col">
+        <div className="w-full lg:w-80 xl:w-96 flex flex-col gap-2 max-h-[560px] overflow-hidden">
+          {/* ═════════ SMART PROPOSALS PANEL (sidebar, never covers the map) ═════════ */}
+          <div className="flex-shrink-0 bg-gradient-to-br from-slate-900/95 to-slate-950/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <button
+              onClick={() => setProposalsOpen(o => !o)}
+              className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-purple-500/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
+                </div>
+                <div className="text-left">
+                  <div className="text-[11px] sm:text-xs font-bold text-white flex items-center gap-1.5">
+                    Smart Proposals
+                    <span className="bg-purple-500/20 text-purple-300 text-[8px] px-1.5 py-0.5 rounded-full border border-purple-500/30 font-semibold">AI</span>
+                  </div>
+                  <div className="text-[9px] text-slate-400">{smartProposals.length} insights · {regionLabel}</div>
+                </div>
+              </div>
+              {proposalsOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+            </button>
+
+            {/* Body */}
+            <AnimatePresence initial={false}>
+              {proposalsOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-2 pb-2 space-y-1.5 max-h-[220px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                    {smartProposals.map((p, idx) => {
+                      const isHighlighted = idx === activeProposalIdx % smartProposals.length;
+                      return (
+                        <motion.button
+                          key={p.id}
+                          layout
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.2, delay: idx * 0.03 }}
+                          onClick={() => {
+                            if (p.action) p.action();
+                            else if (p.instrument) setInstrumentFilter(p.instrument);
+                          }}
+                          className={`w-full text-left p-2.5 rounded-xl border transition-all hover:scale-[1.01] group relative overflow-hidden ${
+                            isHighlighted
+                              ? "bg-gradient-to-br from-purple-500/15 to-fuchsia-500/10 border-purple-500/40 shadow-lg shadow-purple-500/10"
+                              : "bg-slate-800/40 border-slate-700/30 hover:bg-slate-800/70 hover:border-slate-600/40"
+                          }`}
+                        >
+                          {isHighlighted && (
+                            <div className={`absolute inset-0 opacity-10 bg-gradient-to-br ${p.color} pointer-events-none`} />
+                          )}
+                          <div className="flex items-start gap-2 relative">
+                            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${p.color} flex items-center justify-center flex-shrink-0 text-sm shadow-md`}>
+                              {p.icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] font-bold text-white leading-tight">{p.title}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2 leading-snug">{p.subtitle}</div>
+                              <div className="flex items-center gap-1 mt-1.5 text-[10px] text-purple-300 font-semibold group-hover:text-purple-200">
+                                {p.cta} <ChevronRight className="h-3 w-3" />
+                              </div>
+                            </div>
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <div className="px-3 py-1.5 bg-slate-950/60 border-t border-slate-800/60 flex items-center justify-between">
+                    <span className="text-[9px] text-slate-500">Updates as you move the map</span>
+                    <button
+                      onClick={() => setProposalsTick(v => v + 1)}
+                      className="text-[9px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" /> Re-roll
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="bg-slate-900/60 backdrop-blur border border-slate-700/40 rounded-2xl p-3 flex-1 overflow-hidden flex flex-col min-h-[180px]">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <Zap className="h-4 w-4 text-orange-400" />

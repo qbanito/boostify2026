@@ -185,6 +185,28 @@ export const GOAL_PRESETS: GoalPreset[] = [
     description: 'Net Promoter Score from quarterly artist survey.',
     cadenceDays: 30,
   },
+  {
+    key: 'investor_pipeline_25',
+    category: 'revenue',
+    scope: 'company',
+    ownerAgent: 'cfo',
+    title: '25 qualified investor leads in pipeline',
+    metric: 'investor_leads',
+    targetValue: 25,
+    description: 'Qualified investor leads (recordInvestorLead) with active follow-up. Review with queryInvestorLeads; follow up high-interest leads via sendOutreachEmail.',
+    cadenceDays: 7,
+  },
+  {
+    key: 'outreach_acquisition_100',
+    category: 'growth',
+    scope: 'company',
+    ownerAgent: 'cmo',
+    title: '100 outreach-driven signups per month',
+    metric: 'outreach_signups',
+    targetValue: 100,
+    description: 'New user signups attributable to outreach campaigns. Monitor with queryGrowthFunnel; run targeted sendOutreachEmail campaigns to communities, partners and artist networks.',
+    cadenceDays: 7,
+  },
 ];
 
 export function getPreset(key: string): GoalPreset | undefined {

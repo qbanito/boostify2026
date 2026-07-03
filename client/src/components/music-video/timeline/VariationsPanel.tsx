@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/queryClient';
 import {
   X, Sparkles, Loader2, ChevronLeft, Check,
   Plus, ChevronDown, Maximize2, Settings2,
@@ -59,16 +60,18 @@ interface Perspective {
 }
 
 const PERSPECTIVES: Perspective[] = [
+  // Solo 4 activas por defecto — cada perspectiva marcada genera una imagen
+  // de pago; antes había 9 activas y un clic en Generate quemaba 9 créditos.
   { id: 'ext-long', label: 'Ext. long shot', promptSuffix: 'extreme long shot, full environment visible, establishing shot', default: true },
   { id: 'long', label: 'Long shot', promptSuffix: 'long shot, full body visible, wide framing', default: true },
   { id: 'closeup', label: 'Closeup', promptSuffix: 'close-up shot, face filling frame, intimate portrait', default: true },
-  { id: 'medium-long', label: 'Medium long', promptSuffix: 'medium long shot, knees up, natural framing', default: true },
-  { id: 'extreme-closeup', label: 'Extreme closeup', promptSuffix: 'extreme close-up, eyes and mouth detail, macro portrait', default: true },
-  { id: 'low-angle', label: 'Low angle', promptSuffix: 'low angle shot, camera looking up, powerful perspective', default: true },
-  { id: 'back-view', label: 'Back view', promptSuffix: 'back view, over the shoulder, rear perspective', default: true },
+  { id: 'medium-long', label: 'Medium long', promptSuffix: 'medium long shot, knees up, natural framing', default: false },
+  { id: 'extreme-closeup', label: 'Extreme closeup', promptSuffix: 'extreme close-up, eyes and mouth detail, macro portrait', default: false },
+  { id: 'low-angle', label: 'Low angle', promptSuffix: 'low angle shot, camera looking up, powerful perspective', default: false },
+  { id: 'back-view', label: 'Back view', promptSuffix: 'back view, over the shoulder, rear perspective', default: false },
   { id: 'med-closeup', label: 'Med. closeup', promptSuffix: 'medium close-up, chest up, conversational distance', default: true },
   { id: 'ots', label: 'OTS', promptSuffix: 'over the shoulder shot, depth framing', default: false },
-  { id: 'high-angle', label: 'High angle', promptSuffix: 'high angle shot, camera looking down, bird\'s eye perspective', default: true },
+  { id: 'high-angle', label: 'High angle', promptSuffix: 'high angle shot, camera looking down, bird\'s eye perspective', default: false },
   { id: 'wide', label: 'Wide', promptSuffix: 'wide shot, panoramic view, environmental context', default: false },
   { id: 'pov', label: 'POV', promptSuffix: 'point of view shot, first person perspective', default: false },
 ];
@@ -150,17 +153,15 @@ export function VariationsPanel({
       const activePerspectives = PERSPECTIVES.filter(p => selectedPerspectives.has(p.id));
       const prompts = activePerspectives.map(p => buildPrompt(p));
 
-      const res = await fetch('/api/fal/nano-banana/generate-batch', {
+      const data = await apiRequest({
+        url: '/api/fal/nano-banana/generate-batch',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        data: {
           prompts,
           aspectRatio: '16:9',
           referenceImages: [sourceUrl],
-        }),
+        },
       });
-
-      const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Error generating variations');
 
       const newResults: VariationResult[] = (data.results || [])

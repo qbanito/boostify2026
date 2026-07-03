@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
+import Stripe from 'stripe';
 import { db } from '../db';
 import { storage as firebaseStorage } from '../firebase';
 import {
@@ -20,6 +21,60 @@ import {
 import { rateLimitAiGen } from '../middleware/rate-limit';
 
 const router = Router();
+
+// ─── Stripe (payment verification for subscriptions / purchases / tips) ───
+const stripeKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2025-01-27.acacia' as any }) : null;
+
+/**
+ * Verifies a Stripe subscription id is real and active/trialing.
+ * Returns an error string when invalid, null when OK (or when Stripe is not
+ * configured — e.g. local dev without keys).
+ */
+async function verifyStripeSubscription(stripeSubscriptionId?: string): Promise<string | null> {
+  if (!stripe) return null; // Stripe not configured (dev) — skip hard validation
+  if (!stripeSubscriptionId) return 'stripeSubscriptionId required';
+  try {
+    const sub = await stripe.subscriptions.retrieve(String(stripeSubscriptionId));
+    if (!['active', 'trialing'].includes(sub.status)) {
+      return `Stripe subscription is not active (status: ${sub.status})`;
+    }
+    return null;
+  } catch {
+    return 'Invalid Stripe subscription';
+  }
+}
+
+/**
+ * Verifies a Stripe PaymentIntent succeeded. Returns an error string when
+ * invalid, null when OK (or when Stripe is not configured).
+ */
+async function verifyStripePayment(stripePaymentIntentId?: string): Promise<string | null> {
+  if (!stripe) return null;
+  if (!stripePaymentIntentId) return 'stripePaymentIntentId required';
+  try {
+    const pi = await stripe.paymentIntents.retrieve(String(stripePaymentIntentId));
+    if (pi.status !== 'succeeded') return `Payment not completed (status: ${pi.status})`;
+    return null;
+  } catch {
+    return 'Invalid Stripe payment';
+  }
+}
+
+// ─── Lightweight per-user chat rate limiter (30 messages / minute) ───
+const chatRateBuckets = new Map<number, { count: number; resetAt: number }>();
+const CHAT_RATE_LIMIT = 30;
+const CHAT_RATE_WINDOW_MS = 60_000;
+function chatRateLimited(userId: number): boolean {
+  const now = Date.now();
+  const bucket = chatRateBuckets.get(userId);
+  if (!bucket || bucket.resetAt <= now) {
+    chatRateBuckets.set(userId, { count: 1, resetAt: now + CHAT_RATE_WINDOW_MS });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > CHAT_RATE_LIMIT;
+}
 
 // ─── Multer for file uploads (memory, 100MB max, image/video/audio only) ───
 const explicitUpload = multer({
@@ -199,6 +254,16 @@ router.post('/content/upload', explicitUpload.single('file'), async (req: Reques
 
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'No file provided (field name must be "file")' });
+
+    // Per-artist library quota (protects storage from abuse)
+    const MAX_CONTENT_ITEMS = 500;
+    const [{ count: itemCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(explicitContent)
+      .where(eq(explicitContent.artistId, userId));
+    if (Number(itemCount) >= MAX_CONTENT_ITEMS) {
+      return res.status(429).json({ error: `Content library limit reached (${MAX_CONTENT_ITEMS} items). Delete old items first.` });
+    }
 
     if (!firebaseStorage) {
       return res.status(503).json({ error: 'Firebase Storage not configured on server' });
@@ -418,6 +483,20 @@ router.post('/subscription/create', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Valid plan required (monthly/yearly)' });
     }
 
+    // Verify the payment actually happened in Stripe before granting access
+    const stripeError = await verifyStripeSubscription(stripeSubscriptionId);
+    if (stripeError) return res.status(402).json({ error: stripeError });
+
+    // Reject re-use of the same Stripe subscription id (forgery / replay)
+    if (stripeSubscriptionId) {
+      const [dupe] = await db.select({ id: explicitSubscriptions.id }).from(explicitSubscriptions)
+        .where(and(
+          eq(explicitSubscriptions.stripeSubscriptionId, stripeSubscriptionId),
+          eq(explicitSubscriptions.status, 'active'),
+        )).limit(1);
+      if (dupe) return res.status(409).json({ error: 'This Stripe subscription is already registered' });
+    }
+
     // Deactivate existing subscription if any
     await db.update(explicitSubscriptions)
       .set({ status: 'cancelled', updatedAt: new Date() })
@@ -461,6 +540,19 @@ router.post('/purchase', async (req: Request, res: Response) => {
       .where(eq(explicitContent.id, contentId)).limit(1);
     if (!content) return res.status(404).json({ error: 'Content not found' });
 
+    // Block duplicate purchases of the same content
+    const [alreadyOwned] = await db.select({ id: explicitPurchases.id }).from(explicitPurchases)
+      .where(and(
+        eq(explicitPurchases.buyerId, userId),
+        eq(explicitPurchases.contentId, content.id),
+        eq(explicitPurchases.status, 'completed'),
+      )).limit(1);
+    if (alreadyOwned) return res.status(409).json({ error: 'Content already purchased', purchaseId: alreadyOwned.id });
+
+    // Verify the payment actually happened in Stripe
+    const stripeError = await verifyStripePayment(stripePaymentIntentId);
+    if (stripeError) return res.status(402).json({ error: stripeError });
+
     const [purchase] = await db.insert(explicitPurchases).values({
       buyerId: userId,
       contentId: content.id,
@@ -493,6 +585,10 @@ router.post('/tip', async (req: Request, res: Response) => {
     if (!amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: 'Valid amount required' });
     }
+
+    // Verify the tip payment actually happened in Stripe
+    const stripeError = await verifyStripePayment(stripePaymentIntentId);
+    if (stripeError) return res.status(402).json({ error: stripeError });
 
     const [tip] = await db.insert(explicitTips).values({
       tipperId: userId, artistId, amount: String(amount), message,
@@ -570,6 +666,10 @@ router.post('/chat/:artistId', async (req: Request, res: Response) => {
 
     const artistId = await resolveArtistId(req.params.artistId);
     if (!artistId) return res.status(404).json({ error: 'Artist not found' });
+
+    if (chatRateLimited(userId)) {
+      return res.status(429).json({ error: 'Too many messages — slow down (max 30/min)' });
+    }
 
     const isOwner = userId === artistId;
 

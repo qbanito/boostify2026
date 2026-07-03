@@ -16,7 +16,7 @@ import {
   Shield, RefreshCw, Activity, Upload, Sparkles, Link as LinkIcon,
   TrendingUp, Zap, Users2, AreaChart, PieChart as PieChartIcon, CreditCard, Terminal, FileText,
   Download, ScrollText, Settings, Loader2, Search, AlertTriangle, Key, Crown,
-  MoreVertical, ChevronRight, Truck, Instagram, Mail, Inbox
+  MoreVertical, ChevronRight, Truck, Instagram, Mail, Inbox, Coins
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -52,6 +52,7 @@ import { EmailCommandCenter } from '../components/admin/email-command-center';
 import { AdminSongAnalyzer } from '../components/admin/admin-song-analyzer';
 import { ConcertsManager } from '../components/admin/concerts-manager';
 import { CreditPricingAdmin } from '../components/admin/credit-pricing-admin';
+import { StreamingRewardsAdmin } from '../components/admin/streaming-rewards-admin';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -308,6 +309,7 @@ export default function AdminDashboard() {
                     tabs: [
                       { value: 'accounting', label: 'Accounting', icon: DollarSign },
                       { value: 'credits-pricing', label: 'Credits & Pricing', icon: Zap },
+                      { value: 'streaming-rewards', label: 'Streaming Rewards', icon: Coins },
                       { value: 'stripe-events', label: 'Stripe Events', icon: CreditCard },
                       { value: 'economic-engine', label: 'Economic Engine', icon: PieChartIcon },
                       { value: 'smart-merch-suppliers', label: 'Smart Merch', icon: Truck },
@@ -567,6 +569,10 @@ export default function AdminDashboard() {
 
               <TabsContent value="credits-pricing" className="w-full">
                 <CreditPricingAdmin />
+              </TabsContent>
+
+              <TabsContent value="streaming-rewards" className="w-full">
+                <StreamingRewardsAdmin />
               </TabsContent>
 
               <TabsContent value="api-usage" className="w-full">

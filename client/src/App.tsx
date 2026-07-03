@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, ReactNode, useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
@@ -222,7 +222,6 @@ const TipsPage = lazy(() => import("./pages/tips"));
 const GuidesPage = lazy(() => import("./pages/guides"));
 const ToolsPage = lazy(() => import("./pages/tools"));
 const FeaturesPage = lazy(() => import("./pages/features"));
-const AIVideoCreationPage = lazy(() => import("./pages/ai-video-creation"));
 const TimelineDemoPage = lazy(() => import("./pages/timeline-demo"));
 const DebugFirebasePage = lazy(() => import("./pages/debug-firebase"));
 const TimelineEditorPage = lazy(() => import("./pages/timeline-editor"));
@@ -583,7 +582,6 @@ const Router = () => {
   const WrappedGuidesPage = withPageWrapper(GuidesPage);
   const WrappedToolsPage = withPageWrapper(ToolsPage);
   const WrappedFeaturesPage = withPageWrapper(FeaturesPage);
-  const WrappedAIVideoCreationPage = withPageWrapper(AIVideoCreationPage);
   const WrappedTimelineDemoPage = withPageWrapper(TimelineDemoPage);
   const WrappedDebugFirebasePage = withPageWrapper(DebugFirebasePage);
   const WrappedTimelineEditorPage = withPageWrapper(TimelineEditorPage);
@@ -750,7 +748,8 @@ const Router = () => {
           {getRouteComponent("/translator", WrappedRealTimeTranslator, 'pro')}
           {getRouteComponent("/ai-agents", WrappedAIAgentsPage, 'pro')}
           {getRouteComponent("/agent-nodes", WrappedAgentNodesPage, 'pro')}
-          {getRouteComponent("/ai-video-creation", WrappedAIVideoCreationPage, 'pro')}
+          {/* Ruta retirada: redirige enlaces antiguos al Music Video Creator */}
+          <Route path="/ai-video-creation">{() => <Redirect to="/music-video-creator" />}</Route>
 
           {/* DOMINATE / ENTERPRISE ($149.99) — Virtual Label & Web3 */}
           {getRouteComponent("/virtual-record-label", WrappedVirtualRecordLabelPage, 'premium')}

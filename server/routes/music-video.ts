@@ -23,6 +23,7 @@ import {
 import { db } from '../../db';
 import { musicVideoConcepts } from '../../db/schema';
 import { eq, and } from 'drizzle-orm';
+import { isAuthenticated } from '../middleware/clerk-auth';
 import {
   analyzeEmotionalContent,
   generateDynamicPacing,
@@ -33,6 +34,68 @@ import {
 } from '../services/video-analysis-service';
 
 const router = Router();
+
+/**
+ * 🎬 Director AI proxy — chat con OpenRouter DESDE EL SERVIDOR.
+ * El cliente no debe llamar a openrouter.ai directo (la API key es secreta y
+ * VITE_OPENROUTER_API_KEY no existe en el bundle → Director Chat/Suggestions
+ * del Timeline quedaban rotos). Usado por chatWithAI() en openrouter.fixed.ts.
+ */
+router.post('/ai-chat', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { messages, temperature, maxTokens, model } = req.body || {};
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ success: false, error: 'messages array is required' });
+    }
+    const safeMessages = messages
+      .filter((m: any) => m && typeof m.content === 'string' && ['system', 'user', 'assistant'].includes(m.role))
+      .slice(-30)
+      .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 24000) }));
+    if (safeMessages.length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid messages provided' });
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ success: false, error: 'OpenRouter API key not configured' });
+    }
+
+    const ALLOWED_MODELS = new Set(['google/gemini-2.0-flash-001', 'anthropic/claude-3-haiku', 'openai/gpt-4o-mini']);
+    const chosenModel = ALLOWED_MODELS.has(model) ? model : 'google/gemini-2.0-flash-001';
+
+    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://boostifymusic.com',
+        'X-Title': 'Boostify Music Video Creator',
+      },
+      body: JSON.stringify({
+        model: chosenModel,
+        messages: safeMessages,
+        temperature: Math.min(Math.max(Number(temperature) || 0.7, 0), 2),
+        max_tokens: Math.min(Math.max(Number(maxTokens) || 2000, 64), 8192),
+      }),
+    });
+
+    if (!orRes.ok) {
+      const errText = await orRes.text().catch(() => '');
+      logger.error(`[music-video/ai-chat] OpenRouter ${orRes.status}: ${errText.slice(0, 300)}`);
+      return res.status(502).json({ success: false, error: `AI provider error (${orRes.status})` });
+    }
+
+    const data: any = await orRes.json();
+    const text = data?.choices?.[0]?.message?.content ?? '';
+    if (!text) {
+      return res.status(502).json({ success: false, error: 'Empty AI response' });
+    }
+    return res.json({ success: true, text, model: chosenModel });
+  } catch (error: any) {
+    logger.error('[music-video/ai-chat] Error:', error);
+    return res.status(500).json({ success: false, error: error?.message || 'AI chat failed' });
+  }
+});
 
 // Cliente OpenAI para generación de texto
 const openai = createTrackedOpenAI({

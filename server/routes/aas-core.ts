@@ -141,7 +141,7 @@ router.post('/toggle/:artistId', isAuthenticated, requireArtistOwner, async (req
 });
 
 // ── Get AAS status for an artist ──────────────────────────
-router.get('/status/:artistId', async (req: Request, res: Response) => {
+router.get('/status/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -176,7 +176,7 @@ router.get('/status/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get full AAS profile for an artist ────────────────────
-router.get('/profile/:artistId', async (req: Request, res: Response) => {
+router.get('/profile/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -265,7 +265,7 @@ router.post('/run-cycle/:artistId', isAuthenticated, requireArtistOwner, async (
 });
 
 // ── Get survival score ────────────────────────────────────
-router.get('/score/:artistId', async (req: Request, res: Response) => {
+router.get('/score/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -293,7 +293,7 @@ router.get('/score/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get metrics history ───────────────────────────────────
-router.get('/metrics/:artistId', async (req: Request, res: Response) => {
+router.get('/metrics/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -314,7 +314,7 @@ router.get('/metrics/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get today's plan ──────────────────────────────────────
-router.get('/plan/:artistId/today', async (req: Request, res: Response) => {
+router.get('/plan/:artistId/today', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -341,7 +341,7 @@ router.get('/plan/:artistId/today', async (req: Request, res: Response) => {
 });
 
 // ── Get deal pipeline ─────────────────────────────────────
-router.get('/deals/:artistId', async (req: Request, res: Response) => {
+router.get('/deals/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -361,7 +361,7 @@ router.get('/deals/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get pending approvals ─────────────────────────────────
-router.get('/approvals/:artistId/pending', async (req: Request, res: Response) => {
+router.get('/approvals/:artistId/pending', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -428,7 +428,7 @@ router.post('/approvals/:id/:decision', isAuthenticated, async (req: Request, re
 });
 
 // ── Get strategic memory ──────────────────────────────────
-router.get('/insights/:artistId', async (req: Request, res: Response) => {
+router.get('/insights/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -449,7 +449,7 @@ router.get('/insights/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get daily goals ───────────────────────────────────────
-router.get('/goals/:artistId', async (req: Request, res: Response) => {
+router.get('/goals/:artistId', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {
@@ -464,7 +464,7 @@ router.get('/goals/:artistId', async (req: Request, res: Response) => {
 });
 
 // ── Get goals summary ─────────────────────────────────────
-router.get('/goals/:artistId/summary', async (req: Request, res: Response) => {
+router.get('/goals/:artistId/summary', isAuthenticated, requireArtistOwner, async (req: Request, res: Response) => {
   try {
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) {

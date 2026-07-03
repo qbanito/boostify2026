@@ -44,6 +44,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { apiRequest } from '@/lib/queryClient';
 import { useAudioAnalysis } from '@/hooks/useAudioAnalysis';
 import { useTimelineEngine } from '@/hooks/useTimelineEngine';
 import type { EditMode } from '@/hooks/useTimelineEngine';
@@ -1234,6 +1235,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   // Flag para evitar hammering de .play() en cada tick
   const audioStartedRef = useRef(false);
 
+  // 🧹 Guard de desmontaje — los pollings (pollVideoStatus) lo consultan para
+  // no actualizar estado en un componente desmontado
+  const isUnmountedRef = useRef(false);
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => { isUnmountedRef.current = true; };
+  }, []);
+
   // 🎯 Play loop — usa performance.now() como reloj maestro, audio se sincroniza
   useEffect(() => {
     if (!isPlaying) {
@@ -1277,8 +1286,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       }
       
       // 🔊 Sincronizar audio con el reloj maestro (NO al revés)
+      // playbackRate > 0: el audio suena también a 0.5x/2x/4x (antes solo a 1x);
+      // en reversa (rate < 0) se mantiene pausado.
       const src = activeAudioSourceRef.current;
-      if (audioRef.current && src && playbackRate === 1) {
+      if (audioRef.current && src && playbackRate > 0) {
         const isWithinClip = newTime >= src.clipStart && 
                               newTime < src.clipStart + src.clipDuration;
         if (isWithinClip) {
@@ -1287,6 +1298,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           if (!audioStartedRef.current) {
             // Primer tick: iniciar audio una sola vez
             audioRef.current.currentTime = expectedAudioTime;
+            audioRef.current.playbackRate = Math.min(playbackRate, 4);
             audioRef.current.play().then(() => {
               audioStartedRef.current = true;
             }).catch(() => {
@@ -1343,9 +1355,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       
       audioRef.current.volume = isMuted ? 0 : volume;
       
-      if (isWithinClip && audioSeekTime >= 0 && playbackRate === 1) {
+      if (isWithinClip && audioSeekTime >= 0 && playbackRate > 0) {
         audioRef.current.currentTime = audioSeekTime;
-        audioRef.current.playbackRate = 1;
+        audioRef.current.playbackRate = Math.min(playbackRate, 4);
         audioRef.current.play()
           .then(() => {
             setAudioReady(true);
@@ -3127,13 +3139,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
     setIsUpscaling(clip.id);
     try {
-      const res = await fetch('/api/fal/nano-banana/upscale', {
+      const data = await apiRequest({
+        url: '/api/fal/nano-banana/upscale',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: imgUrl, scale: 2 }),
+        data: { imageUrl: imgUrl, scale: 2 },
       });
-
-      const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Upscale failed');
 
       updateClip(clip.id, {
@@ -3250,17 +3260,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
       
       logger.info(`?? [Timeline] Usando endpoint: ${endpoint}, con referencia: ${shouldUseReference}`);
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        throw new Error('Error regenerando imagen');
-      }
-
-      const data = await response.json();
+      const data = await apiRequest({ url: endpoint, method: 'POST', data: requestBody });
       
       if (data.imageUrl || data.success) {
         const newImageUrl = data.imageUrl || data.url;
@@ -3518,13 +3518,14 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
     let pollDelay = 10000; // start 10s, grows with backoff
     
     const checkStatus = async () => {
+      if (isUnmountedRef.current) return; // no actualizar estado tras desmontar
       try {
         const isPixVerse = model.startsWith('pixverse-');
         const url = isPixVerse
           ? `/api/fal/pixverse-video/${requestId}`
           : `/api/fal/kling-video/${requestId}?model=${model}`;
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await apiRequest(url);
+        if (isUnmountedRef.current) return;
         
         if (data.status === 'completed' && (data.videoUrl || data.video_url)) {
           updateClip(clipId, {
@@ -3572,6 +3573,12 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         }
       } catch (error) {
         logger.error('Error polling video status:', error);
+        // Reintentar en errores transitorios — antes el polling moría en silencio
+        attempts++;
+        if (!isUnmountedRef.current && attempts < maxAttempts) {
+          pollDelay = Math.min(pollDelay * 1.5, 60000);
+          setTimeout(checkStatus, pollDelay);
+        }
       }
     };
     
@@ -3611,46 +3618,43 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         if (isPixVerse) {
           // ── PixVerse branch ──
           const pixverseModelName = model.replace('pixverse-', '');
-          const response = await fetch('/api/fal/pixverse-video/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl,
-              prompt,
-              model: pixverseModelName,
-              duration: Math.min(clip.duration ?? 5, 8),
-            }),
-          });
-          if (response.ok) {
-            const data = await response.json();
+          try {
+            const data = await apiRequest({
+              url: '/api/fal/pixverse-video/generate',
+              method: 'POST',
+              data: {
+                imageUrl,
+                prompt,
+                model: pixverseModelName,
+                duration: Math.min(clip.duration ?? 5, 8),
+              },
+            });
             if (data.taskId) {
               pollVideoStatus(clip.id, data.taskId, model);
             }
-          } else {
+          } catch (_pixErr) {
             updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: false, videoError: 'PixVerse start failed' } });
           }
         } else {
           // ── Kling branch ──
-          const response = await fetch('/api/fal/kling-video/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl,
-              prompt,
-              model: model.includes('.') ? model : 'kling-v2.1-standard',
-              clipId: clip.id,
-              duration: Math.min(clip.duration ?? 5, 10),
-            }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
+          try {
+            const data = await apiRequest({
+              url: '/api/fal/kling-video/generate',
+              method: 'POST',
+              data: {
+                imageUrl,
+                prompt,
+                model: model.includes('.') ? model : 'kling-v2.1-standard',
+                clipId: clip.id,
+                duration: Math.min(clip.duration ?? 5, 10),
+              },
+            });
             if (data.requestId) {
               pollVideoStatus(clip.id, data.requestId, model);
             } else if (data.videoUrl) {
               handleVideoGenerated(clip.id, data.videoUrl, data.metadata || {});
             }
-          } else {
+          } catch (_klingErr) {
             updateClip(clip.id, {
               metadata: { ...clip.metadata, videoGenerating: false, videoError: 'Generation failed' },
             });
@@ -3730,59 +3734,43 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
 
       // 5?? Subir el audio a un servidor temporal para obtener URL
       // Usamos FormData para subir el audio como archivo
+      // (apiRequest adjunta el bearer de Clerk y deja que el navegador ponga
+      // el boundary del multipart)
       const audioFormData = new FormData();
       audioFormData.append('file', audioSegment.blob, `clip_${clip.id}_audio.wav`);
       
-      const uploadResponse = await fetch('/api/upload/temp-audio', {
-        method: 'POST',
-        body: audioFormData,
-      });
-
-      if (!uploadResponse.ok) {
-        // Si no hay endpoint de upload, usamos la URL local directamente
-        // PixVerse deber�a poder aceptar data URLs o necesitamos un workaround
-        logger.warn('?? No hay endpoint de upload, intentando con data URL');
-        
-        // Convertir blob a base64 data URL
-        const reader = new FileReader();
-        const audioDataUrl = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(audioSegment.blob);
+      let audioUrl: string;
+      try {
+        const uploadData = await apiRequest({
+          url: '/api/upload/temp-audio',
+          method: 'POST',
+          data: audioFormData,
         });
-        
-        // Por ahora, loggeamos que necesitamos un endpoint de upload
+        audioUrl = uploadData?.url;
+        if (!audioUrl) throw new Error('Upload sin URL');
+      } catch (uploadErr) {
+        logger.error('?? [Timeline] Error subiendo audio temporal:', uploadErr);
         toast({
-          title: "⏳ Pendiente",
-          description: "Se requiere implementar endpoint de upload de audio temporal",
+          title: "Error subiendo audio",
+          description: "No se pudo subir el segmento de audio temporal. Intenta de nuevo.",
           variant: "destructive",
         });
         setIsApplyingLipsync(null);
         return;
       }
-
-      const uploadData = await uploadResponse.json();
-      const audioUrl = uploadData.url;
       
       logger.info(`?? [Timeline] Audio subido: ${audioUrl}`);
 
       // 6?? Llamar al endpoint de lipsync con video + audio
-      const lipsyncResponse = await fetch('/api/fal/pixverse/lipsync', {
+      const lipsyncData = await apiRequest({
+        url: '/api/fal/pixverse/lipsync',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        data: {
           videoUrl: videoUrl,
           audioUrl: audioUrl,
           clipId: clip.id,
-        }),
+        },
       });
-
-      if (!lipsyncResponse.ok) {
-        const errorData = await lipsyncResponse.json();
-        throw new Error(errorData.error || 'Error aplicando lipsync');
-      }
-
-      const lipsyncData = await lipsyncResponse.json();
 
       if (lipsyncData.success && lipsyncData.videoUrl) {
         // 7?? Actualizar el clip con el video sincronizado

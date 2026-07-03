@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/queryClient';
 import {
   X, Sparkles, ImagePlus, Loader2,
   Plus, Palette, User, Download, Check,
@@ -208,18 +209,16 @@ export function ImageGeneratorPanel({
       if (quantity > 1) {
         // Batch generation
         const prompts = Array(quantity).fill(finalPrompt);
-        const res = await fetch('/api/fal/nano-banana/generate-batch', {
+        const data = await apiRequest({
+          url: '/api/fal/nano-banana/generate-batch',
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          data: {
             prompts,
             aspectRatio,
             ...(trimmedNegative ? { negativePrompt: trimmedNegative } : {}),
             ...(hasReferences && consistencyMode ? { referenceImages: referenceUrls } : {}),
-          }),
+          },
         });
-
-        const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Error en batch generation');
 
         const newResults: GeneratedResult[] = (data.results || [])
@@ -257,13 +256,7 @@ export function ImageGeneratorPanel({
           body.shotCategory = 'PERFORMANCE'; // default to high fidelity
         }
 
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-
-        const data = await res.json();
+        const data = await apiRequest({ url: endpoint, method: 'POST', data: body });
         if (!data.success) throw new Error(data.error || 'Error generando imagen');
 
         const imageUrl = data.imageUrl || data.images?.[0]?.url;

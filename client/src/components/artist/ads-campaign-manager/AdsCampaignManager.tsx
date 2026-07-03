@@ -380,8 +380,11 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
   const loadCredentials = async () => {
     try {
       const data: any = await apiRequest({ url: `/api/ads-campaigns/${artistId}/credentials`, method: 'GET' });
-      if (data?.credentials) setCredentials(data.credentials);
-    } catch { /* ignore */ }
+      setCredentials(data?.credentials || {});
+    } catch {
+      // Clear stale credentials so the UI never shows a false "connected" state
+      setCredentials({});
+    }
   };
 
   const loadCreatives = async () => {
@@ -451,6 +454,9 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
     const videoUrl = mediaType === 'video' ? selectedVideoUrl : undefined;
     if (!imageUrl && !videoUrl) { toast({ title: 'Select content first', variant: 'destructive' }); return; }
     if (!scheduledAt) { toast({ title: 'Set a schedule date/time', variant: 'destructive' }); return; }
+    if (new Date(scheduledAt).getTime() <= Date.now()) {
+      toast({ title: 'Schedule must be in the future', description: 'Pick a later date/time.', variant: 'destructive' }); return;
+    }
     setSavingSchedule(true);
     try {
       const data: any = await apiRequest({
@@ -664,8 +670,8 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
         }));
         toast({ title: '✦ AI Copy Generated', description: 'Review and customize before publishing' });
       }
-    } catch {
-      toast({ title: 'Error', description: 'Could not generate copy', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Could not generate copy', variant: 'destructive' });
     } finally {
       setGeneratingCopy(false);
     }
@@ -674,6 +680,13 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
   const saveCampaign = async (launchNow = false) => {
     if (!form.name) { toast({ title: 'Campaign name required', variant: 'destructive' }); return; }
     if (!form.platforms?.length) { toast({ title: 'Select at least one platform', variant: 'destructive' }); return; }
+    if (!form.budgetAmount || form.budgetAmount <= 0) { toast({ title: 'Budget must be greater than 0', variant: 'destructive' }); return; }
+    if (launchNow && !form.creative?.imageUrl) {
+      toast({ title: 'Creative image required to launch', description: 'Pick or generate a creative first.', variant: 'destructive' }); return;
+    }
+    if (launchNow && !form.creative?.headline) {
+      toast({ title: 'Headline required to launch', description: 'Write a headline or use AI copy.', variant: 'destructive' }); return;
+    }
     setSavingCampaign(true);
     try {
       const payload = { ...form, status: launchNow ? 'scheduled' : 'draft', artistId };
@@ -684,8 +697,8 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
         setActiveTab('campaigns');
         resetForm();
       }
-    } catch {
-      toast({ title: 'Error saving campaign', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Error saving campaign', description: err?.message, variant: 'destructive' });
     } finally {
       setSavingCampaign(false);
     }
@@ -755,8 +768,8 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
       await loadCredentials();
       setCredsForm({});
       toast({ title: '🔐 Credentials saved securely', description: 'Platforms are now ready for ad launches' });
-    } catch {
-      toast({ title: 'Error saving credentials', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Error saving credentials', description: err?.message, variant: 'destructive' });
     } finally {
       setSavingCreds(false);
     }

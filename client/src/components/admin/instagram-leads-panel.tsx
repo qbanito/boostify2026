@@ -7,12 +7,12 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Upload, Sparkles, RefreshCw, Download, Copy, CheckCircle2, Instagram,
-  Loader2, Users, Send, FileSpreadsheet, ExternalLink, Radar, TrendingUp, Mail,
+  Loader2, Users, Send, FileSpreadsheet, ExternalLink, Radar, TrendingUp, Mail, Music2,
 } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
 import { apiRequest } from '../../lib/queryClient';
 
-interface Stats { total: number; new: number; ready: number; sent: number; claimed: number; }
+interface Stats { total: number; new: number; ready: number; sent: number; claimed: number; musicians?: number; byInstrument?: Record<string, number>; }
 interface FunnelStage { key: string; label: string; count: number; pctOfTop: number; convFromPrev: number; }
 interface FunnelSource { source: string; imported: number; sent: number; claimed: number; claimRate: number; }
 interface Funnel { stages: FunnelStage[]; overallConversion: number; bySource: FunnelSource[]; }
@@ -21,7 +21,16 @@ interface Lead {
   profile_image_url: string | null; followers: number | null; email: string | null;
   slug: string | null; claim_url: string | null; dm_text_es: string | null;
   dm_text_en: string | null; dm_lang: 'es' | 'en' | null; dm_status: string; user_id: number | null;
+  lead_type?: 'artist' | 'musician' | null; instrument?: string | null; instrument_confidence?: 'high' | 'medium' | null;
 }
+
+const INSTRUMENT_EMOJI: Record<string, string> = {
+  Trumpet: '🎺', Trombone: '🎺', Tuba: '🎺', 'French Horn': '🎺',
+  Saxophone: '🎷', Clarinet: '🎷', Flute: '🎷',
+  Guitar: '🎸', Bass: '🎸', Ukulele: '🎸', Banjo: '🪕', Mandolin: '🪕',
+  Drums: '🥁', Percussion: '🥁', Piano: '🎹',
+  Violin: '🎻', Viola: '🎻', Cello: '🎻', Harp: '🎻', Accordion: '🪗',
+};
 
 const STATUS_STYLE: Record<string, string> = {
   new: 'bg-slate-500/20 text-slate-300 border-slate-500/40',
@@ -48,7 +57,54 @@ export function InstagramLeadsPanel() {
   const [funnel, setFunnel] = useState<Funnel | null>(null);
   const [emailing, setEmailing] = useState(false);
   const [emailInfo, setEmailInfo] = useState<{ emailable: number; withEmail: number } | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [autoMusicianOutreach, setAutoMusicianOutreach] = useState(() => {
+    try { return localStorage.getItem('ig_leads_auto_musician_outreach') === '1'; } catch { return false; }
+  });
+  const [invitingMusicians, setInvitingMusicians] = useState(false);
+  const musicianPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const toggleAutoMusicianOutreach = () => {
+    setAutoMusicianOutreach((v) => {
+      const next = !v;
+      try { localStorage.setItem('ig_leads_auto_musician_outreach', next ? '1' : '0'); } catch { /* noop */ }
+      return next;
+    });
+  };
+
+  // Polls the background musician-outreach job until it finishes, then
+  // surfaces the summary + refreshes all the panel data.
+  const pollMusicianOutreach = useCallback((onDone: () => void) => {
+    if (musicianPollRef.current) clearInterval(musicianPollRef.current);
+    let attempts = 0;
+    musicianPollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const d = await apiRequest('GET', '/api/admin/instagram-leads/musician-outreach/status');
+        const job = d?.job;
+        if (job && !job.running) {
+          if (musicianPollRef.current) { clearInterval(musicianPollRef.current); musicianPollRef.current = null; }
+          const s = job.summary || {};
+          toast({
+            title: job.error ? '⚠️ Outreach de músicos con errores' : '🎺 Outreach de músicos completado',
+            description: job.error
+              ? job.error
+              : `${s.generated || 0} perfiles creados · ${s.emailed || 0} emails enviados${s.emailFailed ? ` · ${s.emailFailed} fallidos` : ''} · ${s.dmReady || 0} DMs listos para envío manual`,
+            ...(job.error ? { variant: 'destructive' as const } : {}),
+          });
+          onDone();
+        }
+      } catch { /* transient poll error — keep trying */ }
+      if (attempts >= 150 && musicianPollRef.current) { // ~10 min safety stop
+        clearInterval(musicianPollRef.current);
+        musicianPollRef.current = null;
+        onDone();
+      }
+    }, 4000);
+  }, [toast]);
+
+  useEffect(() => () => { if (musicianPollRef.current) clearInterval(musicianPollRef.current); }, []);
 
   const loadStats = useCallback(async () => {
     try {
@@ -115,12 +171,23 @@ export function InstagramLeadsPanel() {
       } else {
         csvContent = await file.text();
       }
-      const d = await apiRequest('POST', '/api/admin/instagram-leads/import-csv', { csvContent });
+      const d = await apiRequest('POST', '/api/admin/instagram-leads/import-csv', { csvContent, autoMusicianOutreach });
       if (d?.success) {
+        const musNote = d.musiciansDetected
+          ? ` · 🎺 ${d.musiciansDetected} instrumentistas detectados (${Object.entries(d.byInstrument || {}).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+          : '';
+        const autoNote = d.autoOutreach === 'started' ? ' · 🚀 outreach automático a músicos iniciado' : '';
         toast({
           title: '✅ Importado',
-          description: `${d.valid} válidos · ${d.inserted} nuevos · ${d.updated} actualizados · ${d.invalid} inválidos`,
+          description: `${d.valid} válidos · ${d.inserted} nuevos · ${d.updated} actualizados · ${d.invalid} inválidos${musNote}${autoNote}`,
         });
+        if (d.autoOutreach === 'started') {
+          setInvitingMusicians(true);
+          pollMusicianOutreach(() => {
+            setInvitingMusicians(false);
+            Promise.all([loadStats(), loadLeads(), loadFunnel(), loadEmailInfo()]).catch(() => {});
+          });
+        }
         await Promise.all([loadStats(), loadLeads(), loadFunnel()]);
       } else {
         toast({ title: 'Error', description: d?.message || 'Falló la importación', variant: 'destructive' });
@@ -210,6 +277,56 @@ export function InstagramLeadsPanel() {
     }
   };
 
+  const inviteMusicians = async () => {
+    setInvitingMusicians(true);
+    try {
+      const d = await apiRequest('POST', '/api/admin/instagram-leads/musician-outreach', { variant });
+      if (d?.success) {
+        toast({
+          title: '🎺 Outreach de músicos iniciado',
+          description: 'Generando perfiles + enviando emails adaptados al instrumento en segundo plano…',
+        });
+        pollMusicianOutreach(() => {
+          setInvitingMusicians(false);
+          Promise.all([loadStats(), loadLeads(), loadFunnel(), loadEmailInfo()]).catch(() => {});
+        });
+      } else {
+        setInvitingMusicians(false);
+        toast({ title: 'Error', description: d?.message || 'Falló el outreach de músicos', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      setInvitingMusicians(false);
+      const msg = String(e?.message || '');
+      toast({
+        title: msg.includes('409') ? 'Job ya en ejecución' : 'Error',
+        description: msg.includes('409') ? 'Ya hay un outreach de músicos corriendo — espera a que termine.' : (e?.message || 'Falló el outreach de músicos'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const detectInstruments = async () => {
+    setDetecting(true);
+    try {
+      const d = await apiRequest('POST', '/api/admin/instagram-leads/detect-instruments', { limit: 2000 });
+      if (d?.success) {
+        toast({
+          title: '🎺 Detección completada',
+          description: d.detected
+            ? `${d.detected} instrumentistas detectados de ${d.scanned} revisados (${Object.entries(d.byInstrument || {}).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+            : `Sin nuevos instrumentistas (${d.scanned} revisados). Solo se marca a quien lo dice en su bio.`,
+        });
+        await Promise.all([loadStats(), loadLeads()]);
+      } else {
+        toast({ title: 'Error', description: d?.message || 'Falló la detección', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Falló la detección', variant: 'destructive' });
+    } finally {
+      setDetecting(false);
+    }
+  };
+
   const refreshImages = async () => {
     setRefreshing(true);
     try {
@@ -282,6 +399,7 @@ export function InstagramLeadsPanel() {
     { label: 'Listos para DM', value: stats?.ready ?? 0, color: 'text-emerald-400' },
     { label: 'Enviados', value: stats?.sent ?? 0, color: 'text-blue-400' },
     { label: 'Reclamados', value: stats?.claimed ?? 0, color: 'text-orange-400' },
+    { label: 'Instrumentistas', value: stats?.musicians ?? 0, color: 'text-violet-400' },
   ];
 
   return (
@@ -306,7 +424,7 @@ export function InstagramLeadsPanel() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {statCards.map((s) => (
           <Card key={s.label} className="bg-slate-900/60 border-slate-800">
             <CardContent className="p-3">
@@ -479,6 +597,12 @@ export function InstagramLeadsPanel() {
                 {refreshing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
                 Refrescar imágenes
               </Button>
+              <Button variant="outline" onClick={detectInstruments} disabled={detecting}
+                className="border-violet-700/60 text-violet-200 hover:bg-violet-500/10"
+                title="Detecta instrumentistas de forma ESTRICTA: solo marca leads cuya bio dice que tocan un instrumento (trompetista, drummer, toco la trompeta…)">
+                {detecting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Music2 className="h-4 w-4 mr-1.5" />}
+                Detectar instrumentos
+              </Button>
               <Button variant="outline" onClick={exportReady}
                 className="border-slate-700 text-slate-300">
                 <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
@@ -504,6 +628,37 @@ export function InstagramLeadsPanel() {
                   onClick={sendEmails}>
                   {emailing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                   <span className="ml-1.5">Enviar emails {emailInfo?.emailable ? `(${emailInfo.emailable})` : ''}</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Musician outreach — instrument-adapted invitations for detected instrumentalists */}
+            <div className="rounded-lg border border-violet-700/40 bg-violet-500/5 p-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-violet-200 flex items-center gap-1.5">
+                    <Music2 className="h-3.5 w-3.5" /> Invitar músicos detectados
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Genera el perfil de músico (inactivo hasta que acepten los términos), lo geolocaliza en el mapa
+                    por su ciudad y envía el email adaptado a su instrumento{stats?.musicians ? ` · ${stats.musicians} músicos detectados` : ''}.
+                    Los que no tienen email quedan con su DM listo para envío manual.
+                  </p>
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={autoMusicianOutreach}
+                      onChange={toggleAutoMusicianOutreach}
+                      className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
+                    />
+                    Automático: lanzar este outreach al importar un CSV con músicos detectados
+                  </label>
+                </div>
+                <Button size="sm" disabled={invitingMusicians || !(stats?.musicians)}
+                  className="h-8 px-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-600 hover:from-violet-600 hover:to-fuchsia-700 text-white w-full sm:w-auto justify-center shrink-0"
+                  onClick={inviteMusicians}>
+                  {invitingMusicians ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  <span className="ml-1.5">{invitingMusicians ? 'Invitando…' : `Invitar músicos${stats?.musicians ? ` (${stats.musicians})` : ''}`}</span>
                 </Button>
               </div>
             </div>
@@ -559,6 +714,13 @@ export function InstagramLeadsPanel() {
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${STATUS_STYLE[l.dm_status] || ''}`}>
                           {l.dm_status}
                         </Badge>
+                        {l.instrument && (
+                          <Badge variant="outline"
+                            className="text-[10px] px-1.5 py-0 bg-violet-500/20 text-violet-300 border-violet-500/40"
+                            title={`Instrumentista detectado (confianza ${l.instrument_confidence || 'high'})`}>
+                            {INSTRUMENT_EMOJI[l.instrument] || '🎵'} {l.instrument}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-400">
                         <a href={l.profile_url} target="_blank" rel="noreferrer"

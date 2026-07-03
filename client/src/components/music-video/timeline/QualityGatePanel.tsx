@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Shield, X, Zap, AlertTriangle, AlertCircle, Info, Loader2, CheckCircle2 } from 'lucide-react';
 import { TimelineClip } from '@/interfaces/timeline';
+import { apiRequest } from '@/lib/queryClient';
 import { analyzeTimelineQuality, snapClipsToBeats, type QualityVerdict } from '@/lib/services/montage-quality';
 
 interface QualityGatePanelProps {
@@ -52,14 +53,13 @@ export function QualityGatePanel({ clips, duration, beats, onApplyClips, onClose
     setProbing(true);
     setProbeError(null);
     try {
-      const r = await fetch('/api/video-qc/probe', {
+      // apiRequest adjunta el bearer de Clerk — /api/video-qc/probe requiere auth
+      const data = await apiRequest({
+        url: '/api/video-qc/probe',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ videoUrl: videoPreviewUrl }),
+        data: { videoUrl: videoPreviewUrl },
       });
-      const data = await r.json();
-      if (!r.ok || !data?.success) throw new Error(data?.error || `HTTP ${r.status}`);
+      if (!data?.success) throw new Error(data?.error || 'Probe failed');
       setProbe(data.probe);
     } catch (e: any) {
       setProbeError(e?.message || 'No se pudo analizar el video');

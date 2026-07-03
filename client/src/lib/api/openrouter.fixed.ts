@@ -1,5 +1,6 @@
 import { env } from "../../env";
 import { logger } from "../logger";
+import { apiRequest } from "../queryClient";
 import { 
   ShotType, 
   SceneRole, 
@@ -402,121 +403,21 @@ export async function generateCourseContent(prompt: string) {
 
 export async function chatWithAI(messages: Message[]) {
   try {
-    // Obtener la clave API para chat
-    const apiKey = env.VITE_OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error('OpenRouter API key is missing or undefined');
-    }
-    
-    // Preparar los headers correctos para OpenRouter
-    const headers = {
-      "Authorization": `Bearer ${apiKey.trim()}`,
-      "HTTP-Referer": window.location.origin || "https://boostify.music.app",
-      "X-Title": "Music Video Creator",
-      "Content-Type": "application/json"
-    };
-    
-    // Log para debugging (sin exponer la clave completa)
-    logger.info("OpenRouter chat headers:", {
-      Authorization: `Bearer ${apiKey.substring(0, 3)}...${apiKey.substring(apiKey.length - 3)}`,
-      "HTTP-Referer": headers["HTTP-Referer"],
-      "X-Title": headers["X-Title"]
-    });
-    
-    // Usar el modelo Gemini 2.0 Flash según lo solicitado por el usuario
-    logger.info("Using Gemini 2.0 Flash model for chat completion");
-    
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001", // Modelo solicitado por el usuario
-        messages,
-        temperature: 0.7,
-        max_tokens: 2000
-      })
+    // 🔐 Proxy en el backend: la API key de OpenRouter vive en el servidor.
+    // Antes se llamaba a openrouter.ai directo con VITE_OPENROUTER_API_KEY —
+    // esa variable no existe en el bundle del cliente, así que Director Chat
+    // y Director Suggestions del Timeline quedaban rotos (y exponer la key
+    // en el navegador sería inseguro).
+    const data = await apiRequest({
+      url: '/api/music-video/ai-chat',
+      method: 'POST',
+      data: { messages, temperature: 0.7, maxTokens: 2000 },
     });
 
-    // Manejo mejorado de respuestas y errores
-    const contentType = response.headers.get('content-type') || '';
-    let data;
-    let responseText;
-
-    if (!response.ok) {
-      try {
-        const errorData = await response.json().catch(async () => {
-          // Si no podemos obtener JSON, intentamos obtener el texto
-          const errorText = await response.text().catch(() => "Unknown error");
-          return { error: { message: errorText } };
-        });
-        logger.error("OpenRouter API error:", errorData);
-        throw new Error(`Error in AI chat: ${response.statusText}. Status: ${response.status}`);
-      } catch (parseError) {
-        logger.error("Error parsing error response:", parseError);
-        throw new Error(`API error (${response.status}): Could not parse error response`);
-      }
+    if (data?.text) {
+      return data.text as string;
     }
-
-    // Manejo de posibles respuestas no-JSON
-    if (!contentType.includes('application/json')) {
-      try {
-        responseText = await response.text();
-        logger.info("Non-JSON response received from chat API:", responseText.substring(0, 100) + "...");
-        
-        // Comprobar si es realmente JSON a pesar del tipo de contenido incorrecto
-        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
-          try {
-            data = JSON.parse(responseText);
-            logger.info("Successfully parsed chat response as JSON despite incorrect content-type");
-          } catch (parseError) {
-            logger.error("Failed to parse chat response as JSON:", parseError);
-            // Si no se puede analizar como JSON pero la respuesta se ve bien, usamos el texto como respuesta
-            return responseText;
-          }
-        } else {
-          // Si no es JSON pero la respuesta tiene contenido, la usamos directamente
-          return responseText;
-        }
-      } catch (textError) {
-        logger.error("Error reading chat response:", textError);
-        throw new Error(`Unable to read API response: ${(textError as Error).message}`);
-      }
-    } else {
-      // Manejo estándar de JSON
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        logger.error("Error parsing chat JSON response:", jsonError);
-        throw new Error(`Unable to parse API response as JSON: ${(jsonError as Error).message}`);
-      }
-    }
-
-    // Extraer el contenido con manejo de diferentes estructuras posibles
-    if (!data || !data.choices || data.choices.length === 0) {
-      logger.error("Invalid chat API response structure:", data);
-      
-      // Si tenemos texto de respuesta, usémoslo como último recurso
-      if (responseText) {
-        return responseText;
-      }
-      
-      throw new Error("Invalid API response format: missing choices array");
-    }
-
-    const firstChoice = data.choices[0];
-    
-    if (firstChoice.message?.content) {
-      return firstChoice.message.content;
-    } else if (firstChoice.text) {
-      return firstChoice.text;
-    } else if (firstChoice.content) {
-      return firstChoice.content;
-    } else if (typeof firstChoice === 'string') {
-      return firstChoice;
-    }
-    
-    logger.error("Unexpected chat response format:", firstChoice);
-    throw new Error("Cannot extract content from API response");
+    throw new Error(data?.error || 'Empty AI response');
   } catch (error) {
     logger.error('Error in AI chat:', error);
     return `Lo siento, no puedo procesar tu solicitud en este momento debido a un error: ${error instanceof Error ? error.message : 'Error desconocido'}. Por favor, intenta nuevamente más tarde.`;

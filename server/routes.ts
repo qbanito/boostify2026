@@ -193,6 +193,7 @@ import { startActivationScheduler } from './services/artist-activation'; // Acti
 import artistEnrichmentRouter from './routes/artist-enrichment'; // Artist Enrichment Agent routes
 import { startEnrichmentScheduler } from './services/artist-enrichment'; // Artist Enrichment scheduler
 import adminCSuiteRouter from './routes/admin-c-suite'; // C-Suite AI executive team admin endpoints
+import { startCSuiteScheduler } from './services/c-suite/scheduler'; // C-Suite autonomous work scheduler
 import adminSongAnalysisRouter from './routes/admin-song-analysis'; // Admin Song Analyzer + promote helpers
 import songPromotionRouter from './routes/song-promotion'; // Lazy Firestore→Postgres sync for promote button
 import promoteEngineRouter from './routes/promote-engine'; // Cinematic promo pipeline (LoRA + flux-pro/kontext)
@@ -740,6 +741,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
     startEnrichmentScheduler(); // Start artist enrichment every 15 minutes
   }
   app.use('/api/admin/c-suite', adminCSuiteRouter); // Admin: C-Suite AI executive team (CEO + 9 chiefs)
+  if (shouldRunSchedulers()) startCSuiteScheduler(); // Autonomous agent work (briefings, growth pulse, investor pipeline)
   app.use('/api/admin/song-analysis', adminSongAnalysisRouter); // Admin: Song Analyzer + promote helpers
   app.use('/api/song-promotion', songPromotionRouter); // Lazy Firestore→Postgres sync for Promote button
   app.use('/api/promote-engine', promoteEngineRouter); // Cinematic promo pipeline (LoRA training + 3-style packs)
@@ -1025,6 +1027,15 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   const streamingRouter = (await import('./routes/streaming')).default;
   app.use('/api/streaming', streamingRouter);
   console.log('🎧 Streaming module registered at /api/streaming');
+
+  // Streaming Rewards — BTF token rewards for artist streams + platform actions
+  const streamingRewardsRouter = (await import('./routes/streaming-rewards')).default;
+  app.use('/api/streaming-rewards', streamingRewardsRouter);
+  if (shouldRunSchedulers()) {
+    const { startStreamingRewardsScheduler } = await import('./services/streaming-rewards');
+    startStreamingRewardsScheduler();
+  }
+  console.log('💰 Streaming Rewards (BTF) registered at /api/streaming-rewards');
 
   // Node Workflow Scheduler — boot cron jobs for all artist ScheduleTrigger nodes
   if (shouldRunSchedulers()) {

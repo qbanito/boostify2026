@@ -38,6 +38,7 @@ import {
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
 const CreditsWidget = lazy(() => import("../credits/CreditsWidget"));
+const StreamingRewardsWidget = lazy(() => import("../rewards/StreamingRewardsWidget"));
 import { PremiumGate, UploadLimitBanner, ModuleGuide } from "../ui/premium-gate";
 import { useTranslation } from "react-i18next";
 import {
@@ -8106,6 +8107,16 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               <Suspense fallback={null}>
                 <CreditsWidget
                   email={user.email}
+                  accentColor={colors.hexAccent}
+                  primaryColor={colors.hexPrimary}
+                />
+              </Suspense>
+            )}
+
+            {/* Owner-only: BTF streaming rewards (claimable token earnings) */}
+            {isOwnProfile && (
+              <Suspense fallback={null}>
+                <StreamingRewardsWidget
                   accentColor={colors.hexAccent}
                   primaryColor={colors.hexPrimary}
                 />

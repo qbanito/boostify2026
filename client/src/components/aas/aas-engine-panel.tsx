@@ -76,6 +76,10 @@ export function AASEnginePanel({
   const numericId = pgId || parseInt(artistId, 10);
   const [activeTab, setActiveTab] = useState<"overview" | "goals" | "plan" | "deals" | "approvals" | "metrics">("overview");
   const [showGuide, setShowGuide] = useState(false);
+  // While a manual cycle runs, live-poll goals/approvals/score so the panel
+  // reflects the engine's progress in real time.
+  const [cycleRunning, setCycleRunning] = useState(false);
+  const livePoll = cycleRunning ? 5000 : false;
 
   // --- Queries ---
   const { data: statusData, isLoading: statusLoading } = useQuery<any>({
@@ -94,6 +98,7 @@ export function AASEnginePanel({
       return res;
     },
     enabled: !!numericId && isOwnProfile && statusData?.enabled,
+    refetchInterval: livePoll,
   });
 
   const { data: planData } = useQuery<any>({
@@ -121,6 +126,7 @@ export function AASEnginePanel({
       return res;
     },
     enabled: !!numericId && isOwnProfile && statusData?.enabled && activeTab === "approvals",
+    refetchInterval: livePoll,
   });
 
   const { data: metricsData } = useQuery<any>({
@@ -139,6 +145,7 @@ export function AASEnginePanel({
       return res;
     },
     enabled: !!numericId && isOwnProfile && statusData?.enabled && (activeTab === "goals" || activeTab === "overview"),
+    refetchInterval: livePoll,
   });
 
   // --- Mutations ---
@@ -159,10 +166,15 @@ export function AASEnginePanel({
     mutationFn: async () => {
       return await apiRequest({ url: `/api/aas/run-cycle/${numericId}`, method: "POST" });
     },
+    onMutate: () => setCycleRunning(true),
+    onSettled: () => setCycleRunning(false),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/aas/score", numericId] });
       queryClient.invalidateQueries({ queryKey: ["/api/aas/plan", numericId, "today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/aas/metrics", numericId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/aas/goals", numericId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/aas/approvals", numericId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/aas/deals", numericId] });
       toast({ title: "Cycle Complete", description: "Daily AAS cycle executed successfully" });
     },
     onError: (err: any) => {

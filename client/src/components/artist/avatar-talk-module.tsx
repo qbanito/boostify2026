@@ -230,7 +230,7 @@ export function AvatarTalkModule({
   const [generationStep, setGenerationStep] = useState<string | null>(null);
 
   // Fetch existing videos
-  const { data: videosData, isLoading: loadingVideos } = useQuery({
+  const { data: videosData, isLoading: loadingVideos, isError: videosError, refetch: refetchVideos } = useQuery({
     queryKey: ['avatar-talk-videos', artistId],
     queryFn: () => apiRequest({ url: `/api/avatar-talk/${artistId}/videos`, method: 'GET' }),
     staleTime: 30_000,
@@ -345,6 +345,23 @@ export function AvatarTalkModule({
         <div className="flex items-center gap-2 text-white/30 text-sm py-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading videos…
+        </div>
+      ) : videosError ? (
+        <div
+          className="flex items-center justify-between gap-3 p-3 rounded-xl text-xs"
+          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}
+        >
+          <div className="flex items-center gap-2 text-red-300/80">
+            <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+            Could not load your videos.
+          </div>
+          <button
+            onClick={() => refetchVideos()}
+            className="px-3 py-1.5 rounded-lg font-medium text-red-200 hover:bg-red-500/10 transition-colors"
+            style={{ border: '1px solid rgba(239,68,68,0.3)' }}
+          >
+            Retry
+          </button>
         </div>
       ) : videos.length > 0 ? (
         <div>
@@ -576,10 +593,16 @@ export function AvatarTalkModule({
             <div>
               <label className="text-white/40 text-xs uppercase tracking-wider mb-2 block">Format</label>
               <div className="flex gap-2">
-                {(['9:16', '16:9', '1:1'] as AspectRatio[]).map(ar => (
+                {([
+                  { ar: '9:16' as AspectRatio, hint: 'TikTok / Reels / Shorts' },
+                  { ar: '16:9' as AspectRatio, hint: 'YouTube / landscape' },
+                  { ar: '1:1' as AspectRatio, hint: 'Feed posts (IG/FB)' },
+                ]).map(({ ar, hint }) => (
                   <button
                     key={ar}
                     onClick={() => setAspectRatio(ar)}
+                    title={hint}
+                    aria-label={`${ar} — ${hint}`}
                     className="flex-1 py-2 rounded-xl text-xs font-medium transition-all"
                     style={{
                       background: aspectRatio === ar ? `${colors.hexAccent}22` : 'rgba(255,255,255,0.04)',
@@ -629,14 +652,14 @@ export function AvatarTalkModule({
             whileHover={!generating ? { scale: 1.02 } : undefined}
             whileTap={!generating ? { scale: 0.98 } : undefined}
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={generating || !artistProfileImage || prompt.trim().length < 10}
             className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
             style={{
-              background: generating
+              background: (generating || !artistProfileImage || prompt.trim().length < 10)
                 ? 'rgba(255,255,255,0.05)'
                 : `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
-              color: generating ? 'rgba(255,255,255,0.3)' : '#fff',
-              cursor: generating ? 'not-allowed' : 'pointer',
+              color: (generating || !artistProfileImage || prompt.trim().length < 10) ? 'rgba(255,255,255,0.3)' : '#fff',
+              cursor: (generating || !artistProfileImage || prompt.trim().length < 10) ? 'not-allowed' : 'pointer',
             }}
           >
             {generating ? (

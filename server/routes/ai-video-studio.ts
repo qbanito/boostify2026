@@ -26,6 +26,7 @@ import { db } from '../db';
 import { videoJobs, videoOutputs, hyperframesTemplates } from '../../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth';
+import { requireArtistOwnerParam } from '../middleware/artist-owner';
 import { logger } from '../utils/logger';
 import {
   orchestrateVideoProduction,
@@ -133,7 +134,7 @@ router.post('/templates', authenticate, async (req: Request, res: Response) => {
 
 // ─── POST /:artistId/concept ──────────────────────────────────────────────────
 // Just runs the Creative Director Agent (fast, no video render)
-router.post('/:artistId/concept', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/concept', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const input: VideoProductionInput = req.body;
 
@@ -152,7 +153,7 @@ router.post('/:artistId/concept', authenticate, async (req: Request, res: Respon
 
 // ─── POST /:artistId/compose ──────────────────────────────────────────────────
 // Generates HyperFrames composition HTML files without rendering
-router.post('/:artistId/compose', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/compose', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const compositionInput: HyperFramesCompositionInput = req.body;
 
@@ -176,7 +177,7 @@ router.post('/:artistId/compose', authenticate, async (req: Request, res: Respon
 
 // ─── POST /:artistId/heygen-avatar ────────────────────────────────────────────
 // Kicks off a HeyGen avatar video generation
-router.post('/:artistId/heygen-avatar', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/heygen-avatar', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const { jobId, avatarId, voiceId, script, format, background, caption } = req.body;
 
@@ -209,7 +210,7 @@ router.post('/:artistId/heygen-avatar', authenticate, async (req: Request, res: 
 
 // ─── POST /:artistId/generate ─────────────────────────────────────────────────
 // Full pipeline: concept → script → HyperFrames → HeyGen → assemble → save
-router.post('/:artistId/generate', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const input: VideoProductionInput = req.body;
 
@@ -382,7 +383,7 @@ async function processVideoJobAsync(jobId: number, input: VideoProductionInput):
 }
 
 // ─── GET /:artistId/jobs ──────────────────────────────────────────────────────
-router.get('/:artistId/jobs', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/jobs', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const { limit = '20', offset = '0' } = req.query as Record<string, string>;
 
@@ -400,7 +401,7 @@ router.get('/:artistId/jobs', authenticate, async (req: Request, res: Response) 
 });
 
 // ─── GET /:artistId/jobs/:jobId ───────────────────────────────────────────────
-router.get('/:artistId/jobs/:jobId', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/jobs/:jobId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId, jobId } = req.params;
 
   try {
@@ -437,7 +438,7 @@ router.get('/:artistId/jobs/:jobId', authenticate, async (req: Request, res: Res
 });
 
 // ─── DELETE /:artistId/jobs/:jobId ────────────────────────────────────────────
-router.delete('/:artistId/jobs/:jobId', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/jobs/:jobId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId, jobId } = req.params;
 
   try {
@@ -536,7 +537,7 @@ const AVATAR_SCENE_PRESETS = [
 ] as const;
 
 // ─── POST /:artistId/generate-avatar-scenes ───────────────────────────────────
-router.post('/:artistId/generate-avatar-scenes', async (req: Request, res: Response) => {
+router.post('/:artistId/generate-avatar-scenes', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const { profileImageUrl: bodyImageUrl, scenes: requestedScenes } = req.body as {
     profileImageUrl?: string;
@@ -605,7 +606,7 @@ router.post('/:artistId/generate-avatar-scenes', async (req: Request, res: Respo
 });
 
 // ─── POST /:artistId/create-photo-avatar ──────────────────────────────────────
-router.post('/:artistId/create-photo-avatar', async (req: Request, res: Response) => {
+router.post('/:artistId/create-photo-avatar', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { imageUrl, avatarName } = req.body as { imageUrl: string; avatarName?: string };
 
   if (!imageUrl) {

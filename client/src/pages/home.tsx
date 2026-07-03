@@ -2025,7 +2025,7 @@ export default function HomePage() {
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link href={index === 0 ? "/ai-video-creation" : "/features"}>
+                  <Link href={index === 0 ? "/videoservice" : "/features"}>
                     <Button variant="outline" className="border-white/20 hover:bg-white/10">
                       Learn More
                     </Button>
@@ -2607,7 +2607,7 @@ export default function HomePage() {
               </div>
               
               <div className="mt-10 flex flex-wrap gap-4">
-                <Link href="/ai-video-creation">
+                <Link href="/music-video-creator">
                   <Button 
                     size="lg" 
                     className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-6 text-lg font-medium hover:opacity-90"

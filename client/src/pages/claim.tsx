@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { musicianTermsSections, musicianTermsSummary } from "@shared/musician-terms";
 import {
   Loader2,
   CheckCircle2,
@@ -21,6 +22,7 @@ import {
   TrendingUp,
   Bot,
   Gift,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -129,6 +131,12 @@ interface ClaimArtist {
   isAIGenerated: boolean;
 }
 
+interface ClaimMusician {
+  isMusician: boolean;
+  instrument?: string | null;
+  isActive?: boolean;
+}
+
 type Phase = "loading" | "ready" | "claiming" | "claimed" | "already" | "error";
 
 export default function ClaimPage() {
@@ -139,6 +147,9 @@ export default function ClaimPage() {
   const [artist, setArtist] = useState<ClaimArtist | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [prefillEmail, setPrefillEmail] = useState<string | undefined>(undefined);
+  const [musician, setMusician] = useState<ClaimMusician>({ isMusician: false });
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const pendingClaim = useRef(false);
 
   // Read token / slug from the URL once.
@@ -171,6 +182,7 @@ export default function ClaimPage() {
         }
         setArtist(data.artist);
         if (data.prefillEmail) setPrefillEmail(String(data.prefillEmail));
+        if (data.musician?.isMusician) setMusician(data.musician);
         setPhase(data.alreadyClaimed ? "already" : "ready");
       } catch {
         if (!cancelled) {
@@ -188,7 +200,11 @@ export default function ClaimPage() {
   const submitClaim = async () => {
     setPhase("claiming");
     try {
-      const data = await apiRequest("POST", "/api/artist-activation/claim", token ? { token } : { slug });
+      const body: Record<string, unknown> = token ? { token } : { slug };
+      // Musician leads: accepting the Musician Services Terms activates their
+      // musician profile (sell services + live map placement).
+      if (musician.isMusician && termsAccepted) body.acceptMusicianTerms = true;
+      const data = await apiRequest("POST", "/api/artist-activation/claim", body);
       await refetch().catch(() => {});
       setPhase("claimed");
       toast({ title: "Profile claimed!", description: "Welcome to Boostify. Your career starts now." });
@@ -376,6 +392,55 @@ export default function ClaimPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Musician Services Terms — shown only for musician leads. Accepting
+                  activates their musician profile (selling + live map). */}
+              {musician.isMusician && (
+                <div className="mt-6 rounded-2xl border border-[#8b7cf6]/25 bg-[#8b7cf6]/[0.07] p-4">
+                  <div className="flex items-center gap-2">
+                    <Music2 className="h-4 w-4 text-[#b9a8ff]" />
+                    <p className="text-sm font-semibold text-white">
+                      Musician profile{musician.instrument ? ` · ${musician.instrument}` : ""}
+                    </p>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-white/55">
+                    {musicianTermsSummary("en")}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTermsOpen((v) => !v)}
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#b9a8ff] hover:text-white"
+                  >
+                    {termsOpen ? "Hide full terms" : "Read the full Musician Services Terms"}
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${termsOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {termsOpen && (
+                    <div className="mt-3 max-h-56 space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/30 p-3">
+                      {musicianTermsSections("en").map((s) => (
+                        <div key={s.title}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{s.title}</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-white/45">{s.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="mt-3 flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-white/30 bg-transparent accent-[#8b7cf6]"
+                    />
+                    <span className="text-xs leading-relaxed text-white/70">
+                      I accept the <span className="font-semibold text-white">Musician Services Terms</span> and want to
+                      activate my musician profile to offer paid sessions and appear on the live map.
+                    </span>
+                  </label>
+                  <p className="mt-2 text-[10px] leading-relaxed text-white/35">
+                    Optional — you can claim your profile without accepting and activate it later from your dashboard.
+                  </p>
+                </div>
+              )}
 
               <button
                 onClick={handleClaimClick}

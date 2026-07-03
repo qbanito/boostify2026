@@ -31,8 +31,10 @@ router.use(requireAdmin);
 router.post('/bootstrap', async (_req, res) => {
   try {
     await seedAgentsIfMissing();
+    const { seedDefaultSchedules } = await import('../services/c-suite/scheduler');
+    const schedules = await seedDefaultSchedules();
     const agents = await db.select().from(cSuiteAgents);
-    res.json({ ok: true, seededCount: agents.length });
+    res.json({ ok: true, seededCount: agents.length, schedulesSeeded: schedules.seeded });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -202,12 +204,20 @@ router.post('/approvals/:id/decide', async (req, res) => {
           const args = (dec.target as any) || {};
           const parsed = tool.schema.safeParse(args);
           if (parsed.success) {
-            execResult = await tool.execute(parsed.data, {
-              agentId: dec.agentId,
-              threadId: dec.threadId ?? 0,
-              dryRun: false,
-              autonomy: 3, // human-approved bypass
-            });
+            // CRITICAL: humanRequired tools use execute() to QUEUE the approval.
+            // Re-running execute() here would enqueue ANOTHER approval forever.
+            // performApproved() is the real action once a human signs off.
+            const runner = tool.performApproved ?? (tool.humanRequired ? null : tool.execute);
+            if (!runner) {
+              execResult = { error: `tool ${tool.id} has no performApproved action wired` };
+            } else {
+              execResult = await runner(parsed.data, {
+                agentId: dec.agentId,
+                threadId: dec.threadId ?? 0,
+                dryRun: false,
+                autonomy: 3, // human-approved bypass
+              });
+            }
           } else {
             execResult = { error: 'schema_validation_failed', details: parsed.error.format() };
           }

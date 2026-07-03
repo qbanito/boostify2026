@@ -196,6 +196,108 @@ export function buildClaimEmail(opts: {
   return { subject: t.subject, html };
 }
 
+// ─── Musician invitation email (instrument-aware, ES / EN) ──────────────────
+// Sent ONLY to leads whose own bio proves they play an instrument (see
+// shared/instruments.ts). Pitch: earn money with your sessions + appear on the
+// live musicians map. Includes the legal footer (data source + opt-out) required
+// for cold outreach compliance.
+export function buildMusicianClaimEmail(opts: {
+  name: string;
+  lang: 'es' | 'en';
+  claimUrl: string;
+  imageUrl?: string | null;
+  instrument: string;      // e.g. 'Trumpet'
+  instrumentEs?: string;   // e.g. 'Trompeta'
+  emoji?: string;          // e.g. '🎺'
+  city?: string | null;
+  optOutUrl?: string | null;
+}): { subject: string; html: string } {
+  const first = (opts.name || '').trim().split(/\s+/)[0] || (opts.lang === 'es' ? 'músico' : 'there');
+  const safeName = escapeHtml(first);
+  const claimUrl = opts.claimUrl;
+  const img = opts.imageUrl && /^https?:\/\//.test(opts.imageUrl) ? opts.imageUrl : '';
+  const emoji = opts.emoji || '🎵';
+  const instEn = opts.instrument || 'instrument';
+  const instEs = opts.instrumentEs || instEn;
+  const city = (opts.city || '').trim();
+
+  const t = opts.lang === 'es'
+    ? {
+        subject: `${first}, gana dinero con tu ${instEs.toLowerCase()} en Boostify ${emoji}`,
+        eyebrow: 'Boostify Music · Músicos',
+        h1: `Tu ${instEs.toLowerCase()} puede generar ingresos ${emoji}`,
+        body: `Hola ${safeName}, vimos que eres ${instEs.toLowerCase() === instEn.toLowerCase() ? `intérprete de ${instEs.toLowerCase()}` : `${instEs.toLowerCase()}`} y te reservamos un perfil de músico en Boostify. Artistas y productores buscan sesiones reales cada día: activa tu perfil, fija tu tarifa y aparece en el mapa en vivo de músicos${city ? ` de ${escapeHtml(city)}` : ' de tu ciudad'} para recibir solicitudes pagadas.`,
+        bullets: [
+          `${emoji} Perfil de ${instEs} ya preparado con tu nombre`,
+          '💰 Tú fijas tu tarifa por sesión — cobra por tu talento',
+          `📍 Apareces en el mapa en vivo${city ? ` en ${escapeHtml(city)}` : ''} donde los artistas te encuentran`,
+          '🎧 Solicitudes de grabaciones, conciertos y colaboraciones',
+        ],
+        cta: 'Activar mi perfil de músico',
+        ps: 'Activarlo es gratis y toma 30 segundos. Para vender servicios deberás aceptar los Términos de Servicios para Músicos dentro de la plataforma.',
+        legal: `Recibiste este email porque tu biografía pública de Instagram indica que eres músico. Tus datos provienen de fuentes públicas y puedes solicitar su eliminación en cualquier momento.`,
+        optOut: 'No quiero recibir más invitaciones',
+      }
+    : {
+        subject: `${first}, get paid for your ${instEn.toLowerCase()} sessions on Boostify ${emoji}`,
+        eyebrow: 'Boostify Music · Musicians',
+        h1: `Your ${instEn.toLowerCase()} can earn you money ${emoji}`,
+        body: `Hi ${safeName}, we saw you play the ${instEn.toLowerCase()} and reserved a musician profile for you on Boostify. Artists and producers look for real session players every day: activate your profile, set your rate and appear on the live musicians map${city ? ` of ${escapeHtml(city)}` : ' of your city'} to receive paid requests.`,
+        bullets: [
+          `${emoji} ${instEn} profile already set up with your name`,
+          '💰 You set your session rate — get paid for your talent',
+          `📍 You appear on the live map${city ? ` in ${escapeHtml(city)}` : ''} where artists find you`,
+          '🎧 Requests for recordings, gigs and collaborations',
+        ],
+        cta: 'Activate my musician profile',
+        ps: 'Activation is free and takes 30 seconds. To sell services you will need to accept the Musician Services Terms inside the platform.',
+        legal: `You received this email because your public Instagram biography indicates you are a musician. Your data comes from public sources and you can request its deletion at any time.`,
+        optOut: "I don't want to receive more invitations",
+      };
+
+  const bulletsHtml = t.bullets
+    .map((b) => `<tr><td style="padding:5px 0;color:#d4d4de;font-size:14px;line-height:1.5;">${b}</td></tr>`)
+    .join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0b0b0f;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0b0f;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#101016;border:1px solid rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;">
+        <tr><td style="padding:22px 28px 0;">
+          <p style="margin:0;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#8b7cf6;font-weight:700;">${t.eyebrow}</p>
+        </td></tr>
+        ${img ? `<tr><td align="center" style="padding:18px 28px 0;">
+          <img src="${escapeHtml(img)}" alt="${safeName}" width="96" height="96" style="width:96px;height:96px;border-radius:18px;object-fit:cover;border:2px solid rgba(139,124,246,0.45);" />
+        </td></tr>` : ''}
+        <tr><td style="padding:18px 28px 0;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;line-height:1.25;font-weight:800;">${t.h1}</h1>
+          <p style="margin:14px 0 0;color:#b9b9c6;font-size:15px;line-height:1.6;">${t.body}</p>
+        </td></tr>
+        <tr><td style="padding:14px 28px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#15151d;border:1px solid rgba(139,124,246,0.18);border-radius:14px;padding:6px 16px;">
+            ${bulletsHtml}
+          </table>
+        </td></tr>
+        <tr><td align="center" style="padding:24px 28px 6px;">
+          <a href="${claimUrl}" style="display:inline-block;background:linear-gradient(90deg,#7c5cff,#ff2d95);color:#ffffff;text-decoration:none;padding:15px 38px;border-radius:12px;font-weight:700;font-size:16px;">${t.cta}</a>
+        </td></tr>
+        <tr><td style="padding:8px 28px 20px;">
+          <p style="margin:0;color:#6b6b78;font-size:12px;line-height:1.5;">${t.ps}</p>
+        </td></tr>
+        <tr><td style="background:#0c0c12;padding:16px 28px;border-top:1px solid rgba(255,255,255,0.06);">
+          <p style="margin:0;color:#5a5a66;font-size:10px;line-height:1.6;">${t.legal}</p>
+          ${opts.optOutUrl ? `<p style="margin:8px 0 0;"><a href="${escapeHtml(opts.optOutUrl)}" style="color:#7c7c8a;font-size:10px;text-decoration:underline;">${t.optOut}</a></p>` : ''}
+          <p style="margin:10px 0 0;color:#5a5a66;font-size:11px;text-align:center;">© ${new Date().getFullYear()} Boostify Music · The network for artists</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  return { subject: t.subject, html };
+}
+
 // ─── Senders ─────────────────────────────────────────────────────────────────
 async function viaResend(acct: ResendAccount, to: string, subject: string, html: string): Promise<OutreachResult> {
   try {

@@ -25,6 +25,7 @@ import { Router, Request, Response } from 'express';
 import { db, FieldValue } from '../firebase';
 import { pool } from '../db';
 import { authenticate } from '../middleware/auth';
+import { requireArtistOwnerParam } from '../middleware/artist-owner';
 import { logger } from '../utils/logger';
 import { callAI } from '../utils/smart-ai';
 
@@ -75,7 +76,7 @@ async function getSettings(artistId: string) {
 // ─────────────────────────── GROUPS CRUD ────────────────────────────────────
 
 /** GET /:artistId/groups → list the artist's registered open FB groups. */
-router.get('/:artistId/groups', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/groups', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await artistDoc(artistId).collection('facebookGroups').orderBy('addedAt', 'desc').get();
@@ -88,7 +89,7 @@ router.get('/:artistId/groups', authenticate, async (req: Request, res: Response
 });
 
 /** POST /:artistId/groups → register an open FB group {name, url, memberCount?, category?, notes?}. */
-router.post('/:artistId/groups', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/groups', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const { name, url, memberCount, category, notes } = req.body || {};
@@ -96,8 +97,8 @@ router.post('/:artistId/groups', authenticate, async (req: Request, res: Respons
       return res.status(400).json({ success: false, error: 'name is required' });
     }
     const cleanUrl = String(url || '').trim();
-    if (cleanUrl && !/^https?:\/\/(www\.|m\.|web\.)?facebook\.com\//i.test(cleanUrl)) {
-      return res.status(400).json({ success: false, error: 'url must be a facebook.com group link' });
+    if (cleanUrl && !/^https?:\/\/(www\.|m\.|web\.)?facebook\.com\/groups\/[A-Za-z0-9._%-]+/i.test(cleanUrl)) {
+      return res.status(400).json({ success: false, error: 'url must be a facebook.com/groups/... link' });
     }
     const ref = await artistDoc(artistId).collection('facebookGroups').add({
       name: String(name).trim(),
@@ -121,13 +122,19 @@ router.post('/:artistId/groups', authenticate, async (req: Request, res: Respons
 });
 
 /** PATCH /:artistId/groups/:groupId → edit / toggle active. */
-router.patch('/:artistId/groups/:groupId', authenticate, async (req: Request, res: Response) => {
+router.patch('/:artistId/groups/:groupId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, groupId } = req.params;
     const patch: Record<string, any> = {};
     const { name, url, active, memberCount, category, notes } = req.body || {};
     if (name !== undefined) patch.name = String(name).trim();
-    if (url !== undefined) patch.url = String(url).trim() || null;
+    if (url !== undefined) {
+      const cleanUrl = String(url).trim();
+      if (cleanUrl && !/^https?:\/\/(www\.|m\.|web\.)?facebook\.com\/groups\/[A-Za-z0-9._%-]+/i.test(cleanUrl)) {
+        return res.status(400).json({ success: false, error: 'url must be a facebook.com/groups/... link' });
+      }
+      patch.url = cleanUrl || null;
+    }
     if (active !== undefined) patch.active = !!active;
     if (memberCount !== undefined) patch.memberCount = Number(memberCount) || null;
     if (category !== undefined) patch.category = category ? String(category).slice(0, 60) : null;
@@ -145,7 +152,7 @@ router.patch('/:artistId/groups/:groupId', authenticate, async (req: Request, re
 });
 
 /** DELETE /:artistId/groups/:groupId */
-router.delete('/:artistId/groups/:groupId', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/groups/:groupId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, groupId } = req.params;
     await artistDoc(artistId).collection('facebookGroups').doc(groupId).delete();
@@ -327,7 +334,7 @@ export async function aggregatePromotableContent(artistPk: number): Promise<{
 }
 
 /** GET /:artistId/content → all promotable content connected to this artist. */
-router.get('/:artistId/content', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/content', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const pk = numericArtistId(req.params.artistId);
     if (!pk) return res.status(400).json({ success: false, error: 'invalid artistId' });
@@ -386,7 +393,7 @@ Write the post caption only (no preamble).`;
 }
 
 /** POST /:artistId/generate-caption → AI caption for a content item (no enqueue). */
-router.post('/:artistId/generate-caption', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate-caption', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const pk = numericArtistId(req.params.artistId);
     const { contentType, title, subtitle, link, tone, language } = req.body || {};
@@ -515,7 +522,7 @@ async function resolveArtistGenre(artistPk: number): Promise<string | null> {
  * each with a NATIVE Facebook group-search deep-link so the artist verifies the
  * real member count and joins manually (ToS-safe — we never scrape FB).
  */
-router.post('/:artistId/discover', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/discover', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const pk = numericArtistId(req.params.artistId);
     if (!pk) return res.status(400).json({ success: false, error: 'invalid artistId' });
@@ -613,7 +620,7 @@ Return JSON exactly: { "keywords": string[], "groups": [ { name, query, niche, s
 // ─────────────────────────── PUBLISH QUEUE ──────────────────────────────────
 
 /** POST /:artistId/queue → enqueue a post for one or more groups. */
-router.post('/:artistId/queue', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/queue', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const pk = numericArtistId(artistId);
@@ -669,7 +676,7 @@ router.post('/:artistId/queue', authenticate, async (req: Request, res: Response
 });
 
 /** GET /:artistId/queue → list queue items (optionally filter by status). */
-router.get('/:artistId/queue', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/queue', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const status = req.query.status ? String(req.query.status) : null;
@@ -687,7 +694,7 @@ router.get('/:artistId/queue', authenticate, async (req: Request, res: Response)
 });
 
 /** PATCH /:artistId/queue/:itemId → edit caption / schedule / groups. */
-router.patch('/:artistId/queue/:itemId', authenticate, async (req: Request, res: Response) => {
+router.patch('/:artistId/queue/:itemId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, itemId } = req.params;
     const patch: Record<string, any> = {};
@@ -716,7 +723,7 @@ router.patch('/:artistId/queue/:itemId', authenticate, async (req: Request, res:
  * Records that the human published this item into {groupId}. When every target
  * group is done, the item flips to 'published'.
  */
-router.post('/:artistId/queue/:itemId/mark-published', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/queue/:itemId/mark-published', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, itemId } = req.params;
     const { groupId } = req.body || {};
@@ -751,7 +758,7 @@ router.post('/:artistId/queue/:itemId/mark-published', authenticate, async (req:
 });
 
 /** POST /:artistId/queue/:itemId/skip → skip an item. */
-router.post('/:artistId/queue/:itemId/skip', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/queue/:itemId/skip', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, itemId } = req.params;
     await artistDoc(artistId).collection('facebookGroupQueue').doc(itemId)
@@ -764,7 +771,7 @@ router.post('/:artistId/queue/:itemId/skip', authenticate, async (req: Request, 
 });
 
 /** DELETE /:artistId/queue/:itemId */
-router.delete('/:artistId/queue/:itemId', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/queue/:itemId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, itemId } = req.params;
     await artistDoc(artistId).collection('facebookGroupQueue').doc(itemId).delete();
@@ -778,7 +785,7 @@ router.delete('/:artistId/queue/:itemId', authenticate, async (req: Request, res
 // ─────────────────────────── SETTINGS ───────────────────────────────────────
 
 /** GET /:artistId/settings */
-router.get('/:artistId/settings', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/settings', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const settings = await getSettings(req.params.artistId);
     return res.json({ success: true, settings });
@@ -788,7 +795,7 @@ router.get('/:artistId/settings', authenticate, async (req: Request, res: Respon
 });
 
 /** POST /:artistId/settings → update settings (merge). */
-router.post('/:artistId/settings', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/settings', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const body = req.body || {};
@@ -814,7 +821,7 @@ router.post('/:artistId/settings', authenticate, async (req: Request, res: Respo
 // ─────────────────────────── OVERVIEW ───────────────────────────────────────
 
 /** GET /:artistId/overview → settings + counts + next ready items (the dashboard). */
-router.get('/:artistId/overview', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/overview', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const [settings, groupsSnap, queueSnap] = await Promise.all([
@@ -861,7 +868,7 @@ router.get('/:artistId/overview', authenticate, async (req: Request, res: Respon
  * content, build captioned queue items (respecting the daily cap), and surface
  * them as "ready" (Hybrid: NOT auto-posted — the human clicks publish).
  */
-router.post('/:artistId/autopilot/run', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/autopilot/run', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const pk = numericArtistId(artistId);
@@ -902,9 +909,10 @@ export async function preparePublishQueue(
   if (remaining <= 0) return { prepared: 0, skippedReason: 'daily cap reached' };
 
   // Avoid re-queuing content we already have pending/ready/scheduled.
+  // Items without a contentId are skipped so they can't collide on a "type:null" key.
   const activeKeys = new Set(
     queue
-      .filter((q) => ['ready', 'scheduled', 'draft'].includes(q.status))
+      .filter((q) => ['ready', 'scheduled', 'draft'].includes(q.status) && q.contentId)
       .map((q) => `${q.contentType}:${q.contentId}`),
   );
 

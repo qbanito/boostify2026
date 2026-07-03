@@ -898,6 +898,9 @@ export const musicians = pgTable("musicians", {
   totalReviews: integer("total_reviews").default(0).notNull(),
   genres: text("genres").array().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  // Musician Services Terms acceptance (activation gate for selling services)
+  termsAcceptedAt: timestamp("terms_accepted_at"),
+  termsVersion: text("terms_version"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });

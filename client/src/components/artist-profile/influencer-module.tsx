@@ -85,7 +85,7 @@ export function InfluencerModule({ userId, artistName, isOwner, colors, isExpand
 
   const { data: contentData } = useQuery({
     queryKey: [`/api/influencer/content/${userId}`],
-    enabled: !!userId,
+    enabled: !!userId && isOwner, // drafts are owner-only (endpoint enforces ownership)
     // Live-poll while any video is still rendering so the UI updates itself.
     refetchInterval: (q: any) => {
       const items = (q.state.data as any)?.content || [];
@@ -312,17 +312,15 @@ function VideoPreviewSection({ content, colors, isOwner, artistName }: {
     setPublishingPlatform(platform);
     setPublishMsg(null);
     try {
-      const response = await fetch(`/api/influencer/content/${currentItem.id}/publish-${platform}`, {
+      const data: any = await apiRequest({
+        url: `/api/influencer/content/${currentItem.id}/publish-${platform}`,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId: currentItem.userId }),
+        data: {},
       });
-      const data = await response.json();
-      if (response.ok && data.success) {
+      if (data?.success) {
         setPublishMsg({ kind: 'success', text: data.message || `Queued for ${platform}` });
       } else {
-        setPublishMsg({ kind: 'error', text: data.error || `Publish to ${platform} failed` });
+        setPublishMsg({ kind: 'error', text: data?.error || `Publish to ${platform} failed` });
       }
     } catch (err: any) {
       setPublishMsg({ kind: 'error', text: err.message || 'Network error' });
@@ -896,12 +894,11 @@ function SetupPanel({ userId, colors, voiceProfile, avatarProfile, queryClient, 
       formData.append('voiceName', voiceName);
       formData.append('language', 'en');
 
-      const response = await fetch('/api/influencer/voice/upload', {
+      const data: any = await apiRequest({
+        url: '/api/influencer/voice/upload',
         method: 'POST',
-        body: formData,
+        data: formData,
       });
-
-      const data = await response.json();
 
       if (data.success) {
         setVoiceSuccess(`Voice "${data.voiceName}" cloned via ${data.provider || 'ElevenLabs'}!`);
@@ -950,12 +947,11 @@ function SetupPanel({ userId, colors, voiceProfile, avatarProfile, queryClient, 
       fd.append('userId', String(userId));
       fd.append('avatarStyle', 'casual');
       files.forEach(f => fd.append('images', f));
-      const response = await fetch('/api/influencer/avatar/create-multi', {
+      const data: any = await apiRequest({
+        url: '/api/influencer/avatar/create-multi',
         method: 'POST',
-        body: fd,
-        credentials: 'include',
+        data: fd,
       });
-      const data = await response.json();
       if (data.success) {
         queryClient.invalidateQueries({ queryKey: [`/api/influencer/avatar/${userId}`] });
         // Clear previews

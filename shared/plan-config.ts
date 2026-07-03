@@ -552,7 +552,6 @@ export const ROUTE_PLAN_MAP: Record<string, PlanId | null> = {
   '/smart-cards': 'professional',
   '/translator': 'professional',
   '/ai-agents': 'professional',
-  '/ai-video-creation': 'professional',
 
   // ── DOMINATE / ENTERPRISE ($149.99) ──
   '/virtual-record-label': 'enterprise',

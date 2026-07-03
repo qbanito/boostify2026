@@ -25,6 +25,8 @@ import {
   cSuiteMessages,
   users,
   merchandise,
+  newsArticles,
+  investorFeedback,
 } from '../../db/schema';
 import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -61,6 +63,13 @@ export interface Tool<I = any, O = any> {
   /** Categorized for UI grouping. */
   category: 'database' | 'platform' | 'marketing' | 'finance' | 'ops' | 'meta' | 'self' | 'goals';
   execute: (input: I, ctx: ToolContext) => Promise<O>;
+  /**
+   * REAL action for humanRequired tools. `execute` queues the approval;
+   * once an admin approves, the approvals route calls `performApproved`
+   * to actually do the work. Without this, approving a HITL decision
+   * would just re-queue another approval forever.
+   */
+  performApproved?: (input: I, ctx: ToolContext) => Promise<any>;
 }
 
 const tools = new Map<string, Tool>();
@@ -568,7 +577,15 @@ registerTool({
   readOnly: false,
   category: 'self',
   execute: async (input, ctx) => {
-    return await requestApproval(ctx, 'tune_agent', input, input.rationale, 6);
+    return await requestApproval(ctx, 'proposeAgentTuning', input, input.rationale, 6);
+  },
+  performApproved: async (input) => {
+    const patch: Record<string, any> = {};
+    if (input.field === 'autonomy') patch.autonomy = Math.min(Math.max(Number(input.newValue) || 1, 1), 3);
+    else if (input.field === 'budgetUsdDaily') patch.budgetUsdDaily = String(Number(input.newValue) || 1);
+    else patch[input.field] = String(input.newValue);
+    await db.update(cSuiteAgents).set(patch).where(eq(cSuiteAgents.id, input.targetAgentId));
+    return { applied: true, agentId: input.targetAgentId, field: input.field };
   },
 });
 
@@ -586,13 +603,25 @@ registerTool({
   readOnly: false,
   category: 'platform',
   execute: async (input, ctx) => {
-    return await requestApproval(ctx, 'pause_user', input, input.reason, 8);
+    return await requestApproval(ctx, 'pauseUser', input, input.reason, 8);
+  },
+  performApproved: async (input, ctx) => {
+    // No hard "suspended" column exists on users — record the sanctioned
+    // suspension in agent memory as an auditable directive for ops.
+    await db.insert(cSuiteMemory).values({
+      agentId: ctx.agentId,
+      kind: 'decision',
+      content: `[APPROVED] Suspend user ${input.userId}: ${input.reason}. Apply in Clerk dashboard (ban) — no automated suspension column exists yet.`,
+      tags: ['suspension', 'approved', 'manual-action'],
+      weight: 5,
+    });
+    return { recorded: true, userId: input.userId, note: 'Suspension approved & logged. Manual Clerk ban still required.' };
   },
 });
 
 registerTool({
   id: 'publishNews',
-  description: 'Schedule a news article to be published on Boostify News. Queues for approval if risk > threshold.',
+  description: 'Publish a news article on Boostify News (real publication after admin approval). Body supports plain paragraphs separated by blank lines.',
   schema: z.object({
     title: z.string().min(10).max(140),
     body: z.string().min(50).max(8000),
@@ -604,7 +633,31 @@ registerTool({
   readOnly: false,
   category: 'marketing',
   execute: async (input, ctx) => {
-    return await requestApproval(ctx, 'publish_news', input, `Article: ${input.title}`, 4);
+    return await requestApproval(ctx, 'publishNews', input, `Article: ${input.title}`, 4);
+  },
+  performApproved: async (input, ctx) => {
+    const slugBase = input.title.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+    const slug = `${slugBase}-${Date.now().toString(36)}`;
+    const htmlContent = input.body
+      .split(/\n{2,}/)
+      .map((p) => `<p>${p.trim().replace(/\n/g, '<br/>')}</p>`)
+      .join('\n');
+    const [article] = await db.insert(newsArticles).values({
+      slug,
+      title: input.title,
+      summary: input.body.slice(0, 280),
+      htmlContent,
+      category: 'platform-updates',
+      tags: input.tags || ['c-suite'],
+      status: 'published',
+      publishedAt: new Date(),
+      generatedBy: `c-suite:${ctx.agentId}`,
+      aiModel: 'glm-5.2',
+    }).returning({ id: newsArticles.id, slug: newsArticles.slug });
+    return { published: true, articleId: article.id, slug: article.slug, url: `/news/${article.slug}` };
   },
 });
 
@@ -636,6 +689,145 @@ registerTool({
 });
 
 // ============================================================
+// GROWTH & INVESTOR ACQUISITION TOOLS — the agents' real work
+// ============================================================
+
+registerTool({
+  id: 'queryGrowthFunnel',
+  description: 'User acquisition funnel: signups (current vs previous period), daily signup series, cold outreach performance (sent/opened/replied 30d) and investor lead count.',
+  schema: z.object({ days: z.number().min(1).max(90).default(30) }),
+  requiredAutonomy: 3,
+  risk: 1,
+  readOnly: true,
+  category: 'marketing',
+  execute: async ({ days }) => {
+    const since = new Date(Date.now() - days * 86400 * 1000);
+    const prevSince = new Date(Date.now() - 2 * days * 86400 * 1000);
+    const [{ current }] = await db.select({ current: count() }).from(users)
+      .where(gte(users.createdAt, since));
+    const [{ previous }] = await db.select({ previous: count() }).from(users)
+      .where(and(gte(users.createdAt, prevSince), sql`${users.createdAt} < ${since.toISOString()}`));
+    const daily = await db.execute(sql`
+      SELECT DATE(created_at) AS day, COUNT(*) AS signups
+      FROM users WHERE created_at >= ${new Date(Date.now() - 14 * 86400 * 1000).toISOString()}
+      GROUP BY 1 ORDER BY 1 DESC LIMIT 14
+    `).catch(() => ({ rows: [] }));
+    const outreach = await db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('sent','delivered','opened','clicked','replied')) AS sent,
+        COUNT(*) FILTER (WHERE opened_at IS NOT NULL) AS opened,
+        COUNT(*) FILTER (WHERE replied_at IS NOT NULL) AS replied
+      FROM outreach_email_log
+      WHERE created_at >= ${new Date(Date.now() - 30 * 86400 * 1000).toISOString()}
+    `).catch(() => ({ rows: [{ sent: 0, opened: 0, replied: 0 }] }));
+    const [{ investorLeads }] = await db.select({ investorLeads: count() }).from(investorFeedback)
+      .where(gte(investorFeedback.createdAt, since));
+    return {
+      periodDays: days,
+      signups: { current, previous, trendPct: previous ? Math.round(((current - previous) / previous) * 100) : null },
+      dailySignups14d: (daily as any).rows || [],
+      outreach30d: (outreach as any).rows?.[0] || {},
+      investorLeadsInPeriod: investorLeads,
+    };
+  },
+});
+
+registerTool({
+  id: 'queryInvestorLeads',
+  description: 'List investor leads captured via the Investor Room and agent outreach: name, email, company, type, interest level, viewpoints.',
+  schema: z.object({
+    interestLevel: z.enum(['low', 'medium', 'high']).optional(),
+    limit: z.number().min(1).max(100).default(25),
+  }),
+  requiredAutonomy: 3,
+  risk: 1,
+  readOnly: true,
+  category: 'finance',
+  execute: async ({ interestLevel, limit }) => {
+    const rows = await db.select({
+      id: investorFeedback.id,
+      name: investorFeedback.name,
+      email: investorFeedback.email,
+      company: investorFeedback.company,
+      investorType: investorFeedback.investorType,
+      interestLevel: investorFeedback.interestLevel,
+      viewpoints: investorFeedback.viewpoints,
+      createdAt: investorFeedback.createdAt,
+    }).from(investorFeedback)
+      .where(interestLevel ? eq(investorFeedback.interestLevel, interestLevel) : undefined)
+      .orderBy(desc(investorFeedback.createdAt))
+      .limit(limit);
+    return { leads: rows, count: rows.length };
+  },
+});
+
+registerTool({
+  id: 'recordInvestorLead',
+  description: 'Register a new investor lead in the pipeline (name, email, company, interest). Use when you identify or qualify a potential investor.',
+  schema: z.object({
+    name: z.string().min(2).max(120),
+    email: z.string().min(5).max(200),
+    company: z.string().max(160).optional(),
+    investorType: z.enum(['individual', 'corporate', 'institutional', 'other']).default('individual'),
+    interestLevel: z.enum(['low', 'medium', 'high']).default('medium'),
+    notes: z.string().min(10).max(4000).describe('Qualification notes: thesis fit, check size, stage, next step.'),
+  }),
+  requiredAutonomy: 2,
+  risk: 2,
+  readOnly: false,
+  category: 'finance',
+  execute: async (input, ctx) => {
+    if (ctx.dryRun) return { dryRun: true, would: input };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) return { error: 'invalid_email' };
+    const [lead] = await db.insert(investorFeedback).values({
+      name: input.name,
+      email: input.email.toLowerCase(),
+      company: input.company,
+      investorType: input.investorType,
+      interestLevel: input.interestLevel,
+      viewpoints: input.notes,
+      userAgent: `c-suite:${ctx.agentId}`,
+    }).returning({ id: investorFeedback.id });
+    return { recorded: true, leadId: lead.id };
+  },
+});
+
+registerTool({
+  id: 'sendOutreachEmail',
+  description: 'Send a REAL outreach email (user acquisition, investor relations, partnerships). Always requires admin approval before sending. Body is plain text; paragraphs separated by blank lines.',
+  schema: z.object({
+    to: z.string().min(5).max(200),
+    subject: z.string().min(5).max(150),
+    body: z.string().min(50).max(6000),
+    purpose: z.enum(['user_acquisition', 'investor_relations', 'partnership', 'retention']),
+  }),
+  requiredAutonomy: 2,
+  humanRequired: true,
+  risk: 7,
+  readOnly: false,
+  category: 'marketing',
+  execute: async (input, ctx) => {
+    return await requestApproval(ctx, 'sendOutreachEmail', input, `${input.purpose} → ${input.to}: ${input.subject}`, 7);
+  },
+  performApproved: async (input, ctx) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.to)) return { error: 'invalid_email' };
+    const { sendOutreachEmail } = await import('../artist-activation/outreach-email');
+    const html = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;line-height:1.6;max-width:600px;margin:0 auto;padding:24px;">${
+      input.body.split(/\n{2,}/).map((p) => `<p>${p.trim().replace(/\n/g, '<br/>')}</p>`).join('')
+    }<p style="color:#888;font-size:12px;margin-top:32px;">Boostify Music · boostifymusic.com</p></body></html>`;
+    const result = await sendOutreachEmail(input.to, input.subject, html);
+    await db.insert(cSuiteMemory).values({
+      agentId: ctx.agentId,
+      kind: 'decision',
+      content: `[outreach:${input.purpose}] ${result.success ? 'SENT' : 'FAILED'} → ${input.to} · "${input.subject}"${result.success ? '' : ` · error: ${result.error}`}`,
+      tags: ['outreach', input.purpose],
+      weight: 2,
+    });
+    return { sent: result.success, provider: (result as any).provider, error: (result as any).error };
+  },
+});
+
+// ============================================================
 // TOOL SETS PER ROLE
 // ============================================================
 
@@ -653,20 +845,23 @@ export const TOOL_SETS: Record<string, string[]> = {
     'runSelfDiagnostics', 'reportSelfImprovement', 'proposeAgentTuning',
     'queryArtistOverview', 'queryTopArtistsByRevenue', 'queryAtRiskArtists',
     'recommendArtistStrategy',
+    'queryGrowthFunnel', 'queryInvestorLeads', 'recordInvestorLead', 'sendOutreachEmail',
   ],
   cmo: [
     'queryPlatformOverview', 'queryUsers',
-    'listGoals', 'checkInOnGoal',
+    'listGoals', 'checkInOnGoal', 'createGoal',
     'publishNews',
     'handoffTo', 'remember', 'recallMemory',
     'queryArtistFanMetrics', 'queryArtistOverview', 'recommendArtistStrategy',
+    'queryGrowthFunnel', 'sendOutreachEmail',
   ],
   cro: [
     'queryPlatformOverview', 'queryUsers',
-    'listGoals', 'checkInOnGoal',
+    'listGoals', 'checkInOnGoal', 'createGoal',
     'handoffTo', 'remember', 'recallMemory',
     'queryArtistMerchPerformance', 'queryTopArtistsByRevenue',
     'queryArtistMonetizationFunnel', 'recommendArtistStrategy',
+    'queryGrowthFunnel', 'queryInvestorLeads', 'sendOutreachEmail',
   ],
   cpo: [
     'queryPlatformOverview', 'queryUsers',
@@ -679,6 +874,7 @@ export const TOOL_SETS: Record<string, string[]> = {
     'listGoals', 'checkInOnGoal', 'createGoal',
     'handoffTo', 'remember', 'recallMemory',
     'queryArtistTreasury', 'queryArtistMonetizationFunnel', 'queryTopArtistsByRevenue',
+    'queryInvestorLeads', 'recordInvestorLead', 'sendOutreachEmail',
   ],
   coo: [
     'queryPlatformOverview', 'queryAgentHealth',
@@ -699,6 +895,7 @@ export const TOOL_SETS: Record<string, string[]> = {
     'queryPlatformOverview', 'queryRevenueSnapshot', 'queryUsers',
     'listGoals', 'checkInOnGoal',
     'handoffTo', 'remember', 'recallMemory',
+    'queryGrowthFunnel', 'queryInvestorLeads',
     ...ARTIST_READ_TOOLS,
   ],
   ciso: [

@@ -20,6 +20,8 @@ import {
 import { eq, desc, and, lte, isNotNull } from 'drizzle-orm';
 import { logger } from '../utils/logger';
 import { storage } from '../firebase';
+import { authenticate } from '../middleware/auth';
+import { verifyArtistOwner } from '../middleware/artist-owner';
 
 // Services
 import { cloneInfluencerVoice, cloneInfluencerVoiceFromBuffer, generateInfluencerSpeech, getVoiceProfile, deleteVoiceProfile, listElevenLabsVoices, setupGeminiVoice, GEMINI_VOICES } from '../services/influencer-voice-service';
@@ -35,6 +37,56 @@ import {
 import { chargeCreditsFromUsd, canAffordUsd, getUserBalance } from '../services/credit-engine';
 
 const router = Router();
+
+// ─── Auth helpers ───────────────────────────────────────────────────────────
+// Every mutating / billing endpoint must (a) be authenticated and (b) operate
+// only on artists the caller owns. userId in body/params is NEVER trusted on
+// its own — it is validated against the authenticated caller via the shared
+// artist-owner guard (owner = same user, generated_by, or admin).
+
+/** Email of the authenticated caller (used for credit charges — never from body). */
+function callerEmail(req: Request): string | null {
+  const email = (req as any).user?.email;
+  return typeof email === 'string' && email ? email : null;
+}
+
+/**
+ * Asserts the caller owns the target user/artist id. Sends the error response
+ * and returns false when not allowed.
+ */
+async function assertOwnsUser(req: Request, res: Response, targetUserId: number): Promise<boolean> {
+  if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+    res.status(400).json({ error: 'Valid userId required' });
+    return false;
+  }
+  const result = await verifyArtistOwner(req, String(targetUserId));
+  if (!result.allowed) {
+    res.status(result.error === 'Artist not found' ? 404 : 403)
+      .json({ error: result.error || 'Not authorized for this artist' });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Loads an influencerContent row and asserts the caller owns its artist.
+ * Sends the error response and returns null when not found / not allowed.
+ */
+async function loadOwnedContent(req: Request, res: Response, contentId: number) {
+  if (!Number.isFinite(contentId)) {
+    res.status(400).json({ error: 'Invalid content id' });
+    return null;
+  }
+  const [content] = await db.select().from(influencerContent)
+    .where(eq(influencerContent.id, contentId))
+    .limit(1);
+  if (!content) {
+    res.status(404).json({ error: 'Content not found' });
+    return null;
+  }
+  const ok = await assertOwnsUser(req, res, content.userId);
+  return ok ? content : null;
+}
 
 // Multer for voice file uploads (memory storage, 25MB max)
 const voiceUpload = multer({
@@ -91,12 +143,13 @@ async function uploadBufferToFirebase(
 // ═══════════════════════════════════════════
 
 /** POST /voice/upload — Clone voice from uploaded file (ElevenLabs) */
-router.post('/voice/upload', voiceUpload.single('audio'), async (req: Request, res: Response) => {
+router.post('/voice/upload', authenticate, voiceUpload.single('audio'), async (req: Request, res: Response) => {
   try {
     const { userId, voiceName, language } = req.body;
     if (!userId || !req.file) {
       return res.status(400).json({ error: 'userId and audio file required' });
     }
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const result = await cloneInfluencerVoiceFromBuffer(
       Number(userId),
@@ -114,12 +167,13 @@ router.post('/voice/upload', voiceUpload.single('audio'), async (req: Request, r
 });
 
 /** POST /voice/create — Clone voice from audio URL */
-router.post('/voice/create', async (req: Request, res: Response) => {
+router.post('/voice/create', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, audioSampleUrl, voiceName, language } = req.body;
     if (!userId || !audioSampleUrl) {
       return res.status(400).json({ error: 'userId and audioSampleUrl required' });
     }
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const result = await cloneInfluencerVoice(
       Number(userId),
@@ -146,8 +200,9 @@ router.get('/voice/:userId', async (req: Request, res: Response) => {
 });
 
 /** DELETE /voice/:userId — Delete voice profile */
-router.delete('/voice/:userId', async (req: Request, res: Response) => {
+router.delete('/voice/:userId', authenticate, async (req: Request, res: Response) => {
   try {
+    if (!(await assertOwnsUser(req, res, Number(req.params.userId)))) return;
     await deleteVoiceProfile(Number(req.params.userId));
     res.json({ success: true });
   } catch (error: any) {
@@ -156,7 +211,7 @@ router.delete('/voice/:userId', async (req: Request, res: Response) => {
 });
 
 /** GET /voices/library — List available ElevenLabs voices */
-router.get('/voices/library', async (_req: Request, res: Response) => {
+router.get('/voices/library', authenticate, async (_req: Request, res: Response) => {
   try {
     const voices = await listElevenLabsVoices();
     res.json({ voices });
@@ -171,10 +226,11 @@ router.get('/voices/gemini', (_req: Request, res: Response) => {
 });
 
 /** POST /voice/gemini-setup — Set up a Gemini TTS voice profile (no file upload) */
-router.post('/voice/gemini-setup', async (req: Request, res: Response) => {
+router.post('/voice/gemini-setup', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, voiceName, geminiVoiceId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const result = await setupGeminiVoice(
       Number(userId),
@@ -193,12 +249,13 @@ router.post('/voice/gemini-setup', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════
 
 /** POST /avatar/create — Create HeyGen avatar from photo */
-router.post('/avatar/create', async (req: Request, res: Response) => {
+router.post('/avatar/create', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, imageUrl, avatarStyle } = req.body;
     if (!userId || !imageUrl) {
       return res.status(400).json({ error: 'userId and imageUrl required' });
     }
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const result = await createInfluencerAvatar(
       Number(userId),
@@ -224,8 +281,9 @@ router.get('/avatar/:userId', async (req: Request, res: Response) => {
 });
 
 /** DELETE /avatar/:userId — Delete avatar profile */
-router.delete('/avatar/:userId', async (req: Request, res: Response) => {
+router.delete('/avatar/:userId', authenticate, async (req: Request, res: Response) => {
   try {
+    if (!(await assertOwnsUser(req, res, Number(req.params.userId)))) return;
     await deleteAvatarProfile(Number(req.params.userId));
     res.json({ success: true });
   } catch (error: any) {
@@ -265,10 +323,11 @@ router.get('/profile-image/:userId', async (req: Request, res: Response) => {
  * POST /avatar/auto-create — Create avatar using the artist's own profile image
  * Looks up profileImage from the users table — no manual URL needed.
  */
-router.post('/avatar/auto-create', async (req: Request, res: Response) => {
+router.post('/avatar/auto-create', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, avatarStyle } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     // Try several sources to locate the artist's profile/face image.
     // 1) users.profileImage  2) users.profileImageUrl  3) userCreatedArtists.avatarUrl (AI artists)
@@ -313,13 +372,14 @@ router.post('/avatar/auto-create', async (req: Request, res: Response) => {
  * Uses the first image as the primary HeyGen avatar source; the rest are stored
  * as reference images (returned to the client; useful for future multi-shot avatars).
  */
-router.post('/avatar/create-multi', avatarImageUpload.array('images', 4), async (req: Request, res: Response) => {
+router.post('/avatar/create-multi', authenticate, avatarImageUpload.array('images', 4), async (req: Request, res: Response) => {
   try {
     const userId = Number(req.body.userId || (req as any).auth?.userId || (req as any).user?.id);
     const avatarStyle = req.body.avatarStyle || 'casual';
     const files = (req.files as Express.Multer.File[]) || [];
 
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, userId))) return;
     if (files.length === 0) return res.status(400).json({ error: 'At least one image is required' });
 
     // Upload all images to Firebase
@@ -361,19 +421,16 @@ router.post('/avatar/create-multi', avatarImageUpload.array('images', 4), async 
  * Chrome extension. Inserts a row into instagramPendingActions; the extension
  * picks it up on its next sync cycle.
  */
-router.post('/content/:id/publish-instagram', async (req: Request, res: Response) => {
+router.post('/content/:id/publish-instagram', authenticate, async (req: Request, res: Response) => {
   try {
     const contentId = Number(req.params.id);
-    const userId = Number(req.body.userId || (req as any).auth?.userId || (req as any).user?.id);
     const captionOverride: string | undefined = req.body.caption;
     const postType: 'reel' | 'post' = req.body.postType === 'post' ? 'post' : 'reel';
 
-    if (!userId) return res.status(400).json({ error: 'userId required' });
-
-    // Look up content + verify ownership
-    const [content] = await db.select().from(influencerContent).where(eq(influencerContent.id, contentId)).limit(1);
-    if (!content) return res.status(404).json({ error: 'Content not found' });
-    if (content.userId !== userId) return res.status(403).json({ error: 'Not authorized' });
+    // Ownership enforced against the authenticated caller (admin / owner / generated_by)
+    const content = await loadOwnedContent(req, res, contentId);
+    if (!content) return;
+    const userId = content.userId;
 
     const mediaUrl = content.finalVideoUrl || content.avatarVideoUrl;
     if (!mediaUrl) return res.status(400).json({ error: 'Content has no published video yet' });
@@ -439,17 +496,14 @@ router.post('/content/:id/publish-instagram', async (req: Request, res: Response
  * social_media_posts (isPublished=false). A worker / future TikTok extension
  * picks it up. Returns the media URL so the user can also publish manually.
  */
-router.post('/content/:id/publish-tiktok', async (req: Request, res: Response) => {
+router.post('/content/:id/publish-tiktok', authenticate, async (req: Request, res: Response) => {
   try {
     const contentId = Number(req.params.id);
-    const userId = Number(req.body.userId || (req as any).auth?.userId || (req as any).user?.id);
     const captionOverride: string | undefined = req.body.caption;
 
-    if (!userId) return res.status(400).json({ error: 'userId required' });
-
-    const [content] = await db.select().from(influencerContent).where(eq(influencerContent.id, contentId)).limit(1);
-    if (!content) return res.status(404).json({ error: 'Content not found' });
-    if (content.userId !== userId) return res.status(403).json({ error: 'Not authorized' });
+    const content = await loadOwnedContent(req, res, contentId);
+    if (!content) return;
+    const userId = content.userId;
 
     const mediaUrl = content.finalVideoUrl || content.avatarVideoUrl;
     if (!mediaUrl) return res.status(400).json({ error: 'Content has no published video yet' });
@@ -488,10 +542,11 @@ router.post('/content/:id/publish-tiktok', async (req: Request, res: Response) =
 // ═══════════════════════════════════════════
 
 /** POST /content/generate-script — Generate only the script */
-router.post('/content/generate-script', async (req: Request, res: Response) => {
+router.post('/content/generate-script', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, topic, contentType, targetDurationSec, language, customPrompt } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const script = await generateInfluencerScript(Number(userId), {
       topic, contentType, targetDurationSec, language, customPrompt,
@@ -504,10 +559,11 @@ router.post('/content/generate-script', async (req: Request, res: Response) => {
 });
 
 /** POST /content/generate — Run full pipeline (script → voice → avatar → video) */
-router.post('/content/generate', async (req: Request, res: Response) => {
+router.post('/content/generate', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, topic, contentType, targetDurationSec, language, customPrompt, existingContentId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     // Run pipeline asynchronously — return immediately with content ID
     const pipelinePromise = runInfluencerPipeline(Number(userId), {
@@ -565,10 +621,11 @@ router.get('/content/published/:userId', async (req: Request, res: Response) => 
   }
 });
 
-/** GET /content/:userId — List all influencer content for a user */
-router.get('/content/:userId', async (req: Request, res: Response) => {
+/** GET /content/:userId — List all influencer content for a user (owner only — includes drafts) */
+router.get('/content/:userId', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = Number(req.params.userId);
+    if (!(await assertOwnsUser(req, res, userId))) return;
     const limit = Number(req.query.limit) || 20;
     const offset = Number(req.query.offset) || 0;
     const statusFilter = req.query.status as string;
@@ -593,10 +650,11 @@ router.get('/content/:userId', async (req: Request, res: Response) => {
 });
 
 /** PATCH /content/:id/publish — Publish content */
-router.patch('/content/:id/publish', async (req: Request, res: Response) => {
+router.patch('/content/:id/publish', authenticate, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const { platform } = req.body;
+    if (!(await loadOwnedContent(req, res, id))) return;
 
     await db.update(influencerContent)
       .set({
@@ -614,8 +672,9 @@ router.patch('/content/:id/publish', async (req: Request, res: Response) => {
 });
 
 /** DELETE /content/:id — Delete content */
-router.delete('/content/:id', async (req: Request, res: Response) => {
+router.delete('/content/:id', authenticate, async (req: Request, res: Response) => {
   try {
+    if (!(await loadOwnedContent(req, res, Number(req.params.id)))) return;
     await db.delete(influencerContent)
       .where(eq(influencerContent.id, Number(req.params.id)));
     res.json({ success: true });
@@ -629,10 +688,11 @@ router.delete('/content/:id', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════
 
 /** POST /topics/suggest — Get AI-suggested topics */
-router.post('/topics/suggest', async (req: Request, res: Response) => {
+router.post('/topics/suggest', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, count } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
 
     const topics = await suggestTopics(Number(userId), count || 5);
     res.json({ topics });
@@ -645,10 +705,11 @@ router.post('/topics/suggest', async (req: Request, res: Response) => {
 // SCHEDULE CONFIG
 // ═══════════════════════════════════════════
 
-/** GET /schedule/:userId — Get schedule config */
-router.get('/schedule/:userId', async (req: Request, res: Response) => {
+/** GET /schedule/:userId — Get schedule config (owner only) */
+router.get('/schedule/:userId', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = Number(req.params.userId);
+    if (!(await assertOwnsUser(req, res, userId))) return;
     const [config] = await db.select()
       .from(influencerScheduleConfig)
       .where(eq(influencerScheduleConfig.userId, userId))
@@ -675,10 +736,11 @@ router.get('/schedule/:userId', async (req: Request, res: Response) => {
   }
 });
 
-/** PUT /schedule/:userId — Update schedule config */
-router.put('/schedule/:userId', async (req: Request, res: Response) => {
+/** PUT /schedule/:userId — Update schedule config (owner only) */
+router.put('/schedule/:userId', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = Number(req.params.userId);
+    if (!(await assertOwnsUser(req, res, userId))) return;
     const { frequency, customIntervalHours, preferredHour, preferredDayOfWeek, autoPublish, autoGenerate, topics, isActive } = req.body;
 
     const [existing] = await db.select()
@@ -745,7 +807,7 @@ const VIRAL_COSTS_USD = {
  * Calcula el coste total (créditos + USD) ANTES de generar.
  * Body: { steps: ('image'|'imageEdit'|'i2v'|'r2v')[], duration?: 5|10|15 }
  */
-router.post('/viral/estimate-cost', async (req: Request, res: Response) => {
+router.post('/viral/estimate-cost', authenticate, async (req: Request, res: Response) => {
   try {
     const { steps = [], duration = 10 } = req.body as {
       steps: Array<'image' | 'imageEdit' | 'i2v' | 'r2v'>;
@@ -772,10 +834,11 @@ router.post('/viral/estimate-cost', async (req: Request, res: Response) => {
 
     const totalCredits = breakdown.reduce((acc, b) => acc + b.credits, 0);
 
-    // Balance del usuario (si proporciona email)
+    // Balance del usuario autenticado (el email del body ya no se confía)
     let balance: number | null = null;
-    if (req.body.userEmail) {
-      const b = await getUserBalance(req.body.userEmail);
+    const authedEmail = callerEmail(req);
+    if (authedEmail) {
+      const b = await getUserBalance(authedEmail);
       balance = b.credits;
     }
 
@@ -800,10 +863,12 @@ router.post('/viral/estimate-cost', async (req: Request, res: Response) => {
  * Genera una imagen viral inicial (nano-banana-2) lista para convertir a video.
  * Body: { userId, userEmail, prompt, target, artistName?, aspectRatio? }
  */
-router.post('/viral/generate-image', async (req: Request, res: Response) => {
+router.post('/viral/generate-image', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, userEmail, prompt, target = 'service', artistName, aspectRatio = '9:16' } = req.body;
+    const { userId, prompt, target = 'service', artistName, aspectRatio = '9:16' } = req.body;
     if (!userId || !prompt) return res.status(400).json({ error: 'userId & prompt required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
 
     // Pre-check balance
     if (userEmail) {
@@ -840,12 +905,14 @@ router.post('/viral/generate-image', async (req: Request, res: Response) => {
  * Edita 1+ imagen(es) con GPT-Image-2 (premium, BYOK).
  * Body: { userId, userEmail, imageUrls[], prompt, target?, aspectRatio? }
  */
-router.post('/viral/edit-image', async (req: Request, res: Response) => {
+router.post('/viral/edit-image', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, userEmail, imageUrls, prompt, target, aspectRatio = '1:1' } = req.body;
+    const { userId, imageUrls, prompt, target, aspectRatio = '1:1' } = req.body;
     if (!userId || !prompt || !Array.isArray(imageUrls) || !imageUrls.length) {
       return res.status(400).json({ error: 'userId, prompt & imageUrls[] required' });
     }
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
 
     if (userEmail) {
       const afford = await canAffordUsd(userEmail, VIRAL_COSTS_USD.imageEdit);
@@ -874,11 +941,13 @@ router.post('/viral/edit-image', async (req: Request, res: Response) => {
  * Convierte una imagen en video viral (happy-horse i2v) hasta 15s.
  * Body: { userId, userEmail, imageUrl, prompt, target, duration?, aspectRatio?, resolution? }
  */
-router.post('/viral/image-to-video', async (req: Request, res: Response) => {
+router.post('/viral/image-to-video', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, userEmail, imageUrl, prompt, target = 'service', artistName,
+    const { userId, imageUrl, prompt, target = 'service', artistName,
       duration = 10, aspectRatio = '9:16', resolution = '720p' } = req.body;
     if (!userId || !imageUrl || !prompt) return res.status(400).json({ error: 'userId, imageUrl & prompt required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
     const usd = VIRAL_COSTS_USD.videoI2vPerSec * dur;
@@ -933,13 +1002,15 @@ router.post('/viral/image-to-video', async (req: Request, res: Response) => {
  * Crea video viral usando 1-4 imágenes de referencia (producto, persona, escena).
  * Body: { userId, userEmail, referenceImageUrls[], prompt, target, duration?, aspectRatio?, resolution? }
  */
-router.post('/viral/reference-to-video', async (req: Request, res: Response) => {
+router.post('/viral/reference-to-video', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, userEmail, referenceImageUrls, prompt, target = 'merch', artistName,
+    const { userId, referenceImageUrls, prompt, target = 'merch', artistName,
       duration = 10, aspectRatio = '9:16', resolution = '720p' } = req.body;
     if (!userId || !prompt || !Array.isArray(referenceImageUrls) || !referenceImageUrls.length) {
       return res.status(400).json({ error: 'userId, prompt & referenceImageUrls[] required' });
     }
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
     const usd = VIRAL_COSTS_USD.videoR2vPerSec * dur;
@@ -998,17 +1069,19 @@ router.post('/viral/reference-to-video', async (req: Request, res: Response) => 
  *   duration?: 5|10|15, aspectRatio?, resolution?
  * }
  */
-router.post('/viral/generate-full', async (req: Request, res: Response) => {
+router.post('/viral/generate-full', authenticate, async (req: Request, res: Response) => {
   const startMs = Date.now();
   try {
     const {
-      userId, userEmail, prompt, target = 'service', artistName,
+      userId, prompt, target = 'service', artistName,
       useImageEdit = false, editPrompt,
       referenceImageUrls, duration = 10,
       aspectRatio = '9:16', resolution = '720p',
     } = req.body;
 
     if (!userId || !prompt) return res.status(400).json({ error: 'userId & prompt required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
     const usingReference = Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0;

@@ -40,8 +40,10 @@ function client(): OpenAI {
 }
 
 // z.ai (Zhipu GLM) client — OpenAI-compatible. GLM-5.2 is the flagship primary
-// model for the C-Suite; OpenAI is kept as automatic fallback.
+// model for the C-Suite; GLM-4.6 is the mid-tier backup and OpenAI is kept as
+// the final automatic fallback.
 const GLM_FLAGSHIP = 'glm-5.2';
+const GLM_SECONDARY = 'glm-4.6';
 let _zaiClient: OpenAI | null = null;
 function zaiClient(): OpenAI | null {
   if (!isZaiConfigured()) return null;
@@ -53,8 +55,9 @@ function zaiClient(): OpenAI | null {
 
 /**
  * Resilient chat completion for C-Suite agents.
- * PRIMARY: z.ai GLM-5.2 (flagship). FALLBACK: OpenAI with the agent's configured model.
- * Tool/function calling is preserved across both providers.
+ * PRIMARY: z.ai GLM-5.2 (flagship agentic model). BACKUP: z.ai GLM-4.6.
+ * FINAL FALLBACK: OpenAI with the agent's configured model.
+ * Tool/function calling is preserved across all providers.
  */
 async function createAgentCompletion(
   agentModel: string,
@@ -62,14 +65,18 @@ async function createAgentCompletion(
 ) {
   const zai = zaiClient();
   if (zai) {
-    try {
-      const completion = await zai.chat.completions.create({ model: GLM_FLAGSHIP, ...params });
-      if (completion?.choices?.length) return completion;
-    } catch (err: any) {
-      console.warn('[C-Suite] GLM-5.2 primary failed, falling back to OpenAI:', err?.message || err);
+    for (const glmModel of [GLM_FLAGSHIP, GLM_SECONDARY]) {
+      try {
+        const completion = await zai.chat.completions.create({ model: glmModel, ...params });
+        if (completion?.choices?.length) return completion;
+      } catch (err: any) {
+        console.warn(`[C-Suite] ${glmModel} failed, trying next provider:`, err?.message || err);
+      }
     }
   }
-  return client().chat.completions.create({ model: agentModel || 'gpt-4o-mini', ...params });
+  // The agent's stored model may itself be a GLM id — never send that to OpenAI.
+  const fallbackModel = agentModel && !agentModel.startsWith('glm-') ? agentModel : 'gpt-4o-mini';
+  return client().chat.completions.create({ model: fallbackModel, ...params });
 }
 
 // Pricing table (USD per 1M tokens). Update as needed.
@@ -199,7 +206,10 @@ export async function runAgentTurn(args: RunArgs): Promise<RunResult> {
   let finalText = '';
   const openaiTools = toolsToOpenAI(agent.tools as string[] || []);
 
-  for (let iter = 0; iter < 6; iter++) {
+  // 12 model iterations max — still bounded by maxToolCalls and the 5-min
+  // turn deadline. The old cap of 6 cut multi-step plans short (each tool
+  // round consumes one iteration).
+  for (let iter = 0; iter < 12; iter++) {
     if (Date.now() > turnDeadline) {
       finalText = '⚠️ Turn deadline (5 min) exceeded — terminating.';
       break;
@@ -369,6 +379,20 @@ export async function seedAgentsIfMissing() {
       escalatesTo: seed.escalatesTo,
       budgetUsdDaily: seed.budgetUsdDaily,
     });
+  }
+  // Keep LIVE agents wired to the latest TOOL_SETS (additive union — never
+  // removes tools an admin granted manually). Without this, agents seeded
+  // before a deploy never receive newly-registered tools.
+  const { TOOL_SETS } = await import('./tools');
+  const all = await db.select({ id: cSuiteAgents.id, tools: cSuiteAgents.tools }).from(cSuiteAgents);
+  for (const a of all) {
+    const desired = TOOL_SETS[a.id];
+    if (!desired) continue;
+    const current = (a.tools as string[]) || [];
+    const merged = Array.from(new Set([...current, ...desired]));
+    if (merged.length !== current.length) {
+      await db.update(cSuiteAgents).set({ tools: merged }).where(eq(cSuiteAgents.id, a.id));
+    }
   }
   // Ensure settings row exists
   await loadSettings();

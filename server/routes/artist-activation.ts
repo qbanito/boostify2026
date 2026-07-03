@@ -4,10 +4,12 @@
  */
 
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { db } from '../db';
-import { musicIndustryContacts, dripSequences, activationScores, users } from '../db/schema';
+import { musicIndustryContacts, dripSequences, activationScores, users, musicians } from '../db/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import { isAuthenticated } from '../middleware/clerk-auth';
+import { MUSICIAN_TERMS_VERSION } from '../../shared/musician-terms';
 import {
   getFullActivationDashboard,
   processActivationTick,
@@ -178,6 +180,19 @@ router.get('/claim-info', async (req: Request, res: Response) => {
 
     const alreadyClaimed = Boolean(profile.claimedAt);
 
+    // Musician leads (Instagram outreach) have an INACTIVE `musicians` row —
+    // the claim page must show the instrument + Musician Services Terms so the
+    // owner can accept them and activate selling. Best-effort lookup.
+    let musician: { isMusician: boolean; instrument?: string | null; isActive?: boolean } = { isMusician: false };
+    try {
+      const [m] = await db
+        .select({ id: musicians.id, instrument: musicians.instrument, isActive: musicians.isActive })
+        .from(musicians)
+        .where(eq(musicians.userId, profile.id))
+        .limit(1);
+      if (m) musician = { isMusician: true, instrument: m.instrument, isActive: Boolean(m.isActive) };
+    } catch { /* table optional — never break claim preview */ }
+
     // Track the view (best-effort) when we know who is being addressed.
     if (payloadEmail) {
       trackEvent(payloadEmail, 'claim_viewed', { slug: profile.slug }, contactId, profile.id).catch(() => {});
@@ -192,6 +207,7 @@ router.get('/claim-info', async (req: Request, res: Response) => {
       // on the public slug path.
       prefillEmail: tokenValid && payloadEmail ? payloadEmail : undefined,
       artist: publicArtist(profile),
+      musician,
     });
   } catch (err: any) {
     console.error('[Activation] claim-info error:', err);
@@ -304,6 +320,16 @@ router.post('/claim', isAuthenticated, async (req: Request, res: Response) => {
        WHERE user_id = ${profile.id} AND dm_status <> 'claimed'
     `).catch(() => {});
 
+    // Musician activation gate: when the claimer explicitly accepts the
+    // Musician Services Terms, activate their `musicians` row so they can sell
+    // services + appear on the live map. Best-effort — never breaks the claim.
+    if (req.body?.acceptMusicianTerms === true) {
+      db.update(musicians)
+        .set({ isActive: true, termsAcceptedAt: new Date(), termsVersion: MUSICIAN_TERMS_VERSION } as any)
+        .where(eq(musicians.userId, profile.id))
+        .catch((e: any) => console.warn('[Activation] musician activation failed:', e?.message));
+    }
+
     res.json({ ok: true, slug: profile.slug });
   } catch (err: any) {
     const status = err?.httpStatus || 500;
@@ -312,6 +338,40 @@ router.post('/claim', isAuthenticated, async (req: Request, res: Response) => {
     }
     console.error('[Activation] claim error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// GET /api/artist-activation/lead-opt-out?e=<email>&sig=<hmac>
+// Public one-click opt-out linked from cold outreach emails (Instagram leads).
+// The HMAC signature proves the link came from one of our own emails, so no
+// attacker can opt out arbitrary addresses. Marks the lead opted_out — the
+// send-emails / auto-outreach selectors only pick dm_status IN ('ready','new'),
+// so an opted-out lead is permanently excluded even after CSV re-imports.
+router.get('/lead-opt-out', async (req: Request, res: Response) => {
+  const page = (title: string, body: string) => `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
+<body style="margin:0;background:#0b0b0f;color:#e5e5ee;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+  <div style="max-width:420px;padding:40px 28px;text-align:center;">
+    <h1 style="font-size:20px;margin:0 0 12px;">${title}</h1>
+    <p style="color:#9a9aa8;font-size:14px;line-height:1.6;margin:0;">${body}</p>
+  </div>
+</body></html>`;
+  try {
+    const email = String(req.query.e || '').trim().toLowerCase();
+    const sig = String(req.query.sig || '');
+    const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'boostify-activation-2026';
+    const expected = crypto.createHmac('sha256', secret).update(email).digest('hex').slice(0, 32);
+    if (!email || !sig || sig.length !== expected.length ||
+        !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return res.status(400).send(page('Enlace inválido', 'Este enlace de baja no es válido o ha expirado. / This opt-out link is invalid or expired.'));
+    }
+    await db.execute(sql`
+      UPDATE instagram_leads SET dm_status = 'opted_out'
+       WHERE LOWER(email) = ${email} AND dm_status <> 'claimed'
+    `).catch(() => {});
+    res.send(page('Listo — no volverás a recibir invitaciones', 'Hemos eliminado tu email de nuestra lista de invitaciones. Si también deseas que borremos tus datos, escríbenos a info@boostifymusic.com. / You will no longer receive invitations. To request full data deletion, email info@boostifymusic.com.'));
+  } catch (err: any) {
+    console.error('[Activation] lead-opt-out error:', err);
+    res.status(500).send(page('Error', 'Ha ocurrido un error. Inténtalo de nuevo más tarde. / Something went wrong, please try again later.'));
   }
 });
 

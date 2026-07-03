@@ -299,27 +299,28 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   // ── Data queries ───────────────────────────────────────────────────────────
   const { data: avatarsData } = useQuery({
     queryKey: ['heygen-avatars'],
-    queryFn: () => fetch('/api/ai-video-studio/heygen/avatars', { credentials: 'include' }).then(r => r.json()),
+    queryFn: () => apiRequest({ url: '/api/ai-video-studio/heygen/avatars', method: 'GET' }),
     staleTime: 60 * 60 * 1000,
   });
 
   const { data: voicesData } = useQuery({
     queryKey: ['heygen-voices', selectedLanguage],
-    queryFn: () => fetch(`/api/ai-video-studio/heygen/voices?language=${selectedLanguage}`, { credentials: 'include' }).then(r => r.json()),
+    queryFn: () => apiRequest({ url: `/api/ai-video-studio/heygen/voices?language=${selectedLanguage}`, method: 'GET' }),
     staleTime: 60 * 60 * 1000,
   });
 
   const { data: templatesData } = useQuery({
     queryKey: ['hyperframes-templates'],
-    queryFn: () => fetch('/api/ai-video-studio/templates', { credentials: 'include' }).then(r => r.json()),
+    queryFn: () => apiRequest({ url: '/api/ai-video-studio/templates', method: 'GET' }),
     staleTime: 10 * 60 * 1000,
   });
 
   const { data: jobsData, refetch: refetchJobs } = useQuery({
     queryKey: ['video-jobs', artistId],
-    queryFn: () => fetch(`/api/ai-video-studio/${artistId}/jobs`, { credentials: 'include' }).then(r => r.json()),
-    refetchInterval: (data: any) => {
-      const jobs = data?.jobs ?? [];
+    queryFn: () => apiRequest({ url: `/api/ai-video-studio/${artistId}/jobs`, method: 'GET' }),
+    enabled: !!artistId && isOwnProfile,
+    refetchInterval: (query) => {
+      const jobs = (query.state.data as any)?.jobs ?? [];
       const active = jobs.some((j: VideoJob) => ['draft', 'script_generated', 'hyperframes_generated', 'heygen_processing', 'rendering'].includes(j.status));
       return active ? 4000 : false;
     },
@@ -341,8 +342,9 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
 
   // ── Generate mutation ──────────────────────────────────────────────────────
   const generateMutation = useMutation({
-    mutationFn: async (extra?: { videoType?: string; languages?: string[] }) => {
+    mutationFn: async (extra?: { videoType?: string; language?: string; platform?: string; format?: string; duration?: number }) => {
       const song = songs.find(s => String(s.id) === selectedSongId);
+      const language = extra?.language ?? selectedLanguage;
       const payload = {
         videoType: extra?.videoType ?? selectedVideoType,
         artist: {
@@ -351,7 +353,7 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
           genre: artistGenre,
           avatarId: avatarId || undefined,
           voiceId: voiceId || undefined,
-          language: selectedLanguage,
+          language,
         },
         song: song ? {
           id: String(song.id),
@@ -365,23 +367,16 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
           duration: song.duration,
         } : undefined,
         campaign: {
-          platform: selectedPlatform,
-          format: selectedFormat as '9:16' | '16:9' | '1:1',
-          durationSeconds: selectedDuration,
+          platform: extra?.platform ?? selectedPlatform,
+          format: (extra?.format ?? selectedFormat) as '9:16' | '16:9' | '1:1',
+          durationSeconds: extra?.duration ?? selectedDuration,
           cta,
           targetAudience,
-          language: selectedLanguage,
+          language,
         },
       };
 
-      const res = await fetch(`/api/ai-video-studio/${artistId}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Generate failed'); }
-      return res.json();
+      return apiRequest({ url: `/api/ai-video-studio/${artistId}/generate`, method: 'POST', data: payload });
     },
     onSuccess: (data) => {
       toast({ title: '🎬 Video job started!', description: `Job #${data.jobId} — check Render History for status.` });
@@ -397,19 +392,16 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   const avatarMutation = useMutation({
     mutationFn: async () => {
       if (!avatarId || !voiceId || !avatarScript) throw new Error('Avatar ID, Voice ID, and script are required');
-      const res = await fetch(`/api/ai-video-studio/${artistId}/heygen-avatar`, {
+      return apiRequest({
+        url: `/api/ai-video-studio/${artistId}/heygen-avatar`,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        data: {
           avatarId, voiceId, script: avatarScript,
           format: selectedFormat,
           background: { type: 'color', value: avatarBackground },
           caption: avatarCaption,
-        }),
+        },
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
-      return res.json();
     },
     onSuccess: (data) => {
       toast({ title: '🤖 HeyGen video queued!', description: `Video ID: ${data.videoId}` });
@@ -422,27 +414,36 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   // ── Delete mutation ────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      await fetch(`/api/ai-video-studio/${artistId}/jobs/${jobId}`, { method: 'DELETE', credentials: 'include' });
+      return apiRequest({ url: `/api/ai-video-studio/${artistId}/jobs/${jobId}`, method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['video-jobs', artistId] });
     },
+    onError: (err: any) => {
+      toast({ title: 'Delete failed', description: err?.message, variant: 'destructive' });
+    },
   });
+
+  // ── Job detail (for completed jobs — fetches final rendered output) ────────
+  const { data: jobDetailData } = useQuery({
+    queryKey: ['video-job-detail', artistId, selectedJob?.id],
+    queryFn: () => apiRequest({ url: `/api/ai-video-studio/${artistId}/jobs/${selectedJob!.id}`, method: 'GET' }),
+    enabled: !!selectedJob,
+    staleTime: 15_000,
+  });
+  const jobOutput: { videoUrl?: string; thumbnailUrl?: string } | null = (jobDetailData as any)?.output ?? null;
 
   // ── Artist scene generator mutation ────────────────────────────────────────
   const scenesMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/ai-video-studio/${artistId}/generate-avatar-scenes`, {
+      return apiRequest({
+        url: `/api/ai-video-studio/${artistId}/generate-avatar-scenes`,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        data: {
           profileImageUrl: sceneProfileUrl || undefined,
           scenes: selectedScenes.length > 0 ? selectedScenes : undefined,
-        }),
+        },
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Scene generation failed'); }
-      return res.json();
     },
     onSuccess: (data) => {
       setGeneratedScenes(data.scenes ?? []);
@@ -456,14 +457,11 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   // ── Create photo avatar mutation ───────────────────────────────────────────
   const photoAvatarMutation = useMutation({
     mutationFn: async (imageUrl: string) => {
-      const res = await fetch(`/api/ai-video-studio/${artistId}/create-photo-avatar`, {
+      return apiRequest({
+        url: `/api/ai-video-studio/${artistId}/create-photo-avatar`,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ imageUrl, avatarName: `${artistName} - AI Avatar` }),
+        data: { imageUrl, avatarName: `${artistName} - AI Avatar` },
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Avatar creation failed'); }
-      return res.json();
     },
     onSuccess: (data) => {
       setAvatarId(data.avatarId);
@@ -1042,7 +1040,7 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                           setSelectedFormat(ad.format);
                           setSelectedDuration(ad.duration);
                           setSelectedVideoType('campaign_ad');
-                          generateMutation.mutate({ videoType: 'campaign_ad' });
+                          generateMutation.mutate({ videoType: 'campaign_ad', platform: ad.platform, format: ad.format, duration: ad.duration });
                         }}
                         disabled={generateMutation.isPending}
                         className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-left hover:border-violet-500/50 transition-colors disabled:opacity-50"
@@ -1091,8 +1089,7 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                   <button
                     onClick={() => {
                       multilingualLanguages.forEach(lang => {
-                        setSelectedLanguage(lang);
-                        generateMutation.mutate({ videoType: 'multilingual' });
+                        generateMutation.mutate({ videoType: 'multilingual', language: lang });
                       });
                     }}
                     disabled={generateMutation.isPending || multilingualLanguages.length < 1}
@@ -1119,6 +1116,13 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                     <RefreshCw className="w-3 h-3" /> Refresh
                   </button>
                 </div>
+
+                {jobsError && (
+                  <div className="flex items-center gap-2 bg-red-900/20 border border-red-700/30 rounded-xl p-3 text-xs text-red-400">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Could not load your video jobs. <button onClick={() => refetchJobs()} className="underline">Retry</button>
+                  </div>
+                )}
 
                 {jobs.length === 0 ? (
                   <div className="text-center py-10 text-zinc-500">
@@ -1167,7 +1171,10 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                         </div>
                         <button
                           onClick={() => {
-                            toast({ title: '📋 Template applied', description: `Using "${t.name}" for your next video.` });
+                            if (t.format) setSelectedFormat(t.format);
+                            if (t.durationSeconds) setSelectedDuration(t.durationSeconds);
+                            setActiveTab('quick');
+                            toast({ title: '📋 Template applied', description: `"${t.name}" — ${t.format} · ${t.durationSeconds}s loaded into Quick Generate.` });
                           }}
                           className="w-full py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs font-medium text-white transition-colors"
                         >
@@ -1250,6 +1257,27 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                         {s.textOverlay && <p className="text-white font-medium">"{s.textOverlay}"</p>}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {jobOutput?.videoUrl && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-zinc-300 uppercase">Final Rendered Video</p>
+                    <video
+                      src={jobOutput.videoUrl}
+                      poster={jobOutput.thumbnailUrl || undefined}
+                      controls
+                      playsInline
+                      className="w-full rounded-xl border border-zinc-700 bg-black max-h-72"
+                    />
+                    <a
+                      href={jobOutput.videoUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      download
+                      className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-xs text-white bg-zinc-800 border border-zinc-700 hover:border-violet-500/50 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download MP4
+                    </a>
                   </div>
                 )}
 

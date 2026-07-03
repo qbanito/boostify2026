@@ -19,6 +19,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
+import { requireArtistOwnerParam } from '../middleware/artist-owner';
 import { db as firestoreDb } from '../firebase';
 import { db as pgDb } from '../db';
 import { tiktokConnections } from '../../db/schema';
@@ -235,7 +236,7 @@ async function publishTikTokContent(userId: number, input: { videoUrl?: string |
 }
 
 // ─── GET /:artistId/campaigns ───────────────────────────────────────────────
-router.get('/:artistId/campaigns', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/campaigns', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const ref = await getCampaignsRef(artistId);
@@ -249,7 +250,7 @@ router.get('/:artistId/campaigns', authenticate, async (req: Request, res: Respo
 });
 
 // ─── POST /:artistId/campaigns ──────────────────────────────────────────────
-router.post('/:artistId/campaigns', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/campaigns', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const body = req.body as Partial<AdCampaign>;
@@ -292,7 +293,7 @@ router.post('/:artistId/campaigns', authenticate, async (req: Request, res: Resp
 });
 
 // ─── PUT /:artistId/campaigns/:id ───────────────────────────────────────────
-router.put('/:artistId/campaigns/:id', authenticate, async (req: Request, res: Response) => {
+router.put('/:artistId/campaigns/:id', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, id } = req.params;
     const updates = req.body;
@@ -311,7 +312,7 @@ router.put('/:artistId/campaigns/:id', authenticate, async (req: Request, res: R
 });
 
 // ─── DELETE /:artistId/campaigns/:id ────────────────────────────────────────
-router.delete('/:artistId/campaigns/:id', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/campaigns/:id', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, id } = req.params;
     const ref = await getCampaignsRef(artistId);
@@ -324,7 +325,7 @@ router.delete('/:artistId/campaigns/:id', authenticate, async (req: Request, res
 });
 
 // ─── POST /:artistId/campaigns/:id/launch ───────────────────────────────────
-router.post('/:artistId/campaigns/:id/launch', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/campaigns/:id/launch', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, id } = req.params;
     const ref = await getCampaignsRef(artistId);
@@ -431,7 +432,7 @@ router.post('/:artistId/campaigns/:id/launch', authenticate, async (req: Request
 });
 
 // ─── POST /:artistId/credentials ────────────────────────────────────────────
-router.post('/:artistId/credentials', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/credentials', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const {
@@ -467,7 +468,7 @@ router.post('/:artistId/credentials', authenticate, async (req: Request, res: Re
 });
 
 // ─── GET /:artistId/credentials ─────────────────────────────────────────────
-router.get('/:artistId/credentials', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/credentials', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await firestoreDb.collection('adsCredentials').doc(artistId).get();
@@ -491,7 +492,7 @@ router.get('/:artistId/credentials', authenticate, async (req: Request, res: Res
 });
 
 // ─── POST /:artistId/generate-copy ──────────────────────────────────────────
-router.post('/:artistId/generate-copy', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate-copy', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const { artistName, songName, genre, objective, platform, mood, viralHook, language = 'en', pgUserId } = req.body;
@@ -568,7 +569,7 @@ Be bold, direct, and platform-native. Do not use generic phrases.`;
 
 // ─── GET /:artistId/creatives ────────────────────────────────────────────────
 // Pull available creative images from Firestore (promo clips gallery + character pack + merch)
-router.get('/:artistId/creatives', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/creatives', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
 
@@ -643,7 +644,7 @@ router.get('/:artistId/creatives', authenticate, async (req: Request, res: Respo
 });
 
 // ─── GET /:artistId/creatives/videos — unified video creative library ────────
-router.get('/:artistId/creatives/videos', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/creatives/videos', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const { videos } = await listArtistVideoAssets(artistId);
@@ -661,7 +662,7 @@ router.get('/:artistId/creatives/videos', authenticate, async (req: Request, res
  *
  * Body: { imageUrl?, videoUrl?, caption, hashtags? }
  */
-router.post('/:artistId/publish/instagram', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/publish/instagram', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const { imageUrl, videoUrl, caption = '', hashtags = '' } = req.body;
 
@@ -685,7 +686,7 @@ router.post('/:artistId/publish/instagram', authenticate, async (req: Request, r
  *
  * Body: { videoUrl, caption, hashtags?, privacy? }
  */
-router.post('/:artistId/publish/tiktok', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/publish/tiktok', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { videoUrl, caption = '', hashtags = '', privacy = 'SELF_ONLY' } = req.body;
 
   const userId: number = (req as any).user?.id;
@@ -704,7 +705,7 @@ router.post('/:artistId/publish/tiktok', authenticate, async (req: Request, res:
 });
 
 // ─── GET /:artistId/publish/tiktok/status — check publish status ─────────────
-router.get('/:artistId/publish/tiktok/status', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/publish/tiktok/status', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { publishId } = req.query;
   if (!publishId) return res.status(400).json({ success: false, error: 'publishId required' });
 
@@ -733,7 +734,7 @@ router.get('/:artistId/publish/tiktok/status', authenticate, async (req: Request
  *
  * Body: { platform, imageUrl?, videoUrl?, caption, hashtags?, scheduledAt (ISO string) }
  */
-router.post('/:artistId/schedule', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/schedule', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const { platform, imageUrl, videoUrl, mediaUrl, mediaType, caption = '', hashtags = '', scheduledAt } = req.body;
   const normalizedVideoUrl = videoUrl || ((mediaType === 'reel' || mediaType === 'video') ? mediaUrl : null);
@@ -782,7 +783,7 @@ router.post('/:artistId/schedule', authenticate, async (req: Request, res: Respo
 });
 
 // ─── GET /:artistId/schedule ── list scheduled posts ─────────────────────────
-router.get('/:artistId/schedule', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/schedule', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   try {
     const snap = await firestoreDb
@@ -801,7 +802,7 @@ router.get('/:artistId/schedule', authenticate, async (req: Request, res: Respon
 });
 
 // ─── DELETE /:artistId/schedule/:postId ── cancel scheduled post ──────────────
-router.delete('/:artistId/schedule/:postId', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/schedule/:postId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId, postId } = req.params;
   try {
     await firestoreDb
@@ -819,7 +820,7 @@ router.delete('/:artistId/schedule/:postId', authenticate, async (req: Request, 
 });
 
 // ─── GET /:artistId/analytics/tiktok ── TikTok video.list ────────────────────
-router.get('/:artistId/analytics/tiktok', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/analytics/tiktok', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const userId: number = (req as any).user?.id;
   if (!userId) return res.status(401).json({ success: false, error: 'Not authenticated' });
 
@@ -850,7 +851,7 @@ router.get('/:artistId/analytics/tiktok', authenticate, async (req: Request, res
 });
 
 // ─── GET /:artistId/analytics/instagram ── Meta/IG insights ──────────────────
-router.get('/:artistId/analytics/instagram', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/analytics/instagram', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   try {
     const credsDoc = await firestoreDb.collection('adsCredentials').doc(artistId).get();
@@ -996,7 +997,7 @@ async function generateContentImage(
  * Body: { referenceImageUrl?, scene, artistName, genre, count, aspectRatio }
  * Returns: { success, images: [{url, scene, prompt}] }
  */
-router.post('/:artistId/generate-content', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate-content', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const {
@@ -1058,7 +1059,7 @@ router.post('/:artistId/generate-content', authenticate, async (req: Request, re
  * Body: { artistName, genre, biography?, songs?, startDate?, days? }
  * Returns: { success, calendar: [...posts], calendarId }
  */
-router.post('/:artistId/generate-calendar', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate-calendar', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const {
@@ -1168,7 +1169,7 @@ Return ONLY valid JSON array (no markdown):
 });
 
 // ─── GET /:artistId/calendar — list saved content calendars ──────────────────
-router.get('/:artistId/calendar', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/calendar', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await firestoreDb
@@ -1197,7 +1198,7 @@ router.get('/:artistId/calendar', authenticate, async (req: Request, res: Respon
 //   5. Artist can optionally approve individual posts before they go live
 
 // POST /:artistId/autopilot/activate
-router.post('/:artistId/autopilot/activate', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/autopilot/activate', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const { posts, autopilotMode = true, referenceImageUrl, artistName: aName, genre: aGenre } = req.body;
@@ -1254,7 +1255,7 @@ router.post('/:artistId/autopilot/activate', authenticate, async (req: Request, 
 });
 
 // GET /:artistId/autopilot/posts
-router.get('/:artistId/autopilot/posts', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/autopilot/posts', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await firestoreDb
@@ -1282,7 +1283,7 @@ router.get('/:artistId/autopilot/posts', authenticate, async (req: Request, res:
 });
 
 // PATCH /:artistId/autopilot/approve/:postId — approve individual post
-router.patch('/:artistId/autopilot/approve/:postId', authenticate, async (req: Request, res: Response) => {
+router.patch('/:artistId/autopilot/approve/:postId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId, postId } = req.params;
     const ref = firestoreDb.collection('autopilotPosts').doc(artistId).collection('posts').doc(postId);
@@ -1297,7 +1298,7 @@ router.patch('/:artistId/autopilot/approve/:postId', authenticate, async (req: R
 });
 
 // PATCH /:artistId/autopilot/approve-all — approve all pending posts
-router.patch('/:artistId/autopilot/approve-all', authenticate, async (req: Request, res: Response) => {
+router.patch('/:artistId/autopilot/approve-all', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await firestoreDb
@@ -1316,7 +1317,7 @@ router.patch('/:artistId/autopilot/approve-all', authenticate, async (req: Reque
 });
 
 // DELETE /:artistId/autopilot/posts — reset / clear all autopilot posts
-router.delete('/:artistId/autopilot/posts', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/autopilot/posts', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const snap = await firestoreDb.collection('autopilotPosts').doc(artistId).collection('posts').get();

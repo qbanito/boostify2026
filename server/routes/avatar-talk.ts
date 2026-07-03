@@ -19,6 +19,7 @@ import { db } from '../db';
 import { artistAvatarVideos } from '../../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth';
+import { requireArtistOwnerParam } from '../middleware/artist-owner';
 import { generateKontextImage } from '../services/flux-kontext-generator';
 import type { PromoStyle } from '../services/promo-style-presets';
 
@@ -202,7 +203,7 @@ async function generateFluxAvatarImage(params: {
 }
 
 // ─── POST /api/avatar-talk/:artistId/generate ────────────────────────────────
-router.post('/:artistId/generate', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/generate', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId } = req.params;
   const {
     imageUrl,
@@ -347,7 +348,7 @@ router.get('/:artistId/videos', async (req: Request, res: Response) => {
 });
 
 // ─── DELETE /api/avatar-talk/:artistId/videos/:videoId ───────────────────────
-router.delete('/:artistId/videos/:videoId', authenticate, async (req: Request, res: Response) => {
+router.delete('/:artistId/videos/:videoId', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   const { artistId, videoId } = req.params;
   const id = parseInt(videoId, 10);
   if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid videoId' });
@@ -364,7 +365,7 @@ router.delete('/:artistId/videos/:videoId', authenticate, async (req: Request, r
 });
 
 // ─── POST /api/avatar-talk/:artistId/config — save per-artist FAL key ─────────
-router.post('/:artistId/config', authenticate, async (req: Request, res: Response) => {
+router.post('/:artistId/config', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.uid;
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -393,7 +394,7 @@ router.post('/:artistId/config', authenticate, async (req: Request, res: Respons
 });
 
 // ─── GET /api/avatar-talk/:artistId/config — get config (key masked) ──────────
-router.get('/:artistId/config', authenticate, async (req: Request, res: Response) => {
+router.get('/:artistId/config', authenticate, requireArtistOwnerParam, async (req: Request, res: Response) => {
   try {
     const { artistId } = req.params;
     const rows = await sql`

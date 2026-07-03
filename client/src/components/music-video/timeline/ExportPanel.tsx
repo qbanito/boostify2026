@@ -2,7 +2,7 @@
  * ExportPanel — Full-screen cinematic overlay for exporting timeline
  * Supports multiple formats, aspect ratios, resolutions, quality presets
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -100,6 +100,17 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
 
+  // Polling del render — ref para poder limpiarlo al desmontar (antes el
+  // setInterval seguía vivo si el usuario cerraba el panel a mitad de render)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => stopPolling(), [stopPolling]);
+
   // ── Derived ───────────────────────────────────────────
   const selectedFormat = useMemo(() => EXPORT_FORMATS.find(f => f.id === format)!, [format]);
   const selectedRes = useMemo(() => RESOLUTIONS.find(r => r.id === resolution)!, [resolution]);
@@ -178,11 +189,12 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
       } else if (data.jobId) {
         toast({ title: '🎬 Renderizando...', description: 'Tu video se está procesando...' });
         // Poll for render completion
-        const pollInterval = setInterval(async () => {
+        stopPolling();
+        pollRef.current = setInterval(async () => {
           try {
             const statusData = await apiRequest(`/api/video-projects/export/status/${data.jobId}`);
             if (statusData.status === 'done' && statusData.downloadUrl) {
-              clearInterval(pollInterval);
+              stopPolling();
               setExportProgress(100);
               toast({ title: '✅ Video listo', description: 'Tu video está listo para descargar' });
               window.open(statusData.downloadUrl, '_blank');
@@ -190,21 +202,21 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
               setIsExporting(false);
               onClose();
             } else if (statusData.status === 'failed') {
-              clearInterval(pollInterval);
+              stopPolling();
               toast({ title: 'Error', description: statusData.error || 'El renderizado falló', variant: 'destructive' });
               setIsExporting(false);
             } else {
-              setExportProgress(statusData.progress || exportProgress);
+              setExportProgress(prev => statusData.progress ?? prev);
             }
           } catch (err) {
-            clearInterval(pollInterval);
+            stopPolling();
             logger.error('[ExportPanel] Error consultando estado de render:', err);
             toast({ title: 'Error', description: 'No se pudo consultar el estado del render', variant: 'destructive' });
             setIsExporting(false);
           }
         }, 5000);
         // Safety timeout: clear polling after 10 minutes
-        setTimeout(() => clearInterval(pollInterval), 600000);
+        setTimeout(() => stopPolling(), 600000);
         return; // Don't hit finally block yet
       }
 
@@ -220,7 +232,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
       setIsExporting(false);
       setExportProgress(0);
     }
-  }, [clips, duration, audioUrl, projectName, format, effectiveRes, selectedQuality, quality, customFps, selectedAspectRatio, selectedFormat, toast, onClose, onExportComplete]);
+  }, [clips, duration, audioUrl, projectName, format, effectiveRes, selectedQuality, quality, customFps, selectedAspectRatio, selectedFormat, toast, onClose, onExportComplete, stopPolling]);
 
   if (!open) return null;
 

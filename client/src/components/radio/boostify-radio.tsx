@@ -5,8 +5,6 @@ import { Slider } from "../ui/slider";
 import { Volume2, Mic, Play, Pause, Radio, X, SkipForward, RefreshCw, Search } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { motion } from "framer-motion";
-import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
-import { db } from "../../firebase";
 import { StreamingService, StreamingTrack } from "../../lib/streaming/streaming-service";
 import { SpotifyStreamingService } from "../../lib/streaming/spotify-service";
 import { useToast } from "../../hooks/use-toast";
@@ -19,11 +17,42 @@ interface BoostifyRadioProps {
 }
 
 interface Song {
-  id: string;
+  id: number;
   name: string;
+  artistName: string;
   audioUrl: string;
-  userId: string;
-  createdAt: Date;
+  coverArt?: string | null;
+  genre?: string | null;
+}
+
+/** Song shape returned by /api/streaming endpoints (mapSongRow) */
+interface StreamingSongDto {
+  id: number;
+  title: string;
+  audioUrl: string | null;
+  coverArt: string | null;
+  genre: string | null;
+  artist?: { id: number; name: string; image?: string | null };
+}
+
+function toRadioSong(s: StreamingSongDto): Song {
+  return {
+    id: s.id,
+    name: s.title,
+    artistName: s.artist?.name || "Boostify Artist",
+    audioUrl: s.audioUrl || "",
+    coverArt: s.coverArt || s.artist?.image || null,
+    genre: s.genre,
+  };
+}
+
+function shuffleSongs(songs: Song[]): Song[] {
+  const arr = [...songs];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
@@ -47,6 +76,17 @@ export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
     loadSongs();
     initializeStreamingServices();
   }, []);
+
+  // Keep the radio rolling: when the current song changes while playing,
+  // resume playback after React swaps the <audio> src.
+  useEffect(() => {
+    if (selectedSource !== 'boostify' || !isPlaying || !currentSong || !audioRef.current) return;
+    const el = audioRef.current;
+    const timer = setTimeout(() => {
+      el.play().catch(() => {});
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [currentSong?.id]);
 
   const initializeStreamingServices = async () => {
     setIsInitializingServices(true);
@@ -73,19 +113,39 @@ export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
     }
   };
 
+  /**
+   * Loads the radio playlist from the STREAMING catalog (/api/streaming).
+   * Charts (top + viral) first, /home (trending + recent) as fallback —
+   * same published songs that power the /streaming page.
+   */
   const loadSongs = async () => {
     try {
-      const songsQuery = query(
-        collection(db, "songs"),
-        orderBy("createdAt", "desc"),
-        limit(50)
+      const collected: StreamingSongDto[] = [];
+
+      const chartsRes = await fetch("/api/streaming/charts", { credentials: "include" });
+      if (chartsRes.ok) {
+        const charts = await chartsRes.json();
+        collected.push(...(charts.top || []), ...(charts.viral || []));
+      }
+
+      if (collected.length === 0) {
+        const homeRes = await fetch("/api/streaming/home", { credentials: "include" });
+        if (homeRes.ok) {
+          const home = await homeRes.json();
+          collected.push(...(home.trending || []), ...(home.recent || []));
+        }
+      }
+
+      const seen = new Set<number>();
+      const songs = shuffleSongs(
+        collected
+          .filter((s) => {
+            if (!s?.audioUrl || seen.has(s.id)) return false;
+            seen.add(s.id);
+            return true;
+          })
+          .map(toRadioSong)
       );
-      const querySnapshot = await getDocs(songsQuery);
-      const songs = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
-      })) as Song[];
 
       setPlaylist(songs);
       if (songs.length > 0 && !currentSong) {
@@ -99,6 +159,17 @@ export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
         variant: "destructive"
       });
     }
+  };
+
+  /** Scrobble a meaningful play (≥30s) back to streaming stats/charts. */
+  const scrobble = (track: Song | null, msPlayed: number) => {
+    if (!track || msPlayed < 30_000) return;
+    fetch("/api/streaming/plays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ songId: track.id, msPlayed, source: "radio" }),
+    }).catch(() => {});
   };
 
   const togglePlay = async () => {
@@ -165,6 +236,7 @@ export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
       }
     } else if (selectedSource === 'boostify') {
       if (!currentSong || playlist.length === 0) return;
+      scrobble(currentSong, Math.round((audioRef.current?.currentTime || 0) * 1000));
       const currentIndex = playlist.findIndex(song => song.id === currentSong.id);
       const nextIndex = (currentIndex + 1) % playlist.length;
       setCurrentSong(playlist[nextIndex]);
@@ -420,7 +492,19 @@ export function BoostifyRadio({ className, onClose }: BoostifyRadioProps) {
                 </a>
               </div>
             ) : currentSong ? (
-              <p className="truncate">{currentSong.name}</p>
+              <div className="flex items-center gap-2">
+                {currentSong.coverArt && (
+                  <img
+                    src={currentSong.coverArt}
+                    alt={currentSong.name}
+                    className="w-9 h-9 rounded object-cover flex-shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-white/90">{currentSong.name}</p>
+                  <p className="truncate text-xs">{currentSong.artistName}</p>
+                </div>
+              </div>
             ) : (
               "No hay canciones disponibles"
             )}
