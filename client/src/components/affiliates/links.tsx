@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { logger } from "@/lib/logger";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   Card,
   CardContent,
@@ -147,6 +148,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
   });
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Obtener productos disponibles para afiliados
   const {
@@ -178,7 +180,7 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
       });
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       // Cerrar el diálogo y reiniciar el formulario
       setIsDialogOpen(false);
       setNewLinkData({
@@ -192,6 +194,29 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
       });
       // Actualizar la lista de enlaces
       queryClient.invalidateQueries({ queryKey: ["/api/affiliate/me"] });
+      const code = result?.link?.uniqueCode;
+      toast({
+        title: "Enlace creado",
+        description: code
+          ? `Tu enlace está listo: ${window.location.origin}/ref/${code}`
+          : "Tu enlace de afiliado fue creado correctamente.",
+      });
+    },
+    onError: (error: any) => {
+      const raw = error?.message || "";
+      // apiRequest lanza "<status>: <body>" — extraer el mensaje del servidor si viene en JSON
+      let description = "No se pudo crear el enlace. Inténtalo de nuevo.";
+      const jsonStart = raw.indexOf("{");
+      if (jsonStart >= 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(jsonStart));
+          if (parsed?.message) description = parsed.message;
+        } catch { /* usar mensaje por defecto */ }
+      } else if (raw) {
+        description = raw;
+      }
+      logger.error("Error al crear enlace de afiliado:", error);
+      toast({ title: "Error al crear enlace", description, variant: "destructive" });
     },
   });
 
@@ -204,6 +229,10 @@ export function AffiliateLinks({ affiliateData }: AffiliateLinksProps) {
     onSuccess: () => {
       // Actualizar la lista de enlaces
       queryClient.invalidateQueries({ queryKey: ["/api/affiliate/me"] });
+      toast({ title: "Enlace eliminado" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "No se pudo eliminar el enlace.", variant: "destructive" });
     },
   });
 

@@ -22,6 +22,7 @@ import {
 import { eq, desc, and, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { isAdminEmail } from '../../shared/constants';
 
 const router = express.Router();
 
@@ -268,16 +269,33 @@ router.post('/links', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, message: 'Autenticación requerida' });
     }
 
-    const dbUserId = await resolveDbUserId(req.user.id);
+    const isAdmin = !!req.user.isAdmin || isAdminEmail(req.user.email || undefined);
+
+    // Admins get a users row auto-created if needed; regular users must exist already
+    const dbUserId = isAdmin
+      ? await getOrCreateDbUser(String(req.user.id), req.user.email || null)
+      : await resolveDbUserId(req.user.id);
     if (!dbUserId) {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado en el sistema' });
     }
-    const [affiliate] = await db.select().from(affiliates).where(eq(affiliates.userId, dbUserId)).limit(1);
+    let [affiliate] = await db.select().from(affiliates).where(eq(affiliates.userId, dbUserId)).limit(1);
     if (!affiliate) {
-      return res.status(404).json({ success: false, message: 'Afiliado no encontrado' });
+      if (!isAdmin) {
+        return res.status(404).json({ success: false, message: 'No estás registrado como afiliado. Completa el registro primero.' });
+      }
+      // Auto-provision an approved affiliate profile for admins (they bypass the registration form)
+      const [created] = await db.insert(affiliates).values({
+        userId: dbUserId,
+        fullName: req.user.email?.split('@')[0] || 'Admin',
+        email: req.user.email || 'admin@boostifymusic.com',
+        level: 'Básico',
+        status: 'approved',
+        referralCode: generateUniqueCode(8)
+      }).returning();
+      affiliate = created;
     }
 
-    if (affiliate.status !== 'approved') {
+    if (affiliate.status !== 'approved' && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Tu cuenta de afiliado debe estar aprobada para crear enlaces' });
     }
 
@@ -294,7 +312,9 @@ router.post('/links', authenticate, async (req: Request, res: Response) => {
 
     const [newLink] = await db.insert(affiliateLinks).values(validatedData).returning();
 
-    const trackingUrl = `${process.env.REPLIT_DEV_DOMAIN || 'https://yourdomain.com'}/ref/${uniqueCode}`;
+    // Build the real tracking URL from the request origin (works in dev and prod)
+    const origin = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const trackingUrl = `${origin}/ref/${uniqueCode}`;
 
     res.json({
       success: true,

@@ -83,6 +83,13 @@ export default defineConfig({
         ws: true,
         timeout: 0,
       },
+      // Affiliate tracking links (/ref/:code) must reach the backend, not the SPA
+      '/ref': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        timeout: 0,
+      },
       '/static-assets': {
         target: 'http://localhost:3000',
         changeOrigin: true,

@@ -114,7 +114,8 @@ router.get('/ref/:code', async (req: Request, res: Response) => {
     url.searchParams.set('utm_medium', 'referral');
     url.searchParams.set('utm_campaign', link.title.toLowerCase().replace(/\s+/g, '_'));
 
-    res.redirect(url.toString());
+    // Relative redirect keeps the visitor on the public origin (dev proxy & prod safe)
+    res.redirect(`${url.pathname}${url.search}`);
   } catch (error) {
     console.error('[TRACKING ERROR]', error);
     res.redirect('/');
