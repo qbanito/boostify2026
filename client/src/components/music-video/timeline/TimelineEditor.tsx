@@ -33,6 +33,7 @@ import { VideoGenerationModal } from '../VideoGenerationModal';
 import { StoryboardPanel } from '../StoryboardPanel';
 import { MotionSyncPanel } from '../MotionSyncPanel';
 import { ImageGeneratorPanel } from './ImageGeneratorPanel';
+import { QualityGatePanel } from './QualityGatePanel';
 import { VariationsPanel } from './VariationsPanel';
 import { ExportPanel, ASPECT_RATIOS } from './ExportPanel';
 import { MediaLibraryPanel, type MediaItem } from './MediaLibraryPanel';
@@ -324,6 +325,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [microCutPlans, setMicroCutPlans] = useState<Map<number | string, MicroCutPlan>>(new Map());
   const [showMicroCutsPanel, setShowMicroCutsPanel] = useState(false);
   const [isApplyingMicroCuts, setIsApplyingMicroCuts] = useState(false);
+
+  // 🛡️ Quality Gate — control de calidad del montaje (anti-slideshow + beat-snap + QC render)
+  const [showQualityPanel, setShowQualityPanel] = useState(false);
 
   // 🎯 CapCut-style media transform editing (scale/position within frame)
   const [isTransformMode, setIsTransformMode] = useState(false);
@@ -4279,6 +4283,15 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
               <Button 
                 size="sm" 
                 variant="ghost" 
+                onClick={() => setShowQualityPanel(!showQualityPanel)}
+                className={`p-1 h-6 w-6 ${showQualityPanel ? 'bg-sky-500/20' : 'bg-sky-500/10 hover:bg-sky-500/20'}`}
+                title="🛡️ Quality Gate — Control de calidad del montaje"
+              >
+                <Shield size={11} className="text-sky-400" />
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost" 
                 onClick={() => setShowStoryboardPanel(!showStoryboardPanel)}
                 className={`p-1 h-6 w-6 ${showStoryboardPanel ? 'bg-teal-500/20' : 'bg-teal-500/10 hover:bg-teal-500/20'}`}
                 title="📋 Storyboard Visual"
@@ -5427,6 +5440,27 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
             totalClips={clips.filter(c => c.layerId === 1).length}
             isApplying={isApplyingMicroCuts}
             beatsAvailable={audioAnalysis?.beats?.length || 0}
+          />
+        </div>
+      )}
+
+      {/* 🛡️ Quality Gate Panel — control de calidad del montaje */}
+      {showQualityPanel && (
+        <div style={{
+          position: 'absolute',
+          top: '60px',
+          right: '16px',
+          zIndex: 40,
+          width: '340px',
+          maxWidth: 'calc(100vw - 32px)',
+        }}>
+          <QualityGatePanel
+            clips={clips}
+            duration={effectiveDuration}
+            beats={audioAnalysis?.beats}
+            videoPreviewUrl={videoPreviewUrl}
+            onApplyClips={(newClips, operation) => pushHistory(newClips, operation)}
+            onClose={() => setShowQualityPanel(false)}
           />
         </div>
       )}

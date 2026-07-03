@@ -144,6 +144,8 @@ import instagramOAuthRouter from './routes/instagram-oauth'; // Import Instagram
 import tiktokAuthRouter from './routes/tiktok-auth'; // TikTok OAuth Login Kit v2
 import youtubeAuthRouter from './routes/youtube-auth'; // YouTube OAuth — connect channel for lyric-video publishing
 import musicVideoRouter from './routes/music-video'; // Import Music Video Concept Generation (Gemini AI)
+import videoQcRouter from './routes/video-qc'; // Quality gate: ffprobe QC de videos renderizados
+import openmontageRouter from './routes/openmontage'; // Proxy al sidecar OpenMontage (opcional)
 import audioAnalysisRouter from './routes/audio-analysis'; // Import Audio Analysis for intelligent video editing
 import autoEditRouter from './routes/auto-edit'; // Import Auto-Edit Engine for genre-based intelligent editing
 import artistProfilesRouter from './routes/artist-profiles'; // Import Artist Profiles auto-generation
@@ -604,6 +606,8 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/music-video-projects', musicVideoProjectsRouter);
   app.use('/api/video-projects', videoProjectsRouter); // Timeline export → Shotstack render + status polling
   app.use('/api/music-video', musicVideoRouter);
+  app.use('/api/video-qc', videoQcRouter); // Quality gate: ffprobe QC de renders
+  app.use('/api/openmontage', openmontageRouter); // Sidecar OpenMontage (503 si no configurado)
   app.use('/api/audio-analysis', audioAnalysisRouter); // Audio analysis for intelligent video editing
   app.use('/api/auto-edit', autoEditRouter); // Auto-edit engine with genre-based intelligent cuts
   app.use('/api/artist-profiles', artistProfilesRouter);
