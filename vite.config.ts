@@ -96,6 +96,19 @@ export default defineConfig({
         secure: false,
         timeout: 0,
       },
+      // Backend-served uploaded / generated assets (service images, etc.)
+      '/attached_assets': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        timeout: 0,
+      },
+      '/uploads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        timeout: 0,
+      },
       '/epk': {
         target: 'http://localhost:3000',
         changeOrigin: true,
