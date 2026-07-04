@@ -322,18 +322,19 @@ function ImageGeneratorView({ artist }: { artist: Artist | undefined }) {
   const [numImages, setNumImages] = useState(4);
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [styleKey, setStyleKey] = useState<string | null>(null);
+  const [useLikeness, setUseLikeness] = useState(true);
 
-  const PRESETS = [
-    "Luxury streetwear editorial shoot, dramatic lighting",
-    "Red carpet couture gown, glamorous Hollywood pose",
-    "High fashion magazine cover, sharp cinematic lighting",
-    "Avant-garde runway look, architectural silhouette",
-    "Urban athleisure, golden hour, dynamic pose",
-    "Y2K cyber aesthetic, holographic textures, neon",
-  ];
+  // Curated editorial style presets (server-driven)
+  const { data: presetsData } = useQuery<{ success: boolean; presets: Array<{ key: string; label: string; description: string }> }>({
+    queryKey: ["/api/fashion/style-presets"],
+    staleTime: 10 * 60_000,
+  });
+  const stylePresets = presetsData?.presets || [];
+  const hasReference = !!artist?.profileImage;
 
   const generate = async () => {
-    if (!prompt.trim()) { toast({ title: "Enter a prompt", variant: "destructive" }); return; }
+    if (!prompt.trim() && !styleKey) { toast({ title: "Pick a style or write a prompt", variant: "destructive" }); return; }
     setLoading(true);
     setImages([]);
     try {
@@ -343,17 +344,18 @@ function ImageGeneratorView({ artist }: { artist: Artist | undefined }) {
         credentials: "include",
         body: JSON.stringify({
           prompt,
+          styleKey: styleKey || undefined,
+          referenceImageUrl: useLikeness && hasReference ? artist!.profileImage : undefined,
           artistId: artist?.id,
           artistName: artist ? artistDisplayName(artist) : undefined,
           numImages,
-          imageSize: "portrait_4_3",
-          sessionTitle: `${prompt.substring(0, 50)} - ${artist ? artistDisplayName(artist) : "Artist"}`,
+          sessionTitle: `${styleKey || prompt.substring(0, 40)} - ${artist ? artistDisplayName(artist) : "Artist"}`,
         }),
       });
       const data = await res.json();
       if (data.success && data.images?.length > 0) {
         setImages(data.images);
-        toast({ title: `${data.images.length} images generated`, description: "Saved to artist gallery" });
+        toast({ title: `${data.images.length} images generated`, description: data.model?.includes("likeness") ? "With your artist's real look · saved to gallery" : "Saved to artist gallery" });
       } else {
         toast({ title: "Generation failed", description: data.error, variant: "destructive" });
       }
@@ -372,33 +374,57 @@ function ImageGeneratorView({ artist }: { artist: Artist | undefined }) {
         </div>
         <div>
           <h2 className="text-lg font-bold text-white">Image Generator</h2>
-          <p className="text-xs text-zinc-400">Flux Pro Kontext - Saves to Artist Gallery</p>
+          <p className="text-xs text-zinc-400">Editorial styles · keeps your artist's real look</p>
         </div>
-        <Badge className="ml-auto bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/30 text-[10px]">FLUX PRO</Badge>
+        <Badge className="ml-auto bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/30 text-[10px]">FLUX KONTEXT</Badge>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((p) => (
-          <button key={p} onClick={() => setPrompt(p)} className="text-[11px] px-2.5 py-1 rounded-full border border-white/10 text-zinc-400 hover:border-fuchsia-500/40 hover:text-fuchsia-300 transition-all">
-            {p.substring(0, 34)}...
-          </button>
-        ))}
+      {/* Editorial style presets — curated art direction */}
+      <div>
+        <p className="text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-2">Editorial styles</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {stylePresets.map((p) => {
+            const active = styleKey === p.key;
+            return (
+              <button
+                key={p.key}
+                onClick={() => setStyleKey(active ? null : p.key)}
+                className={`text-left rounded-xl border p-3 transition-all ${active ? "border-fuchsia-500/60 bg-fuchsia-500/10" : "border-white/10 bg-white/[0.02] hover:border-fuchsia-500/30"}`}
+              >
+                <p className={`text-xs font-bold ${active ? "text-fuchsia-300" : "text-white"}`}>{p.label}</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{p.description}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        placeholder="Describe the fashion scene, outfit, style, lighting..."
+        placeholder={styleKey ? "Optional: add details (outfit color, mood, product…)" : "Describe the fashion scene, outfit, style, lighting…"}
         className="bg-white/5 border-white/10 text-white placeholder:text-zinc-600 min-h-[80px] resize-none focus:border-fuchsia-500/40"
       />
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-400">Images:</span>
           {[1, 2, 4].map((n) => (
             <button key={n} onClick={() => setNumImages(n)} className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${numImages === n ? "bg-fuchsia-600 border-fuchsia-500 text-white" : "border-white/10 text-zinc-400 hover:border-white/20"}`}>{n}</button>
           ))}
         </div>
+        {/* Likeness toggle — use the artist's real photo as identity reference */}
+        {hasReference && (
+          <button
+            onClick={() => setUseLikeness((v) => !v)}
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${useLikeness ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300" : "border-white/10 text-zinc-500 hover:border-white/25"}`}
+            title="Use the artist's profile photo so generated images keep their real face"
+          >
+            <img src={artist!.profileImage} alt="" className="w-5 h-5 rounded-full object-cover" />
+            {useLikeness ? "Artist likeness ON" : "Artist likeness OFF"}
+            {useLikeness && <Check className="w-3 h-3" />}
+          </button>
+        )}
         <Button onClick={generate} disabled={loading} className="ml-auto bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:opacity-90 text-white font-bold">
           {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4 mr-2" />Generate</>}
         </Button>
@@ -408,9 +434,9 @@ function ImageGeneratorView({ artist }: { artist: Artist | undefined }) {
         <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-950/20 p-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-fuchsia-400 animate-pulse" />
-            <span className="text-sm text-fuchsia-300 font-semibold">Crafting your fashion imagery...</span>
+            <span className="text-sm text-fuchsia-300 font-semibold">Crafting your fashion campaign…</span>
           </div>
-          <p className="text-xs text-zinc-500">Flux Pro Kontext - Takes 20-40s</p>
+          <p className="text-xs text-zinc-500">{useLikeness && hasReference ? "FLUX Kontext is restyling your artist keeping their real look · 20-50s" : "Flux Pro Kontext · 20-40s"}</p>
         </div>
       )}
 
@@ -1184,7 +1210,11 @@ export default function ArtistImageAdvisorPage() {
   const userEmail = clerkUser?.primaryEmailAddress?.emailAddress || "";
   const isAdmin = isAdminEmail(userEmail);
 
-  const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Deep-link: /artist-image-advisor?view=imagegen
+    const v = new URLSearchParams(window.location.search).get("view");
+    return (v && ["imagegen", "tryon", "video", "stylist", "lookgen", "portfolio", "charpack"].includes(v)) ? (v as ViewMode) : "dashboard";
+  });
   const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null);
 
   const { data: artistsData } = useQuery<{ success: boolean; artists: Artist[] }>({
@@ -1194,7 +1224,11 @@ export default function ArtistImageAdvisorPage() {
 
   useEffect(() => {
     const artists = artistsData?.artists || [];
-    if (artists.length > 0 && !selectedArtistId) setSelectedArtistId(artists[0].id);
+    if (artists.length === 0 || selectedArtistId) return;
+    // Deep-link: /artist-image-advisor?artist=<pgId> (from the profile module)
+    const param = Number(new URLSearchParams(window.location.search).get("artist"));
+    const match = param && artists.find((a) => a.id === param);
+    setSelectedArtistId(match ? match.id : artists[0].id);
   }, [artistsData, selectedArtistId]);
 
   const selectedArtist = artistsData?.artists?.find((a) => a.id === selectedArtistId);

@@ -9,10 +9,19 @@ import { getRelevantImage } from '@/lib/unsplash-service';
 
 export function setupEducationRoutes(app: Express) {
   // Endpoint to generate course content with OpenRouter
-  app.post('/api/education/generate-course', async (req: Request, res: Response) => {
+  // ⚠️ LEGACY handler ({prompt} contract). The REAL progressive course
+  // generator ({topic, level, ...} contract) lives in education-progressive.ts
+  // which registers AFTER this. Delegate to it or every modern generation
+  // request dies here with "Missing prompt".
+  app.post('/api/education/generate-course', async (req: Request, res: Response, next) => {
     try {
       const { prompt } = req.body;
-      
+
+      if (!prompt && req.body?.topic) {
+        // Modern contract → let education-progressive.ts handle it
+        return next();
+      }
+
       if (!prompt) {
         return res.status(400).json({ error: 'Missing prompt in request body' });
       }

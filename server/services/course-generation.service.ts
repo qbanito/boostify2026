@@ -231,12 +231,25 @@ export async function generateLessonOnDemand(
     }
 
     // OpenAI for quiz questions
-    console.log(`📝 Generating quiz questions with OpenAI...`);
+    console.log(`📝 Generating quiz questions...`);
     const quizQuestionsData = await openaiCourse.generateQuizQuestions(
       lesson.title,
       lessonContent.content,
       5
     );
+
+    // GLM-5.2 for an interactive slide presentation of the lesson
+    console.log(`📊 Generating lesson slide deck...`);
+    let slides: any[] = [];
+    try {
+      slides = await openaiCourse.generateLessonSlides(
+        lesson.title,
+        course.title,
+        lessonContent.content
+      );
+    } catch (e) {
+      console.warn('⚠️ Slide deck generation failed');
+    }
 
     // Store materials with audio narration + key points + video metadata
     const materials: any = {};
@@ -249,6 +262,9 @@ export async function generateLessonOnDemand(
     }
     if (videoMeta) {
       materials.video = videoMeta;
+    }
+    if (slides.length > 0) {
+      materials.slides = slides;
     }
 
     await db.update(courseLessons)

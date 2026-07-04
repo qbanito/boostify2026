@@ -4,11 +4,49 @@
  * y emite alertas accionables (red flags, scams, cláusulas abusivas).
  */
 import { createTrackedOpenAI } from '../utils/tracked-openai';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import OpenAI from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 
 const openai = createTrackedOpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '',
 });
+
+// ─── GLM-5.2 (z.ai) — modelo PRINCIPAL de razonamiento legal ────────────────
+// GLM-5.2 sobresale en razonamiento jurídico multi-paso y análisis de cláusulas.
+// Si falla o devuelve JSON inválido, caemos a OpenAI (PRIMARY_MODEL) — el
+// asistente legal SIEMPRE responde.
+const _glmLegal: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+type LegalMsg = { role: 'system' | 'user' | 'assistant'; content: string };
+
+/** Llama GLM-5.2 esperando JSON. Devuelve el objeto parseado o null (→ fallback OpenAI). */
+async function callGlmLegalJSON(
+  messages: LegalMsg[],
+  opts: { maxTokens: number; temperature: number }
+): Promise<any | null> {
+  if (!_glmLegal) return null;
+  try {
+    const res = await _glmLegal.chat.completions.create({
+      model: 'glm-5.2',
+      messages,
+      max_tokens: opts.maxTokens,
+      temperature: opts.temperature,
+      response_format: { type: 'json_object' },
+    });
+    const raw = res.choices[0]?.message?.content?.trim();
+    if (!raw) return null;
+    // GLM a veces envuelve el JSON en fences — tolerarlo
+    const jsonText = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    const parsed = JSON.parse(jsonText);
+    console.log('[legal-assistant] GLM-5.2 ✅');
+    return parsed;
+  } catch (e: any) {
+    console.warn('[legal-assistant] GLM-5.2 failed, falling back to OpenAI:', e?.message);
+    return null;
+  }
+}
 
 const SYSTEM_PROMPT = `You are "Boostify Legal Shield" — a senior music-industry lawyer assistant for the Boostify Music platform.
 
@@ -96,31 +134,38 @@ export async function askLegalAssistant(ctx: LegalAssistantContext): Promise<Leg
 
   messages.push({ role: 'user', content: ctx.userQuestion });
 
-  const response = await openai.chat.completions.create({
-    model: PRIMARY_MODEL,
-    messages,
-    max_tokens: 2500,
+  // 1) GLM-5.2 primero (mejor razonamiento legal), 2) OpenAI fallback
+  let parsed: Partial<LegalAssistantResponse> | null = await callGlmLegalJSON(messages, {
+    maxTokens: 2500,
     temperature: 0.3,
-    response_format: { type: 'json_object' },
   });
 
-  const raw = response.choices[0]?.message?.content;
-  if (!raw) throw new Error('Empty response from legal assistant');
+  if (!parsed) {
+    const response = await openai.chat.completions.create({
+      model: PRIMARY_MODEL,
+      messages,
+      max_tokens: 2500,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+    });
 
-  let parsed: Partial<LegalAssistantResponse>;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // Fallback: treat entire output as plain answer
-    return {
-      answer: raw,
-      riskLevel: 'none',
-      redFlags: [],
-      actionableSteps: [],
-      citations: [],
-      needsLawyer: false,
-      lawyerSpecialty: null,
-    };
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error('Empty response from legal assistant');
+
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Fallback: treat entire output as plain answer
+      return {
+        answer: raw,
+        riskLevel: 'none',
+        redFlags: [],
+        actionableSteps: [],
+        citations: [],
+        needsLawyer: false,
+        lawyerSpecialty: null,
+      };
+    }
   }
 
   return {
@@ -181,18 +226,23 @@ export async function auditContractsForShield(
 
   const audits = await Promise.all(
     contracts.slice(0, 10).map(async (c) => {
+      const auditMessages: LegalMsg[] = [
+        { role: 'system', content: SHIELD_PROMPT },
+        { role: 'user', content: `Title: ${c.title}\n\nContract:\n${c.content.slice(0, 10000)}` },
+      ];
       try {
-        const resp = await openai.chat.completions.create({
-          model: PRIMARY_MODEL,
-          messages: [
-            { role: 'system', content: SHIELD_PROMPT },
-            { role: 'user', content: `Title: ${c.title}\n\nContract:\n${c.content.slice(0, 10000)}` },
-          ],
-          max_tokens: 1200,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-        });
-        const parsed = JSON.parse(resp.choices[0]?.message?.content || '{}');
+        // GLM-5.2 primero, OpenAI fallback
+        let parsed = await callGlmLegalJSON(auditMessages, { maxTokens: 1200, temperature: 0.2 });
+        if (!parsed) {
+          const resp = await openai.chat.completions.create({
+            model: PRIMARY_MODEL,
+            messages: auditMessages,
+            max_tokens: 1200,
+            temperature: 0.2,
+            response_format: { type: 'json_object' },
+          });
+          parsed = JSON.parse(resp.choices[0]?.message?.content || '{}');
+        }
         return {
           contractId: c.id,
           contractTitle: c.title,

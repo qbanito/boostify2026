@@ -339,6 +339,163 @@ router.get('/map/data', async (req, res) => {
 });
 
 // ============================================================
+// ARTIST PROFILE — LIVE MAP SERVICES MODULE
+// ============================================================
+
+// GET /api/service-requests/artist/:artistId/services — public: the artist's
+// published service listings (musicians rows linked to this user) + map pin data
+router.get('/artist/:artistId/services', async (req, res) => {
+  try {
+    const artistId = parseInt(req.params.artistId);
+    if (!artistId || isNaN(artistId)) {
+      return res.status(400).json({ success: false, error: 'Invalid artist id' });
+    }
+
+    const results = await db
+      .select({
+        id: musicians.id,
+        name: musicians.name,
+        photo: musicians.photo,
+        instrument: musicians.instrument,
+        category: musicians.category,
+        description: musicians.description,
+        price: musicians.price,
+        rating: musicians.rating,
+        totalReviews: musicians.totalReviews,
+        genres: musicians.genres,
+        isActive: musicians.isActive,
+        city: musicianProfiles.city,
+        country: musicianProfiles.country,
+        latitude: musicianProfiles.latitude,
+        longitude: musicianProfiles.longitude,
+        bio: musicianProfiles.bio,
+        isAvailable: musicianProfiles.isAvailable,
+        isVerified: musicianProfiles.isVerified,
+        completedJobs: musicianProfiles.completedJobs,
+      })
+      .from(musicians)
+      .leftJoin(musicianProfiles, eq(musicians.id, musicianProfiles.musicianId))
+      .where(eq(musicians.userId, artistId))
+      .orderBy(desc(musicians.createdAt));
+
+    res.json({ success: true, data: results.filter(r => r.isActive) });
+  } catch (error) {
+    console.error('Error fetching artist services:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch artist services' });
+  }
+});
+
+// POST /api/service-requests/artist/:artistId/services — publish or update a
+// service listing + map pin from the artist profile ("sell my services")
+router.post('/artist/:artistId/services', async (req, res) => {
+  try {
+    const artistId = parseInt(req.params.artistId);
+    if (!artistId || isNaN(artistId)) {
+      return res.status(400).json({ success: false, error: 'Invalid artist id' });
+    }
+    // If the request is authenticated, the caller must be the artist
+    const authUserId = (req as any).userId;
+    if (authUserId && authUserId !== artistId) {
+      return res.status(403).json({ success: false, error: 'You can only publish your own services' });
+    }
+
+    const {
+      serviceId, name, photo, instrument, category, description, price,
+      genres, city, country, latitude, longitude, bio, isAvailable,
+    } = req.body || {};
+
+    if (!name || !instrument || !description || price == null) {
+      return res.status(400).json({ success: false, error: 'name, instrument, description and price are required' });
+    }
+    const numPrice = parseFloat(String(price));
+    if (isNaN(numPrice) || numPrice < 0) {
+      return res.status(400).json({ success: false, error: 'Invalid price' });
+    }
+
+    const musicianValues = {
+      userId: artistId,
+      name: String(name).slice(0, 120),
+      photo: photo || '',
+      instrument: String(instrument),
+      category: String(category || instrument),
+      description: String(description).slice(0, 2000),
+      price: numPrice.toFixed(2),
+      genres: Array.isArray(genres) ? genres.slice(0, 10) : [],
+      isActive: true,
+      updatedAt: new Date(),
+    };
+
+    // Upsert musician row (by explicit serviceId, else create new listing)
+    let musicianRow;
+    if (serviceId) {
+      const [existing] = await db.select().from(musicians)
+        .where(and(eq(musicians.id, parseInt(serviceId)), eq(musicians.userId, artistId)));
+      if (!existing) return res.status(404).json({ success: false, error: 'Service not found' });
+      [musicianRow] = await db.update(musicians).set(musicianValues)
+        .where(eq(musicians.id, existing.id)).returning();
+    } else {
+      [musicianRow] = await db.insert(musicians).values(musicianValues as any).returning();
+    }
+
+    // Upsert map profile (location pin)
+    const lat = latitude != null ? String(parseFloat(String(latitude)).toFixed(7)) : null;
+    const lng = longitude != null ? String(parseFloat(String(longitude)).toFixed(7)) : null;
+    const profileValues = {
+      musicianId: musicianRow.id,
+      userId: artistId,
+      city: city ? String(city).slice(0, 120) : null,
+      country: country ? String(country).slice(0, 120) : null,
+      latitude: lat,
+      longitude: lng,
+      bio: bio ? String(bio).slice(0, 2000) : null,
+      isAvailable: isAvailable !== false,
+      updatedAt: new Date(),
+    };
+
+    const [existingProfile] = await db.select().from(musicianProfiles)
+      .where(eq(musicianProfiles.musicianId, musicianRow.id));
+    if (existingProfile) {
+      await db.update(musicianProfiles).set(profileValues as any)
+        .where(eq(musicianProfiles.id, existingProfile.id));
+    } else {
+      await db.insert(musicianProfiles).values({ ...profileValues, importSource: 'artist-profile' } as any);
+    }
+
+    res.status(serviceId ? 200 : 201).json({ success: true, data: musicianRow });
+  } catch (error) {
+    console.error('Error publishing artist service:', error);
+    res.status(500).json({ success: false, error: 'Failed to publish service' });
+  }
+});
+
+// DELETE /api/service-requests/artist/:artistId/services/:serviceId — unpublish
+router.delete('/artist/:artistId/services/:serviceId', async (req, res) => {
+  try {
+    const artistId = parseInt(req.params.artistId);
+    const serviceId = parseInt(req.params.serviceId);
+    if (!artistId || !serviceId || isNaN(artistId) || isNaN(serviceId)) {
+      return res.status(400).json({ success: false, error: 'Invalid ids' });
+    }
+    const authUserId = (req as any).userId;
+    if (authUserId && authUserId !== artistId) {
+      return res.status(403).json({ success: false, error: 'You can only manage your own services' });
+    }
+
+    const [existing] = await db.select().from(musicians)
+      .where(and(eq(musicians.id, serviceId), eq(musicians.userId, artistId)));
+    if (!existing) return res.status(404).json({ success: false, error: 'Service not found' });
+
+    await db.update(musicians).set({ isActive: false, updatedAt: new Date() })
+      .where(eq(musicians.id, serviceId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error unpublishing artist service:', error);
+    res.status(500).json({ success: false, error: 'Failed to unpublish service' });
+  }
+});
+
+// ============================================================
 // ADMIN: MUSICIAN IMPORTS
 // ============================================================
 

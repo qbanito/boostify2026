@@ -6,9 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Progress } from "../components/ui/progress";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../hooks/use-auth";
 import { useArtistProfile } from "../hooks/use-artist-profile";
+import { useQuery } from "@tanstack/react-query";
+import QRCode from "react-qr-code";
 import { ArtistSelector } from "../components/promotion/artist-selector";
 import { useToast } from "../hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,7 +23,8 @@ import {
   ThumbsUp, MessageSquare, Share2, Star,
   Lightbulb, RefreshCw, ArrowRight, Download,
   Flame, Users, Calendar, FileText, Link2, Send,
-  UserCheck, ExternalLink, Heart, MessageCircle, Globe
+  UserCheck, ExternalLink, Heart, MessageCircle, Globe,
+  Radio, Search, Bot, QrCode
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────
@@ -87,11 +90,325 @@ const TK = {
   gradientSoft: "from-[#00f2ea]/10 via-[#ff0050]/10 to-[#7c3aed]/10",
 };
 
+// ─── LIVE HUB ────────────────────────────────────────────
+// Everything for running a TikTok LIVE from Boostify: pick ANY of your
+// artists (human + AI) with a search bar, show their Boostify profile on
+// stream via QR, and generate a full AI run-of-show.
+interface LiveArtist {
+  id: number;
+  name: string;
+  slug?: string;
+  profileImage?: string;
+  isAI?: boolean;
+  genre?: string;
+}
+
+interface LiveKit {
+  titles: string[];
+  openingHook: string;
+  runOfShow: Array<{ minute: string; segment: string; notes: string }>;
+  engagementPrompts: string[];
+  profilePlug: string;
+  giftGoals: string[];
+  hashtags: string[];
+  announcementCaption: string;
+}
+
+function TikTokLiveHub({ tiktokHandle }: { tiktokHandle?: string | null }) {
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [liveArtist, setLiveArtist] = useState<LiveArtist | null>(null);
+  const [liveTopic, setLiveTopic] = useState("");
+  const [liveDuration, setLiveDuration] = useState("30");
+  const [kitLoading, setKitLoading] = useState(false);
+  const [liveKit, setLiveKit] = useState<LiveKit | null>(null);
+
+  // ALL artists — human + AI — from My Artists
+  const { data: artistsData, isLoading: artistsLoading } = useQuery<{ success: boolean; artists: any[] }>({
+    queryKey: ["/api/artist-generator/my-artists"],
+  });
+
+  const allArtists: LiveArtist[] = useMemo(() =>
+    (artistsData?.artists || []).map((a: any) => ({
+      id: a.id,
+      name: a.artistName || a.name || a.username || "Artist",
+      slug: a.slug,
+      profileImage: a.profileImage || a.profileImageUrl,
+      isAI: !!a.isAIGenerated,
+      genre: a.genre || a.genres?.[0],
+    })), [artistsData]);
+
+  // Search bar filter — locate any artist instantly
+  const filteredArtists = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allArtists;
+    return allArtists.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      (a.genre || "").toLowerCase().includes(q) ||
+      (a.slug || "").toLowerCase().includes(q)
+    );
+  }, [allArtists, search]);
+
+  // Deep-link ?artist=<id> preselect
+  useEffect(() => {
+    if (liveArtist || allArtists.length === 0) return;
+    const param = Number(new URLSearchParams(window.location.search).get("artist"));
+    const match = param ? allArtists.find(a => a.id === param) : null;
+    if (match) setLiveArtist(match);
+  }, [allArtists, liveArtist]);
+
+  const profileUrl = liveArtist?.slug
+    ? `${window.location.origin}/artist/${liveArtist.slug}`
+    : null;
+
+  const generateKit = async () => {
+    if (!liveArtist) { toast({ title: "Pick an artist first", variant: "destructive" }); return; }
+    setKitLoading(true);
+    setLiveKit(null);
+    try {
+      const res = await fetch("/api/tiktok/tiktok-live-kit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          artistName: liveArtist.name,
+          genre: liveArtist.genre,
+          liveTopic,
+          durationMinutes: Number(liveDuration) || 30,
+          profileUrl,
+        }),
+      });
+      const data = await res.json();
+      if (data.titles) {
+        setLiveKit(data);
+        toast({ title: "Live Kit ready", description: "Your full run-of-show is prepared." });
+      } else {
+        throw new Error(data.error || "Generation failed");
+      }
+    } catch (e: any) {
+      toast({ title: "Could not generate Live Kit", description: e.message, variant: "destructive" });
+    } finally {
+      setKitLoading(false);
+    }
+  };
+
+  const copyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: `${label} copied` });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Artist locator — search bar over ALL artists (human + AI) */}
+      <Card className="p-5 border-border/60">
+        <div className="flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4" style={{ color: TK.primary }} />
+          <h3 className="font-semibold text-sm">Choose the artist for this LIVE</h3>
+          <Badge variant="outline" className="ml-auto text-[10px]">{allArtists.length} artists</Badge>
+        </div>
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search artists by name, genre or slug…"
+            className="pl-9 h-10"
+          />
+        </div>
+        {artistsLoading ? (
+          <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : filteredArtists.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No artists match "{search}"</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-64 overflow-y-auto pr-1">
+            {filteredArtists.map((a) => {
+              const active = liveArtist?.id === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setLiveArtist(a)}
+                  className={`flex items-center gap-2 rounded-xl border p-2 text-left transition-all ${active ? "border-[#00f2ea] bg-[#00f2ea]/10" : "border-border hover:border-[#00f2ea]/50"}`}
+                >
+                  {a.profileImage ? (
+                    <img src={a.profileImage} alt={a.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">{a.name[0]}</div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold truncate">{a.name}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      {a.isAI && <Bot className="w-2.5 h-2.5" />}
+                      {a.isAI ? "AI" : "Human"}{a.genre ? ` · ${a.genre}` : ""}
+                    </p>
+                  </div>
+                  {active && <CheckCircle className="w-4 h-4 ml-auto shrink-0" style={{ color: TK.primary }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {liveArtist && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Show the artist profile ON the live — QR + link */}
+          <Card className="p-5 border-border/60">
+            <div className="flex items-center gap-2 mb-4">
+              <QrCode className="w-4 h-4" style={{ color: TK.secondary }} />
+              <h3 className="font-semibold text-sm">Show {liveArtist.name}'s profile on your LIVE</h3>
+            </div>
+            {profileUrl ? (
+              <div className="flex flex-col sm:flex-row items-center gap-5">
+                <div className="bg-white p-3 rounded-xl shrink-0">
+                  <QRCode value={profileUrl} size={140} />
+                </div>
+                <div className="space-y-3 min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground">
+                    Point your phone camera at the screen or show this QR during the LIVE — viewers land directly on the artist's Boostify profile.
+                  </p>
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <Link2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                    <span className="text-xs truncate flex-1">{profileUrl}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => copyText(profileUrl, "Profile link")} className="gap-1.5 text-xs">
+                      <Copy className="w-3 h-3" /> Copy link
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => window.open(profileUrl, "_blank")} className="gap-1.5 text-xs">
+                      <ExternalLink className="w-3 h-3" /> Open profile
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">This artist has no public profile slug yet.</p>
+            )}
+
+            {/* Go LIVE launcher */}
+            <div className="mt-5 pt-5 border-t border-border/50">
+              <div className="flex items-center gap-2 mb-2">
+                <Radio className="w-4 h-4 text-red-500" />
+                <h4 className="font-semibold text-sm">Go LIVE on TikTok</h4>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                TikTok requires starting LIVEs from the TikTok app or LIVE Studio. Prep everything here, then hit Go LIVE.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className="gap-1.5 text-xs text-white"
+                  style={{ background: "linear-gradient(to right, #ff0050, #7c3aed)" }}
+                  onClick={() => window.open(tiktokHandle ? `https://www.tiktok.com/@${tiktokHandle.replace(/^@/, "")}/live` : "https://www.tiktok.com/live", "_blank")}
+                >
+                  <Radio className="w-3 h-3" /> Open TikTok LIVE
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs"
+                  onClick={() => window.open("https://www.tiktok.com/studio/download", "_blank")}>
+                  <ExternalLink className="w-3 h-3" /> TikTok LIVE Studio
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* AI Live Kit generator */}
+          <Card className="p-5 border-border/60">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-4 h-4" style={{ color: TK.primary }} />
+              <h3 className="font-semibold text-sm">AI Live Kit — full run-of-show</h3>
+            </div>
+            <div className="space-y-3">
+              <Input
+                value={liveTopic}
+                onChange={(e) => setLiveTopic(e.target.value)}
+                placeholder="LIVE theme (e.g. new single listening party, Q&A…)"
+                className="h-10"
+              />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Duration:</span>
+                  {["15", "30", "60"].map((d) => (
+                    <button key={d} onClick={() => setLiveDuration(d)}
+                      className={`h-8 px-3 rounded-lg text-xs font-semibold border transition-all ${liveDuration === d ? "border-[#00f2ea] bg-[#00f2ea]/10 text-[#00f2ea]" : "border-border text-muted-foreground"}`}>
+                      {d}m
+                    </button>
+                  ))}
+                </div>
+                <Button onClick={generateKit} disabled={kitLoading} size="sm"
+                  className="ml-auto gap-1.5 text-xs text-white"
+                  style={{ background: "linear-gradient(to right, #00f2ea, #ff0050)" }}>
+                  {kitLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  Generate Kit
+                </Button>
+              </div>
+            </div>
+
+            {liveKit && (
+              <div className="mt-4 space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Titles</p>
+                  {liveKit.titles.map((t, i) => (
+                    <button key={i} onClick={() => copyText(t, "Title")} className="block w-full text-left text-sm rounded-lg bg-muted/40 px-3 py-2 mb-1.5 hover:bg-muted/70">
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Opening hook</p>
+                  <p className="text-sm rounded-lg bg-muted/40 px-3 py-2">{liveKit.openingHook}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Run of show</p>
+                  <div className="space-y-1.5">
+                    {liveKit.runOfShow.map((s, i) => (
+                      <div key={i} className="flex gap-3 rounded-lg bg-muted/40 px-3 py-2">
+                        <span className="text-xs font-mono shrink-0" style={{ color: TK.primary }}>{s.minute}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold">{s.segment}</p>
+                          <p className="text-[11px] text-muted-foreground">{s.notes}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Engagement prompts</p>
+                  <ul className="space-y-1">
+                    {liveKit.engagementPrompts.map((p, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex gap-2"><MessageCircle className="w-3 h-3 shrink-0 mt-0.5" style={{ color: TK.secondary }} />{p}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Profile plug (send viewers to Boostify)</p>
+                  <button onClick={() => copyText(liveKit.profilePlug, "Profile plug")} className="w-full text-left text-sm rounded-lg border border-[#00f2ea]/30 bg-[#00f2ea]/5 px-3 py-2 hover:bg-[#00f2ea]/10">
+                    {liveKit.profilePlug}
+                  </button>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Announcement caption</p>
+                  <button onClick={() => copyText(`${liveKit.announcementCaption}\n\n${liveKit.hashtags.map(h => `#${h.replace(/^#/, "")}`).join(" ")}`, "Caption")} className="w-full text-left text-sm rounded-lg bg-muted/40 px-3 py-2 hover:bg-muted/70">
+                    {liveKit.announcementCaption}
+                    <span className="block mt-1 text-xs" style={{ color: TK.primary }}>{liveKit.hashtags.map(h => `#${h.replace(/^#/, "")}`).join(" ")}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TikTokBoostPage() {
   const { user, isAdmin, userSubscription } = useAuth();
   const { selectedArtist } = useArtistProfile();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("account");
+  const [activeTab, setActiveTab] = useState(() => {
+    // Deep-link: /tiktok-boost?tab=live (from the artist profile module)
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && ["account", "publish", "reel-creator", "trends", "captions", "calendar", "viral", "live"].includes(t) ? t : "account";
+  });
   const [copied, setCopied] = useState<string | null>(null);
 
   // ─── Reel Script Creator State ─────────────────────────
@@ -419,9 +736,9 @@ export default function TikTokBoostPage() {
                   </motion.div>
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
                     {[
-                      { icon: Eye, label: "Views", value: "10K+" },
-                      { icon: ThumbsUp, label: "Likes", value: "5K+" },
-                      { icon: Share2, label: "Shares", value: "2K+" },
+                      { icon: Send, label: "Publish", value: "Publish" },
+                      { icon: Radio, label: "Live", value: "LIVE" },
+                      { icon: Sparkles, label: "AI Tools", value: "AI Tools" },
                     ].map((stat, i) => (
                       <motion.div
                         key={stat.label}
@@ -552,6 +869,7 @@ export default function TikTokBoostPage() {
                 {[
                   { value: "account", icon: UserCheck, label: "Account" },
                   { value: "publish", icon: Send, label: "Publish" },
+                  { value: "live", icon: Radio, label: "Live" },
                   { value: "reel-creator", icon: Video, label: "Reel" },
                   { value: "trends", icon: TrendingUp, label: "Trends" },
                   { value: "captions", icon: Hash, label: "Captions" },
@@ -826,6 +1144,16 @@ export default function TikTokBoostPage() {
                     </Button>
                   </Card>
                 )}
+              </motion.div>
+            </TabsContent>
+
+            {/* ═══════════════════════════════════════════
+                TAB: LIVE — TikTok LIVE hub (all artists,
+                profile QR on stream, AI run-of-show)
+            ═══════════════════════════════════════════ */}
+            <TabsContent value="live">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <TikTokLiveHub tiktokHandle={tiktokConn?.displayName} />
               </motion.div>
             </TabsContent>
 

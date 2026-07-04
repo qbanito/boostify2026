@@ -29,7 +29,9 @@ import {
 } from "lucide-react";
 import { SiSpotify, SiApplemusic, SiYoutube, SiTiktok, SiInstagram } from "react-icons/si";
 
-const heroVideo = "/assets/promos/ROCK.mp4";
+// Small hero video that SHIPS with the app (large promos live on CDN and 404 in prod)
+const heroVideo = "/assets/Standard_Mode_Generated_Video (2).mp4";
+const heroPoster = "/assets/cover.jpg";
 
 // ============================================================================
 // Types
@@ -58,6 +60,8 @@ interface CatalogArtist {
   status: "active" | "draft" | "pending";
   image: string;
   color: string;
+  /** Artist profile slug — links the roster card to /artist/:slug */
+  slug?: string;
 }
 
 interface LabelStat {
@@ -620,11 +624,43 @@ export default function VirtualRecordLabelPage() {
       status: "active" as const,
       image: a.profileImage || a.profileImageUrl || a.coverImage || "",
       color: GRADIENT_COLORS[i % GRADIENT_COLORS.length],
+      slug: a.slug || undefined,
     }));
   })();
 
   // Use DB artists if available, otherwise show demo catalog
   const catalogArtists = dbArtists.length > 0 ? dbArtists : DEMO_CATALOG;
+
+  // ── Link the whole roster to this label (users.record_label_id) ──
+  const [isLinkingRoster, setIsLinkingRoster] = useState(false);
+  const linkRosterToLabel = async () => {
+    if (dbArtists.length === 0) {
+      toast({ title: "No artists yet", description: "Create or generate artists first, then link them to your label." });
+      return;
+    }
+    setIsLinkingRoster(true);
+    try {
+      const recordLabelId = labelConfig.name?.trim()
+        ? `label-${labelConfig.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+        : `label-${user?.id || "my"}`;
+      const res = await fetch("/api/virtual-label/link-artists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ artistIds: dbArtists.map((a) => a.id), recordLabelId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Roster linked", description: `${data.updated} artists now belong to your label (${recordLabelId}).` });
+      } else {
+        throw new Error(data.error || "Link failed");
+      }
+    } catch (e: any) {
+      toast({ title: "Could not link roster", description: e.message, variant: "destructive" });
+    } finally {
+      setIsLinkingRoster(false);
+    }
+  };
 
   const handleWaitlist = () => {
     if (!waitlistEmail.trim()) return;
@@ -664,9 +700,9 @@ export default function VirtualRecordLabelPage() {
 
       {/* ═══════════ HERO ═══════════ */}
       <section className="relative w-full min-h-[92vh] -mt-14 sm:-mt-16 overflow-hidden flex flex-col">
-        {/* Video Background */}
-        <div className="absolute inset-0 w-full h-full bg-cover bg-center" style={{ backgroundImage: `url('/images/music_industry_abstract_art.png')` }} />
-        <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" poster="/images/music_industry_abstract_art.png">
+        {/* Video Background — poster/backdrop use assets that actually ship */}
+        <div className="absolute inset-0 w-full h-full bg-cover bg-center" style={{ backgroundImage: `url('${heroPoster}')` }} />
+        <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" poster={heroPoster}>
           <source src={heroVideo} type="video/mp4" />
         </video>
 
@@ -1419,6 +1455,24 @@ export default function VirtualRecordLabelPage() {
                   </motion.div>
                   <h2 className="text-3xl sm:text-4xl font-black mb-3">Artist Catalog</h2>
                   <p className="text-muted-foreground text-base max-w-xl mx-auto">Manage real and AI-generated artists in your label roster</p>
+                  {dbArtists.length > 0 && (
+                    <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+                      <Badge variant="outline" className="border-orange-500/30 text-orange-300 bg-orange-500/5">
+                        {dbArtists.length} artist{dbArtists.length !== 1 ? "s" : ""}
+                      </Badge>
+                      <Badge variant="outline" className="border-purple-500/30 text-purple-300 bg-purple-500/5">
+                        {dbArtists.filter(a => a.type === "virtual").length} AI
+                      </Badge>
+                      <Badge variant="outline" className="border-blue-500/30 text-blue-300 bg-blue-500/5">
+                        {dbArtists.filter(a => a.type === "real").length} real
+                      </Badge>
+                      <Button size="sm" variant="outline" onClick={linkRosterToLabel} disabled={isLinkingRoster}
+                        className="h-7 text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
+                        {isLinkingRoster ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Building2 className="w-3 h-3 mr-1.5" />}
+                        Link roster to my label
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1432,7 +1486,7 @@ export default function VirtualRecordLabelPage() {
                       </motion.div>
                     ))}
                   </div>
-                  <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]" onClick={() => toast({ title: "Coming Soon", description: "Artist catalog management launching Q2 2026" })}>
+                  <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]" onClick={() => setActiveTab("create")}>
                     <Bot className="w-4 h-4 mr-2" /> Add AI Artist
                   </Button>
                 </div>
@@ -1484,6 +1538,15 @@ export default function VirtualRecordLabelPage() {
                             <div className="text-xs flex items-center gap-1.5"><Headphones className="w-3 h-3 text-orange-500" /><span className="text-white/40">Streams: </span><span className="font-semibold">{(artist.streams / 1000).toFixed(0)}K</span></div>
                             <div className="text-xs flex items-center gap-1.5"><DollarSign className="w-3 h-3 text-green-400" /><span className="text-white/40">Revenue: </span><span className="font-semibold text-green-400">${artist.revenue.toLocaleString()}</span></div>
                           </div>
+                          {artist.slug && (
+                            <Button
+                              size="sm" variant="outline"
+                              className="w-full mt-3 h-8 text-xs border-orange-500/25 text-orange-300 hover:bg-orange-500/10"
+                              onClick={(e) => { e.stopPropagation(); setAuthLocation(`/artist/${artist.slug}`); }}
+                            >
+                              <Users className="w-3 h-3 mr-1.5" /> View Artist Profile <ArrowRight className="w-3 h-3 ml-auto" />
+                            </Button>
+                          )}
                         </div>
                       </Card>
                     </motion.div>
@@ -1492,7 +1555,7 @@ export default function VirtualRecordLabelPage() {
                   {/* Add Card */}
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                     <Card className="overflow-hidden border-dashed border-orange-500/20 hover:border-orange-500/40 transition-all duration-300 cursor-pointer group h-full flex items-center justify-center min-h-[280px] bg-black/10"
-                      onClick={() => toast({ title: "Coming Soon", description: "Add artists to your catalog when Label Licensing launches." })}>
+                      onClick={() => setActiveTab("create")}>
                       <div className="text-center p-6">
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/15 to-amber-500/10 border border-orange-500/10 flex items-center justify-center mx-auto mb-4 group-hover:from-orange-500/25 group-hover:to-amber-500/15 group-hover:scale-110 transition-all duration-300">
                           <Users className="w-7 h-7 text-orange-500" />

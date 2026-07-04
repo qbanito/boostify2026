@@ -67,7 +67,6 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useIsMobile } from "../hooks/use-mobile";
 import { useSettingsStore, themeOptions, densityOptions, languageOptions } from "../store/settings-store";
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "../hooks/use-toast";
@@ -92,13 +91,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { StylePresetSelector } from "../components/settings/style-preset-selector";
 
 export default function SettingsPage() {
-  const isMobile = useIsMobile();
   const { toast } = useToast();
   const { user } = useAuth();
   const { isSignedIn, isLoaded, user: clerkUser } = useUser();
   const { openUserProfile, signOut } = useClerk();
   const [, setLocation] = useLocation();
   const { subscription, currentPlan, isLoading: subscriptionLoading } = useSubscription();
+
+  // Active tab — deep-linkable via ?tab= (e.g. /settings?tab=credits)
+  const VALID_TABS = ["subscription", "credits", "artist", "profile", "connected", "notifications", "appearance", "security"];
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const param = new URLSearchParams(window.location.search).get("tab");
+    return param && VALID_TABS.includes(param) ? param : "subscription";
+  });
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url.toString());
+  };
 
   // Password visibility
   const [showCurrentPwd, setShowCurrentPwd] = useState(false);
@@ -166,12 +177,6 @@ export default function SettingsPage() {
     spotify: z.string().optional(),
   });
   
-  const notificationsSchema = z.object({
-    emailNotifications: z.boolean(),
-    pushNotifications: z.boolean(),
-    newsletter: z.boolean()
-  });
-  
   const appearanceSchema = z.object({
     theme: z.enum(themeOptions),
     density: z.enum(densityOptions)
@@ -194,15 +199,6 @@ export default function SettingsPage() {
       name: settings.profile.name || "",
       email: settings.profile.email || "",
       language: settings.profile.language
-    }
-  });
-  
-  const notificationsForm = useForm({
-    resolver: zodResolver(notificationsSchema),
-    defaultValues: {
-      emailNotifications: settings.notifications.emailNotifications,
-      pushNotifications: settings.notifications.pushNotifications,
-      newsletter: settings.notifications.newsletter
     }
   });
   
@@ -582,14 +578,6 @@ export default function SettingsPage() {
     }
   };
   
-  const handleNotificationsSubmit = (values: z.infer<typeof notificationsSchema>) => {
-    settings.updateNotifications(values);
-    toast({
-      title: "Notification preferences updated",
-      description: "Your notification preferences have been saved."
-    });
-  };
-  
   const handleAppearanceSubmit = (values: z.infer<typeof appearanceSchema>) => {
     settings.updateAppearance(values);
     // Apply selected theme
@@ -603,14 +591,31 @@ export default function SettingsPage() {
     });
   };
   
-  const handleSecuritySubmit = (values: z.infer<typeof securitySchema>) => {
-    // Password change logic would be implemented here
-    // For now we just simulate success
-    toast({
-      title: "Password updated",
-      description: "Your password has been updated successfully."
-    });
-    securityForm.reset();
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const handleSecuritySubmit = async (values: z.infer<typeof securitySchema>) => {
+    if (!clerkUser) return;
+    setIsChangingPassword(true);
+    try {
+      await clerkUser.updatePassword({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+        signOutOfOtherSessions: true,
+      });
+      toast({
+        title: "Password updated",
+        description: "Your password was changed. Other sessions have been signed out."
+      });
+      securityForm.reset();
+    } catch (err: any) {
+      const msg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message || err?.message || "";
+      toast({
+        title: "Could not change password",
+        description: /password/i.test(msg) ? msg : "If you signed up with Google/social login, manage your password via Clerk instead.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
   
   // Apply theme on page load
@@ -675,7 +680,7 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <Tabs defaultValue="subscription" className="space-y-4 md:space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
         <div className="overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0">
           <TabsList className="inline-flex w-auto h-auto flex-nowrap gap-0.5 p-1 min-w-max">
             <TabsTrigger value="subscription" className="gap-1.5 h-9 px-3 text-xs whitespace-nowrap">
@@ -1323,9 +1328,15 @@ export default function SettingsPage() {
                   <h3 className="text-lg font-semibold">{clerkUser.fullName || clerkUser.username || "User"}</h3>
                   <p className="text-sm text-muted-foreground">{clerkUser.primaryEmailAddress?.emailAddress}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs border-green-500/30 text-green-500 gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Verified
-                    </Badge>
+                    {clerkUser.primaryEmailAddress?.verification?.status === "verified" ? (
+                      <Badge variant="outline" className="text-xs border-green-500/30 text-green-500 gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs border-yellow-500/30 text-yellow-500 gap-1">
+                        <AlertTriangle className="h-3 w-3" /> Email not verified
+                      </Badge>
+                    )}
                     <Badge variant="outline" className="text-xs border-orange-500/30 text-orange-500">
                       {getPlanDisplayName(currentPlan)}
                     </Badge>
@@ -1442,14 +1453,14 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground mb-5">Connect your music distribution accounts for deeper analytics</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { name: "Spotify for Artists", icon: "🎵", desc: "Sync streams and listener analytics", connected: false },
-                { name: "Apple Music Connect", icon: "🍎", desc: "Access Apple Music metrics", connected: false },
-                { name: "YouTube Studio", icon: "▶️", desc: "Video views and subscriber sync", connected: false },
-                { name: "DistroKid", icon: "📦", desc: "Distribution status and royalties", connected: false },
-                { name: "TuneCore", icon: "🎸", desc: "Revenue and release tracking", connected: false },
-                { name: "SoundCloud", icon: "☁️", desc: "Play counts and fan engagement", connected: false },
+                { name: "Spotify for Artists", icon: "🎵", desc: "Sync streams and listener analytics" },
+                { name: "Apple Music Connect", icon: "🍎", desc: "Access Apple Music metrics" },
+                { name: "YouTube Studio", icon: "▶️", desc: "Video views and subscriber sync" },
+                { name: "DistroKid", icon: "📦", desc: "Distribution status and royalties" },
+                { name: "TuneCore", icon: "🎸", desc: "Revenue and release tracking" },
+                { name: "SoundCloud", icon: "☁️", desc: "Play counts and fan engagement" },
               ].map(plat => (
-                <div key={plat.name} className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-orange-500/30 transition-all">
+                <div key={plat.name} className="flex items-center justify-between p-3 rounded-xl border border-border/60 opacity-75">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{plat.icon}</span>
                     <div>
@@ -1457,9 +1468,9 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">{plat.desc}</p>
                     </div>
                   </div>
-                  <Button size="sm" variant={plat.connected ? "outline" : "default"} className={plat.connected ? "border-green-500/30 text-green-500 hover:text-red-500 hover:border-red-500/30" : "bg-orange-500 hover:bg-orange-600 h-7 text-xs"}>
-                    {plat.connected ? "Connected" : "Connect"}
-                  </Button>
+                  <Badge variant="outline" className="text-xs border-border/60 text-muted-foreground shrink-0">
+                    Coming Soon
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -1649,7 +1660,8 @@ export default function SettingsPage() {
                   )}
                 />
                 <div className="flex flex-wrap gap-3">
-                  <Button type="submit" className="bg-orange-500 hover:bg-orange-600" disabled={!securityForm.formState.isDirty}>
+                  <Button type="submit" className="bg-orange-500 hover:bg-orange-600" disabled={!securityForm.formState.isDirty || isChangingPassword}>
+                    {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Update Password
                   </Button>
                   <Button type="button" variant="outline" className="border-orange-500/30 hover:bg-orange-500/10" onClick={() => openUserProfile()}>
@@ -1672,16 +1684,18 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <p className="text-sm font-medium">Enable 2FA</p>
+                  <p className="text-sm font-medium">Status</p>
                   <p className="text-xs text-muted-foreground">Authenticator app or SMS</p>
                 </div>
-                <Switch
-                  checked={settings.security.twoFactorEnabled}
-                  onCheckedChange={(value) => {
-                    settings.updateSecurity({ twoFactorEnabled: value });
-                    openUserProfile();
-                  }}
-                />
+                {clerkUser?.twoFactorEnabled ? (
+                  <Badge variant="outline" className="border-green-500/30 text-green-500 gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Enabled
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-yellow-500/30 text-yellow-500 gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Disabled
+                  </Badge>
+                )}
               </div>
               <Button variant="outline" size="sm" className="mt-3 w-full border-orange-500/30 hover:bg-orange-500/10" onClick={() => openUserProfile()}>
                 Configure 2FA <ExternalLink className="ml-2 h-3.5 w-3.5" />
@@ -1722,7 +1736,37 @@ export default function SettingsPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" className="border-orange-500/30 hover:bg-orange-500/10" onClick={() => {
-                toast({ title: "Data export requested", description: "We'll send you an email with your data within 24 hours." });
+                // Real client-side data export: everything we hold locally about the user
+                const exportData = {
+                  exportedAt: new Date().toISOString(),
+                  account: clerkUser ? {
+                    id: clerkUser.id,
+                    fullName: clerkUser.fullName,
+                    username: clerkUser.username,
+                    email: clerkUser.primaryEmailAddress?.emailAddress,
+                    createdAt: clerkUser.createdAt,
+                    lastSignInAt: clerkUser.lastSignInAt,
+                    externalAccounts: clerkUser.externalAccounts?.map(a => ({ provider: a.provider, email: a.emailAddress })),
+                  } : null,
+                  artistProfile: artistProfileData || null,
+                  preferences: {
+                    profile: settings.profile,
+                    notifications: notifPrefs,
+                    appearance: settings.appearance,
+                  },
+                  subscription: { plan: currentPlan, status: subscription?.status || "free" },
+                  credits: { balance: creditBalance, recentTransactions: creditTransactions },
+                };
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `boostify-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                toast({ title: "Data exported", description: "Your data was downloaded as a JSON file." });
               }}>
                 <Download className="mr-2 h-4 w-4" /> Export My Data
               </Button>
@@ -1765,6 +1809,7 @@ export default function SettingsPage() {
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This action cannot be undone. All your data, artist profiles, songs, and settings will be permanently deleted.
+                      You'll be taken to your account manager to confirm the deletion.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -1773,7 +1818,7 @@ export default function SettingsPage() {
                       className="bg-destructive hover:bg-destructive/90"
                       onClick={() => openUserProfile()}
                     >
-                      Delete Account
+                      Continue to Delete
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

@@ -23,6 +23,8 @@ const FAL_QUEUE_URL = 'https://queue.fal.run';
 const HF_TOKEN = process.env.HUGGINGFACE_TOKEN || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+const ZAI_API_KEY = process.env.ZAI_API_KEY || process.env.Z_API_KEY || process.env.ZHIPU_API_KEY || '';
+const ZAI_BASE_URL = 'https://api.z.ai/api/paas/v4';
 
 // ─── Models ───────────────────────────────────────────────
 const MODELS = {
@@ -126,6 +128,31 @@ async function hfFluxImage(prompt: string): Promise<{ buffer: Buffer; mimeType: 
   return null;
 }
 
+/** z.ai CogView — cheap, fast text-to-image (OpenAI-compatible endpoint). */
+async function zaiCogViewImage(prompt: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  if (!ZAI_API_KEY) return null;
+  for (const model of ['cogview-4', 'cogview-3-flash']) {
+    try {
+      const res = await axios.post(
+        `${ZAI_BASE_URL}/images/generations`,
+        { model, prompt: prompt.slice(0, 1800), size: '1344x768' },
+        { headers: { Authorization: `Bearer ${ZAI_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 90000 }
+      );
+      const item = res.data?.data?.[0];
+      if (item?.b64_json) {
+        return { buffer: Buffer.from(item.b64_json, 'base64'), mimeType: 'image/png' };
+      }
+      if (item?.url) {
+        const dl = await downloadToBase64(item.url);
+        if (dl) return { buffer: Buffer.from(dl.base64, 'base64'), mimeType: dl.mimeType };
+      }
+    } catch (e: any) {
+      logger.warn(`[CourseMedia] z.ai ${model} image error:`, e?.response?.data?.error?.message || e.message);
+    }
+  }
+  return null;
+}
+
 /** OpenAI gpt-image-1 — high-quality paid fallback. Returns raw image bytes. */
 async function openaiImage(prompt: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   if (!OPENAI_API_KEY) return null;
@@ -169,9 +196,10 @@ async function falImage(prompt: string): Promise<{ buffer: Buffer; mimeType: str
  * @returns permanent image URL, or null if every provider failed.
  */
 async function generateImageToFirebase(prompt: string, folder: string): Promise<string | null> {
-  // OpenAI gpt-image-1 is the primary provider (best quality / most coherent
-  // course art). HF FLUX.1-schnell (free) and FAL are resilient fallbacks.
+  // Chain: z.ai CogView (cheap, fast) → OpenAI gpt-image-1 (best quality) →
+  // HF FLUX.1-schnell (free) → FAL (last resort).
   const providers: Array<{ name: string; fn: () => Promise<{ buffer: Buffer; mimeType: string } | null> }> = [
+    { name: 'zai-cogview', fn: () => zaiCogViewImage(prompt) },
     { name: 'openai-gpt-image-1', fn: () => openaiImage(prompt) },
     { name: 'hf-flux-schnell', fn: () => hfFluxImage(prompt) },
     { name: 'fal-nano-banana-2', fn: () => falImage(prompt) },

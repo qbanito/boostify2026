@@ -65,9 +65,9 @@ router.post('/composer/lyrics', async (req, res) => {
     
     // Log API usage (estimating ~500 tokens per lyrics generation)
     await logApiUsage({
-      apiProvider: 'gemini',
+      apiProvider: 'zai',
       endpoint: '/composer/lyrics',
-      model: 'gemini-2.0-flash',
+      model: 'glm-5.2',
       promptTokens: 300,
       completionTokens: 200,
       status: 'success'
@@ -82,9 +82,9 @@ router.post('/composer/lyrics', async (req, res) => {
     console.error('Error generating lyrics:', error);
     
     await logApiUsage({
-      apiProvider: 'gemini',
+      apiProvider: 'zai',
       endpoint: '/composer/lyrics',
-      model: 'gemini-2.0-flash',
+      model: 'glm-5.2',
       status: 'error',
       errorMessage: error instanceof Error ? error.message : 'Unknown error'
     });

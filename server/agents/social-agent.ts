@@ -35,16 +35,57 @@ import type {
   SocialPost,
   PostComment
 } from './types';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import OpenAI from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 
-// LLM para generación de contenido creativo
+// ─── GLM-5.2 (z.ai) — modelo principal para razonamiento creativo ──────────────
+// GLM-5.2 es el flagship de Zhipu: mejor razonamiento causal y coherencia narrativa
+// que gpt-4o-mini para contenido artístico. Si falla, cae a LangChain + OpenAI.
+const _glmClient: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+type ChatMsg = { role: 'system' | 'user' | 'assistant'; content: string };
+
+/**
+ * Invoca GLM-5.2 para generación de contenido. Si falla, devuelve null
+ * para que el caller haga fallback a LangChain.
+ */
+async function callGLM(
+  systemPrompt: string,
+  userPrompt: string,
+  opts?: { temperature?: number; maxTokens?: number }
+): Promise<string | null> {
+  if (!_glmClient) return null;
+  try {
+    const res = await _glmClient.chat.completions.create({
+      model: 'glm-5.2',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: opts?.temperature ?? 0.85,
+      max_tokens: opts?.maxTokens ?? 600,
+    });
+    const text = res.choices[0]?.message?.content?.trim();
+    if (text) {
+      console.log('[social-agent] GLM-5.2 ✅');
+      return text;
+    }
+  } catch (e: any) {
+    console.warn('[social-agent] GLM-5.2 failed, falling back to LangChain:', e?.message);
+  }
+  return null;
+}
+
+// LLM para generación de contenido creativo (fallback LangChain)
 const contentLLM = new ChatOpenAI({
   modelName: PRIMARY_MODEL,
   temperature: 0.85, // Alta creatividad
   openAIApiKey: process.env.OPENAI_API_KEY,
 });
 
-// LLM para comentarios (más rápido y económico)
+// LLM para comentarios (fallback LangChain)
 const commentLLM = new ChatOpenAI({
   modelName: PRIMARY_MODEL,
   temperature: 0.7,
@@ -136,12 +177,16 @@ export async function generatePost(input: GeneratePostInput): Promise<SocialPost
   );
 
   try {
-    const response = await contentLLM.invoke([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(userPrompt),
-    ]);
-
-    const generatedContent = response.content as string;
+    // Intentar GLM-5.2 primero (mejor razonamiento creativo)
+    let generatedContent = await callGLM(systemPrompt, userPrompt, { temperature: 0.85, maxTokens: 600 });
+    if (!generatedContent) {
+      // Fallback: LangChain + OpenAI
+      const response = await contentLLM.invoke([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(userPrompt),
+      ]);
+      generatedContent = response.content as string;
+    }
 
     // Parsear el contenido generado
     const { content, hashtags, visualDescription } = parseGeneratedPost(generatedContent, contentType);
@@ -536,12 +581,17 @@ REQUIREMENTS:
 - Sound like a real artist talking to a colleague, not an AI assistant`;
 
   try {
-    const response = await commentLLM.invoke([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(userPrompt),
-    ]);
+    // GLM-5.2 primero (captura matices relacionales mejor)
+    let rawComment = await callGLM(systemPrompt, userPrompt, { temperature: 0.75, maxTokens: 150 });
+    if (!rawComment) {
+      const response = await commentLLM.invoke([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(userPrompt),
+      ]);
+      rawComment = response.content as string;
+    }
 
-    const commentContent = (response.content as string).trim();
+    const commentContent = rawComment.trim();
 
     // Guardar comentario (usando authorId, no artistId)
     const [comment] = await db.insert(aiPostComments).values({

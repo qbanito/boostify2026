@@ -15,12 +15,37 @@ import type {
   MoodType, 
   CommunicationStyle 
 } from './types';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import OpenAI from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 
-// ============================================
-// LLM CONFIGURATION
-// ============================================
+// ─── GLM-5.2 (z.ai) — modelo principal para generación de personalidades ────────
+// GLM-5.2 sobresale en razonamiento psicológico y coherencia narrativa. Lo usamos
+// como primario para crear personalidades más ricas y coherentes en los agentes.
+const _glmPersonalityClient: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
 
+async function callGLMPersonality(prompt: string): Promise<string | null> {
+  if (!_glmPersonalityClient) return null;
+  try {
+    const res = await _glmPersonalityClient.chat.completions.create({
+      model: 'glm-5.2',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.9,
+      max_tokens: 900,
+    });
+    const text = res.choices[0]?.message?.content?.trim();
+    if (text) {
+      console.log('[personality-agent] GLM-5.2 ✅');
+      return text;
+    }
+  } catch (e: any) {
+    console.warn('[personality-agent] GLM-5.2 failed, falling back to LangChain:', e?.message);
+  }
+  return null;
+}
+
+// ─── LangChain fallback ───────────────────────────────────────────────────────────────
 const llm = new ChatOpenAI({
   modelName: PRIMARY_MODEL,
   temperature: 0.9, // High creativity for personality generation
@@ -104,8 +129,15 @@ Generate a JSON object with these exact fields (all numbers should be 0-100):
 Make the personality coherent with their genre and biography. Be creative but realistic.
 Return ONLY the JSON, no explanations.`;
 
-    const response = await llm.invoke(prompt);
-    const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+    // GLM-5.2 primero (richer psychological reasoning), fallback to LangChain
+    let content: string;
+    const glmResult = await callGLMPersonality(prompt);
+    if (glmResult) {
+      content = glmResult;
+    } else {
+      const response = await llm.invoke(prompt);
+      content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+    }
     
     // Parse the JSON response
     const jsonMatch = content.match(/\{[\s\S]*\}/);

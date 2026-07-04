@@ -845,9 +845,9 @@ export default function ProducerToolsPage() {
               <Shield className="w-6 h-6 text-orange-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-white text-sm">¿Vas a contratar músicos para tu canción?</p>
+              <p className="font-bold text-white text-sm">Hiring musicians for your song?</p>
               <p className="text-xs text-white/50 mt-1">
-                Crea primero tu proyecto en <span className="text-orange-400 font-semibold">Canción Original Certificada</span> — los músicos quedarán vinculados al certificado de autoría con su acuerdo Work For Hire registrado.
+                Create your project in <span className="text-orange-400 font-semibold">Certified Original Song</span> first — musicians will be linked to your authorship certificate with their Work For Hire agreement on record.
               </p>
             </div>
             <Button
@@ -856,7 +856,7 @@ export default function ProducerToolsPage() {
               className="bg-orange-500 hover:bg-orange-600 text-black font-bold flex-shrink-0 whitespace-nowrap"
             >
               <Shield className="w-3 h-3 mr-1.5" />
-              Ir a Canción Original
+              Go to Original Song
             </Button>
           </div>
 
@@ -1116,7 +1116,7 @@ export default function ProducerToolsPage() {
                 <div className="relative">
                   <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 border border-muted shadow-sm">
                     <span className="text-xs text-muted-foreground font-medium">
-                      {useModernUI ? "Moderna" : "Clásica"}
+                      {useModernUI ? "Modern" : "Classic"}
                     </span>
                     <Switch
                       checked={useModernUI}

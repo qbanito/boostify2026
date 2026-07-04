@@ -181,7 +181,9 @@ function resolvePrintfileSpec(
 
 /**
  * Auto-fit a design into a print area while preserving aspect ratio.
- * - Default: design = 90 % of the area (10 % margin), centered.
+ * - mode 'contain' (default): design = 90 % of the area (10 % margin), centered.
+ * - mode 'cover' (all-over/sublimation printfiles): design FILLS the whole
+ *   area preserving ratio (may overflow one axis — Printful crops the excess).
  * - Apparel chest area: design top-aligned in the upper third.
  *
  * Inputs/outputs are in PRINTFUL UNITS (px at the printfile's DPI).
@@ -189,8 +191,24 @@ function resolvePrintfileSpec(
 function autoFit(
   area: { width: number; height: number },
   designAspectRatio: number,
-  opts: { coverage?: number; verticalAlign?: 'top' | 'center' } = {},
+  opts: { coverage?: number; verticalAlign?: 'top' | 'center'; mode?: 'contain' | 'cover' } = {},
 ): { width: number; height: number; top: number; left: number } {
+  if (opts.mode === 'cover') {
+    // Fill the entire area — scale up so BOTH dimensions cover, center the overflow
+    let w = area.width;
+    let h = w / designAspectRatio;
+    if (h < area.height) {
+      h = area.height;
+      w = h * designAspectRatio;
+    }
+    return {
+      width: Math.round(w),
+      height: Math.round(h),
+      top: Math.round((area.height - h) / 2),
+      left: Math.round((area.width - w) / 2),
+    };
+  }
+
   const coverage = opts.coverage ?? 0.9;
   const maxW = area.width * coverage;
   const maxH = area.height * coverage;
@@ -229,10 +247,17 @@ export async function getRealPlacementGeometry(
   if (data) {
     const spec = resolvePrintfileSpec(data, variantId, placement);
     if (spec) {
+      // Printfiles with fill_mode 'cover' (all-over print / sublimation)
+      // must FILL the area — a contained design leaves blank fabric.
+      const isCover = String(spec.fill_mode || '').toLowerCase() === 'cover';
       const fit = autoFit(
         { width: spec.width, height: spec.height },
         opts?.designAspectRatio ?? 1,
-        { coverage: opts?.coverage, verticalAlign: opts?.verticalAlign },
+        {
+          coverage: opts?.coverage,
+          verticalAlign: opts?.verticalAlign,
+          mode: isCover ? 'cover' : 'contain',
+        },
       );
       return {
         area_width: spec.width,

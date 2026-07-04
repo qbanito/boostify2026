@@ -440,10 +440,10 @@ interface WebhookEvent {
 
 const CONTENT_TYPES = [
   { value: "single", label: "Single", icon: Music },
-  { value: "album", label: "Álbum", icon: Music },
-  { value: "video", label: "Video Musical", icon: Video },
-  { value: "tour", label: "Tour/Concierto", icon: Users },
-  { value: "announcement", label: "Anuncio", icon: Megaphone }
+  { value: "album", label: "Album", icon: Music },
+  { value: "video", label: "Music Video", icon: Video },
+  { value: "tour", label: "Tour/Concert", icon: Users },
+  { value: "announcement", label: "Announcement", icon: Megaphone }
 ];
 
 const MEDIA_TYPES = [
@@ -451,12 +451,12 @@ const MEDIA_TYPES = [
   { value: "tv", label: "TV", icon: Tv },
   { value: "podcast", label: "Podcast", icon: Mic },
   { value: "blog", label: "Blog", icon: Globe },
-  { value: "magazine", label: "Revista", icon: Globe }
+  { value: "magazine", label: "Magazine", icon: Globe }
 ];
 
 const COUNTRIES = [
-  "USA", "Mexico", "Colombia", "Argentina", "España", "Chile", 
-  "Peru", "Ecuador", "Venezuela", "Puerto Rico", "República Dominicana"
+  "USA", "Mexico", "Colombia", "Argentina", "Spain", "Chile", 
+  "Peru", "Ecuador", "Venezuela", "Puerto Rico", "Dominican Republic"
 ];
 
 const GENRES = [
@@ -570,8 +570,8 @@ export default function PRPage() {
     },
     onSuccess: () => {
       toast({
-        title: "¡Campaña creada!",
-        description: "Tu campaña PR ha sido creada exitosamente."
+        title: "Campaign created!",
+        description: "Your PR campaign was created successfully."
       });
       queryClient.invalidateQueries({ queryKey: ['/api/pr/campaigns'] });
       setActiveView("list");
@@ -580,7 +580,7 @@ export default function PRPage() {
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo crear la campaña. Inténtalo de nuevo.",
+        description: "Could not create the campaign. Please try again.",
         variant: "destructive"
       });
     }
@@ -594,8 +594,8 @@ export default function PRPage() {
     },
     onSuccess: (data: any) => {
       toast({
-        title: "¡Campaña activada!",
-        description: `Se contactarán ${data.mediaCount || 0} medios automáticamente.`
+        title: "Campaign activated!",
+        description: `${data.mediaCount || 0} media outlets will be contacted automatically.`
       });
       queryClient.invalidateQueries({ queryKey: ['/api/pr/campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pr/campaigns', selectedCampaign] });
@@ -603,7 +603,7 @@ export default function PRPage() {
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo activar la campaña.",
+        description: "Could not activate the campaign.",
         variant: "destructive"
       });
     }
@@ -617,8 +617,8 @@ export default function PRPage() {
     },
     onSuccess: () => {
       toast({
-        title: "Campaña pausada",
-        description: "La campaña ha sido pausada exitosamente."
+        title: "Campaign paused",
+        description: "The campaign was paused successfully."
       });
       queryClient.invalidateQueries({ queryKey: ['/api/pr/campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pr/campaigns', selectedCampaign] });
@@ -649,15 +649,15 @@ export default function PRPage() {
       if (data.pitch) {
         setFormData({ ...formData, pitchMessage: data.pitch });
         toast({
-          title: "¡Pitch generado!",
-          description: "El mensaje ha sido generado con IA."
+          title: "Pitch generated!",
+          description: "The message was generated with AI."
         });
       }
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo generar el pitch. Inténtalo de nuevo.",
+        description: "Could not generate the pitch. Please try again.",
         variant: "destructive"
       });
     }
@@ -669,7 +669,7 @@ export default function PRPage() {
         method: 'POST',
         body: JSON.stringify({
           text: formData.pitchMessage,
-          context: 'comunicación con medios musicales'
+          context: 'music media communication'
         })
       });
     },
@@ -677,15 +677,15 @@ export default function PRPage() {
       if (data.improvedText) {
         setFormData({ ...formData, pitchMessage: data.improvedText });
         toast({
-          title: "¡Texto mejorado!",
-          description: "El mensaje ha sido optimizado con IA."
+          title: "Text improved!",
+          description: "The message was optimized with AI."
         });
       }
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo mejorar el texto.",
+        description: "Could not improve the text.",
         variant: "destructive"
       });
     }
@@ -706,15 +706,15 @@ export default function PRPage() {
       if (data.suggestions && data.suggestions.length > 0) {
         setFormData({ ...formData, title: data.suggestions[0] });
         toast({
-          title: "¡Título sugerido!",
-          description: "Puedes editarlo si lo deseas."
+          title: "Title suggested!",
+          description: "You can edit it if you wish."
         });
       }
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudo generar título.",
+        description: "Could not generate a title.",
         variant: "destructive"
       });
     }
@@ -742,15 +742,15 @@ export default function PRPage() {
       if (data.contacts) {
         setMatchingContacts(data.contacts);
         toast({
-          title: `${data.count} contactos encontrados`,
-          description: "Contactos que coinciden con tu perfil de artista."
+          title: `${data.count} contacts found`,
+          description: "Contacts matching your artist profile."
         });
       }
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudieron buscar contactos.",
+        description: "Could not search for contacts.",
         variant: "destructive"
       });
     }
@@ -770,7 +770,7 @@ export default function PRPage() {
     onSuccess: (data: any) => {
       if (data.success) {
         toast({
-          title: `${data.saved} contactos nuevos`,
+          title: `${data.saved} new contacts`,
           description: data.message
         });
         // Refresh contacts after extraction
@@ -780,7 +780,7 @@ export default function PRPage() {
     onError: () => {
       toast({
         title: "Error",
-        description: "No se pudieron extraer contactos.",
+        description: "Could not extract contacts.",
         variant: "destructive"
       });
     }
@@ -795,7 +795,7 @@ export default function PRPage() {
         for (const country of formData.targetCountries.slice(0, 2)) {
           const genre = formData.targetGenres[0] || 'latin music';
           await extractContactsMutation.mutateAsync({
-            searchQuery: `${mediaType} ${genre} industria musical`,
+            searchQuery: `${mediaType} ${genre} music industry`,
             country,
             mediaType
           });
@@ -867,10 +867,10 @@ export default function PRPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      draft: { label: "Borrador", variant: "secondary" as const, icon: Clock },
-      active: { label: "Activa", variant: "default" as const, icon: Play },
-      paused: { label: "Pausada", variant: "outline" as const, icon: Pause },
-      completed: { label: "Completada", variant: "default" as const, icon: CheckCircle }
+      draft: { label: "Draft", variant: "secondary" as const, icon: Clock },
+      active: { label: "Active", variant: "default" as const, icon: Play },
+      paused: { label: "Paused", variant: "outline" as const, icon: Pause },
+      completed: { label: "Completed", variant: "default" as const, icon: CheckCircle }
     };
     const config = statusConfig[status as keyof typeof statusConfig];
     const Icon = config.icon;
@@ -894,10 +894,10 @@ export default function PRPage() {
 
   const getEventLabel = (eventType: string) => {
     const labels = {
-      email_sent: "Email enviado",
-      email_opened: "Email abierto",
-      media_replied: "Medio respondió",
-      interview_booked: "Entrevista agendada"
+      email_sent: "Email sent",
+      email_opened: "Email opened",
+      media_replied: "Media replied",
+      interview_booked: "Interview booked"
     };
     return labels[eventType as keyof typeof labels] || eventType;
   };
@@ -1202,10 +1202,10 @@ export default function PRPage() {
               >
                 <div>
                   <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                    Mis Campañas
+                    My Campaigns
                   </h2>
                   <p className="text-muted-foreground mt-1">
-                    Gestiona y monitorea tus campañas PR activas
+                    Manage and monitor your active PR campaigns
                   </p>
                 </div>
                 <motion.div
@@ -1217,7 +1217,7 @@ export default function PRPage() {
                     className="gap-2 bg-gradient-to-r from-primary to-purple-600 shadow-lg shadow-primary/20"
                   >
                     <Zap className="w-4 h-4" />
-                    Crear Campaña
+                    Create Campaign
                   </Button>
                 </motion.div>
               </motion.div>
@@ -1234,7 +1234,7 @@ export default function PRPage() {
                   >
                     <Loader2 className="w-12 h-12 text-primary" />
                   </motion.div>
-                  <p className="mt-4 text-muted-foreground">Cargando tus campañas...</p>
+                  <p className="mt-4 text-muted-foreground">Loading your campaigns...</p>
                 </motion.div>
               ) : campaignsData?.campaigns && campaignsData.campaigns.length > 0 ? (
                 <motion.div 
@@ -1367,11 +1367,11 @@ export default function PRPage() {
                       </motion.div>
                       
                       <h3 className="text-2xl font-bold mb-3 text-center">
-                        ¡Comienza tu primera campaña PR!
+                        Start your first PR campaign!
                       </h3>
                       <p className="text-muted-foreground mb-8 text-center max-w-md">
-                        Llega a radios, podcasts, TV y medios de todo el mundo con un solo clic. 
-                        Nuestra IA te ayudará a crear el pitch perfecto.
+                        Reach radio, podcasts, TV and media worldwide with a single click. 
+                        Our AI will help you craft the perfect pitch.
                       </p>
                       
                       <motion.div
@@ -1385,14 +1385,14 @@ export default function PRPage() {
                           data-testid="button-create-first-campaign"
                         >
                           <Rocket className="w-5 h-5" />
-                          Crear Primera Campaña
+                          Create First Campaign
                           <Sparkles className="w-4 h-4 ml-1" />
                         </Button>
                       </motion.div>
                       
                       {/* Feature Pills */}
                       <div className="flex flex-wrap gap-2 mt-8 justify-center">
-                        {["IA Generativa", "500+ Medios", "Emails Automáticos", "Analytics"].map((feature, i) => (
+                        {["Generative AI", "500+ Media Outlets", "Automated Emails", "Analytics"].map((feature, i) => (
                           <motion.div
                             key={feature}
                             initial={{ opacity: 0, y: 10 }}
@@ -1437,14 +1437,14 @@ export default function PRPage() {
                       <Rocket className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-2xl">Nueva Campaña PR</CardTitle>
+                      <CardTitle className="text-2xl">New PR Campaign</CardTitle>
                       <CardDescription className="mt-1">
-                        Paso {wizardStep} de 5: {
-                          wizardStep === 1 ? "Información Básica" :
-                          wizardStep === 2 ? "Contenido a Promocionar" :
-                          wizardStep === 3 ? "Target de Medios" :
-                          wizardStep === 4 ? "Mensaje y Contacto" :
-                          "Revisar y Lanzar"
+                        Step {wizardStep} of 5: {
+                          wizardStep === 1 ? "Basic Information" :
+                          wizardStep === 2 ? "Content to Promote" :
+                          wizardStep === 3 ? "Media Targeting" :
+                          wizardStep === 4 ? "Message & Contact" :
+                          "Review & Launch"
                         }
                       </CardDescription>
                     </div>
@@ -1484,7 +1484,7 @@ export default function PRPage() {
                   
                   {/* Step Labels */}
                   <div className="flex justify-between mt-3">
-                    {["Básico", "Contenido", "Target", "Mensaje", "Lanzar"].map((label, i) => (
+                    {["Basics", "Content", "Target", "Message", "Launch"].map((label, i) => (
                       <motion.span
                         key={label}
                         className={`text-xs ${i + 1 <= wizardStep ? "text-primary font-medium" : "text-muted-foreground"}`}
@@ -1527,10 +1527,10 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
                         <User className="w-4 h-4 text-white" />
                       </div>
-                      <Label data-testid="label-select-artist" className="text-lg font-semibold">Selecciona un Artista</Label>
+                      <Label data-testid="label-select-artist" className="text-lg font-semibold">Select an Artist</Label>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Elige uno de tus artistas creados en My Artists
+                      Pick one of your artists created in My Artists
                     </p>
                     {isLoadingArtists ? (
                       <motion.div 
@@ -1539,7 +1539,7 @@ export default function PRPage() {
                         transition={{ duration: 1.5, repeat: Infinity }}
                       >
                         <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground">Cargando tus artistas...</span>
+                        <span className="text-sm text-muted-foreground">Loading your artists...</span>
                       </motion.div>
                     ) : myArtists && myArtists.length > 0 ? (
                       <motion.div 
@@ -1617,7 +1617,7 @@ export default function PRPage() {
                           <User className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
                         </motion.div>
                         <p className="text-muted-foreground mb-4">
-                          No tienes artistas creados aún.
+                          You don't have any artists yet.
                         </p>
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                           <Button
@@ -1626,7 +1626,7 @@ export default function PRPage() {
                             onClick={() => window.location.href = '/my-artists'}
                           >
                             <Sparkles className="w-4 h-4" />
-                            Crear Artista
+                            Create Artist
                           </Button>
                         </motion.div>
                       </motion.div>
@@ -1646,7 +1646,7 @@ export default function PRPage() {
                           <Rocket className="w-4 h-4 text-white" />
                         </div>
                         <Label htmlFor="title" data-testid="label-campaign-title" className="text-lg font-semibold">
-                          Nombre de la Campaña
+                          Campaign Name
                         </Label>
                       </div>
                       {formData.artistName && formData.contentTitle && (
@@ -1665,14 +1665,14 @@ export default function PRPage() {
                             ) : (
                               <Sparkles className="w-3 h-3 text-primary" />
                             )}
-                            Generar con IA
+                            Generate with AI
                           </Button>
                         </motion.div>
                       )}
                     </div>
                     <Input
                       id="title"
-                      placeholder="Ej: Lanzamiento Single Noviembre 2025"
+                      placeholder="E.g: November 2025 Single Launch"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       className="h-12 text-base border-2 focus:border-primary transition-colors"
@@ -1690,7 +1690,7 @@ export default function PRPage() {
                     {/* Artist Name (auto-filled, editable) */}
                     <div className="space-y-2">
                       <Label htmlFor="artistName" data-testid="label-artist-name" className="flex items-center gap-2">
-                        Nombre del Artista 
+                        Artist Name 
                         {selectedArtistId && (
                           <motion.span 
                             className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -1699,13 +1699,13 @@ export default function PRPage() {
                             transition={{ type: "spring" }}
                           >
                             <CheckCircle className="w-3 h-3" />
-                            Auto-cargado
+                            Auto-filled
                           </motion.span>
                         )}
                       </Label>
                       <Input
                         id="artistName"
-                        placeholder="Nombre artístico"
+                        placeholder="Artist name"
                         value={formData.artistName}
                         onChange={(e) => setFormData({ ...formData, artistName: e.target.value })}
                         data-testid="input-artist-name"
@@ -1716,7 +1716,7 @@ export default function PRPage() {
                     {/* Artist Profile URL (auto-filled, editable) */}
                     <div className="space-y-2">
                       <Label htmlFor="artistProfileUrl" data-testid="label-profile-url" className="flex items-center gap-2">
-                        Link del Perfil
+                        Profile Link
                         {selectedArtistId && (
                           <motion.span 
                             className="text-xs bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -1725,13 +1725,13 @@ export default function PRPage() {
                             transition={{ type: "spring", delay: 0.1 }}
                           >
                             <CheckCircle className="w-3 h-3" />
-                            Auto-cargado
+                            Auto-filled
                           </motion.span>
                         )}
                       </Label>
                       <Input
                         id="artistProfileUrl"
-                        placeholder="https://boostifymusic.com/artist/tu-nombre"
+                        placeholder="https://boostifymusic.com/artist/your-name"
                         value={formData.artistProfileUrl}
                         onChange={(e) => setFormData({ ...formData, artistProfileUrl: e.target.value })}
                         data-testid="input-profile-url"
@@ -1750,12 +1750,12 @@ export default function PRPage() {
                     {selectedArtistId ? (
                       <>
                         <Sparkles className="w-4 h-4 text-green-500" />
-                        La información del artista se ha cargado automáticamente desde My Artists.
+                        Artist info was loaded automatically from My Artists.
                       </>
                     ) : (
                       <>
                         <Target className="w-4 h-4 text-muted-foreground" />
-                        Selecciona un artista arriba para cargar automáticamente su perfil.
+                        Select an artist above to auto-load their profile.
                       </>
                     )}
                   </motion.p>
@@ -1778,7 +1778,7 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
                         <Music className="w-4 h-4 text-white" />
                       </div>
-                      <Label data-testid="label-content-type" className="text-lg font-semibold">¿Qué estás promocionando?</Label>
+                      <Label data-testid="label-content-type" className="text-lg font-semibold">What are you promoting?</Label>
                     </div>
                     <motion.div 
                       className="grid grid-cols-2 md:grid-cols-3 gap-4"
@@ -1850,11 +1850,11 @@ export default function PRPage() {
                     <div className="space-y-2">
                       <Label htmlFor="contentTitle" data-testid="label-content-title" className="flex items-center gap-2">
                         <Video className="w-4 h-4 text-pink-500" />
-                        Título del Contenido
+                        Content Title
                       </Label>
                       <Input
                         id="contentTitle"
-                        placeholder="Ej: El Silencio Grita"
+                        placeholder="E.g: The Silence Screams"
                         value={formData.contentTitle}
                         onChange={(e) => setFormData({ ...formData, contentTitle: e.target.value })}
                         className="h-12 text-base border-2 focus:border-primary transition-colors"
@@ -1864,7 +1864,7 @@ export default function PRPage() {
                     <div className="space-y-2">
                       <Label htmlFor="contentUrl" data-testid="label-content-url" className="flex items-center gap-2">
                         <Globe className="w-4 h-4 text-blue-500" />
-                        Link al Contenido
+                        Content Link
                       </Label>
                       <Input
                         id="contentUrl"
@@ -1884,7 +1884,7 @@ export default function PRPage() {
                     transition={{ delay: 0.4 }}
                   >
                     <Sparkles className="w-4 h-4" />
-                    Soportamos Spotify, YouTube, Apple Music, SoundCloud y más.
+                    We support Spotify, YouTube, Apple Music, SoundCloud and more.
                   </motion.p>
                 </motion.div>
               )}
@@ -1906,9 +1906,9 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
                         <Radio className="w-4 h-4 text-white" />
                       </div>
-                      <Label className="text-lg font-semibold" data-testid="label-media-types">Tipos de Medios</Label>
+                      <Label className="text-lg font-semibold" data-testid="label-media-types">Media Types</Label>
                       <Badge variant="secondary" className="ml-auto">
-                        {formData.targetMediaTypes.length} seleccionados
+                        {formData.targetMediaTypes.length} selected
                       </Badge>
                     </div>
                     <motion.div 
@@ -1972,9 +1972,9 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
                         <Globe className="w-4 h-4 text-white" />
                       </div>
-                      <Label className="text-lg font-semibold" data-testid="label-countries">Países</Label>
+                      <Label className="text-lg font-semibold" data-testid="label-countries">Countries</Label>
                       <Badge variant="secondary" className="ml-auto">
-                        {formData.targetCountries.length} seleccionados
+                        {formData.targetCountries.length} selected
                       </Badge>
                     </div>
                     <motion.div 
@@ -2021,9 +2021,9 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center">
                         <Music className="w-4 h-4 text-white" />
                       </div>
-                      <Label className="text-lg font-semibold" data-testid="label-genres">Géneros Musicales</Label>
+                      <Label className="text-lg font-semibold" data-testid="label-genres">Music Genres</Label>
                       <Badge variant="secondary" className="ml-auto">
-                        {formData.targetGenres.length} seleccionados
+                        {formData.targetGenres.length} selected
                       </Badge>
                     </div>
                     <motion.div 
@@ -2079,10 +2079,10 @@ export default function PRPage() {
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
                         <Wand2 className="w-4 h-4 text-white" />
                       </div>
-                      <Label data-testid="label-template-type" className="text-lg font-semibold">Plantilla Base</Label>
+                      <Label data-testid="label-template-type" className="text-lg font-semibold">Base Template</Label>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Selecciona una plantilla profesional para generar tu pitch con IA
+                      Pick a professional template to generate your pitch with AI
                     </p>
                     <motion.div 
                       className="grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -2091,9 +2091,9 @@ export default function PRPage() {
                       animate="visible"
                     >
                       {[
-                        { id: 'artist_intro', name: 'Introducción de Artista', icon: User, color: 'from-blue-500 to-cyan-500' },
-                        { id: 'sync_opportunity', name: 'Oportunidad Sync', icon: Music, color: 'from-purple-500 to-violet-500' },
-                        { id: 'follow_up', name: 'Seguimiento', icon: Mail, color: 'from-green-500 to-emerald-500' }
+                        { id: 'artist_intro', name: 'Artist Introduction', icon: User, color: 'from-blue-500 to-cyan-500' },
+                        { id: 'sync_opportunity', name: 'Sync Opportunity', icon: Music, color: 'from-purple-500 to-violet-500' },
+                        { id: 'follow_up', name: 'Follow-Up', icon: Mail, color: 'from-green-500 to-emerald-500' }
                       ].map((template, index) => {
                         const Icon = template.icon;
                         const isSelected = formData.templateType === template.id;
@@ -2145,7 +2145,7 @@ export default function PRPage() {
                           <MessageSquare className="w-4 h-4 text-white" />
                         </div>
                         <Label htmlFor="pitchMessage" data-testid="label-pitch-message" className="text-lg font-semibold">
-                          Mensaje para Medios
+                          Message for Media
                         </Label>
                       </div>
                       <div className="flex gap-2">
@@ -2165,7 +2165,7 @@ export default function PRPage() {
                               ) : (
                                 <Wand2 className="w-3 h-3 text-primary" />
                               )}
-                              Mejorar
+                              Improve
                             </Button>
                           </motion.div>
                         )}
@@ -2185,7 +2185,7 @@ export default function PRPage() {
                               ) : (
                                 <Sparkles className="w-3 h-3" />
                               )}
-                              Generar con IA
+                              Generate with AI
                             </Button>
                           </motion.div>
                         )}
@@ -2193,7 +2193,7 @@ export default function PRPage() {
                     </div>
                     <Textarea
                       id="pitchMessage"
-                      placeholder="Ej: Redwine lanza su nuevo single 'El Silencio Grita', una fusión única de cine y música latina. Disponible ahora en todas las plataformas."
+                      placeholder="E.g: Redwine drops the new single 'The Silence Screams', a unique fusion of cinema and Latin music. Available now on all platforms."
                       value={formData.pitchMessage}
                       onChange={(e) => setFormData({ ...formData, pitchMessage: e.target.value })}
                       rows={5}
@@ -2207,7 +2207,7 @@ export default function PRPage() {
                         animate={{ opacity: 1 }}
                       >
                         <Sparkles className="w-4 h-4 text-primary" />
-                        Tip: Usa "Generar con IA" para crear un mensaje profesional automáticamente
+                        Tip: Use "Generate with AI" to create a professional message automatically
                       </motion.p>
                     )}
                   </motion.div>
@@ -2222,12 +2222,12 @@ export default function PRPage() {
                     <div className="space-y-2">
                       <Label htmlFor="contactEmail" data-testid="label-contact-email" className="flex items-center gap-2">
                         <Mail className="w-4 h-4 text-blue-500" />
-                        Email de Contacto
+                        Contact Email
                       </Label>
                       <Input
                         id="contactEmail"
                         type="email"
-                        placeholder="tu@email.com"
+                        placeholder="you@email.com"
                         value={formData.contactEmail}
                         onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
                         className="h-12 text-base border-2 focus:border-primary transition-colors"
@@ -2237,7 +2237,7 @@ export default function PRPage() {
                     <div className="space-y-2">
                       <Label htmlFor="contactPhone" data-testid="label-contact-phone" className="flex items-center gap-2">
                         <Phone className="w-4 h-4 text-green-500" />
-                        Teléfono/WhatsApp (Opcional)
+                        Phone/WhatsApp (Optional)
                       </Label>
                       <Input
                         id="contactPhone"
@@ -2270,7 +2270,7 @@ export default function PRPage() {
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-white" />
                       </div>
-                      <h3 className="text-xl font-bold">Resumen de la Campaña</h3>
+                      <h3 className="text-xl font-bold">Campaign Summary</h3>
                     </div>
                     
                     <motion.div 
@@ -2285,7 +2285,7 @@ export default function PRPage() {
                       >
                         <span className="text-muted-foreground flex items-center gap-2">
                           <Rocket className="w-4 h-4" />
-                          Nombre:
+                          Name:
                         </span>
                         <span className="font-semibold" data-testid="text-review-title">{formData.title}</span>
                       </motion.div>
@@ -2295,7 +2295,7 @@ export default function PRPage() {
                       >
                         <span className="text-muted-foreground flex items-center gap-2">
                           <User className="w-4 h-4" />
-                          Artista:
+                          Artist:
                         </span>
                         <span className="font-semibold" data-testid="text-review-artist">{formData.artistName}</span>
                       </motion.div>
@@ -2305,7 +2305,7 @@ export default function PRPage() {
                       >
                         <span className="text-muted-foreground flex items-center gap-2">
                           <Music className="w-4 h-4" />
-                          Contenido:
+                          Content:
                         </span>
                         <span className="font-semibold" data-testid="text-review-content">
                           {formData.contentTitle} ({formData.contentType})
@@ -2317,7 +2317,7 @@ export default function PRPage() {
                         <div className="p-3 bg-background rounded-xl">
                           <span className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
                             <Radio className="w-4 h-4" />
-                            Tipos de Medios:
+                            Media Types:
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {formData.targetMediaTypes.map((type) => (
@@ -2331,7 +2331,7 @@ export default function PRPage() {
                         <div className="p-3 bg-background rounded-xl">
                           <span className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
                             <Globe className="w-4 h-4" />
-                            Países:
+                            Countries:
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {formData.targetCountries.map((country) => (
@@ -2345,7 +2345,7 @@ export default function PRPage() {
                         <div className="p-3 bg-background rounded-xl">
                           <span className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
                             <Music className="w-4 h-4" />
-                            Géneros:
+                            Genres:
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {formData.targetGenres.map((genre) => (
@@ -2359,7 +2359,7 @@ export default function PRPage() {
                         <div className="p-4 bg-background rounded-xl">
                           <span className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
                             <MessageSquare className="w-4 h-4" />
-                            Mensaje:
+                            Message:
                           </span>
                           <p className="text-sm leading-relaxed" data-testid="text-review-message">
                             {formData.pitchMessage}
@@ -2379,7 +2379,7 @@ export default function PRPage() {
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="font-semibold flex items-center gap-2 text-lg">
                         <Users className="w-5 h-5 text-primary" />
-                        Contactos que coinciden con tu perfil
+                        Contacts matching your profile
                       </h4>
                       <div className="flex gap-2">
                         <Button
@@ -2395,7 +2395,7 @@ export default function PRPage() {
                           ) : (
                             <Target className="w-3 h-3" />
                           )}
-                          Buscar Contactos
+                          Find Contacts
                         </Button>
                         {prConfig?.apify && (
                           <Button
@@ -2411,7 +2411,7 @@ export default function PRPage() {
                             ) : (
                               <Globe className="w-3 h-3" />
                             )}
-                            Extraer de Web
+                            Extract from Web
                           </Button>
                         )}
                       </div>
@@ -2420,8 +2420,8 @@ export default function PRPage() {
                     {matchingContacts.length > 0 ? (
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-                          <span>{matchingContacts.length} contactos encontrados</span>
-                          <span>{selectedContacts.length} seleccionados</span>
+                          <span>{matchingContacts.length} contacts found</span>
+                          <span>{selectedContacts.length} selected</span>
                         </div>
                         {matchingContacts.map((contact) => (
                           <div 
@@ -2475,9 +2475,9 @@ export default function PRPage() {
                         >
                           <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
                         </motion.div>
-                        <p className="text-muted-foreground">Haz clic en "Buscar Contactos" para encontrar medios que coincidan con tu target.</p>
+                        <p className="text-muted-foreground">Click "Find Contacts" to discover media matching your target.</p>
                         {prConfig?.apify && (
-                          <p className="text-sm text-muted-foreground mt-2">O usa "Extraer de Web" para encontrar nuevos contactos automáticamente.</p>
+                          <p className="text-sm text-muted-foreground mt-2">Or use "Extract from Web" to find new contacts automatically.</p>
                         )}
                         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="mt-4">
                           <Button
@@ -2487,7 +2487,7 @@ export default function PRPage() {
                             className="gap-2"
                           >
                             <Users className="w-4 h-4" />
-                            Ver Base de Contactos Completa
+                            View Full Contact Database
                           </Button>
                         </motion.div>
                       </motion.div>
@@ -2627,7 +2627,7 @@ export default function PRPage() {
                       data-testid="button-wizard-back"
                     >
                       <ArrowRight className="w-4 h-4 rotate-180" />
-                      {wizardStep === 1 ? "Cancelar" : "Atrás"}
+                      {wizardStep === 1 ? "Cancel" : "Back"}
                     </Button>
                   </motion.div>
                   
@@ -2657,17 +2657,17 @@ export default function PRPage() {
                           >
                             <Loader2 className="w-4 h-4" />
                           </motion.div>
-                          Creando campaña...
+                          Creating campaign...
                         </>
                       ) : wizardStep === 5 ? (
                         <>
                           <Rocket className="w-4 h-4" />
-                          Lanzar Campaña
+                          Launch Campaign
                           <Sparkles className="w-4 h-4 ml-1" />
                         </>
                       ) : (
                         <>
-                          Siguiente
+                          Next
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -2708,7 +2708,7 @@ export default function PRPage() {
                   data-testid="button-back-to-list"
                 >
                   <ArrowRight className="w-4 h-4 rotate-180" />
-                  Volver a campañas
+                  Back to campaigns
                 </Button>
               </motion.div>
             </motion.div>
@@ -2726,7 +2726,7 @@ export default function PRPage() {
                 >
                   <Loader2 className="w-8 h-8 text-primary" />
                 </motion.div>
-                <p className="mt-4 text-muted-foreground">Cargando detalles de la campaña...</p>
+                <p className="mt-4 text-muted-foreground">Loading campaign details...</p>
               </motion.div>
             ) : campaignDetails?.campaign ? (
               <>
@@ -2802,7 +2802,7 @@ export default function PRPage() {
                                 ) : (
                                   <Pause className="w-4 h-4" />
                                 )}
-                                Pausar
+                                Pause
                               </Button>
                             </motion.div>
                           )}
@@ -2819,10 +2819,10 @@ export default function PRPage() {
                         animate="visible"
                       >
                         {[
-                          { label: "Medios Contactados", value: campaignDetails.campaign.mediaContacted, icon: Send, color: "from-blue-500 to-cyan-500", bgColor: "bg-blue-500/10" },
-                          { label: "Emails Abiertos", value: campaignDetails.campaign.emailsOpened, icon: Eye, color: "from-green-500 to-emerald-500", bgColor: "bg-green-500/10" },
-                          { label: "Respuestas", value: campaignDetails.campaign.mediaReplied, icon: MessageSquare, color: "from-yellow-500 to-orange-500", bgColor: "bg-yellow-500/10" },
-                          { label: "Entrevistas Agendadas", value: campaignDetails.campaign.interviewsBooked, icon: Star, color: "from-primary to-purple-500", bgColor: "bg-primary/10" }
+                          { label: "Media Contacted", value: campaignDetails.campaign.mediaContacted, icon: Send, color: "from-blue-500 to-cyan-500", bgColor: "bg-blue-500/10" },
+                          { label: "Emails Opened", value: campaignDetails.campaign.emailsOpened, icon: Eye, color: "from-green-500 to-emerald-500", bgColor: "bg-green-500/10" },
+                          { label: "Replies", value: campaignDetails.campaign.mediaReplied, icon: MessageSquare, color: "from-yellow-500 to-orange-500", bgColor: "bg-yellow-500/10" },
+                          { label: "Interviews Booked", value: campaignDetails.campaign.interviewsBooked, icon: Star, color: "from-primary to-purple-500", bgColor: "bg-primary/10" }
                         ].map((stat, i) => (
                           <motion.div
                             key={stat.label}
@@ -2858,7 +2858,7 @@ export default function PRPage() {
                       >
                         <h4 className="font-semibold flex items-center gap-2">
                           <TrendingUp className="w-5 h-5 text-primary" />
-                          Métricas de Rendimiento
+                          Performance Metrics
                         </h4>
                         
                         <div className="space-y-5">
@@ -2866,7 +2866,7 @@ export default function PRPage() {
                             <div className="flex justify-between text-sm mb-3">
                               <span className="flex items-center gap-2 text-muted-foreground">
                                 <Eye className="w-4 h-4" />
-                                Tasa de Apertura
+                                Open Rate
                               </span>
                               <span className="font-bold text-lg text-green-500">
                                 {Math.round((campaignDetails.campaign.emailsOpened / campaignDetails.campaign.mediaContacted) * 100)}%
@@ -2887,7 +2887,7 @@ export default function PRPage() {
                               <div className="flex justify-between text-sm mb-3">
                                 <span className="flex items-center gap-2 text-muted-foreground">
                                   <MessageSquare className="w-4 h-4" />
-                                  Tasa de Conversión (Respuestas)
+                                  Conversion Rate (Replies)
                                 </span>
                                 <span className="font-bold text-lg text-yellow-500">
                                   {Math.round((campaignDetails.campaign.mediaReplied / campaignDetails.campaign.emailsOpened) * 100)}%
@@ -2921,9 +2921,9 @@ export default function PRPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Clock className="w-5 h-5 text-primary" />
-                          Actividad Reciente
+                          Recent Activity
                         </CardTitle>
-                        <CardDescription>Últimas interacciones con medios</CardDescription>
+                        <CardDescription>Latest interactions with media outlets</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <motion.div 
@@ -2964,7 +2964,7 @@ export default function PRPage() {
                                   )}
                                 </div>
                                 <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {new Date(event.createdAt).toLocaleDateString('es-ES', {
+                                  {new Date(event.createdAt).toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     hour: '2-digit',

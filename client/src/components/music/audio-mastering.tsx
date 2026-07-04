@@ -22,6 +22,7 @@ import { apiRequest } from "@/lib/queryClient";
 
 // ─── Hero images (Unsplash free) ──────────────────────────────────────────────
 const HERO_IMAGES = {
+  master:    "https://images.unsplash.com/photo-1519508234439-4f23643125c1?w=800&q=80",
   stems:     "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&q=80",
   voice:     "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=800&q=80",
   beat:      "https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=800&q=80",
@@ -29,14 +30,33 @@ const HERO_IMAGES = {
   cloneVoice:"https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&q=80",
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type Tab = "stems" | "voice-clone" | "beat" | "transcribe" | "history";
+// ─── Types ──────────────────────────────────────────────────────────────────────
+type Tab = "master" | "stems" | "voice-clone" | "beat" | "transcribe" | "history";
 
 interface StemResult {
   vocals: string | null;
   drums: string | null;
   bass: string | null;
   other: string | null;
+  guitar?: string | null;
+  piano?: string | null;
+}
+
+interface MasterStats {
+  inputLufs: number;
+  inputTruePeak: number;
+  inputLra: number;
+  targetLufs: number;
+  targetTruePeak: number;
+  outputLufs: number;
+  outputTruePeak: number;
+}
+
+interface MasterResult {
+  audioUrl: string;
+  preset: string;
+  presetLabel: string;
+  stats: MasterStats;
 }
 
 interface HistoryItem {
@@ -171,7 +191,7 @@ function UploadZone({
 export function AudioMastering() {
   const { toast } = useToast();
   const [user] = useAuthState(auth);
-  const [activeTab, setActiveTab] = useState<Tab>("stems");
+  const [activeTab, setActiveTab] = useState<Tab>("master");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -179,7 +199,12 @@ export function AudioMastering() {
   // ── Stems state
   const [stemsFile, setStemsFile] = useState<File | null>(null);
   const [stemResult, setStemResult] = useState<StemResult | null>(null);
-  const [stemsModel, setStemsModel] = useState<"htdemucs" | "htdemucs_ft" | "mdx_extra">("htdemucs");
+  const [stemsModel, setStemsModel] = useState<"htdemucs_6s" | "htdemucs" | "htdemucs_ft">("htdemucs_6s");
+
+  // ── Mastering state (REAL ffmpeg EBU R128)
+  const [masterFile, setMasterFile] = useState<File | null>(null);
+  const [masterPreset, setMasterPreset] = useState("streaming");
+  const [masterResult, setMasterResult] = useState<MasterResult | null>(null);
 
   // ── Voice clone state
   const [cloneRefFile, setCloneRefFile] = useState<File | null>(null);
@@ -197,14 +222,47 @@ export function AudioMastering() {
   const [transcribeText, setTranscribeText] = useState<string | null>(null);
   const [transcribeChunks, setTranscribeChunks] = useState<any[]>([]);
 
-  // ─── Upload helper
+  // ─── Upload helper — server-side upload returns a PUBLIC https URL that FAL
+  // can fetch (client blob:/objectURL fallbacks are NOT reachable by FAL).
   async function uploadFile(file: File): Promise<string> {
-    if (user?.uid) {
-      return uploadAudioFile(file, "mastering", user.uid);
+    try {
+      const fd = new FormData();
+      fd.append("audio", file);
+      const res = await fetch("/api/mastering/upload", { method: "POST", body: fd, credentials: "include" });
+      const data = await res.json();
+      if (res.ok && data.audioUrl) return data.audioUrl;
+      throw new Error(data.error || "Server upload failed");
+    } catch (e) {
+      // Fallback: client-side Firebase upload (prod only)
+      if (user?.uid) return uploadAudioFile(file, "mastering", user.uid);
+      throw e;
     }
-    // fallback: convert to object URL for demo
-    return URL.createObjectURL(file);
   }
+
+  // ─── REAL Mastering (two-pass EBU R128 loudnorm on the server)
+  const handleMaster = async () => {
+    if (!masterFile) { toast({ title: "Upload an audio file first", variant: "destructive" }); return; }
+    setBusy(true); setProgress(10); setMasterResult(null);
+    try {
+      toast({ title: "⏳ Uploading track…" });
+      const audioUrl = await uploadFile(masterFile);
+      setProgress(35);
+      toast({ title: "🎛️ Mastering — measuring real loudness (LUFS)…" });
+      const data = await apiRequest("/api/mastering/master", {
+        method: "POST",
+        body: JSON.stringify({ audioUrl, preset: masterPreset }),
+      });
+      setProgress(100);
+      setMasterResult(data);
+      addHistory("master", `${masterFile.name} → ${data.presetLabel}`, data.audioUrl, data.stats);
+      toast({
+        title: "✅ Master ready!",
+        description: `${data.stats.inputLufs.toFixed(1)} → ${data.stats.outputLufs.toFixed(1)} LUFS (target ${data.stats.targetLufs})`,
+      });
+    } catch (err: any) {
+      toast({ title: "Mastering failed", description: err.message, variant: "destructive" });
+    } finally { setBusy(false); setProgress(0); }
+  };
 
   // ─── Stem separation
   const handleSeparateStems = async () => {
@@ -330,9 +388,10 @@ export function AudioMastering() {
               </p>
               <div className="flex flex-wrap gap-4 pt-1 text-xs text-muted-foreground">
                 {[
-                  { icon: Split, label: "Demucs Stem Separation" },
+                  { icon: Waves, label: "Real EBU R128 Mastering" },
+                  { icon: Split, label: "Demucs 6-Stem Separation" },
                   { icon: MicVocal, label: "F5-TTS Voice Clone" },
-                  { icon: Drum, label: "Stable Audio Beats" },
+                  { icon: Drum, label: "Stable Audio 2.5 Beats" },
                   { icon: FileAudio, label: "Whisper v3 Transcribe" },
                 ].map(({ icon: Icon, label }) => (
                   <span key={label} className="flex items-center gap-1.5">
@@ -356,13 +415,15 @@ export function AudioMastering() {
 
       {/* ─── Tool grid ──────────────────────────────────────────────────────── */}
       <div className="container mx-auto px-4 pt-8 space-y-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <ToolCard icon={Waves}     title="Mastering"       description="Real LUFS mastering for streaming"
+            badge="EBU R128"   image={HERO_IMAGES.master}     active={activeTab === "master"}       onClick={() => setActiveTab("master")} />
           <ToolCard icon={Split}     title="Stem Separation" description="Isolate vocals, drums, bass & more"
             badge="FAL Demucs" image={HERO_IMAGES.stems}      active={activeTab === "stems"}        onClick={() => setActiveTab("stems")} />
           <ToolCard icon={MicVocal}  title="Voice Clone"     description="Synthesize speech with any voice"
             badge="F5-TTS"     image={HERO_IMAGES.cloneVoice} active={activeTab === "voice-clone"}  onClick={() => setActiveTab("voice-clone")} />
           <ToolCard icon={Drum}      title="Beat Generator"  description="Text-to-audio beat generation"
-            badge="Stable Audio" image={HERO_IMAGES.beat}     active={activeTab === "beat"}         onClick={() => setActiveTab("beat")} />
+            badge="Stable Audio 2.5" image={HERO_IMAGES.beat} active={activeTab === "beat"}         onClick={() => setActiveTab("beat")} />
           <ToolCard icon={FileAudio} title="Transcribe"      description="Extract lyrics with timestamps"
             badge="Whisper v3"  image={HERO_IMAGES.transcribe} active={activeTab === "transcribe"}  onClick={() => setActiveTab("transcribe")} />
         </div>
@@ -385,7 +446,106 @@ export function AudioMastering() {
         </AnimatePresence>
 
         {/* ─── Panel ──────────────────────────────────────────────────────────── */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait">          {/* ══ MASTERING (REAL — ffmpeg EBU R128) ══ */}
+          {activeTab === "master" && (
+            <motion.div key="master" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
+              className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold flex items-center gap-2 mb-1">
+                    <Waves className="w-5 h-5 text-orange-400" /> AI Mastering
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Real two-pass EBU R128 mastering. We measure your track's actual loudness (LUFS), true peak and dynamic range, then normalize it to the exact target of your platform — no simulation.
+                  </p>
+                </div>
+
+                <UploadZone label="Drop your mix here" hint="WAV, MP3, FLAC · max 100 MB"
+                  file={masterFile} onChange={setMasterFile} />
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Target Platform</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {([
+                      { id: "streaming", label: "Streaming", sub: "-14 LUFS · Spotify/YT" },
+                      { id: "tiktok",    label: "TikTok",    sub: "-10 LUFS · Social" },
+                      { id: "club",      label: "Club / DJ", sub: "-8 LUFS · Loud" },
+                      { id: "radio",     label: "Radio",     sub: "-16 LUFS · Broadcast" },
+                      { id: "podcast",   label: "Podcast",   sub: "-16 LUFS · Voice" },
+                    ] as const).map(m => (
+                      <button key={m.id} onClick={() => setMasterPreset(m.id)}
+                        className={`rounded-xl border p-2.5 text-center transition-all ${
+                          masterPreset === m.id
+                            ? "border-orange-500/60 bg-orange-500/10 text-orange-400"
+                            : "border-white/8 bg-white/3 text-muted-foreground hover:border-white/20"
+                        }`}>
+                        <p className="text-xs font-semibold">{m.label}</p>
+                        <p className="text-[10px] opacity-70">{m.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button onClick={handleMaster} disabled={busy || !masterFile}
+                  className="w-full h-11 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 font-semibold">
+                  {busy ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Mastering…</> : <><Waves className="w-4 h-4 mr-2" /> Master Track</>}
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative h-52 rounded-2xl overflow-hidden border border-white/5">
+                  <img src={HERO_IMAGES.master} alt="mastering" className="w-full h-full object-cover opacity-50" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                    <Waves className="w-10 h-10 text-orange-400 opacity-80" />
+                    <p className="text-sm font-semibold">Two-Pass Loudness Normalization</p>
+                    <p className="text-xs text-muted-foreground">EBU R128 · measured LUFS / true peak / LRA · 320 kbps output</p>
+                  </div>
+                </div>
+
+                {masterResult && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+                    <h3 className="text-sm font-semibold text-orange-400 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> Master Ready — {masterResult.presetLabel}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "Loudness", before: `${masterResult.stats.inputLufs.toFixed(1)}`, after: `${masterResult.stats.outputLufs.toFixed(1)}`, unit: "LUFS" },
+                        { label: "True Peak", before: `${masterResult.stats.inputTruePeak.toFixed(1)}`, after: `${masterResult.stats.outputTruePeak.toFixed(1)}`, unit: "dBTP" },
+                        { label: "Target", before: "—", after: `${masterResult.stats.targetLufs}`, unit: "LUFS" },
+                      ].map(s => (
+                        <div key={s.label} className="bg-zinc-900 border border-white/8 rounded-xl p-3 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{s.label}</p>
+                          <p className="text-sm font-bold text-white mt-1">
+                            {s.before !== "—" && <span className="text-muted-foreground font-normal">{s.before} → </span>}
+                            <span className="text-orange-400">{s.after}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{s.unit}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <AudioPlayer url={masterResult.audioUrl} label="🎛️ Mastered Track (320 kbps)" />
+                  </motion.div>
+                )}
+
+                <div className="bg-zinc-900 border border-white/5 rounded-2xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What happens</p>
+                  {[
+                    "Pass 1: ffmpeg measures real LUFS, true peak & LRA (EBU R128)",
+                    "Pass 2: linear loudness normalization to your platform target",
+                    "Output: 44.1 kHz / 320 kbps MP3 uploaded to your storage",
+                    "Before/after stats are real measurements, not estimates",
+                  ].map((step, i) => (
+                    <div key={i} className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
           {/* ══ STEM SEPARATION ══ */}
           {activeTab === "stems" && (
             <motion.div key="stems" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
@@ -407,9 +567,9 @@ export function AudioMastering() {
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Model Quality</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: "htdemucs", label: "HTDemucs", sub: "Fast · Good" },
-                      { id: "htdemucs_ft", label: "Fine-tuned", sub: "Balanced" },
-                      { id: "mdx_extra", label: "MDX Extra", sub: "Best quality" },
+                      { id: "htdemucs_6s", label: "6-Stem", sub: "+ Guitar & Piano" },
+                      { id: "htdemucs", label: "HTDemucs", sub: "Fast · 4 stems" },
+                      { id: "htdemucs_ft", label: "Fine-tuned", sub: "Best 4-stem" },
                     ] as const).map(m => (
                       <button key={m.id} onClick={() => setStemsModel(m.id)}
                         className={`rounded-xl border p-2 text-center transition-all ${
@@ -457,7 +617,9 @@ export function AudioMastering() {
                       { key: "vocals", label: "🎤 Vocals", icon: MicVocal },
                       { key: "drums", label: "🥁 Drums", icon: Drum },
                       { key: "bass", label: "🎸 Bass", icon: AudioLines },
-                      { key: "other", label: "🎹 Other", icon: Music2 },
+                      { key: "other", label: "� Other", icon: Music2 },
+                      { key: "guitar", label: "🎸 Guitar", icon: Guitar },
+                      { key: "piano", label: "🎹 Piano", icon: Piano },
                     ].map(({ key, label }) => {
                       const url = (stemResult as any)[key];
                       return url ? <AudioPlayer key={key} url={url} label={label} /> : null;
@@ -497,7 +659,7 @@ export function AudioMastering() {
                   <Textarea value={cloneGenText} onChange={e => setCloneGenText(e.target.value)} rows={3}
                     placeholder="Enter the text you want spoken in the cloned voice…"
                     className="bg-zinc-900 border-white/10 focus:border-orange-500/50 resize-none" />
-                  <p className="text-xs text-muted-foreground">{cloneGenText.length} / 1000</p>
+                  <p className="text-xs text-muted-foreground">{cloneGenText.length} / 5000</p>
                 </div>
 
                 <Button onClick={handleCloneVoice} disabled={busy || !cloneRefFile || !cloneGenText.trim()}
@@ -571,10 +733,10 @@ export function AudioMastering() {
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Duration</Label>
                     <span className="text-xs text-orange-400 font-semibold">{beatSeconds}s</span>
                   </div>
-                  <Slider min={5} max={90} step={5} value={[beatSeconds]} onValueChange={v => setBeatSeconds(v[0])}
+                  <Slider min={5} max={120} step={5} value={[beatSeconds]} onValueChange={v => setBeatSeconds(v[0])}
                     className="py-2" />
                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>5s</span><span>30s</span><span>60s</span><span>90s</span>
+                    <span>5s</span><span>30s</span><span>60s</span><span>120s</span>
                   </div>
                 </div>
 
@@ -620,8 +782,8 @@ export function AudioMastering() {
 
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: Zap, title: "AI-Powered", desc: "Stable Audio model" },
-                    { icon: Clock, title: "Up to 90s", desc: "Full tracks" },
+                    { icon: Zap, title: "AI-Powered", desc: "Stable Audio 2.5" },
+                    { icon: Clock, title: "Up to 2 min", desc: "Full tracks" },
                     { icon: Music2, title: "Any Genre", desc: "Trap, house, jazz…" },
                     { icon: Download, title: "Royalty-Free", desc: "Use commercially" },
                   ].map(({ icon: Icon, title, desc }) => (

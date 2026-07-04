@@ -16,19 +16,44 @@ const router = Router();
 
 // Initialize OpenAI client
 import { createTrackedOpenAI } from '../utils/tracked-openai';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import OpenAI from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 const openai = createTrackedOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Helper function to call OpenAI and extract JSON response
+// ─── GLM-5.2 (z.ai) — primary generation model, OpenAI fallback ────────────
+const glm: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+// Helper function: GLM-5.2 → OpenAI cascade, returns raw JSON-ish text
 async function callOpenAI(prompt: string): Promise<string> {
+  const messages = [
+    { role: 'system' as const, content: 'You are a TikTok growth expert and viral content strategist. Always respond with valid JSON only, no markdown fences.' },
+    { role: 'user' as const, content: prompt }
+  ];
+  if (glm) {
+    try {
+      const res = await glm.chat.completions.create({
+        model: 'glm-5.2',
+        messages,
+        temperature: 0.8,
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
+      });
+      const text = res.choices[0]?.message?.content;
+      if (text) {
+        console.log('[tiktok-tools] GLM-5.2 ✅');
+        return text;
+      }
+    } catch (e: any) {
+      console.warn('[tiktok-tools] GLM-5.2 failed, falling back to OpenAI:', e?.message);
+    }
+  }
   const response = await openai.chat.completions.create({
     model: PRIMARY_MODEL,
-    messages: [
-      { role: 'system', content: 'You are a TikTok growth expert and viral content strategist. Always respond with valid JSON only, no markdown fences.' },
-      { role: 'user', content: prompt }
-    ],
+    messages,
     temperature: 0.8,
   });
   return response.choices[0]?.message?.content || '{}';
@@ -315,6 +340,51 @@ Be realistic with scores. Consider:
   } catch (error) {
     console.error('Error analyzing TikTok viral score:', error);
     res.status(500).json({ error: 'Failed to analyze viral potential' });
+  }
+});
+
+/**
+ * POST /api/tiktok/tiktok-live-kit
+ * AI Live Kit — everything an artist needs to run a great TikTok LIVE:
+ * title options, opening hook, run-of-show segments, engagement prompts,
+ * profile plug script (drives viewers to the Boostify artist profile).
+ */
+router.post('/tiktok-live-kit', async (req: Request, res: Response) => {
+  try {
+    const { artistName, genre, liveTopic, durationMinutes, profileUrl } = req.body;
+    if (!artistName) {
+      return res.status(400).json({ error: 'artistName is required' });
+    }
+
+    const prompt = `Create a complete TikTok LIVE kit for music artist "${artistName}"${genre ? ` (genre: ${genre})` : ''}.
+Live topic/theme: ${liveTopic || 'connecting with fans, playing music, Q&A'}.
+Target duration: ${durationMinutes || 30} minutes.
+${profileUrl ? `The artist's Boostify profile (viewers should visit it): ${profileUrl}` : ''}
+
+Return JSON:
+{
+  "titles": ["3 scroll-stopping LIVE titles under 32 chars"],
+  "openingHook": "first 30 seconds script to hook viewers who join",
+  "runOfShow": [
+    { "minute": "0-5", "segment": "Segment name", "notes": "what to do/say" }
+  ],
+  "engagementPrompts": ["6 questions/prompts to keep chat active"],
+  "profilePlug": "natural 2-sentence script to send viewers to the artist's Boostify profile (mention the link in bio / QR on screen)",
+  "giftGoals": ["2 fun gift-goal ideas that reward viewers"],
+  "hashtags": ["5 hashtags for the pre-live announcement post"],
+  "announcementCaption": "caption for the video/post announcing this LIVE"
+}
+Make the runOfShow cover the full ${durationMinutes || 30} minutes in 4-6 segments.`;
+
+    const raw = await callOpenAI(prompt);
+    const result = parseJSON(raw);
+    if (!result) {
+      return res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Error generating TikTok live kit:', error);
+    res.status(500).json({ error: 'Failed to generate live kit' });
   }
 });
 

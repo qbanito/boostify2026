@@ -1485,53 +1485,177 @@ router.post('/generate-hero', authenticate, async (req: Request, res: Response) 
  * Generate 1-4 fashion images with Flux Pro Kontext T2I (best model).
  * Saves to Firestore image_galleries for artist profile gallery.
  */
+// ════════════════════════════════════════════════════════════════
+// EDITORIAL FASHION STYLE PRESETS — commercial, magazine-grade looks
+// Each preset is a full art-direction brief (scene, styling, light,
+// camera) so results look like real fashion campaigns, not AI slop.
+// ════════════════════════════════════════════════════════════════
+export interface FashionStylePreset {
+  key: string;
+  label: string;
+  description: string;
+  prompt: string;
+  imageSize: 'portrait_4_3' | 'square_hd' | 'landscape_16_9';
+}
+
+const FASHION_STYLE_PRESETS: FashionStylePreset[] = [
+  {
+    key: 'editorial-flora',
+    label: 'Editorial Flora',
+    description: 'Endless flower field, long coat, overcast nordic light',
+    imageSize: 'portrait_4_3',
+    prompt: 'standing alone in an endless field of vivid blue muscari flowers stretching to a foggy horizon, wearing an oversized tailored long coat in a bold solid color over a cream knit dress, tinted oval sunglasses, white ankle boots, full body, symmetrical centered composition, overcast soft diffused nordic light, muted desaturated sky, high fashion editorial for a European magazine, shot on medium format film, rich color grading',
+  },
+  {
+    key: 'studio-heritage',
+    label: 'Studio Heritage',
+    description: 'Warm gradient studio, suede & leather workwear',
+    imageSize: 'portrait_4_3',
+    prompt: 'three-quarter portrait against a warm peach-to-cream gradient studio backdrop, wearing a premium brown suede chore jacket with black leather collar, eyes lowered in a contemplative pose, braided or textured hair styling, soft directional key light with gentle falloff, visible fabric texture and stitching detail, luxury heritage workwear campaign, medium format studio photography, editorial retouching',
+  },
+  {
+    key: 'night-editorial',
+    label: 'Night Editorial',
+    description: 'Dark glossy set, rim light, silk & lens flare',
+    imageSize: 'landscape_16_9',
+    prompt: 'centered inside a giant glass lens ring on a black set, wearing monogrammed navy silk pajama-style shirt with white piping, wet-look slicked hair, deep red and magenta practical lights glowing behind, glossy rim lighting on skin, confident direct gaze into camera, night luxury campaign for a fashion house, cinematic anamorphic look, deep blacks',
+  },
+  {
+    key: 'product-hero',
+    label: 'Product Hero',
+    description: 'Riverflow-style product-centric shot with the artist',
+    imageSize: 'square_hd',
+    prompt: 'holding and presenting a signature merch product close to camera, saturated color-blocked lighting in the brand palette, product label crisp and legible, shallow depth of field with the product tack sharp, editorial commercial photography like a premium DTC brand campaign, studio strobes with colored gels, ultra-detailed product texture',
+  },
+  {
+    key: 'lookbook-minimal',
+    label: 'Lookbook Minimal',
+    description: 'Clean e-commerce lookbook, neutral seamless',
+    imageSize: 'portrait_4_3',
+    prompt: 'full body lookbook shot on a neutral light-grey seamless background, wearing an elevated minimal outfit with strong silhouette, relaxed natural pose looking slightly off-camera, even soft wraparound lighting, true-to-color garment rendering, e-commerce premium lookbook photography, 85mm lens, clean shadows under feet',
+  },
+  {
+    key: 'street-golden',
+    label: 'Street Golden Hour',
+    description: 'Urban editorial, warm rooftop sunset light',
+    imageSize: 'portrait_4_3',
+    prompt: 'urban rooftop at golden hour, wearing luxury streetwear layers with statement outerwear, dynamic mid-stride pose, warm rim light from the setting sun with city skyline bokeh behind, film grain, confident energy, street style editorial for a culture magazine, 50mm lens, backlit hair detail',
+  },
+  {
+    key: 'spice-market',
+    label: 'Artisan Market',
+    description: 'Warm bazaar textures, rich color story',
+    imageSize: 'portrait_4_3',
+    prompt: 'in a warm artisan spice market with pyramids of colored spices softly out of focus behind, wearing textured natural-fabric garments in earth tones with gold jewelry accents, warm tungsten and daylight mix, rich amber color grading, sensory editorial campaign photography, tactile fabric and skin detail, medium close-up',
+  },
+  {
+    key: 'character-sheet',
+    label: 'Character Sheet',
+    description: 'Full model sheet: turnaround, head study, wardrobe',
+    imageSize: 'landscape_16_9',
+    prompt: 'professional character design sheet on a cream paper background: full-body turnaround (front, 3/4, profile, back), head study grid with multiple expressions and angles, wardrobe breakdown of each garment laid flat with fabric swatches, color palette strip, cinematic portrait inset, elegant serif typography labels, fashion-brand identity board, ultra organized layout, consistent identity across all views',
+  },
+];
+
+/** Commercial quality suffix appended to every generation */
+const COMMERCIAL_SUFFIX = 'commercially licensed fashion campaign quality, photorealistic, impeccable styling, professional hair and makeup, sharp focus on face, no watermarks, no text artifacts';
+
+// GET /api/fashion/style-presets — public list for pickers
+router.get('/style-presets', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    presets: FASHION_STYLE_PRESETS.map(({ key, label, description, imageSize }) => ({ key, label, description, imageSize })),
+  });
+});
+
 router.post('/generate-images', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = await getUserPgId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const { prompt, artistId, artistName, numImages, imageSize, sessionTitle } = req.body as {
-      prompt: string;
+    const { prompt, artistId, artistName, numImages, imageSize, sessionTitle, styleKey, referenceImageUrl } = req.body as {
+      prompt?: string;
       artistId?: string | number;
       artistName?: string;
       numImages?: number;
       imageSize?: string;
       sessionTitle?: string;
+      styleKey?: string;
+      referenceImageUrl?: string;
     };
 
-    if (!prompt || prompt.trim().length < 5) {
-      return res.status(400).json({ error: 'prompt is required' });
+    const preset = styleKey ? FASHION_STYLE_PRESETS.find((p) => p.key === styleKey) : undefined;
+    const scenePrompt = (prompt || '').trim() || preset?.prompt || '';
+    if (scenePrompt.length < 5 && !preset) {
+      return res.status(400).json({ error: 'prompt or styleKey is required' });
     }
 
     const FAL_KEY = process.env.FAL_KEY || process.env.FAL_KEY_BACKUP;
     if (!FAL_KEY) return res.status(500).json({ error: 'FAL_KEY not configured' });
 
     const count = Math.min(Math.max(numImages || 1, 1), 4);
-    const enhancedPrompt = `${artistName ? `${artistName}, music artist, ` : ''}${prompt.trim()}, high fashion editorial photography, luxury aesthetic, cinematic lighting, professional quality`;
+    const finalSize = imageSize || preset?.imageSize || 'portrait_4_3';
+    const hasReference = !!referenceImageUrl && /^https?:\/\//i.test(referenceImageUrl);
 
-    const falRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext/text-to-image', {
-      method: 'POST',
-      headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: enhancedPrompt,
-        image_size: imageSize || 'portrait_4_3',
-        num_images: count,
-        num_inference_steps: 28,
-        guidance_scale: 3.5,
-      }),
-    });
+    // Combine: preset art direction + user's custom scene + commercial suffix
+    const artDirection = [preset?.prompt, prompt?.trim()].filter(Boolean).join(', ');
 
-    if (!falRes.ok) {
-      const errText = await falRes.text();
-      return res.status(502).json({ error: 'FAL API failed', detail: errText });
+    let imageUrls: string[] = [];
+    let modelUsed = '';
+
+    if (hasReference) {
+      // ── LIKENESS MODE: FLUX Kontext image-to-image keeps the artist's real
+      // face/identity while restyling the whole scene — commercializable look.
+      modelUsed = 'flux-pro/kontext (image-to-image, likeness)';
+      const likenessPrompt = `Transform this person into a high fashion campaign image, KEEPING their exact face, identity, skin tone and features: ${artDirection}, ${COMMERCIAL_SUFFIX}`;
+      const falRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: likenessPrompt,
+          image_url: referenceImageUrl,
+          num_images: count,
+          guidance_scale: 3.5,
+          output_format: 'jpeg',
+          safety_tolerance: '2',
+        }),
+      });
+      if (falRes.ok) {
+        const falData: any = await falRes.json();
+        imageUrls = (falData?.images || []).map((img: any) => img?.url).filter(Boolean);
+      } else {
+        console.warn('[fashion] kontext i2i failed, falling back to t2i:', await falRes.text().catch(() => ''));
+      }
     }
 
-    const falData: any = await falRes.json();
-    const imageUrls: string[] = (falData?.images || []).map((img: any) => img?.url).filter(Boolean);
+    if (imageUrls.length === 0) {
+      // ── TEXT-TO-IMAGE MODE (no reference or i2i failed)
+      modelUsed = modelUsed ? `${modelUsed} → flux-pro/kontext t2i fallback` : 'flux-pro/kontext (text-to-image)';
+      const t2iPrompt = `${artistName ? `${artistName}, music artist, ` : ''}${artDirection}, ${COMMERCIAL_SUFFIX}`;
+      const falRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext/text-to-image', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: t2iPrompt,
+          image_size: finalSize,
+          num_images: count,
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+        }),
+      });
+      if (!falRes.ok) {
+        const errText = await falRes.text();
+        return res.status(502).json({ error: 'FAL API failed', detail: errText });
+      }
+      const falData: any = await falRes.json();
+      imageUrls = (falData?.images || []).map((img: any) => img?.url).filter(Boolean);
+    }
 
     if (imageUrls.length === 0) {
       return res.status(502).json({ error: 'No images returned from FAL' });
     }
+
+    console.log(`✅ [fashion] ${imageUrls.length} images via ${modelUsed}${preset ? ` · preset=${preset.key}` : ''}`);
 
     // Save to Firestore image_galleries
     try {
@@ -1539,15 +1663,15 @@ router.post('/generate-images', authenticate, async (req: Request, res: Response
         const fsUserId = artistId ? String(artistId) : String(userId);
         await firestoreDb.collection('image_galleries').add({
           userId: fsUserId,
-          singleName: sessionTitle || `Fashion Images — ${artistName || 'Artist'}`,
+          singleName: sessionTitle || `${preset?.label || 'Fashion'} — ${artistName || 'Artist'}`,
           artistName: artistName || 'Artist',
-          basePrompt: prompt,
-          styleInstructions: 'Generated with Flux Pro Kontext',
-          referenceImageUrls: [],
+          basePrompt: scenePrompt,
+          styleInstructions: preset ? `Style preset: ${preset.label} · ${modelUsed}` : `Generated with ${modelUsed}`,
+          referenceImageUrls: hasReference ? [referenceImageUrl] : [],
           generatedImages: imageUrls.map((url, i) => ({
             id: `fashion-img-${Date.now()}-${i}`,
             url,
-            prompt: enhancedPrompt,
+            prompt: artDirection,
             createdAt: new Date().toISOString(),
             isVideo: false,
           })),
@@ -1562,7 +1686,7 @@ router.post('/generate-images', authenticate, async (req: Request, res: Response
       console.warn('⚠️ Could not save fashion images to Firestore:', fsErr);
     }
 
-    res.json({ success: true, images: imageUrls, count: imageUrls.length });
+    res.json({ success: true, images: imageUrls, count: imageUrls.length, model: modelUsed, preset: preset?.key || null });
   } catch (error: any) {
     console.error('❌ generate-images error:', error);
     res.status(500).json({ error: error.message });

@@ -211,6 +211,22 @@ export const BoostifyLiveStage = withLazy(
   "live-stage",
   named(() => import("./live-stage/BoostifyLiveStage"), "BoostifyLiveStage"),
 );
+export const LiveMapServices = withLazy(
+  "live-map",
+  named(() => import("./live-map-services"), "LiveMapServices"),
+);
+export const FashionImageModule = withLazy(
+  "fashion-image-studio",
+  named(() => import("./fashion-image-module"), "FashionImageModule"),
+);
+export const TikTokLiveModule = withLazy(
+  "tiktok-live",
+  named(() => import("./tiktok-live-module"), "TikTokLiveModule"),
+);
+export const YoutubeChannelModule = withLazy(
+  "youtube-channel",
+  named(() => import("./youtube-channel-module"), "YoutubeChannelModule"),
+);
 export const FanClubPanel = withLazy(
   "fan-club",
   named(() => import("./FanClubPanel"), "FanClubPanel"),

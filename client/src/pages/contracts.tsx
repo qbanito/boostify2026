@@ -76,13 +76,29 @@ export default function ContractsPage() {
   const [contractToAnalyze, setContractToAnalyze] = useState("");
   const [analysisResult, setAnalysisResult] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [selectedTab, setSelectedTab] = useState("contracts");
+  // Deep-linkable tab (?tab=ai-agent | contracts | generator | analyzer)
+  const VALID_TABS = ["contracts", "generator", "analyzer", "ai-agent"];
+  const [selectedTab, setSelectedTabState] = useState(() => {
+    const param = new URLSearchParams(window.location.search).get("tab");
+    return param && VALID_TABS.includes(param) ? param : "contracts";
+  });
+  const setSelectedTab = (tab: string) => {
+    setSelectedTabState(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url.toString());
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [generatedContractType, setGeneratedContractType] = useState<string>("legal");
   type AnalysisData = { summary: string; risks: string[]; recommendations: string[]; keyTerms: { term: string; description: string }[] } | null;
   const [analysisData, setAnalysisData] = useState<AnalysisData>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll legal chat to the latest message
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [legalChat, isAskingLegal]);
 
   // ─── Legal Shield AI ───
   type LegalChatTurn = { role: 'user' | 'assistant'; content: string; meta?: LegalAssistantResponse };
@@ -474,7 +490,7 @@ ${analysis.keyTerms.map((term, i) => `${i + 1}. ${term.term}: ${term.description
       <main className="flex-1 pt-20 px-4 md:pt-24 md:px-10 pb-12">
         <div className="flex-1 space-y-8">
 
-          {/* Hero Header */}
+          {/* Hero Header — the artist's AI legal counsel */}
           <div className="relative rounded-2xl overflow-hidden border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-[#0d0d1a] to-transparent px-6 py-8 md:px-10">
             <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(ellipse at 80% 50%, #ff640020 0%, transparent 70%)' }} />
             <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -483,12 +499,42 @@ ${analysis.keyTerms.map((term, i) => `${i + 1}. ${term.term}: ${term.description
                   <Scale className="h-7 w-7 text-orange-500" />
                 </div>
                 <div>
-                  <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
-                    Legal Contracts
-                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                      Legal Contracts
+                    </h2>
+                    <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/5 gap-1 text-[10px]">
+                      <Brain className="h-3 w-3" /> Advanced legal reasoning AI
+                    </Badge>
+                  </div>
                   <p className="text-muted-foreground text-sm max-w-xl mt-1">
-                    Create, analyze, and manage your professional agreements with AI assistance
+                    Your personal music-industry lawyer — drafts, analyzes and shields every deal you sign
                   </p>
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <Button
+                      size="sm"
+                      onClick={() => setSelectedTab("ai-agent")}
+                      className="h-8 gap-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs"
+                    >
+                      <Shield className="h-3.5 w-3.5" /> Ask your Legal Shield
+                    </Button>
+                    {shieldReport && (
+                      <button
+                        onClick={() => setSelectedTab("ai-agent")}
+                        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-semibold cursor-pointer ${
+                          shieldReport.protectionScore >= 80
+                            ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5'
+                            : shieldReport.protectionScore >= 60
+                            ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5'
+                            : 'border-red-500/30 text-red-400 bg-red-500/5'
+                        }`}
+                        title="Latest Risk Shield audit"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Protection {shieldReport.protectionScore}/100
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -645,6 +691,15 @@ ${analysis.keyTerms.map((term, i) => `${i + 1}. ${term.term}: ${term.description
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDownloadPDF(contract)} className="h-7 px-2 text-xs gap-1 hover:bg-orange-500/10 hover:text-orange-400">
                             <FileDown className="h-3 w-3" /> PDF
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setAttachedContract(contract); setSelectedTab("ai-agent"); }}
+                            className="h-7 px-2 text-xs gap-1 hover:bg-emerald-500/10 hover:text-emerald-400"
+                            title="Ask the Legal Shield about this contract"
+                          >
+                            <Shield className="h-3 w-3" /> Shield
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDeleteContract(contract)} className="h-7 px-2 text-xs gap-1 hover:bg-red-500/10 hover:text-red-400 ml-auto">
                             <Trash2 className="h-3 w-3" />
@@ -956,6 +1011,7 @@ ${analysis.keyTerms.map((term, i) => `${i + 1}. ${term.term}: ${term.description
                                   </div>
                                 </div>
                               )}
+                              <div ref={chatBottomRef} />
                             </div>
                           )}
                         </ScrollArea>

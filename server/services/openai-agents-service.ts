@@ -1,19 +1,80 @@
 /**
- * OpenAI Agents Service
- * Reemplaza gemini-service.ts para agentes especializados de la industria musical
- * Migrado de Gemini a OpenAI para mayor eficiencia y consistencia
- * 
+ * AI Agents Service — real agentic execution (function calling + tool loop).
+ *
+ * PROVIDERS:
+ *  - PRIMARY: z.ai GLM-5.2 (OpenAI-compatible, supports tools/function-calling)
+ *  - FALLBACK: OpenAI (PRIMARY_MODEL) — agents always respond
+ *
  * V2: Function Calling + Tool Execution Loop
  */
+import OpenAI from "openai";
 import { createTrackedOpenAI } from "../utils/tracked-openai";
 import { generateImageWithNanoBanana, editImageWithNanoBanana, type FalImageResult } from './fal-service';
 import { getToolsForAgent, type ToolResult } from './agent-tool-registry';
 import { executeTool } from './agent-tool-executors';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from "../utils/ai-config";
 
-// Initialize OpenAI client
+// Initialize OpenAI client (fallback provider)
 const openai = createTrackedOpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
 });
+
+// ─── GLM-5.2 (z.ai) — primary agent brain ──────────────────────────────
+const glmClient: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+const GLM_AGENT_MODEL = 'glm-5.2';
+
+/** Legacy callers may still pass gemini-* names — map them to real models. */
+function sanitizeModel(model?: string): string {
+  if (!model || /^gemini/i.test(model)) return PRIMARY_MODEL;
+  return model;
+}
+
+/**
+ * One LLM call with provider cascade: GLM-5.2 → OpenAI.
+ * Supports tools (both providers speak the OpenAI function-calling dialect).
+ * Returns the raw completion + which provider answered.
+ */
+async function callAgentLLM(params: {
+  messages: OpenAI.ChatCompletionMessageParam[];
+  temperature: number;
+  maxTokens: number;
+  tools?: any[];
+  fallbackModel?: string;
+}): Promise<{ completion: OpenAI.ChatCompletion; provider: string }> {
+  const { messages, temperature, maxTokens, tools, fallbackModel } = params;
+  const toolPayload = tools && tools.length > 0 ? { tools, tool_choice: 'auto' as const } : {};
+
+  // 1) GLM-5.2 primary
+  if (glmClient) {
+    try {
+      const completion = await glmClient.chat.completions.create({
+        model: GLM_AGENT_MODEL,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        ...toolPayload,
+      });
+      if (completion.choices?.[0]?.message) {
+        return { completion, provider: `zai:${GLM_AGENT_MODEL}` };
+      }
+    } catch (e: any) {
+      console.warn(`[agents] GLM-5.2 failed, falling back to OpenAI:`, e?.message);
+    }
+  }
+
+  // 2) OpenAI fallback
+  const completion = await openai.chat.completions.create({
+    model: sanitizeModel(fallbackModel),
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    ...toolPayload,
+  });
+  return { completion, provider: `openai:${sanitizeModel(fallbackModel)}` };
+}
 
 export interface GenerationOptions {
   model?: string;
@@ -53,21 +114,23 @@ export const agentsService = {
       }
       messages.push({ role: "user", content: prompt });
 
-      const response = await openai.chat.completions.create({
-        model,
+      // GLM-5.2 primary → OpenAI fallback
+      const { completion, provider } = await callAgentLLM({
         messages,
         temperature,
-        max_tokens: maxTokens,
+        maxTokens,
+        fallbackModel: model,
       });
 
-      const text = response.choices[0]?.message?.content;
+      const text = completion.choices[0]?.message?.content;
       if (!text) {
         throw new Error("No text generated in response");
       }
+      console.log(`[agents] generateText via ${provider}`);
 
       return text;
     } catch (error) {
-      console.error("Error generating text with OpenAI:", error);
+      console.error("Error generating text:", error);
       throw new Error(`Failed to generate text: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
@@ -115,16 +178,19 @@ export const agentsService = {
     messages.push({ role: "user", content: prompt });
 
     let toolCallCount = 0;
+    let providerUsed = '';
 
-    // Tool execution loop: keep calling LLM until it stops requesting tools
+    // Tool execution loop: keep calling LLM until it stops requesting tools.
+    // Each call cascades GLM-5.2 → OpenAI (both speak function-calling).
     while (toolCallCount < maxToolCalls) {
-      const response = await openai.chat.completions.create({
-        model,
+      const { completion: response, provider } = await callAgentLLM({
         messages,
         temperature,
-        max_tokens: maxTokens,
-        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+        maxTokens,
+        tools: tools.length > 0 ? tools : undefined,
+        fallbackModel: model,
       });
+      providerUsed = provider;
 
       totalTokens += response.usage?.total_tokens || 0;
       const choice = response.choices[0];
@@ -173,11 +239,13 @@ export const agentsService = {
       .pop();
     const finalText = (lastAssistantMsg as any)?.content || '';
 
+    console.log(`[agents] executeWithTools(${agentType}) via ${providerUsed} · ${allToolResults.length} tool calls`);
+
     return {
       text: finalText,
       toolResults: allToolResults,
       tokensUsed: totalTokens,
-      model,
+      model: providerUsed || model,
     };
   },
 

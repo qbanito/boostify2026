@@ -191,10 +191,10 @@ const SIDEBAR_NAV: Array<{ id: string; label: string; icon: any; active: boolean
   { id: 'mix',        label: 'Mix Room',     icon: Sliders,      active: false },
   { id: 'master',     label: 'Master Room',  icon: Gauge,        active: false },
   { id: 'release',    label: 'Release Room', icon: Megaphone,    active: false },
-  { id: 'explore',    label: 'Explorar',     icon: Globe,        active: false, href: '/explore' },
-  { id: 'projects',   label: 'Proyectos',    icon: FolderOpen,   active: false },
+  { id: 'explore',    label: 'Explore',      icon: Globe,        active: false, href: '/explore' },
+  { id: 'projects',   label: 'Projects',     icon: FolderOpen,   active: false },
   { id: 'market',     label: 'Marketplace',  icon: Store,        active: false, href: '/marketplace' },
-  { id: 'settings',   label: 'Ajustes',      icon: Settings2,    active: false },
+  { id: 'settings',   label: 'Settings',     icon: Settings2,    active: false },
 ];
 
 interface Agent {
@@ -202,22 +202,22 @@ interface Agent {
   cta: string; ctaColor: string; agentSlug: string;
 }
 const AGENTS: Agent[] = [
-  { id: 'producer',   name: 'AI Producer',          desc: 'Estructura, arreglos y dirección musical', icon: Workflow,   chip: 'bg-orange-500/15 text-orange-300',
-    cta: 'Analizar',  ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'producer' },
-  { id: 'songwriter', name: 'AI Songwriter',        desc: 'Letras, hooks y adaptaciones',              icon: BookText,   chip: 'bg-amber-500/15 text-amber-300',
-    cta: 'Escribir',  ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'songwriter' },
-  { id: 'beatmaker',  name: 'AI Beatmaker',         desc: 'Beats y loops personalizados',              icon: Zap,        chip: 'bg-rose-500/15 text-rose-300',
-    cta: 'Generar',   ctaColor: 'bg-rose-500 hover:bg-rose-600 text-white',     agentSlug: 'beatmaker' },
-  { id: 'vocoach',    name: 'AI Vocal Coach',       desc: 'Afinación, emoción y técnica vocal',        icon: Stethoscope,chip: 'bg-orange-500/15 text-orange-300',
-    cta: 'Mejorar',   ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'vocal-coach' },
-  { id: 'mix',        name: 'AI Mix Engineer',      desc: 'Mezcla automática profesional',             icon: Sliders,    chip: 'bg-orange-500/15 text-orange-300',
-    cta: 'Mezclar',   ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'mix-engineer' },
-  { id: 'master',     name: 'AI Mastering Engineer',desc: 'Master final para todas las plataformas',   icon: Gauge,      chip: 'bg-violet-500/15 text-violet-300',
-    cta: 'Masterizar',ctaColor: 'bg-violet-500 hover:bg-violet-600 text-white', agentSlug: 'mastering-engineer' },
-  { id: 'stems',      name: 'AI Stem Separator',    desc: 'Separa stems de cualquier canción',         icon: GitBranch,  chip: 'bg-emerald-500/15 text-emerald-300',
-    cta: 'Separar',   ctaColor: 'bg-emerald-500 hover:bg-emerald-600 text-white', agentSlug: 'stem-separator' },
-  { id: 'release',    name: 'AI Release Assistant', desc: 'Prepara y lanza tu música al mundo',         icon: Megaphone,  chip: 'bg-orange-500/15 text-orange-300',
-    cta: 'Lanzar',    ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'release-assistant' },
+  { id: 'producer',   name: 'AI Producer',          desc: 'Structure, arrangements and musical direction', icon: Workflow,   chip: 'bg-orange-500/15 text-orange-300',
+    cta: 'Analyze',  ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'producer' },
+  { id: 'songwriter', name: 'AI Songwriter',        desc: 'Lyrics, hooks and adaptations',              icon: BookText,   chip: 'bg-amber-500/15 text-amber-300',
+    cta: 'Write',  ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'songwriter' },
+  { id: 'beatmaker',  name: 'AI Beatmaker',         desc: 'Custom beats and loops',              icon: Zap,        chip: 'bg-rose-500/15 text-rose-300',
+    cta: 'Generate',   ctaColor: 'bg-rose-500 hover:bg-rose-600 text-white',     agentSlug: 'beatmaker' },
+  { id: 'vocoach',    name: 'AI Vocal Coach',       desc: 'Tuning, emotion and vocal technique',        icon: Stethoscope,chip: 'bg-orange-500/15 text-orange-300',
+    cta: 'Improve',   ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'vocal-coach' },
+  { id: 'mix',        name: 'AI Mix Engineer',      desc: 'Professional automatic mixing',             icon: Sliders,    chip: 'bg-orange-500/15 text-orange-300',
+    cta: 'Mix',   ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'mix-engineer' },
+  { id: 'master',     name: 'AI Mastering Engineer',desc: 'Final master for every platform',   icon: Gauge,      chip: 'bg-violet-500/15 text-violet-300',
+    cta: 'Master',ctaColor: 'bg-violet-500 hover:bg-violet-600 text-white', agentSlug: 'mastering-engineer' },
+  { id: 'stems',      name: 'AI Stem Separator',    desc: 'Separate stems from any song',         icon: GitBranch,  chip: 'bg-emerald-500/15 text-emerald-300',
+    cta: 'Separate',   ctaColor: 'bg-emerald-500 hover:bg-emerald-600 text-white', agentSlug: 'stem-separator' },
+  { id: 'release',    name: 'AI Release Assistant', desc: 'Prepare and launch your music to the world',         icon: Megaphone,  chip: 'bg-orange-500/15 text-orange-300',
+    cta: 'Launch',    ctaColor: 'bg-orange-500 hover:bg-orange-600 text-white', agentSlug: 'release-assistant' },
 ];
 
 const QUICK_ACTIONS = [
@@ -281,14 +281,14 @@ const AI_KIND_CONFIG: Record<AILabKind, { trackId: string; name: string; type: s
 };
 
 const RELEASE_TILES = [
-  { id: 'cover',    label: 'Portada',          icon: ImageIcon },
+  { id: 'cover',    label: 'Cover Art',        icon: ImageIcon },
   { id: 'video',    label: 'Video',            icon: Tv2 },
   { id: 'viz',      label: 'Visualizer',       icon: AudioLines },
-  { id: 'distro',   label: 'Distribución',     icon: Share2 },
-  { id: 'social',   label: 'Redes Sociales',   icon: Hash },
+  { id: 'distro',   label: 'Distribution',     icon: Share2 },
+  { id: 'social',   label: 'Social Media',     icon: Hash },
   { id: 'merch',    label: 'Merch',            icon: ShoppingBag },
   { id: 'license',  label: 'Licensing',        icon: Tag },
-  { id: 'page',     label: 'Página del Single',icon: Globe },
+  { id: 'page',     label: 'Single Page',      icon: Globe },
 ];
 
 const EXPORT_FORMATS = [
@@ -675,7 +675,7 @@ function TopBar(p: TopBarProps) {
           )}
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
         </div>
-        {p.songTitle && <div className="hidden 2xl:block text-[10px] text-zinc-500 max-w-[180px] truncate shrink-0">Canción: {p.songTitle}</div>}
+        {p.songTitle && <div className="hidden 2xl:block text-[10px] text-zinc-500 max-w-[180px] truncate shrink-0">Song: {p.songTitle}</div>}
         <div className="flex items-center gap-1.5 text-emerald-400 text-xs shrink-0">
           <CircleDot className="w-3 h-3 fill-emerald-500 text-emerald-500" />
           <span>{PROJECT.status}</span>
@@ -715,14 +715,14 @@ function TopBar(p: TopBarProps) {
           <div className="text-xl font-mono font-bold text-white tabular-nums leading-none">{formatTime(p.currentTime)}</div>
         </div>
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          <button onClick={p.onShowShortcuts} className="w-8 h-8 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Atajos de teclado"><Keyboard className="w-3.5 h-3.5" /></button>
+          <button onClick={p.onShowShortcuts} className="w-8 h-8 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Keyboard shortcuts"><Keyboard className="w-3.5 h-3.5" /></button>
           <button onClick={p.onMaximize} className="w-8 h-8 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center"><Maximize2 className="w-3.5 h-3.5" /></button>
           <button onClick={p.onNew} className="w-8 h-8 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center"><Plus className="w-3.5 h-3.5" /></button>
           <button onClick={p.onSave} disabled={p.saving} className="h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 text-zinc-200 text-xs font-medium flex items-center gap-1.5">
-            {p.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} <span>Guardar</span>
+            {p.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} <span>Save</span>
           </button>
           <button onClick={p.onExport} className="h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 text-zinc-200 text-xs font-medium flex items-center gap-1.5">
-            <Upload className="w-3.5 h-3.5" /> Exportar
+            <Upload className="w-3.5 h-3.5" /> Export
           </button>
           <button onClick={p.onRelease} disabled={p.releasing} className="h-8 px-4 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-orange-500/30">
             {p.releasing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Megaphone className="w-3.5 h-3.5" />} Release
@@ -858,7 +858,7 @@ function TracksPanel({ tracks, levels, setTracks, onAddTrack, selectedTrackId, o
   return (
     <div className="bg-[#0e0e12] border-r border-white/5 w-full h-full flex flex-col">
       <div className="h-7 flex items-center justify-between px-3 border-b border-white/5 shrink-0">
-        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pistas</span>
+        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tracks</span>
         <button onClick={onAddTrack} className="text-zinc-500 hover:text-orange-400"><Plus className="w-3.5 h-3.5" /></button>
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -961,21 +961,21 @@ function ArtistLibraryPanel({
             onChange={(e) => onArtistChange(e.target.value)}
             className="h-8 flex-1 min-w-0 rounded-md bg-white/5 border border-white/10 px-2 text-xs text-white outline-none"
           >
-            {artists.length === 0 && <option value="">Sin artistas</option>}
+            {artists.length === 0 && <option value="">No artists</option>}
             {artists.map((artist) => <option key={artist.id} value={artist.id}>{artist.name}</option>)}
           </select>
           <input ref={fileRef} type="file" accept="audio/*" multiple className="hidden" onChange={(e) => e.target.files && onImportFiles(e.target.files)} />
-          <button onClick={() => fileRef.current?.click()} className="w-9 h-9 rounded-md bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center shrink-0" title="Importar audio">
+          <button onClick={() => fileRef.current?.click()} className="w-9 h-9 rounded-md bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center shrink-0" title="Import audio">
             <Upload className="w-4 h-4 text-orange-400" />
           </button>
-          <button onClick={onRefresh} className="w-9 h-9 rounded-md bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center shrink-0" title="Actualizar">
+          <button onClick={onRefresh} className="w-9 h-9 rounded-md bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center shrink-0" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
         {/* Row 2: song chips */}
         <div className="h-10 flex items-center gap-1.5 px-3 overflow-x-auto pb-1">
-          {loading && <div className="text-[10px] text-zinc-500 flex items-center gap-1 shrink-0"><Loader2 className="w-3 h-3 animate-spin" /> Cargando...</div>}
-          {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 shrink-0">Sin canciones. Importa un archivo.</div>}
+          {loading && <div className="text-[10px] text-zinc-500 flex items-center gap-1 shrink-0"><Loader2 className="w-3 h-3 animate-spin" /> Loading...</div>}
+          {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 shrink-0">No songs. Import a file.</div>}
           {!loading && filteredSongs.slice(0, 10).map((song) => {
             const active = selectedSongId === song.id;
             return (
@@ -984,7 +984,7 @@ function ArtistLibraryPanel({
                 onClick={() => void onSongLoad(song)}
                 className={`h-8 px-2.5 rounded-md border text-left shrink-0 ${active ? 'bg-orange-500/20 border-orange-500/40 text-orange-200' : 'bg-white/[0.03] border-white/5 text-zinc-300'}`}
               >
-                <div className="text-[10px] font-bold truncate max-w-[110px]">{song.title || song.name || 'Sin título'}</div>
+                <div className="text-[10px] font-bold truncate max-w-[110px]">{song.title || song.name || 'Untitled'}</div>
               </button>
             );
           })}
@@ -998,19 +998,19 @@ function ArtistLibraryPanel({
         </div>
         <div className="leading-tight min-w-[118px] shrink-0">
           <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">My Artists</div>
-          <div className="text-[10px] text-zinc-300 font-semibold truncate">{artists.length} artistas · {songCount} canciones</div>
+          <div className="text-[10px] text-zinc-300 font-semibold truncate">{artists.length} artists · {songCount} songs</div>
         </div>
         <select
           value={selectedArtist?.id || ''}
           onChange={(e) => onArtistChange(e.target.value)}
           className="h-8 w-[170px] rounded-md bg-white/5 border border-white/10 px-2 text-xs text-white outline-none shrink-0"
         >
-          {artists.length === 0 && <option value="">Sin artistas</option>}
+          {artists.length === 0 && <option value="">No artists</option>}
           {artists.map((artist) => <option key={artist.id} value={artist.id}>{artist.name}</option>)}
         </select>
         <div className="flex-1 flex items-center gap-1 overflow-x-auto min-w-0">
-          {loading && <div className="text-[10px] text-zinc-500 flex items-center gap-1 shrink-0"><Loader2 className="w-3 h-3 animate-spin" /> Cargando...</div>}
-          {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 shrink-0">Sin canciones en este artista.</div>}
+          {loading && <div className="text-[10px] text-zinc-500 flex items-center gap-1 shrink-0"><Loader2 className="w-3 h-3 animate-spin" /> Loading...</div>}
+          {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 shrink-0">No songs for this artist.</div>}
           {!loading && filteredSongs.slice(0, 8).map((song) => {
             const active = selectedSongId === song.id;
             const hasProject = !!projectForSong(song);
@@ -1019,10 +1019,10 @@ function ArtistLibraryPanel({
                 key={song.id}
                 onClick={() => void onSongLoad(song)}
                 className={`h-8 max-w-[155px] px-2 rounded-md border text-left shrink-0 ${active ? 'bg-orange-500/20 border-orange-500/40 text-orange-200' : 'bg-white/[0.03] border-white/5 text-zinc-300 hover:bg-white/10'}`}
-                title={hasProject ? 'Abrir proyecto de esta canción' : 'Crear proyecto para esta canción'}
+                title={hasProject ? 'Open this song\'s project' : 'Create a project for this song'}
               >
-                <div className="text-[10px] font-bold truncate">{song.title || song.name || 'Sin título'}</div>
-                <div className="text-[8px] text-zinc-500 truncate">{hasProject ? 'Proyecto guardado' : 'Nuevo proyecto'} · {song.genre || 'Studio'}</div>
+                <div className="text-[10px] font-bold truncate">{song.title || song.name || 'Untitled'}</div>
+                <div className="text-[8px] text-zinc-500 truncate">{hasProject ? 'Saved project' : 'New project'} · {song.genre || 'Studio'}</div>
               </button>
             );
           })}
@@ -1030,7 +1030,7 @@ function ArtistLibraryPanel({
         <button
           onClick={() => setExpanded((value) => !value)}
           className="h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center shrink-0"
-          title={expanded ? 'Contraer librería' : 'Abrir librería'}
+          title={expanded ? 'Collapse library' : 'Open library'}
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
@@ -1045,11 +1045,11 @@ function ArtistLibraryPanel({
         <button
           onClick={() => fileRef.current?.click()}
           className="h-8 px-2.5 rounded-md bg-white/5 hover:bg-white/10 text-[10px] text-zinc-300 font-bold flex items-center gap-1.5 shrink-0"
-          title="Importar archivo de audio"
+          title="Import audio file"
         >
-          <Upload className="w-3.5 h-3.5 text-orange-400" /> <span className="hidden sm:inline">Archivo</span>
+          <Upload className="w-3.5 h-3.5 text-orange-400" /> <span className="hidden sm:inline">File</span>
         </button>
-        <button onClick={onRefresh} className="h-8 px-2 rounded-md bg-white/5 hover:bg-white/10 text-[10px] text-zinc-300 font-bold shrink-0 flex items-center gap-1" title="Actualizar librería">
+        <button onClick={onRefresh} className="h-8 px-2 rounded-md bg-white/5 hover:bg-white/10 text-[10px] text-zinc-300 font-bold shrink-0 flex items-center gap-1" title="Refresh library">
           <RefreshCw className="w-3 h-3" />
         </button>
       </div>{/* end desktop header */}
@@ -1058,11 +1058,11 @@ function ArtistLibraryPanel({
         <div className="hidden xl:grid px-3 pb-3 grid-cols-[240px_minmax(0,1fr)_240px] gap-2 h-[160px]">
           <div className="rounded-md border border-white/5 bg-white/[0.025] overflow-hidden">
             <div className="h-7 px-2 flex items-center justify-between border-b border-white/5">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Artistas</span>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Artists</span>
               <span className="text-[9px] text-zinc-600">{artists.length}</span>
             </div>
             <div className="h-[132px] overflow-y-auto p-1.5 space-y-1">
-              {!loading && artists.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">My Artists vacío.</div>}
+              {!loading && artists.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">My Artists is empty.</div>}
               {artists.map((artist) => {
                 const active = selectedArtist?.id === artist.id;
                 return (
@@ -1078,7 +1078,7 @@ function ArtistLibraryPanel({
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="text-[10px] font-bold text-white truncate">{artist.name}</div>
-                      <div className="text-[8px] text-zinc-500 truncate">{artist.songs?.length || 0} canciones · {projectCountForArtist(artist)} proyectos</div>
+                      <div className="text-[8px] text-zinc-500 truncate">{artist.songs?.length || 0} songs · {projectCountForArtist(artist)} projects</div>
                     </div>
                   </button>
                 );
@@ -1089,16 +1089,16 @@ function ArtistLibraryPanel({
           <div className="rounded-md border border-white/5 bg-white/[0.025] overflow-hidden min-w-0">
             <div className="h-7 px-2 flex items-center gap-2 border-b border-white/5">
               <Music2 className="w-3.5 h-3.5 text-orange-300 shrink-0" />
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide truncate">Canciones en base de datos</span>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide truncate">Songs in database</span>
               <input
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
-                placeholder="Buscar"
+                placeholder="Search"
                 className="ml-auto h-5 w-[150px] rounded bg-black/30 border border-white/10 px-2 text-[10px] text-white outline-none"
               />
             </div>
             <div className="h-[132px] overflow-y-auto p-1.5 grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-1.5">
-              {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">No hay canciones para importar.</div>}
+              {!loading && filteredSongs.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">No songs to import.</div>}
               {filteredSongs.map((song) => {
                 const active = selectedSongId === song.id;
                 const linkedProject = projectForSong(song);
@@ -1107,14 +1107,14 @@ function ArtistLibraryPanel({
                     key={song.id}
                     onClick={() => void onSongLoad(song)}
                     className={`min-h-10 rounded-md px-2 py-1.5 flex items-center gap-2 text-left border ${active ? 'bg-orange-500/15 border-orange-500/35' : 'bg-white/[0.03] border-white/5 hover:bg-white/10'}`}
-                    title={linkedProject ? 'Abrir proyecto de esta canción' : 'Crear proyecto separado para esta canción'}
+                    title={linkedProject ? 'Open this song\'s project' : 'Create a separate project for this song'}
                   >
                     <FileAudio className="w-4 h-4 text-orange-300 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-bold text-white truncate">{song.title || song.name || 'Sin título'}</div>
-                      <div className="text-[8px] text-zinc-500 truncate">{song.genre || 'Studio'} · {linkedProject ? 'Proyecto guardado' : 'Sin proyecto'}</div>
+                      <div className="text-[10px] font-bold text-white truncate">{song.title || song.name || 'Untitled'}</div>
+                      <div className="text-[8px] text-zinc-500 truncate">{song.genre || 'Studio'} · {linkedProject ? 'Saved project' : 'No project'}</div>
                     </div>
-                    <span className={`text-[9px] font-bold shrink-0 ${linkedProject ? 'text-emerald-300' : 'text-orange-200'}`}>{linkedProject ? 'Abrir' : 'Crear'}</span>
+                    <span className={`text-[9px] font-bold shrink-0 ${linkedProject ? 'text-emerald-300' : 'text-orange-200'}`}>{linkedProject ? 'Open' : 'Create'}</span>
                   </button>
                 );
               })}
@@ -1123,11 +1123,11 @@ function ArtistLibraryPanel({
 
           <div className="rounded-md border border-white/5 bg-white/[0.025] overflow-hidden min-w-0">
             <div className="h-7 px-2 flex items-center justify-between border-b border-white/5">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide truncate">Proyectos del artista</span>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide truncate">Artist projects</span>
               <span className="text-[9px] text-zinc-600">{visibleProjects.length}</span>
             </div>
             <div className="h-[132px] overflow-y-auto p-1.5 space-y-1">
-              {!loading && visibleProjects.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">Cada canción abrirá su propio proyecto al cargarla.</div>}
+              {!loading && visibleProjects.length === 0 && <div className="text-[10px] text-zinc-500 px-1 py-2">Each song opens its own project when loaded.</div>}
               {visibleProjects.map((project: any) => {
                 const active = currentProjectId === project.id;
                 const projectSong = visibleSongs.find((song) => String(song.id) === String(project.songId || ''));
@@ -1137,8 +1137,8 @@ function ArtistLibraryPanel({
                     onClick={() => onProjectLoad(project)}
                     className={`w-full min-h-10 rounded-md px-2 py-1.5 text-left border ${active ? 'bg-orange-500/15 border-orange-500/35' : 'bg-white/[0.03] border-white/5 hover:bg-white/10'}`}
                   >
-                    <div className="text-[10px] font-bold text-white truncate">{project.name || projectSong?.title || projectSong?.name || 'Proyecto sin título'}</div>
-                    <div className="text-[8px] text-zinc-500 truncate">{projectSong?.title || projectSong?.name || 'Sesión'} · {project.tracks?.length || 0} pistas</div>
+                    <div className="text-[10px] font-bold text-white truncate">{project.name || projectSong?.title || projectSong?.name || 'Untitled project'}</div>
+                    <div className="text-[8px] text-zinc-500 truncate">{projectSong?.title || projectSong?.name || 'Session'} · {project.tracks?.length || 0} tracks</div>
                   </button>
                 );
               })}
@@ -1223,29 +1223,29 @@ function AudioPlayer({ audioUrl, songTitle, artistName, isPlaying, onSeek, onVol
 function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
   const shortcuts = [
     ['Space', 'Play / Pause'],
-    ['R', 'Grabar / Detener grabación'],
-    ['Escape', 'Stop todo'],
-    ['Ctrl+S', 'Guardar proyecto'],
-    ['A', 'Agregar pista'],
-    ['Delete / Backspace', 'Borrar clip seleccionado'],
-    ['Shift+Delete', 'Borrar pista seleccionada'],
-    ['Ctrl+D', 'Duplicar clip seleccionado'],
-    ['Ctrl+Shift+D', 'Duplicar pista seleccionada'],
-    ['F2', 'Renombrar clip o pista'],
-    ['S', 'Cortar clip en el playhead'],
-    ['Shift+← / Shift+→', 'Mover clip en el timeline'],
-    ['Shift+↑ / Shift+↓', 'Mover clip entre pistas'],
-    ['Home / 0', 'Rebobinar al inicio'],
-    ['← / →', 'Mover playhead'],
+    ['R', 'Record / Stop recording'],
+    ['Escape', 'Stop everything'],
+    ['Ctrl+S', 'Save project'],
+    ['A', 'Add track'],
+    ['Delete / Backspace', 'Delete selected clip'],
+    ['Shift+Delete', 'Delete selected track'],
+    ['Ctrl+D', 'Duplicate selected clip'],
+    ['Ctrl+Shift+D', 'Duplicate selected track'],
+    ['F2', 'Rename clip or track'],
+    ['S', 'Split clip at playhead'],
+    ['Shift+← / Shift+→', 'Move clip on the timeline'],
+    ['Shift+↑ / Shift+↓', 'Move clip between tracks'],
+    ['Home / 0', 'Rewind to start'],
+    ['← / →', 'Move playhead'],
     ['G', 'Toggle Grid'],
     ['Q', 'Toggle Snap'],
-    ['?', 'Abrir estos atajos'],
+    ['?', 'Open these shortcuts'],
   ];
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[#13131a] border border-white/10 rounded-xl p-5 w-[420px] max-w-[calc(100vw-32px)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-white font-bold"><Keyboard className="w-4 h-4 text-orange-400" /> Atajos de teclado</div>
+          <div className="flex items-center gap-2 text-white font-bold"><Keyboard className="w-4 h-4 text-orange-400" /> Keyboard shortcuts</div>
           <button onClick={onClose} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-1.5">
@@ -1302,7 +1302,7 @@ function RenameDialog({ dialog, onClose, onSubmit }: {
         />
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 text-xs font-bold text-zinc-300">Cancelar</button>
-          <button type="submit" disabled={!value.trim()} className="h-8 px-3 rounded-md bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-xs font-bold text-white">Guardar</button>
+          <button type="submit" disabled={!value.trim()} className="h-8 px-3 rounded-md bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-xs font-bold text-white">Save</button>
         </div>
       </form>
     </div>
@@ -1635,7 +1635,7 @@ function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn,
           </div>
           <button onClick={() => onClipSplit(selectedClip.id, playhead)} className="h-7 px-2 rounded bg-white/5 hover:bg-white/10 text-zinc-200 flex items-center gap-1"><Scissors className="w-3 h-3" /> Cortar</button>
           <button onClick={() => onClipRename(selectedClip.id)} className="h-7 px-2 rounded bg-white/5 hover:bg-white/10 text-zinc-200 flex items-center gap-1"><Pencil className="w-3 h-3" /> Nombre</button>
-          <button onClick={() => onClipDuplicate(selectedClip.id)} className="h-7 px-2 rounded bg-white/5 hover:bg-white/10 text-zinc-200 flex items-center gap-1"><Copy className="w-3 h-3" /> Duplicar</button>
+          <button onClick={() => onClipDuplicate(selectedClip.id)} className="h-7 px-2 rounded bg-white/5 hover:bg-white/10 text-zinc-200 flex items-center gap-1"><Copy className="w-3 h-3" /> Duplicate</button>
           <label className="flex items-center gap-1 min-w-[110px]">Gain
             <input type="range" min={0} max={1.5} step={0.05} value={selectedClip.gain ?? 1} onChange={(e) => onClipUpdate(selectedClip.id, { gain: Number(e.target.value) })} className="w-20 h-1 accent-orange-500" />
           </label>
@@ -1645,7 +1645,7 @@ function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn,
           <label className="flex items-center gap-1 min-w-[105px]">Fade Out
             <input type="range" min={0} max={35} step={1} value={selectedClip.fadeOut ?? 0} onChange={(e) => onClipUpdate(selectedClip.id, { fadeOut: Number(e.target.value) })} className="w-16 h-1 accent-orange-500" />
           </label>
-          <button onClick={() => onClipDelete(selectedClip.id)} className="ml-auto h-7 px-2 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Eliminar</button>
+          <button onClick={() => onClipDelete(selectedClip.id)} className="ml-auto h-7 px-2 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Delete</button>
         </div>
       )}
     </div>
@@ -1679,21 +1679,21 @@ function ClipContextMenu({ menu, clip, tracks, selectedTrackId, playhead, onClos
       >
         <div className="px-2 py-1.5 border-b border-white/10 mb-1">
           <div className="text-[10px] font-bold text-white truncate">{clip.name}</div>
-          <div className="text-[9px] text-zinc-500">Editar clip</div>
+          <div className="text-[9px] text-zinc-500">Edit clip</div>
         </div>
         <div className="grid grid-cols-2 gap-1 mb-1">
-          <button onClick={() => run(() => onSetTool('select'))} className="h-8 px-2 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center gap-1"><ArrowLeftRight className="w-3.5 h-3.5 text-zinc-300" /> Mover</button>
-          <button onClick={() => run(() => onSetTool('cut'))} className="h-8 px-2 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center gap-1"><Scissors className="w-3.5 h-3.5 text-orange-300" /> Cortar</button>
+          <button onClick={() => run(() => onSetTool('select'))} className="h-8 px-2 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center gap-1"><ArrowLeftRight className="w-3.5 h-3.5 text-zinc-300" /> Move</button>
+          <button onClick={() => run(() => onSetTool('cut'))} className="h-8 px-2 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center gap-1"><Scissors className="w-3.5 h-3.5 text-orange-300" /> Cut</button>
         </div>
-        <button onClick={() => run(() => onSplit(clip.id, menu.splitAt))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Scissors className="w-3.5 h-3.5 text-orange-300" /> Cortar aquí</button>
-        <button onClick={() => run(() => onAlignToPlayhead(clip.id, playhead))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Clock className="w-3.5 h-3.5 text-zinc-300" /> Mover al playhead</button>
-        <button onClick={() => run(() => onRename(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Pencil className="w-3.5 h-3.5 text-zinc-300" /> Renombrar</button>
-        <button onClick={() => run(() => onDuplicate(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Copy className="w-3.5 h-3.5 text-zinc-300" /> Duplicar</button>
-        <button onClick={() => run(() => onToggleMute(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><VolumeX className="w-3.5 h-3.5 text-zinc-300" /> {clip.muted ? 'Activar audio' : 'Silenciar clip'}</button>
+        <button onClick={() => run(() => onSplit(clip.id, menu.splitAt))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Scissors className="w-3.5 h-3.5 text-orange-300" /> Cut here</button>
+        <button onClick={() => run(() => onAlignToPlayhead(clip.id, playhead))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Clock className="w-3.5 h-3.5 text-zinc-300" /> Move to playhead</button>
+        <button onClick={() => run(() => onRename(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Pencil className="w-3.5 h-3.5 text-zinc-300" /> Rename</button>
+        <button onClick={() => run(() => onDuplicate(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Copy className="w-3.5 h-3.5 text-zinc-300" /> Duplicate</button>
+        <button onClick={() => run(() => onToggleMute(clip.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><VolumeX className="w-3.5 h-3.5 text-zinc-300" /> {clip.muted ? 'Unmute audio' : 'Mute clip'}</button>
         {selectedTrackId && selectedTrackId !== clip.trackId && (
-          <button onClick={() => run(() => onMoveToTrack(clip.id, selectedTrackId))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><ArrowLeftRight className="w-3.5 h-3.5 text-zinc-300" /> Mover a pista seleccionada</button>
+          <button onClick={() => run(() => onMoveToTrack(clip.id, selectedTrackId))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><ArrowLeftRight className="w-3.5 h-3.5 text-zinc-300" /> Move to selected track</button>
         )}
-        <div className="px-2 py-1.5 text-[9px] uppercase tracking-widest text-zinc-500">Mover a pista</div>
+        <div className="px-2 py-1.5 text-[9px] uppercase tracking-widest text-zinc-500">Move to track</div>
         <select
           value={clip.trackId}
           onChange={(e) => run(() => onMoveToTrack(clip.id, e.target.value))}
@@ -1701,7 +1701,7 @@ function ClipContextMenu({ menu, clip, tracks, selectedTrackId, playhead, onClos
         >
           {tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
         </select>
-        <button onClick={() => run(() => onDelete(clip.id))} className="mt-1 w-full h-8 px-2 rounded hover:bg-rose-500/15 text-rose-300 flex items-center gap-2 text-left"><Trash2 className="w-3.5 h-3.5" /> Eliminar</button>
+        <button onClick={() => run(() => onDelete(clip.id))} className="mt-1 w-full h-8 px-2 rounded hover:bg-rose-500/15 text-rose-300 flex items-center gap-2 text-left"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
       </div>
     </div>
   );
@@ -1730,15 +1730,15 @@ function TrackContextMenu({ menu, track, onClose, onRename, onArm, onMute, onSol
       >
         <div className="px-2 py-1.5 border-b border-white/10 mb-1">
           <div className="text-[10px] font-bold text-white truncate">{track.name}</div>
-          <div className="text-[9px] text-zinc-500">Canal / pista</div>
+          <div className="text-[9px] text-zinc-500">Channel / track</div>
         </div>
-        <button onClick={() => run(() => onRecordHere(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><CircleDot className="w-3.5 h-3.5 text-rose-400" /> Grabar aquí</button>
-        <button onClick={() => run(() => onRename(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Pencil className="w-3.5 h-3.5 text-zinc-300" /> Renombrar pista</button>
-        <button onClick={() => run(() => onArm(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Mic2 className="w-3.5 h-3.5 text-zinc-300" /> {track.rec ? 'Desarmar REC' : 'Armar REC'}</button>
-        <button onClick={() => run(() => onMute(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><VolumeX className="w-3.5 h-3.5 text-zinc-300" /> {track.mute ? 'Quitar mute' : 'Mute'}</button>
-        <button onClick={() => run(() => onSolo(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Headphones className="w-3.5 h-3.5 text-zinc-300" /> {track.solo ? 'Quitar solo' : 'Solo'}</button>
-        <button onClick={() => run(() => onDuplicate(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Copy className="w-3.5 h-3.5 text-zinc-300" /> Duplicar pista</button>
-        <button onClick={() => run(() => onDelete(track.id))} className="mt-1 w-full h-8 px-2 rounded hover:bg-rose-500/15 text-rose-300 flex items-center gap-2 text-left"><Trash2 className="w-3.5 h-3.5" /> Eliminar pista</button>
+        <button onClick={() => run(() => onRecordHere(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><CircleDot className="w-3.5 h-3.5 text-rose-400" /> Record here</button>
+        <button onClick={() => run(() => onRename(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Pencil className="w-3.5 h-3.5 text-zinc-300" /> Rename track</button>
+        <button onClick={() => run(() => onArm(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Mic2 className="w-3.5 h-3.5 text-zinc-300" /> {track.rec ? 'Disarm REC' : 'Arm REC'}</button>
+        <button onClick={() => run(() => onMute(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><VolumeX className="w-3.5 h-3.5 text-zinc-300" /> {track.mute ? 'Unmute' : 'Mute'}</button>
+        <button onClick={() => run(() => onSolo(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Headphones className="w-3.5 h-3.5 text-zinc-300" /> {track.solo ? 'Unsolo' : 'Solo'}</button>
+        <button onClick={() => run(() => onDuplicate(track.id))} className="w-full h-8 px-2 rounded hover:bg-white/10 flex items-center gap-2 text-left"><Copy className="w-3.5 h-3.5 text-zinc-300" /> Duplicate track</button>
+        <button onClick={() => run(() => onDelete(track.id))} className="mt-1 w-full h-8 px-2 rounded hover:bg-rose-500/15 text-rose-300 flex items-center gap-2 text-left"><Trash2 className="w-3.5 h-3.5" /> Delete track</button>
       </div>
     </div>
   );
@@ -1751,7 +1751,7 @@ function AgentsPanel({ onAgentRun, onQuickAction, runningAgent, runningAction }:
     <aside className="w-full xl:w-[300px] xl:shrink-0 bg-[#0e0e12] xl:border-l border-white/5 flex flex-col">
       <div className="h-7 flex items-center justify-between px-3 border-b border-white/5">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Agentes de IA</span>
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">AI Agents</span>
           <span className="text-[8px] font-bold text-amber-400 px-1 py-0.5 bg-amber-500/10 rounded">BETA</span>
         </div>
         <Power className="w-3 h-3 text-zinc-600" />
@@ -1782,7 +1782,7 @@ function AgentsPanel({ onAgentRun, onQuickAction, runningAgent, runningAction }:
         })}
       </div>
       <div className="border-t border-white/5 px-2 py-2">
-        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 px-1">Acciones Rápidas</div>
+        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 px-1">Quick Actions</div>
         <div className="grid grid-cols-4 gap-1">
           {QUICK_ACTIONS.map((q) => {
             const Icon = q.icon;
@@ -1841,7 +1841,7 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
   const takeClips = activeTrack ? clips.filter((clip) => clip.trackId === activeTrack.id).sort((a, b) => a.start - b.start) : [];
   const selectedTake = takeClips.find((clip) => clip.id === selectedClipId) || [...takeClips].reverse().find((clip) => clip.audioUrl) || takeClips[0] || null;
   const savedTakeCount = takeClips.filter((clip) => clip.audioUrl && !clip.audioUrl.startsWith('blob:')).length;
-  const lyricsLines = lyrics ? lyrics.split('\n').filter(Boolean) : ['Verso listo para grabar', 'Respira antes de entrar', 'Mantén el hook al frente', 'Doble al final del compás'];
+  const lyricsLines = lyrics ? lyrics.split('\n').filter(Boolean) : ['Verse ready to record', 'Breathe before you come in', 'Keep the hook up front', 'Double at the end of the bar'];
   const levelSeed = isRecording ? Date.now() % 9999 : settings.inputGain + takeClips.length * 13;
   const pitchOffset = Math.round(((settings.inputGain + takeClips.length * 9) % 25) - 12);
   const enabledChain = plugins.filter((plugin) => plugin.enabled);
@@ -1854,7 +1854,7 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
           <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
             <Mic2 className="w-3 h-3 text-orange-400" /> Vocal Booth
           </div>
-          <div className="text-sm font-bold text-white truncate">{projectName} · {activeTrack?.name || 'Selecciona pista vocal'}</div>
+          <div className="text-sm font-bold text-white truncate">{projectName} · {activeTrack?.name || 'Select a vocal track'}</div>
         </div>
         <div className="flex items-center gap-1.5 min-w-0">
           <select
@@ -1868,12 +1868,12 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             <button
               onClick={() => onArmTrack(activeTrack.id)}
               className={`h-8 px-2 rounded text-[9px] font-bold border ${activeTrack.rec ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : 'bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10'}`}
-              title="Armar pista para grabar"
+              title="Arm track for recording"
             >
               REC
             </button>
           )}
-          <button onClick={onSaveSession} className="h-8 w-8 rounded bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center" title="Guardar sesión vocal">
+          <button onClick={onSaveSession} className="h-8 w-8 rounded bg-white/5 hover:bg-white/10 text-zinc-300 flex items-center justify-center" title="Save vocal session">
             <Save className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1885,7 +1885,7 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             <div className="flex items-center gap-2 min-w-0">
               <CircleDot className={`w-3.5 h-3.5 ${isRecording ? 'text-rose-500 fill-rose-500 animate-pulse' : activeTrack?.rec ? 'text-rose-400' : 'text-zinc-600'}`} />
               <div className="min-w-0">
-                <div className="text-[10px] font-bold text-white truncate">{isRecording ? 'GRABANDO TOMA' : activeTrack?.rec ? 'PISTA ARMADA' : 'STAND BY'}</div>
+                <div className="text-[10px] font-bold text-white truncate">{isRecording ? 'RECORDING TAKE' : activeTrack?.rec ? 'TRACK ARMED' : 'STAND BY'}</div>
                 <div className="text-[8px] text-zinc-500 truncate">{bpm} BPM · {keyName} · {takeClips.length} takes</div>
               </div>
             </div>
@@ -1924,27 +1924,27 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
           )}
 
           <div className="grid grid-cols-4 gap-1.5 mt-2">
-            <button onClick={() => { onSettingsChange({ metronome: !settings.metronome }); onTool('metronome'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.metronome ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Click de tempo">
+            <button onClick={() => { onSettingsChange({ metronome: !settings.metronome }); onTool('metronome'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.metronome ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Tempo click">
               <Music className="w-4 h-4" /><span className="text-[8px] font-bold">Click</span>
             </button>
-            <button onClick={() => { onSettingsChange({ tuning: !settings.tuning }); onTool('tuning'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.tuning ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Afinación automática">
+            <button onClick={() => { onSettingsChange({ tuning: !settings.tuning }); onTool('tuning'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.tuning ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Auto-tune">
               <Wand2 className="w-4 h-4" /><span className="text-[8px] font-bold">Tune</span>
             </button>
-            <button onClick={() => { onSettingsChange({ noise: !settings.noise }); onTool('noise'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.noise ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Reducción de ruido">
+            <button onClick={() => { onSettingsChange({ noise: !settings.noise }); onTool('noise'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.noise ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Noise reduction">
               <Activity className="w-4 h-4" /><span className="text-[8px] font-bold">Clean</span>
             </button>
-            <button onClick={() => { onSettingsChange({ monitoring: !settings.monitoring }); onTool('monitoring'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.monitoring ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Monitoreo">
+            <button onClick={() => { onSettingsChange({ monitoring: !settings.monitoring }); onTool('monitoring'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.monitoring ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Monitoring">
               <Headphones className="w-4 h-4" /><span className="text-[8px] font-bold">Mon</span>
             </button>
           </div>
 
           {isRecording ? (
             <button onClick={onStopRecording} className="mt-2 h-10 rounded bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center gap-2 text-[11px] font-bold">
-              <Square className="w-4 h-4" /> PARAR Y GUARDAR TOMA
+              <Square className="w-4 h-4" /> STOP & SAVE TAKE
             </button>
           ) : (
             <button onClick={() => onStartRecording(activeTrack?.id)} className="mt-2 h-10 rounded bg-rose-500/90 hover:bg-rose-500 text-white flex items-center justify-center gap-2 text-[11px] font-bold">
-              <CircleDot className="w-4 h-4" /> GRABAR EN PISTA SELECCIONADA
+              <CircleDot className="w-4 h-4" /> RECORD ON SELECTED TRACK
             </button>
           )}
         </div>
@@ -1952,7 +1952,7 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
         <div className="rounded-lg bg-black/25 border border-white/5 p-2 flex flex-col min-h-[250px]">
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><AlignLeft className="w-3 h-3" /> Lyrics & Cue</div>
-            <button onClick={onShowLyrics} className="h-7 w-7 rounded bg-white/5 hover:bg-white/10 text-orange-300 flex items-center justify-center" title="Editar letras"><Pencil className="w-3.5 h-3.5" /></button>
+            <button onClick={onShowLyrics} className="h-7 w-7 rounded bg-white/5 hover:bg-white/10 text-orange-300 flex items-center justify-center" title="Edit lyrics"><Pencil className="w-3.5 h-3.5" /></button>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1">
             {lyricsLines.map((line, index) => (
@@ -1981,8 +1981,8 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             {takeClips.length === 0 && (
               <div className="h-full min-h-[140px] rounded border border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center text-center px-4">
                 <Mic2 className="w-6 h-6 text-zinc-600 mb-2" />
-                <div className="text-[11px] font-bold text-zinc-300">Sin tomas todavía</div>
-                <div className="text-[9px] text-zinc-500 mt-1">Arma una pista vocal y graba para crear clips en el timeline.</div>
+                <div className="text-[11px] font-bold text-zinc-300">No takes yet</div>
+                <div className="text-[9px] text-zinc-500 mt-1">Arm a vocal track and record to create clips on the timeline.</div>
               </div>
             )}
             {takeClips.map((clip, index) => {
@@ -1996,9 +1996,9 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
                       <div className="text-[8px] text-zinc-500 font-mono">bar {clip.start.toFixed(1)} · {clip.width.toFixed(1)}% · {permanent ? 'guardada' : clip.audioUrl ? 'local' : 'clip'}</div>
                     </button>
                     <button onClick={() => onTakeMute(clip.id)} className={`w-6 h-6 rounded flex items-center justify-center ${clip.muted ? 'bg-rose-500/15 text-rose-300' : 'bg-white/5 text-zinc-400 hover:text-zinc-200'}`} title={clip.muted ? 'Activar toma' : 'Silenciar toma'}>{clip.muted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}</button>
-                    <button onClick={() => onTakeRename(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Renombrar toma"><Pencil className="w-3 h-3" /></button>
-                    <button onClick={() => onTakeDuplicate(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Duplicar toma"><Copy className="w-3 h-3" /></button>
-                    <button onClick={() => onTakeDelete(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-rose-500/20 hover:text-rose-300 text-zinc-400 flex items-center justify-center" title="Borrar toma"><Trash2 className="w-3 h-3" /></button>
+                    <button onClick={() => onTakeRename(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Rename take"><Pencil className="w-3 h-3" /></button>
+                    <button onClick={() => onTakeDuplicate(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center" title="Duplicate take"><Copy className="w-3 h-3" /></button>
+                    <button onClick={() => onTakeDelete(clip.id)} className="w-6 h-6 rounded bg-white/5 hover:bg-rose-500/20 hover:text-rose-300 text-zinc-400 flex items-center justify-center" title="Delete take"><Trash2 className="w-3 h-3" /></button>
                   </div>
                   <div className="h-5 mt-1 flex items-center gap-px bg-black/30 rounded p-0.5 overflow-hidden">
                     {waveBars(clip.name.length + Math.round(clip.start * 10), 48).map((bar, barIndex) => (
@@ -2334,7 +2334,7 @@ function PluginRack({ track, plugins, onTogglePlugin, onParamChange, onAddPlugin
   return (
     <div className="bg-[#101015] border border-white/5 rounded-lg p-3 flex flex-col">
       <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between gap-2">
-        <span>Plugin Rack - <span className="text-orange-400">{track?.name || 'Sin pista'}</span></span>
+        <span>Plugin Rack - <span className="text-orange-400">{track?.name || 'No track'}</span></span>
         <div className="flex items-center gap-1">
           <select value={newPlugin} onChange={(e) => setNewPlugin(e.target.value as PluginType)} className="h-6 rounded bg-white/5 border border-white/10 px-1 text-[9px] text-zinc-200 outline-none">
             {(Object.keys(PLUGIN_LIBRARY) as PluginType[]).map((type) => <option key={type} value={type}>{PLUGIN_LIBRARY[type].name}</option>)}
@@ -2346,7 +2346,7 @@ function PluginRack({ track, plugins, onTogglePlugin, onParamChange, onAddPlugin
         {plugins.map((plugin) => (
           <PluginCard key={plugin.id} plugin={plugin} onToggle={() => onTogglePlugin(plugin.id)} onParamChange={(key, value) => onParamChange(plugin.id, key, value)} />
         ))}
-        {plugins.length === 0 && <div className="col-span-4 text-xs text-zinc-500 p-3 border border-white/5 rounded-lg">Selecciona una pista para cargar su cadena de plugins.</div>}
+        {plugins.length === 0 && <div className="col-span-4 text-xs text-zinc-500 p-3 border border-white/5 rounded-lg">Select a track to load its plugin chain.</div>}
       </div>
     </div>
   );
@@ -2366,15 +2366,15 @@ function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, k
   generating: string | null;
   generatedUrl: string | null;
 }) {
-  const [tab, setTab] = useState<'GENERAR'|'INSTRUMENTOS'|'VOCES'|'EFECTOS'|'REMIX'>('GENERAR');
+  const [tab, setTab] = useState<'GENERATE'|'INSTRUMENTS'|'VOCALS'|'EFFECTS'|'REMIX'>('GENERATE');
   const activeTargetTrackId = settings.targetTrackId || selectedTrackId || tracks[0]?.id || '';
   const activeTargetTrack = tracks.find((track) => track.id === activeTargetTrackId) || null;
 
   const TAB_KINDS: Record<string, string[]> = {
-    GENERAR: ['beat', 'bassline', 'synth', 'pad', 'vocal', 'hook', 'fx', 'intro', 'outro', 'remix'],
-    INSTRUMENTOS: ['beat', 'bassline', 'synth', 'pad'],
-    VOCES: ['vocal', 'hook'],
-    EFECTOS: ['fx', 'intro', 'outro'],
+    GENERATE: ['beat', 'bassline', 'synth', 'pad', 'vocal', 'hook', 'fx', 'intro', 'outro', 'remix'],
+    INSTRUMENTS: ['beat', 'bassline', 'synth', 'pad'],
+    VOCALS: ['vocal', 'hook'],
+    EFFECTS: ['fx', 'intro', 'outro'],
     REMIX: ['remix', 'bassline', 'synth', 'hook'],
   };
 
@@ -2395,16 +2395,16 @@ function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, k
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-1.5 mb-2">
         <select value={settings.targetMode} onChange={(e) => onSettingsChange({ targetMode: e.target.value as AILabTargetMode })} className="h-7 rounded bg-white/5 border border-white/10 px-2 text-[9px] text-zinc-200 outline-none">
           <option value="auto">Auto</option>
-          <option value="selected">Pista activa</option>
-          <option value="new">Nueva pista</option>
+          <option value="selected">Active track</option>
+          <option value="new">New track</option>
         </select>
         <select value={activeTargetTrackId} onChange={(e) => onSettingsChange({ targetTrackId: e.target.value, targetMode: 'selected' })} className="h-7 rounded bg-white/5 border border-white/10 px-2 text-[9px] text-zinc-200 outline-none">
           {tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
         </select>
         <select value={settings.insertMode} onChange={(e) => onSettingsChange({ insertMode: e.target.value as AILabInsertMode })} className="h-7 rounded bg-white/5 border border-white/10 px-2 text-[9px] text-zinc-200 outline-none">
-          <option value="arrangement">Arreglo</option>
+          <option value="arrangement">Arrangement</option>
           <option value="playhead">Playhead</option>
-          <option value="after-selected">Después clip</option>
+          <option value="after-selected">After clip</option>
         </select>
         <button onClick={() => onSettingsChange({ applyMix: !settings.applyMix })} className={`h-7 rounded border text-[9px] font-bold ${settings.applyMix ? 'bg-orange-500/15 border-orange-500/25 text-orange-300' : 'bg-white/5 border-white/10 text-zinc-400'}`}>Mix FX</button>
       </div>
@@ -2414,7 +2414,7 @@ function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, k
         {selectedClip && <span className="hidden sm:inline shrink-0 text-[8px] px-1.5 py-1 rounded bg-white/5 text-zinc-400 border border-white/10 truncate max-w-[96px]">{selectedClip.name}</span>}
       </div>
       <div className="flex gap-2 mb-2 text-[9px] font-bold uppercase tracking-wider overflow-x-auto">
-        {(['GENERAR','INSTRUMENTOS','VOCES','EFECTOS','REMIX'] as const).map((t) => (
+        {(['GENERATE','INSTRUMENTS','VOCALS','EFFECTS','REMIX'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`shrink-0 ${tab === t ? 'text-white border-b-2 border-orange-500 pb-0.5' : 'text-zinc-500 hover:text-zinc-300 pb-0.5'}`}>{t}</button>
         ))}
       </div>
@@ -2519,7 +2519,7 @@ function ExportarPanel({ formats, onToggleFormat, onExportAll, exporting }: { fo
   return (
     <div className="bg-[#101015] border border-white/5 rounded-lg p-3 flex flex-col">
       <div className="flex items-center justify-between mb-1.5">
-        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Exportar</div>
+        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Export</div>
         <button onClick={() => formats.filter((f) => f.active).forEach((f) => onToggleFormat(f.id))} className="text-zinc-500 hover:text-white"><Square className="w-2.5 h-2.5" /></button>
       </div>
       <div className="grid grid-cols-3 gap-1">
@@ -2535,7 +2535,7 @@ function ExportarPanel({ formats, onToggleFormat, onExportAll, exporting }: { fo
         className="mt-1.5 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold flex items-center justify-center gap-1 disabled:opacity-50"
       >
         {exporting && <Loader2 className="w-3 h-3 animate-spin" />}
-        Exportar Todo
+        Export All
       </button>
     </div>
   );
@@ -2568,7 +2568,7 @@ function ReleaseRoom({ onTile }: { onTile: (id: string) => void }) {
    ProjectsPanel — list + load saved projects
 ============================================================ */
 
-function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', currentProjectId, onLoad, onNew, onClose }: {
+function ProjectsPanel({ projects, loading, contextLabel = 'My Projects', currentProjectId, onLoad, onNew, onClose }: {
   projects: any[];
   loading: boolean;
   contextLabel?: string;
@@ -2585,11 +2585,11 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
     const d = new Date(val);
     if (isNaN(d.getTime())) return null;
     const diff = Date.now() - d.getTime();
-    if (diff < 60_000) return 'Hace un momento';
-    if (diff < 3_600_000) return `Hace ${Math.floor(diff / 60_000)} min`;
-    if (diff < 86_400_000) return `Hace ${Math.floor(diff / 3_600_000)} h`;
-    if (diff < 7 * 86_400_000) return `Hace ${Math.floor(diff / 86_400_000)} días`;
-    return d.toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' });
+    if (diff < 60_000) return 'Just now';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h ago`;
+    if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} days ago`;
+    return d.toLocaleDateString('en', { day: '2-digit', month: 'short', year: '2-digit' });
   };
 
   const filtered = projects
@@ -2624,7 +2624,7 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
           <span className="text-[10px] text-zinc-600 ml-1">({filtered.length})</span>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <button onClick={onNew} className="h-7 px-3 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold flex items-center gap-1.5">
-              <Plus className="w-3.5 h-3.5" />Nueva sesión
+              <Plus className="w-3.5 h-3.5" />New session
             </button>
             <button onClick={onClose} className="h-7 w-7 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center">
               <X className="w-3.5 h-3.5" />
@@ -2636,7 +2636,7 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar sesión…"
+            placeholder="Search sessions…"
             className="flex-1 h-7 rounded-md bg-white/5 border border-white/10 px-2.5 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-orange-500/50"
           />
           <div className="flex items-center gap-1 shrink-0">
@@ -2646,7 +2646,7 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
                 onClick={() => setSortBy(k)}
                 className={`h-7 px-2 rounded-md text-[10px] font-bold transition-colors ${sortBy === k ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-zinc-500 hover:bg-white/10'}`}
               >
-                {k === 'date' ? 'Reciente' : k === 'name' ? 'A-Z' : 'Pistas'}
+                {k === 'date' ? 'Recent' : k === 'name' ? 'A-Z' : 'Tracks'}
               </button>
             ))}
           </div>
@@ -2657,19 +2657,19 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
       <div className="flex-1 overflow-y-auto p-3">
         {loading && (
           <div className="flex items-center gap-2 text-zinc-500 text-sm py-12 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin text-orange-400" /> Cargando sesiones…
+            <Loader2 className="w-4 h-4 animate-spin text-orange-400" /> Loading sessions…
           </div>
         )}
         {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-zinc-600 gap-3">
             <FolderOpen className="w-12 h-12 opacity-20" />
-            <p className="text-sm font-medium">{search ? 'Sin resultados' : 'Sin sesiones guardadas'}</p>
+            <p className="text-sm font-medium">{search ? 'No results' : 'No saved sessions'}</p>
             <p className="text-xs text-center max-w-xs">
-              {search ? 'Prueba con otro término' : 'Carga una canción del artista o guarda tu primera sesión con Ctrl+S'}
+              {search ? 'Try another search term' : 'Load one of the artist\'s songs or save your first session with Ctrl+S'}
             </p>
             {!search && (
               <button onClick={onNew} className="mt-1 h-8 px-4 rounded-md bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" />Crear sesión
+                <Plus className="w-3.5 h-3.5" />Create session
               </button>
             )}
           </div>
@@ -2694,10 +2694,10 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className={`text-xs font-bold truncate ${isActive ? 'text-orange-300' : 'text-white group-hover:text-zinc-100'}`}>
-                      {p.name || 'Sin título'}
+                      {p.name || 'Untitled'}
                     </div>
                     <div className="text-[9px] text-zinc-500 truncate mt-0.5">
-                      {[p.key, p.bpm ? `${p.bpm} BPM` : null].filter(Boolean).join(' · ') || 'Sin tono/BPM'}
+                      {[p.key, p.bpm ? `${p.bpm} BPM` : null].filter(Boolean).join(' · ') || 'No key/BPM'}
                     </div>
                   </div>
                   {isActive && (
@@ -2706,10 +2706,10 @@ function ProjectsPanel({ projects, loading, contextLabel = 'Mis Proyectos', curr
                 </div>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${statusChip(p.status)}`}>
-                    {p.status === 'release-queued' ? 'Release' : p.status === 'export-queued' ? 'Export' : p.status === 'release' ? 'Publicado' : 'Borrador'}
+                    {p.status === 'release-queued' ? 'Release' : p.status === 'export-queued' ? 'Export' : p.status === 'release' ? 'Published' : 'Draft'}
                   </span>
                   <div className="flex items-center gap-2 text-[9px] text-zinc-600 ml-auto">
-                    <span>{p.tracks?.length || 0} pistas</span>
+                    <span>{p.tracks?.length || 0} tracks</span>
                     {date && <span>· {date}</span>}
                   </div>
                 </div>
@@ -2738,33 +2738,33 @@ function LyricsPanel({ lyrics, generating, projectName, onClose, onGenerate, onR
   const [editText, setEditText] = useState(lyrics);
   const [genre, setGenre] = useState('pop');
   const [mood, setMood] = useState('uplifting');
-  const [language, setLanguage] = useState('es');
+  const [language, setLanguage] = useState('en');
   const [rewriteInstr, setRewriteInstr] = useState('');
   useEffect(() => { setEditText(lyrics); }, [lyrics]);
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-[#13131a] border border-white/10 rounded-xl shadow-2xl w-[90vw] max-w-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2 text-white font-bold text-sm"><AlignLeft className="w-4 h-4 text-orange-400" /> Editor de Letras</div>
+          <div className="flex items-center gap-2 text-white font-bold text-sm"><AlignLeft className="w-4 h-4 text-orange-400" /> Lyrics Editor</div>
           <button onClick={onClose} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {/* Generator controls */}
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex flex-col gap-0.5">
-              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Género</label>
+              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Genre</label>
               <select value={genre} onChange={(e) => setGenre(e.target.value)} className="h-7 rounded bg-white/5 border border-white/10 text-xs text-white px-2 outline-none">
                 {['pop','reggaeton','trap','cumbia','salsa','rock','balada','urbano','r&b','rap'].map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-0.5">
-              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Estado de ánimo</label>
+              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Mood</label>
               <select value={mood} onChange={(e) => setMood(e.target.value)} className="h-7 rounded bg-white/5 border border-white/10 text-xs text-white px-2 outline-none">
                 {['uplifting','melancholic','energetic','romantic','aggressive','chill','spiritual','angry','happy','sad'].map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-0.5">
-              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Idioma</label>
+              <label className="text-[9px] text-zinc-500 uppercase tracking-wider">Language</label>
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className="h-7 rounded bg-white/5 border border-white/10 text-xs text-white px-2 outline-none">
                 <option value="es">Español</option><option value="en">English</option><option value="pt">Português</option>
               </select>
@@ -2775,14 +2775,14 @@ function LyricsPanel({ lyrics, generating, projectName, onClose, onGenerate, onR
               className="h-7 px-3 rounded bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1 disabled:opacity-50 ml-auto"
             >
               {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {generating ? 'Generando…' : 'Generar con AI'}
+              {generating ? 'Generating…' : 'Generate with AI'}
             </button>
           </div>
           {/* Text editor */}
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            placeholder="Escribe o genera letras aquí…&#10;&#10;[Verso 1]&#10;...&#10;&#10;[Coro]&#10;..."
+            placeholder="Write or generate lyrics here…&#10;&#10;[Verse 1]&#10;...&#10;&#10;[Chorus]&#10;..."
             className="flex-1 min-h-[280px] bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-zinc-200 resize-none outline-none focus:border-orange-500/50 font-mono leading-relaxed"
           />
           {/* Rewrite instructions */}
@@ -2790,7 +2790,7 @@ function LyricsPanel({ lyrics, generating, projectName, onClose, onGenerate, onR
             <input
               value={rewriteInstr}
               onChange={(e) => setRewriteInstr(e.target.value)}
-              placeholder="Instrucción para reescribir (ej: hazlo más energético)"
+              placeholder="Rewrite instruction (e.g. make it more energetic)"
               className="flex-1 h-8 bg-white/5 border border-white/10 rounded px-3 text-xs text-white outline-none focus:border-orange-500/50"
             />
             <button
@@ -2798,13 +2798,13 @@ function LyricsPanel({ lyrics, generating, projectName, onClose, onGenerate, onR
               disabled={generating || !rewriteInstr.trim() || !editText.trim()}
               className="h-8 px-3 rounded bg-white/10 hover:bg-white/15 text-zinc-200 text-xs font-medium flex items-center gap-1 disabled:opacity-40"
             >
-              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Reescribir
+              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Rewrite
             </button>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="h-8 px-4 rounded bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium">Cancelar</button>
-          <button onClick={() => { onApply(editText); onClose(); }} className="h-8 px-4 rounded bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold">Aplicar letras</button>
+          <button onClick={onClose} className="h-8 px-4 rounded bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium">Cancel</button>
+          <button onClick={() => { onApply(editText); onClose(); }} className="h-8 px-4 rounded bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold">Apply lyrics</button>
         </div>
       </div>
     </div>
@@ -2821,25 +2821,25 @@ function SettingsPanel({ bpm, keyName, projectName, artistName, userTier, onClos
   return (
     <div className="flex-1 bg-[#0e0e12] flex flex-col min-w-0 overflow-hidden">
       <div className="h-10 flex items-center justify-between px-4 border-b border-white/5 shrink-0">
-        <span className="text-xs font-bold text-zinc-200 uppercase tracking-widest flex items-center gap-2"><Settings2 className="w-4 h-4 text-orange-400" /> Ajustes del Proyecto</span>
+        <span className="text-xs font-bold text-zinc-200 uppercase tracking-widest flex items-center gap-2"><Settings2 className="w-4 h-4 text-orange-400" /> Project Settings</span>
         <button onClick={onClose} className="h-7 w-7 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 flex items-center justify-center"><X className="w-3.5 h-3.5" /></button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="bg-white/[0.03] border border-white/5 rounded-lg p-4 space-y-3">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Sesión Actual</div>
+          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Current Session</div>
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Proyecto</span><span className="text-white font-medium">{projectName}</span></div>
-            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Artista</span><span className="text-white font-medium">{artistName || '—'}</span></div>
+            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Project</span><span className="text-white font-medium">{projectName}</span></div>
+            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Artist</span><span className="text-white font-medium">{artistName || '—'}</span></div>
             <div className="flex flex-col gap-0.5"><span className="text-zinc-500">BPM</span><span className="text-orange-400 font-mono font-bold">{bpm}</span></div>
-            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Tonalidad</span><span className="text-orange-400 font-mono font-bold">{keyName}</span></div>
+            <div className="flex flex-col gap-0.5"><span className="text-zinc-500">Key</span><span className="text-orange-400 font-mono font-bold">{keyName}</span></div>
           </div>
         </div>
         <div className="bg-white/[0.03] border border-white/5 rounded-lg p-4 space-y-3">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Plan & Cuenta</div>
+          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Plan & Account</div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-sm font-bold text-white">{(artistName || '?').charAt(0).toUpperCase()}</div>
             <div>
-              <div className="text-sm font-bold text-white">{artistName || 'Usuario'}</div>
+              <div className="text-sm font-bold text-white">{artistName || 'User'}</div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${userTier === 'premium' ? 'bg-amber-500/20 text-amber-400' : userTier === 'pro' ? 'bg-orange-500/20 text-orange-400' : 'bg-white/10 text-zinc-400'}`}>
                   {userTier ? userTier.toUpperCase() : 'FREE'}
@@ -2849,11 +2849,11 @@ function SettingsPanel({ bpm, keyName, projectName, artistName, userTier, onClos
           </div>
         </div>
         <div className="bg-white/[0.03] border border-white/5 rounded-lg p-4">
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Atajos Rápidos</div>
+          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Quick Shortcuts</div>
           <div className="space-y-1 text-xs text-zinc-400">
-            <div className="flex justify-between"><span>Guardar</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">Ctrl+S</kbd></div>
+            <div className="flex justify-between"><span>Save</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">Ctrl+S</kbd></div>
             <div className="flex justify-between"><span>Play/Pause</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">Space</kbd></div>
-            <div className="flex justify-between"><span>Grabar</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">R</kbd></div>
+            <div className="flex justify-between"><span>Record</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">R</kbd></div>
             <div className="flex justify-between"><span>Stop</span><kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">Escape</kbd></div>
           </div>
         </div>
@@ -2881,9 +2881,9 @@ const FLOAT_WIN_DEFAULTS: Record<string, FloatWin> = {
 };
 
 const FLOAT_WIN_DEFS = [
-  { id: 'tracks',   title: 'Pistas',      Icon: Layers,    color: '#f97316', minW: 160, minH: 150 },
+  { id: 'tracks',   title: 'Tracks',      Icon: Layers,    color: '#f97316', minW: 160, minH: 150 },
   { id: 'timeline', title: 'Timeline',    Icon: AudioLines, color: '#818cf8', minW: 280, minH: 150 },
-  { id: 'agents',   title: 'Agentes AI',  Icon: Workflow,  color: '#22c55e', minW: 200, minH: 150 },
+  { id: 'agents',   title: 'AI Agents',   Icon: Workflow,  color: '#22c55e', minW: 200, minH: 150 },
   { id: 'vocal',    title: 'Vocal Booth', Icon: Mic2,      color: '#f97316', minW: 240, minH: 140 },
   { id: 'plugin',   title: 'Plugins',     Icon: Sliders,   color: '#a855f7', minW: 200, minH: 140 },
   { id: 'ai',       title: 'AI Lab',      Icon: Sparkles,  color: '#22c55e', minW: 260, minH: 160 },
@@ -2922,7 +2922,7 @@ function FloatingPanel({
         <button
           className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/10 transition-colors text-zinc-400"
           onClick={e => { e.stopPropagation(); onToggleMinimize(id); }}
-          title={config.minimized ? 'Restaurar' : 'Minimizar'}
+          title={config.minimized ? 'Restore' : 'Minimize'}
         >
           {config.minimized ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
         </button>
@@ -3163,7 +3163,7 @@ export function MiniStudio() {
     const hasMaster = !!(master && master.src);
     const hasStems = stemPartsRef.current.size > 0;
     if (!hasMaster && !hasStems) {
-      toast({ title: 'Sin audio', description: 'Carga una canción o proyecto primero para reproducir.', variant: 'destructive' });
+      toast({ title: 'No audio', description: 'Load a song or project first to play.', variant: 'destructive' });
       return;
     }
     const ctx = getAudioCtx();
@@ -3179,7 +3179,7 @@ export function MiniStudio() {
         if (master) {
           master.play().catch((err) => {
             console.warn('[mini-studio] play error:', err);
-            toast({ title: 'No se pudo reproducir', description: 'El navegador bloqueó la reproducción automática. Haz clic de nuevo.', variant: 'destructive' });
+            toast({ title: 'Playback blocked', description: 'The browser blocked autoplay. Click again.', variant: 'destructive' });
           });
         }
         syncStemsTo(master?.currentTime ?? 0, true);
@@ -3352,7 +3352,7 @@ export function MiniStudio() {
           /* upload failed — local URL still works in current session */
         }
 
-        toast({ title: 'Grabación completa', description: 'Toma guardada en timeline y subida al servidor.' });
+        toast({ title: 'Recording complete', description: 'Take saved to the timeline and uploaded to the server.' });
       };
       mr.start(100);
       mediaRecorderRef.current = mr;
@@ -3360,7 +3360,7 @@ export function MiniStudio() {
       setRecordingTime(0);
       recTimerRef.current = window.setInterval(() => setRecordingTime((t) => t + 1), 1000);
     } catch (err: any) {
-      toast({ title: 'Micrófono no disponible', description: err.message || 'Permite acceso al micrófono.', variant: 'destructive' });
+      toast({ title: 'Microphone unavailable', description: err.message || 'Allow microphone access.', variant: 'destructive' });
     }
   }, [toast, selectedArtistId, currentProjectId, selectedSongId, selectedTrackId, tracks, clips, editorTool, gridOn, snapOn, quantize, vocalSettings, aiLabSettings, generatedUrl, lastAiResult]);
 
@@ -3468,9 +3468,9 @@ export function MiniStudio() {
       }
       projectsQuery.refetch();
       libraryQuery.refetch();
-      toast({ title: 'Proyecto guardado', description: `${res?.project?.name || projectName} sincronizado.` });
+      toast({ title: 'Project saved', description: `${res?.project?.name || projectName} synced.` });
     },
-    onError: (e: any) => toast({ title: 'No se pudo guardar', description: e.message, variant: 'destructive' }),
+    onError: (e: any) => toast({ title: 'Could not save', description: e.message, variant: 'destructive' }),
   });
 
   useEffect(() => {
@@ -3585,9 +3585,9 @@ export function MiniStudio() {
     onSuccess: (res: any) => {
       setSelectedSongId(res?.song?.id || null);
       libraryQuery.refetch();
-      toast({ title: 'Canción guardada', description: `${res?.song?.title || 'Nueva canción'} en la base de datos del artista.` });
+      toast({ title: 'Song saved', description: `${res?.song?.title || 'New song'} in the artist's database.` });
     },
-    onError: (e: any) => toast({ title: 'No se pudo guardar canción', description: e.message, variant: 'destructive' }),
+    onError: (e: any) => toast({ title: 'Could not save song', description: e.message, variant: 'destructive' }),
   });
 
   const releaseMut = useMutation({
@@ -3606,9 +3606,9 @@ export function MiniStudio() {
     },
     onSuccess: () => {
       libraryQuery.refetch();
-      toast({ title: 'Release encolado', description: 'Canción y proyecto marcados para distribución.' });
+      toast({ title: 'Release queued', description: 'Song and project marked for distribution.' });
     },
-    onError: (e: any) => toast({ title: 'Release falló', description: e.message, variant: 'destructive' }),
+    onError: (e: any) => toast({ title: 'Release failed', description: e.message, variant: 'destructive' }),
   });
 
   const applyAiGenerationToSession = async (kind: AILabKind, result: any, options: Partial<AILabSessionState> = {}) => {
@@ -3745,9 +3745,9 @@ export function MiniStudio() {
       }
       if (slug === 'mastering-engineer') setMasterChain((current) => ({ ...current, width: 62, glue: 44, targetLufs: -14, limiter: -1 }));
       if (slug === 'vocal-coach') setVocalSettings((current) => ({ ...current, tuning: true, noise: true, monitoring: true }));
-      toast({ title: `Agente ${slug}`, description: res?.message || res?.plan?.[0] || 'Listo' });
+      toast({ title: `Agent ${slug}`, description: res?.message || res?.plan?.[0] || 'Done' });
     } catch (e: any) {
-      toast({ title: 'Agente falló', description: e.message, variant: 'destructive' });
+      toast({ title: 'Agent failed', description: e.message, variant: 'destructive' });
     } finally {
       setRunningAgent(null);
     }
@@ -3847,20 +3847,20 @@ export function MiniStudio() {
     if (saved?.project?.id) setCurrentProjectId(saved.project.id);
     projectsQuery.refetch();
     libraryQuery.refetch();
-    toast({ title: 'Stems cargados', description: `${stemClips.length} canales independientes creados y guardados.` });
+    toast({ title: 'Stems loaded', description: `${stemClips.length} independent channels created and saved.` });
   };
 
   const handleSeparateStems = async () => {
     const selectedClip = selectedClipId ? clips.find((clip) => clip.id === selectedClipId) : null;
     const sourceAudioUrl = selectedClip?.audioUrl || selectedSong?.audioUrl || tracks.find((track) => track.audioUrl && !track.mute)?.audioUrl;
-    if (!sourceAudioUrl) throw new Error('Carga una canción o selecciona un clip con audio antes de separar stems.');
+    if (!sourceAudioUrl) throw new Error('Load a song or select a clip with audio before separating stems.');
     const r: any = await apiFetch('/api/mini-studio/separate-stems', {
       method: 'POST',
       body: JSON.stringify({ audioUrl: sourceAudioUrl, songId: selectedSong?.id || selectedSongId, projectId: currentProjectId }),
     });
     const stems = stemsFromResponse(r);
     if (!stems.length) {
-      toast({ title: 'Stem separator', description: r?.message || 'Separación en cola. Cuando termine, vuelve a cargar la sesión.' });
+      toast({ title: 'Stem separator', description: r?.message || 'Separation queued. Reload the session when it finishes.' });
       return;
     }
     await applyStemsToSession(stems, sourceAudioUrl);
@@ -3872,13 +3872,13 @@ export function MiniStudio() {
       if (kind === 'lyrics') {
         const r: any = await apiFetch('/api/mini-studio/lyrics/generate', {
           method: 'POST',
-          body: JSON.stringify({ topic: projectName, genre: 'pop', mood: 'uplifting', language: 'es' }),
+          body: JSON.stringify({ topic: projectName, genre: 'pop', mood: 'uplifting', language: 'en' }),
         });
         if (r?.lyrics) {
           setLyrics(r.lyrics);
           setShowLyricsPanel(true);
         }
-        toast({ title: 'Letra generada', description: '¡Letras listas! Se abrió el editor para revisar.' });
+        toast({ title: 'Lyrics generated', description: 'Lyrics ready! The editor is open for review.' });
       } else if (kind === 'stems') {
         await handleSeparateStems();
       } else if (kind === 'release') {
@@ -3894,7 +3894,7 @@ export function MiniStudio() {
           }),
         });
         setMasterChain((current) => ({ ...current, targetLufs: r?.measured?.integratedLufs ?? -14, limiter: r?.measured?.truePeakDb ?? -1, glue: Math.max(current.glue, 40) }));
-        toast({ title: 'Master listo', description: `${r?.preset?.name} · ${r?.measured?.integratedLufs} LUFS` });
+        toast({ title: 'Master ready', description: `${r?.preset?.name} · ${r?.measured?.integratedLufs} LUFS` });
       } else {
         const mappedKind = kind === 'mix' ? 'beat' : kind === 'tiktok' ? 'hook' : kind;
         const r: any = await apiFetch('/api/mini-studio/generate', {
@@ -3902,10 +3902,10 @@ export function MiniStudio() {
           body: JSON.stringify({ kind: mappedKind, bpm, key: keyName, reference: selectedClip?.audioUrl || selectedSong?.audioUrl, project: currentSnapshot(), timeline: { playhead, selectedClipId }, mixer: { selectedTrack, plugins: selectedTrackPlugins } }),
         });
         if (r?.audioUrl) await applyAiGenerationToSession(mappedKind as AILabKind, r, { targetMode: 'auto', insertMode: kind === 'tiktok' ? 'playhead' : 'arrangement', applyMix: true });
-        toast({ title: `${kind} listo`, description: `Provider: ${r?.provider || 'studio'}` });
+        toast({ title: `${kind} ready`, description: `Provider: ${r?.provider || 'studio'}` });
       }
     } catch (e: any) {
-      toast({ title: 'Acción falló', description: e.message, variant: 'destructive' });
+      toast({ title: 'Action failed', description: e.message, variant: 'destructive' });
     } finally {
       setRunningAction(null);
     }
@@ -3934,9 +3934,9 @@ export function MiniStudio() {
         }),
       });
       const applied = await applyAiGenerationToSession(kind, r, options);
-      toast({ title: `${kind} generado`, description: applied ? `${AI_KIND_CONFIG[kind].name} en timeline · ${r?.provider}` : `Provider: ${r?.provider || 'studio'}` });
+      toast({ title: `${kind} generated`, description: applied ? `${AI_KIND_CONFIG[kind].name} on timeline · ${r?.provider}` : `Provider: ${r?.provider || 'studio'}` });
     } catch (e: any) {
-      toast({ title: 'Generación falló', description: e.message, variant: 'destructive' });
+      toast({ title: 'Generation failed', description: e.message, variant: 'destructive' });
     } finally {
       setGenerating(null);
     }
@@ -3951,14 +3951,14 @@ export function MiniStudio() {
     };
     const dest = routes[id];
     if (dest) navigate(dest);
-    else toast({ title: id, description: 'Módulo de release activado.' });
+    else toast({ title: id, description: 'Release module activated.' });
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
       const activeFormats = exportFormats.filter((f) => f.active).map((f) => f.id);
-      if (activeFormats.length === 0) throw new Error('Selecciona al menos un formato de exportación.');
+      if (activeFormats.length === 0) throw new Error('Select at least one export format.');
       const created: any = await apiFetch(currentProjectId ? `/api/mini-studio/projects/${currentProjectId}` : '/api/mini-studio/projects', {
         method: currentProjectId ? 'PUT' : 'POST',
         body: JSON.stringify(currentSnapshot()),
@@ -3985,10 +3985,10 @@ export function MiniStudio() {
           a.click();
           a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 4000);
-          toast({ title: 'WAV exportado', description: 'Render local renderizado y descargado.' });
+          toast({ title: 'WAV exported', description: 'Local render completed and downloaded.' });
         } catch (renderErr: any) {
           console.warn('[mini-studio] local WAV render failed:', renderErr?.message);
-          toast({ title: 'Render local no disponible', description: 'El archivo es cross-origin sin CORS; se encoló en el servidor.', variant: 'destructive' });
+          toast({ title: 'Local render unavailable', description: 'The file is cross-origin without CORS; it was queued on the server.', variant: 'destructive' });
         }
       }
 
@@ -3996,9 +3996,9 @@ export function MiniStudio() {
         method: 'POST',
         body: JSON.stringify({ projectId, songId: selectedSong?.id || selectedSongId, formats: activeFormats }),
       });
-      toast({ title: 'Export encolado', description: `${r?.exports?.length || activeFormats.length} formatos en cola.` });
+      toast({ title: 'Export queued', description: `${r?.exports?.length || activeFormats.length} formats queued.` });
     } catch (e: any) {
-      toast({ title: 'Export falló', description: e.message, variant: 'destructive' });
+      toast({ title: 'Export failed', description: e.message, variant: 'destructive' });
     } finally {
       setExporting(false);
     }
@@ -4017,7 +4017,7 @@ export function MiniStudio() {
           linkedProject = null;
         }
       }
-      if (!audioUrl && !linkedProject?.clips?.length) throw new Error('Esta canción no tiene audio guardado en la base de datos.');
+      if (!audioUrl && !linkedProject?.clips?.length) throw new Error('This song has no audio saved in the database.');
 
       const baseTracks = linkedProject?.tracks?.length ? linkedProject.tracks : TRACKS;
       const baseClips = linkedProject?.clips?.length ? ensureClipIds(linkedProject.clips) : [];
@@ -4117,9 +4117,9 @@ export function MiniStudio() {
       if (saved?.project?.id) setCurrentProjectId(saved.project.id);
       projectsQuery.refetch();
       libraryQuery.refetch();
-      toast({ title: linkedProject ? 'Proyecto de canción abierto' : 'Proyecto de canción creado', description: `${songTitle} está conectado a ${libraryArtist?.name || selectedArtist?.name || 'este artista'}.` });
+      toast({ title: linkedProject ? 'Song project opened' : 'Song project created', description: `${songTitle} is connected to ${libraryArtist?.name || selectedArtist?.name || 'this artist'}.` });
     } catch (error: any) {
-      toast({ title: 'No se pudo importar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Could not import', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -4147,8 +4147,8 @@ export function MiniStudio() {
       deepLinkLoadedRef.current = true;
       void handleLoadSong({
         id: songId || `external-${Date.now()}`,
-        title: songTitle || 'Canción importada',
-        name: songTitle || 'Canción importada',
+        title: songTitle || 'Imported song',
+        name: songTitle || 'Imported song',
         audioUrl,
         artistId: artistMatch?.id || artistParam || undefined,
       });
@@ -4168,7 +4168,7 @@ export function MiniStudio() {
         setProjectName(songName);
         if (audioRef.current) { audioRef.current.src = blobUrl; audioRef.current.load(); }
         setTracks((tks) => tks.map((t, i) => i === 0 ? { ...t, name: songName.toUpperCase().slice(0, 18), audioUrl: blobUrl } : t));
-        toast({ title: 'Archivo importado', description: `${songName} listo en la pista principal.` });
+        toast({ title: 'File imported', description: `${songName} ready on the main track.` });
       }
       const importClipId = makeClipId();
       setClips((prev) => [...prev, { id: importClipId, trackId: artistId ? 't8' : 't1', name: songName, start: 0, width: 50, audioUrl: blobUrl }]);
@@ -4180,7 +4180,7 @@ export function MiniStudio() {
     try { localStorage.removeItem('ms-last-project-id'); } catch {}
     try { localStorage.removeItem('ms-clips-v1'); } catch {}
     autoLoadedRef.current = true; // prevent auto-load from overriding blank session
-    setProjectName('Nuevo proyecto');
+    setProjectName('New project');
     setCurrentProjectId(null);
     if (libraryArtist?.id) setSelectedArtistId(libraryArtist.id);
     setSelectedSongId(null);
@@ -4201,12 +4201,12 @@ export function MiniStudio() {
     setRecordedUrl(null);
     setGeneratedUrl(null);
     if (audioRef.current) { audioRef.current.src = ''; }
-    toast({ title: 'Nuevo proyecto', description: 'Sesión limpia lista para producir.' });
+    toast({ title: 'New project', description: 'Clean session ready to produce.' });
   };
 
   const handleLoadProject = (project: any) => {
     try { localStorage.setItem('ms-last-project-id', String(project.id)); } catch {}
-    setProjectName(project.name || 'Sin título');
+    setProjectName(project.name || 'Untitled');
     setCurrentProjectId(project.id);
     setSelectedSongId(project.songId || null);
     setSelectedArtistId(project.artistId || null);
@@ -4284,7 +4284,7 @@ export function MiniStudio() {
     const splitAt = clampTimelinePct(snapTimelinePct(absolutePct, snapOn, quantize));
     const clipEnd = clip.start + clip.width;
     if (splitAt <= clip.start + 1 || splitAt >= clipEnd - 1) {
-      toast({ title: 'Corte no aplicado', description: 'El punto de corte está demasiado cerca del borde del clip.' });
+      toast({ title: 'Cut not applied', description: 'The cut point is too close to the clip edge.' });
       return;
     }
     setClips((prev) => prev.flatMap((clip) => {
@@ -4295,7 +4295,7 @@ export function MiniStudio() {
       ];
     }));
     setSelectedClipId(rightClipId);
-    toast({ title: 'Clip cortado', description: 'El audio quedó dividido en dos regiones editables.' });
+    toast({ title: 'Clip cut', description: 'The audio was split into two editable regions.' });
   };
 
   const handleDuplicateClip = (clipId: string) => {
@@ -4307,18 +4307,18 @@ export function MiniStudio() {
       return [...prev, { ...clip, id: duplicateId, name: `${clip.name}_copy`, start }];
     });
     setSelectedClipId(duplicateId);
-    toast({ title: 'Clip duplicado', description: 'La copia fue añadida a la misma pista.' });
+    toast({ title: 'Clip duplicated', description: 'The copy was added to the same track.' });
   };
 
   const handleDeleteClip = (clipId: string) => {
     setClips((prev) => prev.filter((clip) => clip.id !== clipId));
     if (selectedClipId === clipId) setSelectedClipId(null);
-    toast({ title: 'Clip eliminado', description: 'La región salió del timeline.' });
+    toast({ title: 'Clip deleted', description: 'The region was removed from the timeline.' });
   };
 
   const handleRenameClip = (clipId: string) => {
     const clip = clips.find((item) => item.id === clipId);
-    setRenameDialog({ target: 'clip', id: clipId, title: 'Renombrar clip', label: 'Nombre del clip', initialValue: clip?.name || 'Audio Clip' });
+    setRenameDialog({ target: 'clip', id: clipId, title: 'Rename clip', label: 'Clip name', initialValue: clip?.name || 'Audio Clip' });
   };
 
   const handleToggleClipMute = (clipId: string) => {
@@ -4337,7 +4337,7 @@ export function MiniStudio() {
 
   const handleRenameTrack = (trackId: string) => {
     const track = tracks.find((item) => item.id === trackId);
-    setRenameDialog({ target: 'track', id: trackId, title: 'Renombrar pista', label: 'Nombre de la pista', initialValue: track?.name || 'PISTA' });
+    setRenameDialog({ target: 'track', id: trackId, title: 'Rename track', label: 'Track name', initialValue: track?.name || 'TRACK' });
   };
 
   const handleRenameSubmit = (value: string) => {
@@ -4418,11 +4418,11 @@ export function MiniStudio() {
     const colors = ['#f97316','#a855f7','#ef4444','#eab308','#22c55e','#06b6d4','#ec4899','#71717a'];
     const color = colors[(next - 1) % colors.length];
     const id = `t${next}`;
-    const newTrack: Track = { id, name: `PISTA ${next}`, type: 'Audio', color, initial: String(next), iconBg: 'bg-orange-500', vol: 60, pan: 0, mute: false, solo: false, rec: false };
+    const newTrack: Track = { id, name: `TRACK ${next}`, type: 'Audio', color, initial: String(next), iconBg: 'bg-orange-500', vol: 60, pan: 0, mute: false, solo: false, rec: false };
     setTracks([...tracks, newTrack]);
     setPluginsByTrack((prev) => ({ ...prev, [id]: defaultPluginsForTrack(newTrack) }));
     setSelectedTrackId(id);
-    toast({ title: 'Pista añadida', description: `PISTA ${next} agregada al proyecto.` });
+    toast({ title: 'Track added', description: `TRACK ${next} added to the project.` });
   };
 
   const handleUpdateTrackMixer = (trackId: string, patch: Partial<Track>) => {
@@ -4477,7 +4477,7 @@ export function MiniStudio() {
     if (item?.href) {
       setSidebarOpen(false);
       navigate(item.href);
-      toast({ title: item.label, description: id === 'explore' ? 'Abriendo Explorar.' : 'Abriendo Marketplace.' });
+      toast({ title: item.label, description: id === 'explore' ? 'Opening Explore.' : 'Opening Marketplace.' });
       return;
     }
     setActiveSection(id);
@@ -4493,12 +4493,12 @@ export function MiniStudio() {
     };
     if (mobileMap[id]) setMobilePanel(mobileMap[id]);
     const labels: Record<string, string> = {
-      studio: 'Studio abierto.',
-      'ai-lab': 'AI Lab abierto.', vocal: 'Vocal Booth listo.',
-      mix: 'Mixer activo.', master: 'Master Room activo.',
-      release: 'Release Room listo.', projects: 'Proyectos cargados.', settings: 'Ajustes abiertos.',
+      studio: 'Studio opened.',
+      'ai-lab': 'AI Lab opened.', vocal: 'Vocal Booth ready.',
+      mix: 'Mixer active.', master: 'Master Room active.',
+      release: 'Release Room ready.', projects: 'Projects loaded.', settings: 'Settings opened.',
     };
-    toast({ title: SIDEBAR_NAV.find((item) => item.id === id)?.label || 'Mini Studio', description: labels[id] || 'Panel activado.' });
+    toast({ title: SIDEBAR_NAV.find((item) => item.id === id)?.label || 'Mini Studio', description: labels[id] || 'Panel activated.' });
   };
 
   const handleTimelineTool = (tool: string) => {
@@ -4515,7 +4515,7 @@ export function MiniStudio() {
       setQuantize((q) => opts[(opts.indexOf(q) + 1) % opts.length]);
       return;
     }
-    toast({ title: 'Editor', description: `Herramienta ${tool} activada.` });
+    toast({ title: 'Editor', description: `Tool ${tool} activated.` });
   };
 
   const handleVocalTool = (tool: string) => {
@@ -4546,23 +4546,23 @@ export function MiniStudio() {
       }
     }
     const descs: Record<string, string> = {
-      metronome: 'Click de tempo sincronizado.',
-      tuning: 'Afinación automática alternada.',
-      noise: 'Reducción de ruido alternada.',
-      monitoring: 'Monitoreo vocal alternado.',
-      'cue-line': 'Línea marcada para la toma actual.',
-      'smart-take': 'Seleccionando mejor toma con AI.',
-      'comp-best': 'Mejor toma enfocada en el timeline.',
-      'vocal-chain': 'Cadena vocal aplicada al mixer.',
-      harmonies: 'Generando armonías con AI.',
-      'vocal-doubler': 'Doblador vocal insertado.',
+      metronome: 'Tempo click synced.',
+      tuning: 'Auto-tune toggled.',
+      noise: 'Noise reduction toggled.',
+      monitoring: 'Vocal monitoring toggled.',
+      'cue-line': 'Line cued for the current take.',
+      'smart-take': 'Selecting the best take with AI.',
+      'comp-best': 'Best take focused on the timeline.',
+      'vocal-chain': 'Vocal chain applied to the mixer.',
+      harmonies: 'Generating harmonies with AI.',
+      'vocal-doubler': 'Vocal doubler inserted.',
     };
-    toast({ title: 'Vocal Booth', description: descs[tool] || 'Control actualizado.' });
+    toast({ title: 'Vocal Booth', description: descs[tool] || 'Control updated.' });
   };
 
   const handleDeleteSelectedClipCommand = () => {
     if (!selectedClipId) {
-      toast({ title: 'Selecciona un clip', description: 'Haz clic en una región del timeline antes de borrar.' });
+      toast({ title: 'Select a clip', description: 'Click a region on the timeline before deleting.' });
       return;
     }
     handleDeleteClip(selectedClipId);
@@ -4570,7 +4570,7 @@ export function MiniStudio() {
 
   const handleDeleteSelectedTrackCommand = () => {
     if (!selectedTrackId) {
-      toast({ title: 'Selecciona una pista', description: 'Haz clic en una pista antes de borrar.' });
+      toast({ title: 'Select a track', description: 'Click a track before deleting.' });
       return;
     }
     handleDeleteTrack(selectedTrackId);
@@ -4578,7 +4578,7 @@ export function MiniStudio() {
 
   const handleDuplicateSelectedClipCommand = () => {
     if (!selectedClipId) {
-      toast({ title: 'Selecciona un clip', description: 'Haz clic en una región del timeline antes de duplicar.' });
+      toast({ title: 'Select a clip', description: 'Click a region on the timeline before duplicating.' });
       return;
     }
     handleDuplicateClip(selectedClipId);
@@ -4586,7 +4586,7 @@ export function MiniStudio() {
 
   const handleDuplicateSelectedTrackCommand = () => {
     if (!selectedTrackId) {
-      toast({ title: 'Selecciona una pista', description: 'Haz clic en una pista antes de duplicar.' });
+      toast({ title: 'Select a track', description: 'Click a track before duplicating.' });
       return;
     }
     handleDuplicateTrack(selectedTrackId);
@@ -4606,13 +4606,13 @@ export function MiniStudio() {
       return;
     }
     setEditorTool('cut');
-    toast({ title: 'Herramienta cortar', description: 'Selecciona un clip o corta directamente en el timeline.' });
+    toast({ title: 'Cut tool', description: 'Select a clip or cut directly on the timeline.' });
   };
 
   const handleNudgeSelectedClip = (direction: -1 | 1) => {
     const clip = selectedClipId ? clips.find((item) => item.id === selectedClipId) : null;
     if (!clip) {
-      toast({ title: 'Selecciona un clip', description: 'Usa Shift + flechas para mover la región seleccionada.' });
+      toast({ title: 'Select a clip', description: 'Use Shift + arrows to move the selected region.' });
       return;
     }
     const nextStart = Math.min(100 - clip.width, Math.max(0, snapTimelinePct(clip.start + (quantizeStepPct(quantize) * direction), snapOn, quantize)));
@@ -4622,7 +4622,7 @@ export function MiniStudio() {
   const handleMoveSelectedClipTrack = (direction: -1 | 1) => {
     const clip = selectedClipId ? clips.find((item) => item.id === selectedClipId) : null;
     if (!clip) {
-      toast({ title: 'Selecciona un clip', description: 'Usa Shift + arriba/abajo para moverlo entre pistas.' });
+      toast({ title: 'Select a clip', description: 'Use Shift + up/down to move it between tracks.' });
       return;
     }
     const currentIndex = tracks.findIndex((track) => track.id === clip.trackId);
@@ -5164,7 +5164,7 @@ export function MiniStudio() {
                   color: active ? color : '#374151',
                   borderColor: active ? `${color}35` : 'rgba(255,255,255,0.07)',
                 }}
-                title={active ? `Minimizar ${title}` : `Restaurar ${title}`}
+                title={active ? `Minimize ${title}` : `Restore ${title}`}
               >
                 <Icon className="w-3 h-3" />
                 <span className="hidden sm:inline">{title}</span>
@@ -5177,15 +5177,15 @@ export function MiniStudio() {
             onClick={showAllFloatWins}
             className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all hover:text-orange-300 hover:border-orange-400/30"
             style={{ color: '#6b7280', borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
-            title="Mostrar todas las ventanas"
+            title="Show all windows"
           >
-            <ChevronDown className="w-3 h-3" /> Mostrar todo
+            <ChevronDown className="w-3 h-3" /> Show all
           </button>
           <button
             onClick={tileFloatLayout}
             className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all hover:text-purple-300 hover:border-purple-400/30"
             style={{ color: '#6b7280', borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
-            title="Distribuir ventanas en cuadrícula"
+            title="Tile windows in a grid"
           >
             <Layers className="w-3 h-3" /> Tile
           </button>

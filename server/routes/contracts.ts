@@ -198,6 +198,42 @@ router.get('/', isAuthenticated, async (req: any, res) => {
   }
 });
 
+/**
+ * GET /api/contracts/risk-shield
+ * Audita TODOS los contratos del usuario y devuelve un score de protección + red flags consolidados.
+ * ⚠️ DEBE registrarse ANTES de GET /:id — si no, /:id captura "risk-shield" como id y devuelve 404.
+ */
+router.get('/risk-shield', isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.clerkUserId;
+
+    const snap = await db
+      .collection('contracts')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+
+    const contracts = snap.docs.map((doc: any) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title || 'Untitled Contract',
+        content: data.content || '',
+      };
+    });
+
+    const report = await auditContractsForShield(contracts);
+    return res.status(200).json({ success: true, ...report });
+  } catch (error: any) {
+    console.error('Error in risk-shield:', error);
+    return res.status(500).json({
+      error: 'Risk shield unavailable',
+      details: error.message,
+    });
+  }
+});
+
 router.get('/:id', isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user.clerkUserId;
@@ -351,38 +387,7 @@ router.post('/legal-assistant', isAuthenticated, async (req: any, res) => {
 });
 
 /**
- * GET /api/contracts/risk-shield
- * Audita TODOS los contratos del usuario y devuelve un score de protección + red flags consolidados.
+ * GET /api/contracts/risk-shield — definido ARRIBA (antes de GET /:id) para evitar shadowing.
  */
-router.get('/risk-shield', isAuthenticated, async (req: any, res) => {
-  try {
-    const userId = req.user.clerkUserId;
-
-    const snap = await db
-      .collection('contracts')
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(10)
-      .get();
-
-    const contracts = snap.docs.map((doc: any) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: data.title || 'Untitled Contract',
-        content: data.content || '',
-      };
-    });
-
-    const report = await auditContractsForShield(contracts);
-    return res.status(200).json({ success: true, ...report });
-  } catch (error: any) {
-    console.error('Error in risk-shield:', error);
-    return res.status(500).json({
-      error: 'Risk shield unavailable',
-      details: error.message,
-    });
-  }
-});
 
 export default router;

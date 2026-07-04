@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { PostFeed } from "../components/social/post-feed";
 import { ArtistProfileEmbed } from "../components/social/artist-profile-embed";
 import { DirectMessages, getUnreadDMCount } from "../components/social/direct-messages";
@@ -34,7 +34,7 @@ const INFO_GROUP_CLASS = "flex items-center gap-2 text-muted-foreground text-sm"
 
 
 // Animated Hero Banner Component - Creative Design
-function HeroBanner() {
+function HeroBanner({ activeArtists }: { activeArtists?: number }) {
   const [activeWave, setActiveWave] = useState(0);
   
   useEffect(() => {
@@ -44,12 +44,12 @@ function HeroBanner() {
     return () => clearInterval(interval);
   }, []);
 
-  // Floating DNA-like helix particles
-  const helixPoints = Array.from({ length: 12 }, (_, i) => ({
+  // Memoize to avoid new random values on every render (causes animation jitter)
+  const helixPoints = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
     angle: (i / 12) * Math.PI * 2,
     delay: i * 0.15,
-    size: 3 + Math.random() * 3,
-  }));
+    size: 3 + (i % 3) * 1.5, // deterministic sizes, no Math.random
+  })), []);
 
   return (
     <div className="relative w-full h-[280px] md:h-[340px] overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-purple-950/80 to-slate-950 border border-purple-500/20">
@@ -292,14 +292,14 @@ function HeroBanner() {
         transition={{ delay: 1.4 }}
       >
         <Brain className="w-3 h-3 text-purple-400" />
-        <span className="text-xs text-purple-300 font-medium">48 AI Minds Active</span>
+        <span className="text-xs text-purple-300 font-medium">{activeArtists ? `${activeArtists} AI Minds Active` : 'AI Minds Active'}</span>
       </motion.div>
     </div>
   );
 }
 
 // Stats Card with Animation
-function AnimatedStatsCard({ artists, users }: { artists: any[]; users: SocialUser[] | undefined }) {
+function AnimatedStatsCard({ artists, users, postsToday }: { artists: any[]; users: SocialUser[] | undefined; postsToday?: number }) {
   return (
     <Card className="bg-gradient-to-br from-slate-900/80 to-purple-900/30 border-purple-500/20 overflow-hidden relative">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-500/10 via-transparent to-transparent" />
@@ -310,36 +310,47 @@ function AnimatedStatsCard({ artists, users }: { artists: any[]; users: SocialUs
         </CardTitle>
       </CardHeader>
       <CardContent className="relative">
-        <div className="grid grid-cols-2 gap-4 text-center">
+        <div className="grid grid-cols-2 gap-3 text-center">
           <motion.div 
-            className="p-4 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/10 border border-orange-500/20"
-            whileHover={{ scale: 1.05 }}
+            className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/10 border border-orange-500/20"
+            whileHover={{ scale: 1.04 }}
             transition={{ type: "spring", stiffness: 300 }}
           >
             <motion.p 
-              className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400"
+              className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              {artists.length || 0}
+              {artists.length > 0 ? artists.length : <span className="text-slate-600 text-lg">—</span>}
             </motion.p>
-            <p className="text-xs text-slate-400 mt-1">AI Artists</p>
+            <p className="text-xs text-slate-400 mt-0.5">AI Artists</p>
           </motion.div>
           <motion.div 
-            className="p-4 rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-500/10 border border-purple-500/20"
-            whileHover={{ scale: 1.05 }}
+            className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-500/10 border border-purple-500/20"
+            whileHover={{ scale: 1.04 }}
             transition={{ type: "spring", stiffness: 300 }}
           >
             <motion.p 
-              className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400"
+              className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              {users?.length || 0}
+              {users !== undefined ? (users.length > 0 ? users.length : '0') : <span className="text-slate-600 text-lg">—</span>}
             </motion.p>
-            <p className="text-xs text-slate-400 mt-1">Members</p>
+            <p className="text-xs text-slate-400 mt-0.5">Members</p>
           </motion.div>
+          {postsToday !== undefined && (
+            <motion.div
+              className="col-span-2 p-2.5 rounded-xl bg-gradient-to-br from-green-500/15 to-emerald-500/10 border border-green-500/20"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <p className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">{postsToday}</p>
+              <p className="text-xs text-slate-400">Posts today</p>
+            </motion.div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -482,6 +493,17 @@ export default function SocialNetworkPage() {
     }
   });
 
+  // Live pulse stats — para el HeroBanner (activeArtists en tiempo real)
+  const { data: pulseStats } = useQuery({
+    queryKey: ["social-network-pulse-stats"],
+    queryFn: async () => {
+      const r = await apiRequest({ url: "/api/ai-social/live-pulse?limit=1", method: "GET" }) as any;
+      return r?.stats as { activeArtists: number; postsToday: number; online: number; listeners: number } | undefined;
+    },
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+
   // Función para obtener las iniciales del nombre
   const getInitials = (name: string) => {
     return name
@@ -536,7 +558,7 @@ export default function SocialNetworkPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <HeroBanner />
+          <HeroBanner activeArtists={pulseStats?.activeArtists} />
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
@@ -611,22 +633,29 @@ export default function SocialNetworkPage() {
             </Card>
 
             {/* Stats Card */}
-            <AnimatedStatsCard artists={artists} users={users} />
+            <AnimatedStatsCard artists={artists} users={users} postsToday={pulseStats?.postsToday} />
 
             {/* On-Chain AI Artist Minting */}
             <ArtistMintWidget />
 
-            {/* Buy BTF Token */}
-            <BuyBTFWidget />
-
-            {/* BTF Token Widget */}
-            <BTFTokenWidget />
-
             {/* Song Boost — Pay BTF to promote your songs */}
             <SongBoostWidget compact />
 
-            {/* Legal: BTF utility-token disclaimer (not a security / no financial return) */}
-            <UtilityDisclaimer variant="long" size="xs" />
+            {/* BTF Token section — collapsed by default to reduce sidebar noise */}
+            <details className="group">
+              <summary className="cursor-pointer flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/60 border border-slate-700/40 text-sm text-slate-300 hover:text-white hover:border-purple-500/40 transition-colors list-none">
+                <span className="flex items-center gap-2">
+                  <Zap className="h-3.5 w-3.5 text-yellow-400" />
+                  BTF Token & Economy
+                </span>
+                <span className="text-slate-500 group-open:rotate-180 transition-transform">▾</span>
+              </summary>
+              <div className="mt-2 space-y-3">
+                <BuyBTFWidget />
+                <BTFTokenWidget />
+                <UtilityDisclaimer variant="long" size="xs" />
+              </div>
+            </details>
           </motion.div>
 
           {/* Main Content Area */}
@@ -637,113 +666,103 @@ export default function SocialNetworkPage() {
             transition={{ duration: 0.5, delay: 0.3 }}
           >
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-8 bg-slate-900/80 border border-slate-700/50 p-1">
+            <TabsList className="flex w-full overflow-x-auto gap-1 bg-slate-900/80 border border-slate-700/50 p-1 rounded-xl scrollbar-none">
                 <TabsTrigger 
                   value="ai-feed" 
-                  className="flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+                  className="flex-none flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   <Bot className="h-4 w-4" />
-                  <span className="hidden sm:inline">AI Feed</span>
+                  <span>AI Feed</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="debates" 
-                  className="flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-orange-500 data-[state=active]:text-white"
+                  className="flex-none flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-orange-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   <Swords className="h-4 w-4" />
-                  <span className="hidden sm:inline">Debates</span>
+                  <span>Debates</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="discover" 
-                  className="flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
+                  className="flex-none flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   <Compass className="h-4 w-4" />
-                  <span className="hidden sm:inline">Discover</span>
+                  <span>Discover</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="manager" 
-                  className="flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white"
+                  className="flex-none flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   <Target className="h-4 w-4" />
-                  <span className="hidden sm:inline">Manager</span>
+                  <span>Manager</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-network" 
-                  className="flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white"
+                  className="flex-none flex items-center gap-1.5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   <Network className="h-4 w-4" />
-                  <span className="hidden sm:inline">Network</span>
+                  <span>Network</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="feed"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white"
+                  className="flex-none data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   Social
                 </TabsTrigger>
                 <TabsTrigger 
                   value="profile"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white"
+                  className="flex-none data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white whitespace-nowrap"
                 >
                   Profile
                 </TabsTrigger>
                 <TabsTrigger 
                   value="messages"
-                  className="flex items-center gap-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white relative"
+                  className="flex-none flex items-center gap-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white relative whitespace-nowrap"
                 >
                   <MessageSquare className="h-4 w-4" />
-                  <span className="hidden sm:inline">DMs</span>
+                  <span>DMs</span>
                 </TabsTrigger>
               </TabsList>
             
               {/* TAB: AI Artists Autonomous Feed */}
-              <TabsContent value="ai-feed" className="space-y-6">
+              <TabsContent value="ai-feed" className="space-y-4">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
-                  {/* Live Pulse — unified alive layer: streaming + activity + news */}
+                  {/* ── Tier 1: Live Status Strip ── */}
                   <LivePulse />
 
-                  {/* Live Token Ticker — Real-time price scroll */}
+                  {/* ── Tier 2: Live Token Ticker ── */}
                   <TradingTicker />
-                  
-                  {/* Boostify Radio Widget - Always visible in AI Feed */}
-                  <BoostifyRadioWidget onAudioRef={handleRadioAudioRef} />
-                  
-                  {/* Radio Visualizer - Synced with Radio Audio */}
-                  <RadioVisualizer audioRef={radioAudioRef} />
-                  
-                  {/* Stories Carousel - Ephemeral 24h stories */}
+
+                  {/* ── Tier 3: Radio + Visualizer (collapsed into one visual block) ── */}
+                  <div className="space-y-2">
+                    <BoostifyRadioWidget onAudioRef={handleRadioAudioRef} />
+                    <RadioVisualizer audioRef={radioAudioRef} />
+                  </div>
+
+                  {/* ── Tier 4: Stories ── */}
                   <StoriesCarousel />
                   
-                  {/* Two-column layout: Feed + Charts sidebar */}
-                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    <div className="xl:col-span-2">
+                  {/* ── Tier 5: Main Feed + Right Rail ── */}
+                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div className="xl:col-span-2 space-y-4">
                       {/* AI Social Feed */}
                       <AISocialFeed />
                     </div>
                     <div className="xl:col-span-1 space-y-4">
-                      {/* Economy Dashboard — Tips, Tokens, Hype */}
+                      {/* Economy & XP */}
                       <EconomyDashboard />
-                      
-                      {/* XP Profile Widget */}
                       <XPProfileWidget userId={user?.id} />
-                      
-                      {/* Weekly Charts Billboard */}
-                      <div className="sticky top-4 space-y-4">
+
+                      {/* Right rail sticky section */}
+                      <div className="space-y-4">
                         <BoostifyCharts />
-                        
-                        {/* Trending Topics */}
                         <TrendingTopics />
-                        
-                        {/* Live Spaces - AI Audio Rooms */}
                         <LiveSpaces userId={user?.id} />
-                        
-                        {/* Spotify Connect */}
                         <SpotifyConnect userId={user?.id} />
-                        
-                        {/* Create AI Artist */}
                         <CreateAiArtist userId={user?.id} />
                       </div>
                     </div>

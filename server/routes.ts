@@ -135,6 +135,7 @@ import adminImportArtistsRouter from './routes/admin-import-artists'; // Import 
 import virtualRecordLabelRouter from './routes/virtual-record-label'; // Import Virtual Record Label integration router
 import ogImageRouter from './routes/og-image.tsx'; // Import Open Graph image generator
 import youtubeToolsRouter from './routes/youtube-tools'; // Import YouTube Growth Tools (Gemini AI + Apify)
+import youtubeChannelSeoRouter from './routes/youtube-channel-seo'; // YouTube Channel SEO Engine (real Data API v3 + GLM-5.2)
 import tiktokToolsRouter from './routes/tiktok-tools'; // Import TikTok Growth Tools (AI-powered)
 import spotifyToolsRouter from './routes/spotify-tools'; // Import Spotify Growth Tools (Gemini AI + Apify)
 import spotifyExtensionRouter from './routes/spotify-extension'; // Spotify Chrome Extension Sync API
@@ -754,6 +755,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   app.use('/api/virtual-label', virtualRecordLabelRouter); // Virtual Record Label integration routes
   app.use('/api/og-image', ogImageRouter); // Open Graph dynamic image generation
   app.use('/api/youtube', youtubeToolsRouter); // YouTube Growth Tools (Pre-Launch Score, Keywords, Title Analyzer, Content Ideas)
+  app.use('/api/youtube-seo', youtubeChannelSeoRouter); // YouTube Channel SEO Engine — real channel monitor + real-time apply (videos.update/channels.update)
   app.use('/api/tiktok', tiktokToolsRouter); // TikTok Growth Tools (Reel Creator, Trends, Captions, Calendar, Viral Score)
   app.use('/api/youtube-ext', youtubeExtensionRouter); // YouTube Chrome Extension Sync API (connect, sync, actions, events)
   app.use('/api/instagram-ext', instagramExtensionRouter); // Instagram Chrome Extension Sync API (connect, sync, actions, events)

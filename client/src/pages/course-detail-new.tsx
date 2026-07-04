@@ -12,7 +12,7 @@ import {
   Award, Sparkles, ChevronLeft, Loader2, GraduationCap,
   ChevronRight, Star, Users, Target, Download, Trophy,
   Crown, Video, FileText, Zap, ArrowRight, Play,
-  Volume2, ImageIcon, Headphones
+  Volume2, ImageIcon, Headphones, Presentation
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -121,13 +121,65 @@ function LessonAudioPlayer({ url }: { url: string }) {
   );
 }
 
+// ─── Interactive slide deck (AI-generated presentation) ─────
+function LessonSlideDeck({ slides, lessonTitle }: {
+  slides: Array<{ title: string; bullets: string[]; speakerNotes?: string }>;
+  lessonTitle: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  if (!slides.length) return null;
+  const slide = slides[Math.min(idx, slides.length - 1)];
+  return (
+    <div className="rounded-lg border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-black/20">
+        <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+          <Presentation className="w-3.5 h-3.5" /> Interactive Presentation
+        </span>
+        <span className="text-[10px] text-muted-foreground tabular-nums">{idx + 1} / {slides.length}</span>
+      </div>
+      <div className="p-5 min-h-[180px]">
+        <h5 className="text-base font-bold mb-3">{slide.title}</h5>
+        <ul className="space-y-2">
+          {slide.bullets.map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+              {b}
+            </li>
+          ))}
+        </ul>
+        {slide.speakerNotes && (
+          <p className="mt-4 text-xs text-muted-foreground/80 italic border-l-2 border-primary/30 pl-3">
+            {slide.speakerNotes}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center justify-between px-4 py-2.5 border-t border-white/5 bg-black/20">
+        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={idx === 0}
+          onClick={(e) => { e.stopPropagation(); setIdx((v) => Math.max(0, v - 1)); }}>
+          ← Prev
+        </Button>
+        <div className="flex gap-1">
+          {slides.map((_, i) => (
+            <button key={i} onClick={(e) => { e.stopPropagation(); setIdx(i); }}
+              className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-4 bg-primary' : 'w-1.5 bg-muted'}`} />
+          ))}
+        </div>
+        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={idx === slides.length - 1}
+          onClick={(e) => { e.stopPropagation(); setIdx((v) => Math.min(slides.length - 1, v + 1)); }}>
+          Next →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Generating-in-progress animation ──────────────────────
 function LessonGeneratingState() {
   const steps = [
     { icon: FileText, label: 'Writing lesson content' },
     { icon: ImageIcon, label: 'Creating illustration' },
     { icon: Headphones, label: 'Recording narration' },
-    { icon: Award, label: 'Building quiz' },
+    { icon: Award, label: 'Building slides & quiz' },
   ];
   return (
     <div className="rounded-lg border border-primary/20 bg-primary/5 p-6 space-y-4">
@@ -693,6 +745,8 @@ export default function CourseDetailPage() {
                         const displayContent = generated?.content && generated.content.length > 60 ? generated.content : null;
                         const audioUrl = generated?.materials?.audioUrl || generated?.materials?.audioIntroUrl || lesson.materials?.audioIntroUrl;
                         const keyPoints: string[] = generated?.materials?.keyPoints || [];
+                        const slides: Array<{ title: string; bullets: string[]; speakerNotes?: string }> =
+                          generated?.materials?.slides || (lesson as any).materials?.slides || [];
 
                         return (
                         <div className="px-4 pb-5 pt-2 pl-[4.5rem] space-y-4 border-t border-white/5">
@@ -751,6 +805,9 @@ export default function CourseDetailPage() {
 
                           {/* Audio narration player (full lesson) */}
                           {audioUrl && <LessonAudioPlayer url={audioUrl} />}
+
+                          {/* Interactive slide presentation (GLM-5.2 generated) */}
+                          {slides.length > 0 && <LessonSlideDeck slides={slides} lessonTitle={lesson.title} />}
 
                           {/* Lesson body */}
                           <div className="bg-muted/30 rounded-lg p-4 space-y-3">

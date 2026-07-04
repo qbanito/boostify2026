@@ -1,14 +1,41 @@
 /**
- * Servicio de generación de contratos con OpenAI GPT-4o
- * Reemplaza gemini-contracts para generación de contratos legales de la industria musical
- * Migrado de Gemini a OpenAI para mayor eficiencia
+ * Servicio de generación de contratos legales de la industria musical.
+ * PRINCIPAL: GLM-5.2 (z.ai) — razonamiento jurídico superior.
+ * FALLBACK: OpenAI (PRIMARY_MODEL) — siempre disponible.
  */
 import { createTrackedOpenAI } from '../utils/tracked-openai';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import OpenAI from 'openai';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 
 const openai = createTrackedOpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || '',
 });
+
+// ─── GLM-5.2 (z.ai) — modelo principal para contratos ──────────────────────
+const _glmContracts: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+/** Genera texto con GLM-5.2; devuelve null si falla (→ fallback OpenAI). */
+async function callGlmText(prompt: string, opts: { maxTokens: number; temperature: number }): Promise<string | null> {
+  if (!_glmContracts) return null;
+  try {
+    const res = await _glmContracts.chat.completions.create({
+      model: 'glm-5.2',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: opts.maxTokens,
+      temperature: opts.temperature,
+    });
+    const text = res.choices[0]?.message?.content?.trim();
+    if (text) {
+      console.log('[contracts] GLM-5.2 ✅');
+      return text;
+    }
+  } catch (e: any) {
+    console.warn('[contracts] GLM-5.2 failed, falling back to OpenAI:', e?.message);
+  }
+  return null;
+}
 
 interface ContractSection {
   title: string;
@@ -55,8 +82,13 @@ Format it professionally with clear sections and legal language appropriate for 
 `;
 
   try {
-    console.log('📄 Generando contrato con OpenAI GPT-4o...');
-    
+    console.log('📄 Generando contrato (GLM-5.2 → OpenAI fallback)...');
+
+    // 1) GLM-5.2 primero
+    const glmContent = await callGlmText(prompt, { maxTokens: 8192, temperature: 0.7 });
+    if (glmContent) return glmContent;
+
+    // 2) Fallback OpenAI
     const response = await openai.chat.completions.create({
       model: PRIMARY_MODEL,
       messages: [{ role: 'user', content: prompt }],
@@ -73,7 +105,7 @@ Format it professionally with clear sections and legal language appropriate for 
     return content;
   } catch (error) {
     console.error("Error generating contract:", error);
-    throw new Error("Failed to generate contract with OpenAI");
+    throw new Error("Failed to generate contract");
   }
 }
 
@@ -99,8 +131,20 @@ Return ONLY valid JSON, no markdown.
 `;
 
   try {
-    console.log('🔍 Analizando contrato con OpenAI GPT-4o...');
-    
+    console.log('🔍 Analizando contrato (GLM-5.2 → OpenAI fallback)...');
+
+    // 1) GLM-5.2 primero (mejor razonamiento sobre cláusulas)
+    const glmRaw = await callGlmText(prompt, { maxTokens: 4096, temperature: 0.5 });
+    if (glmRaw) {
+      try {
+        const jsonText = glmRaw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        return JSON.parse(jsonText);
+      } catch {
+        console.warn('[contracts] GLM-5.2 returned non-JSON analysis, falling back to OpenAI');
+      }
+    }
+
+    // 2) Fallback OpenAI (JSON mode nativo)
     const response = await openai.chat.completions.create({
       model: PRIMARY_MODEL,
       messages: [{ role: 'user', content: prompt }],
@@ -118,7 +162,7 @@ Return ONLY valid JSON, no markdown.
     return JSON.parse(content);
   } catch (error) {
     console.error("Error analyzing contract:", error);
-    throw new Error("Failed to analyze contract with OpenAI");
+    throw new Error("Failed to analyze contract");
   }
 }
 
@@ -188,8 +232,13 @@ Template Type: ${template.description}
   const fullPrompt = `${basePrompt}\n\nCustom Details:\n${customFields}\n\nCreate a comprehensive, legally sound contract with all necessary clauses and professional formatting.`;
 
   try {
-    console.log('📄 Generando contrato desde template con OpenAI GPT-4o...');
-    
+    console.log('📄 Generando contrato desde template (GLM-5.2 → OpenAI fallback)...');
+
+    // 1) GLM-5.2 primero
+    const glmContent = await callGlmText(fullPrompt, { maxTokens: 8192, temperature: 0.7 });
+    if (glmContent) return glmContent;
+
+    // 2) Fallback OpenAI
     const response = await openai.chat.completions.create({
       model: PRIMARY_MODEL,
       messages: [{ role: 'user', content: fullPrompt }],

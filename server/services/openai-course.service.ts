@@ -1,19 +1,60 @@
 /**
- * OpenAI Course Content Service — replaces Gemini for all course text generation
+ * Course Content Service — all course text generation.
  *
- * Uses gpt-4o-mini for cost-effective, high-quality educational content:
- *  - Course outlines (title, description, 15-25 lessons)
- *  - Detailed lesson content (comprehensive markdown)
- *  - Quiz questions (mixed types with explanations)
- *  - Image prompt generation for FAL
- *  - Course expansion (auto-add lessons when user nears end)
+ * PROVIDERS: z.ai GLM-5.2 (deep reasoning, primary) → OpenAI (fallback).
+ * Generates: outlines, lesson content, quizzes, slide decks (presentations),
+ * image prompts, and course expansions.
  */
 
+import OpenAI from 'openai';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
-import { PRIMARY_MODEL } from '../utils/ai-config';
+import { PRIMARY_MODEL, ZAI_API_KEY, ZAI_BASE_URL, isZaiConfigured } from '../utils/ai-config';
 
 const openai = createTrackedOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = PRIMARY_MODEL;
+
+// ─── GLM-5.2 (z.ai) — primary reasoning model for course design ───────────
+const glm: OpenAI | null = isZaiConfigured()
+  ? new OpenAI({ apiKey: ZAI_API_KEY, baseURL: ZAI_BASE_URL })
+  : null;
+
+/**
+ * JSON-mode LLM call with GLM-5.2 → OpenAI cascade.
+ * GLM sometimes wraps JSON in fences — tolerated. Parse failure → OpenAI.
+ */
+async function callCourseLLM(
+  messages: Array<{ role: 'system' | 'user'; content: string }>,
+  opts: { temperature: number; maxTokens?: number }
+): Promise<any> {
+  if (glm) {
+    try {
+      const res = await glm.chat.completions.create({
+        model: 'glm-5.2',
+        messages,
+        temperature: opts.temperature,
+        max_tokens: opts.maxTokens ?? 4000,
+        response_format: { type: 'json_object' },
+      });
+      const raw = res.choices[0]?.message?.content?.trim();
+      if (raw) {
+        const jsonText = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        const parsed = JSON.parse(jsonText);
+        console.log('[course-llm] GLM-5.2 ✅');
+        return parsed;
+      }
+    } catch (e: any) {
+      console.warn('[course-llm] GLM-5.2 failed, falling back to OpenAI:', e?.message);
+    }
+  }
+  const res = await openai.chat.completions.create({
+    model: MODEL,
+    messages,
+    temperature: opts.temperature,
+    max_tokens: opts.maxTokens ?? 4000,
+    response_format: { type: 'json_object' },
+  });
+  return JSON.parse(res.choices[0].message.content || '{}');
+}
 
 // ─── INTERFACES ───────────────────────────────────────────
 
@@ -53,11 +94,8 @@ export async function generateCourseOutline(
   level: 'Beginner' | 'Intermediate' | 'Advanced',
   lessonsCount: number = 15
 ): Promise<CourseOutline> {
-  const res = await openai.chat.completions.create({
-    model: MODEL,
-    temperature: 0.7,
-    response_format: { type: 'json_object' },
-    messages: [
+  return callCourseLLM(
+    [
       {
         role: 'system',
         content: `You are an expert music education course designer for the Boostify Music Academy.
@@ -82,9 +120,8 @@ Return JSON with this exact structure:
 }`,
       },
     ],
-  });
-
-  return JSON.parse(res.choices[0].message.content || '{}');
+    { temperature: 0.7 }
+  );
 }
 
 // ─── LESSON CONTENT ───────────────────────────────────────
@@ -98,12 +135,8 @@ export async function generateLessonContent(
     ? `Previous lessons covered: ${previousLessons.join(', ')}.`
     : 'This is the first lesson.';
 
-  const res = await openai.chat.completions.create({
-    model: MODEL,
-    temperature: 0.7,
-    max_tokens: 4000,
-    response_format: { type: 'json_object' },
-    messages: [
+  return callCourseLLM(
+    [
       {
         role: 'system',
         content: `You are an expert music educator creating detailed lesson content for the Boostify Music Academy.
@@ -133,9 +166,8 @@ Return JSON:
 }`,
       },
     ],
-  });
-
-  return JSON.parse(res.choices[0].message.content || '{}');
+    { temperature: 0.7, maxTokens: 4000 }
+  );
 }
 
 // ─── QUIZ QUESTIONS ───────────────────────────────────────
@@ -145,11 +177,8 @@ export async function generateQuizQuestions(
   lessonContent: string,
   questionsCount: number = 5
 ): Promise<QuizQuestion[]> {
-  const res = await openai.chat.completions.create({
-    model: MODEL,
-    temperature: 0.6,
-    response_format: { type: 'json_object' },
-    messages: [
+  const parsed = await callCourseLLM(
+    [
       {
         role: 'system',
         content: `You are an expert quiz designer for music education.
@@ -181,10 +210,73 @@ Return JSON:
 Mix of multiple_choice (4 options) and true_false (["True", "False"]).`,
       },
     ],
-  });
-
-  const parsed = JSON.parse(res.choices[0].message.content || '{"questions":[]}');
+    { temperature: 0.6 }
+  );
   return parsed.questions || [];
+}
+
+// ─── LESSON SLIDES (interactive presentation deck) ────────
+
+export interface LessonSlide {
+  title: string;
+  bullets: string[];
+  speakerNotes: string;
+}
+
+/**
+ * Generates an interactive slide deck (presentation) for a lesson.
+ * GLM-5.2 reasons over the full lesson content to distill it into
+ * 6-10 teachable slides students can step through.
+ */
+export async function generateLessonSlides(
+  lessonTitle: string,
+  courseTitle: string,
+  lessonContent: string
+): Promise<LessonSlide[]> {
+  try {
+    const parsed = await callCourseLLM(
+      [
+        {
+          role: 'system',
+          content: `You are a master educator who turns lessons into engaging slide presentations.
+Each slide: one clear concept, 3-5 punchy bullets, and speaker notes that TEACH (not just repeat the bullets).
+Always respond with valid JSON.`,
+        },
+        {
+          role: 'user',
+          content: `Turn this lesson into a slide deck of 6-10 slides.
+
+Course: "${courseTitle}"
+Lesson: "${lessonTitle}"
+
+Lesson content:
+${lessonContent.substring(0, 6000)}
+
+Return JSON:
+{
+  "slides": [
+    { "title": "Slide title", "bullets": ["point 1", "point 2", "point 3"], "speakerNotes": "2-3 sentences teaching this slide" }
+  ]
+}
+
+First slide = lesson intro/hook. Last slide = recap + what's next.`,
+        },
+      ],
+      { temperature: 0.6, maxTokens: 3000 }
+    );
+    const slides = Array.isArray(parsed.slides) ? parsed.slides : [];
+    return slides
+      .filter((s: any) => s?.title && Array.isArray(s?.bullets))
+      .slice(0, 12)
+      .map((s: any) => ({
+        title: String(s.title),
+        bullets: s.bullets.map((b: any) => String(b)).slice(0, 6),
+        speakerNotes: String(s.speakerNotes || ''),
+      }));
+  } catch (e: any) {
+    console.warn('[course-llm] slide generation failed:', e?.message);
+    return [];
+  }
 }
 
 // ─── IMAGE PROMPT GENERATOR ──────────────────────────────
@@ -222,11 +314,8 @@ export async function generateExpansionLessons(
   existingLessonTitles: string[],
   count: number = 5
 ): Promise<Array<{ title: string; description: string; duration: number }>> {
-  const res = await openai.chat.completions.create({
-    model: MODEL,
-    temperature: 0.7,
-    response_format: { type: 'json_object' },
-    messages: [
+  const parsed = await callCourseLLM(
+    [
       {
         role: 'system',
         content: `You are an expert course designer. Create advanced follow-up lessons that deepen existing knowledge.
@@ -248,8 +337,7 @@ Return JSON:
 }`,
       },
     ],
-  });
-
-  const parsed = JSON.parse(res.choices[0].message.content || '{"lessons":[]}');
+    { temperature: 0.7 }
+  );
   return parsed.lessons || [];
 }

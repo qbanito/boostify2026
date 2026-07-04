@@ -441,10 +441,17 @@ export async function buildSyncProductData(
 
   const fileType = getPrintfulFileType(mapping.printfileSpec.placement);
 
-  // Derive aspect ratio from the design spec if not provided
+  // REAL aspect ratio of the actual design image — measuring the file beats
+  // any theoretical spec (mismatched ratios are what stretch/misplace logos).
   const designSpec = DESIGN_SPECS[mapping.designType];
-  const designAR = opts?.designAspectRatio ??
-    (designSpec ? designSpec.idealWidth / designSpec.idealHeight : 1);
+  const specAR = designSpec ? designSpec.idealWidth / designSpec.idealHeight : 1;
+  let designAR = opts?.designAspectRatio ?? specAR;
+  if (opts?.designAspectRatio === undefined) {
+    try {
+      const { getImageAspectRatio } = await import('../services/image-dimensions');
+      designAR = await getImageAspectRatio(designImageUrl, specAR);
+    } catch { /* keep spec ratio */ }
+  }
 
   // Fetch real print-area geometry from Printful's printfiles API
   let position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number } | undefined;
@@ -520,8 +527,14 @@ export async function buildOrderData(
 
   const fileType = getPrintfulFileType(mapping.printfileSpec.placement);
 
+  // REAL aspect ratio of the actual design image (fallback: spec ratio)
   const designSpec = DESIGN_SPECS[mapping.designType];
-  const designAR = designSpec ? designSpec.idealWidth / designSpec.idealHeight : 1;
+  const specAR = designSpec ? designSpec.idealWidth / designSpec.idealHeight : 1;
+  let designAR = specAR;
+  try {
+    const { getImageAspectRatio } = await import('../services/image-dimensions');
+    designAR = await getImageAspectRatio(designImageUrl, specAR);
+  } catch { /* keep spec ratio */ }
 
   let position: { area_width: number; area_height: number; width: number; height: number; top: number; left: number } | undefined;
   try {

@@ -33,7 +33,10 @@ import {
   ObservationEnginePanel, DeepBriefPanel, EmotionalStudioPanel, ArtistPromoClipsModule, AIVideoStudio,
   AdsCampaignManager, GammaPresentationsModule, KaraokeModule, KaraokePlayer, LyricsVideoModule,
   ConcertCommandCenter, BoostifyLiveStage, WhatsAppCommandCenter, TelegramCommandCenter,
-  RedditIntelligenceCenter, DiscordFanNation, FacebookGroupsCommandCenter,
+  RedditIntelligenceCenter, DiscordFanNation, FacebookGroupsCommandCenter, LiveMapServices,
+  FashionImageModule,
+  TikTokLiveModule,
+  YoutubeChannelModule,
 } from "./lazy-modules";
 import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
@@ -859,7 +862,7 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
     description: 'Live stage, concerts, booking and holography.',
     icon: Mic2,
     accent: '#06b6d4',
-    sections: ['live-stage', 'songs', 'videos', 'venueBooking', 'hologram', 'promo-clips'],
+    sections: ['live-stage', 'live-map', 'songs', 'videos', 'venueBooking', 'hologram', 'promo-clips'],
     widgets: ['upcoming-shows', 'concert-hub', 'qr-card', 'information'],
   },
   {
@@ -877,7 +880,7 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
     description: 'Generative studios and creative tools.',
     icon: Wand2,
     accent: '#a855f7',
-    sections: ['renaissance-studio', 'ai-video-studio', 'promo-clips', 'emotional-studio', 'gamma-presentations', 'lyrics-video'],
+    sections: ['renaissance-studio', 'ai-video-studio', 'promo-clips', 'emotional-studio', 'gamma-presentations', 'lyrics-video', 'fashion-image-studio'],
     widgets: ['premium-tools', 'information', 'qr-card', 'statistics'],
   },
   {
@@ -913,7 +916,7 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
     description: 'Collabs, blueprint and career suite.',
     icon: Briefcase,
     accent: '#ea580c',
-    sections: ['brand-collabs', 'business-plan', 'career-suite', 'artist-blueprint', 'agent-gateway', 'electronic-press-kit'],
+    sections: ['brand-collabs', 'business-plan', 'career-suite', 'artist-blueprint', 'agent-gateway', 'electronic-press-kit', 'live-map'],
     widgets: ['economic-engine', 'statistics', 'information', 'qr-card'],
   },
   {
@@ -2638,6 +2641,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'business-plan':      { label: 'Business',   color: '#f97316' },
     'career-suite':       { label: 'Business',   color: '#f97316' },
     'artist-blueprint':   { label: 'Business',   color: '#f97316' },
+    'live-map':           { label: 'Business',   color: '#f97316' },
+    'fashion-image-studio': { label: 'Content',  color: '#6366f1' },
+    'tiktok-live':          { label: 'Content',  color: '#6366f1' },
+    'youtube-channel':      { label: 'Content',  color: '#6366f1' },
     'artist-domain':      { label: 'Business',   color: '#f97316' },
     'electronic-press-kit': { label: 'Business', color: '#f97316' },
     'my-universe':          { label: 'Content',   color: '#6366f1' },
@@ -2652,6 +2659,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'songs': { name: getSectionLabel(pageMode, 'songs', 'Music'), icon: Music, isOwnerOnly: false },
     'fanclub': { name: 'Fan Club', icon: Heart, isOwnerOnly: false },
     'live-stage': { name: 'Boostify Live Stage', icon: Radio, isOwnerOnly: false },
+    'live-map': { name: 'Live Services Map', icon: MapPin, isOwnerOnly: false },
+    'fashion-image-studio': { name: 'Fashion Image Studio', icon: Shirt, isOwnerOnly: true },
+    'tiktok-live': { name: 'TikTok Live Hub', icon: Radio, isOwnerOnly: true },
+    'youtube-channel': { name: 'YouTube Channel SEO', icon: VideoIcon, isOwnerOnly: true },
     'videos': { name: getSectionLabel(pageMode, 'videos', 'Videos'), icon: VideoIcon, isOwnerOnly: false },
     'news': { name: getSectionLabel(pageMode, 'news', 'News'), icon: Newspaper, isOwnerOnly: false },
     'social-posts': { name: getSectionLabel(pageMode, 'social-posts', 'Social Posts'), icon: Share2, isOwnerOnly: false },
@@ -2741,7 +2752,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'live-map', 'fashion-image-studio', 'tiktok-live', 'youtube-channel', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2802,6 +2813,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'songs': true,
     'fanclub': true,
     'live-stage': true,
+    'live-map': true,
+    'fashion-image-studio': true,
+    'tiktok-live': true,
+    'youtube-channel': true,
     'videos': true,
     'galleries': true,
     'karaoke': true,
@@ -2861,6 +2876,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'songs': false,
     'fanclub': true,
     'live-stage': false,
+    'live-map': false,
+    'fashion-image-studio': false,
+    'tiktok-live': false,
+    'youtube-channel': false,
     'videos': false,
     'news': false,
     'social-posts': false,
@@ -8238,6 +8257,82 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                   artistSlug={((artist as any) || {})['slug'] as string | undefined}
                                   artistAvatar={artist.profileImage}
                                   colors={{ primary: colors.hexPrimary, secondary: colors.hexAccent, accent: colors.hexAccent }}
+                                  isOwner={!!isOwnProfile}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (sectionId === 'live-map') {
+                        sectionElement = (
+                          <div className={cardStyles} style={cardStyleInline}>
+                            {renderSectionHeader(sectionId, MapPin, 'Live Services Map')}
+                            {sectionExpanded[sectionId] && (
+                              <div className="mt-3">
+                                <LiveMapServices
+                                  artistId={artist.pgId || artistId}
+                                  artistName={artist.name}
+                                  artistImage={artist.profileImage}
+                                  colors={{ primary: colors.hexPrimary, accent: colors.hexAccent }}
+                                  isOwner={!!isOwnProfile}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (sectionId === 'fashion-image-studio') {
+                        sectionElement = (
+                          <div className={cardStyles} style={cardStyleInline}>
+                            {renderSectionHeader(sectionId, Shirt, 'Fashion Image Studio')}
+                            {sectionExpanded[sectionId] && (
+                              <div className="mt-3">
+                                <FashionImageModule
+                                  artistId={artist.pgId || artistId}
+                                  artistName={artist.name}
+                                  artistImage={artist.profileImage}
+                                  colors={{ primary: colors.hexPrimary, accent: colors.hexAccent }}
+                                  isOwner={!!isOwnProfile}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (sectionId === 'tiktok-live') {
+                        sectionElement = (
+                          <div className={cardStyles} style={cardStyleInline}>
+                            {renderSectionHeader(sectionId, Radio, 'TikTok Live Hub')}
+                            {sectionExpanded[sectionId] && (
+                              <div className="mt-3">
+                                <TikTokLiveModule
+                                  artistId={artist.pgId || artistId}
+                                  artistName={artist.name}
+                                  artistSlug={(artist as any)?.slug || (userProfile as any)?.slug}
+                                  colors={{ primary: colors.hexPrimary, accent: colors.hexAccent }}
+                                  isOwner={!!isOwnProfile}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (sectionId === 'youtube-channel') {
+                        sectionElement = (
+                          <div className={cardStyles} style={cardStyleInline}>
+                            {renderSectionHeader(sectionId, VideoIcon, 'YouTube Channel SEO')}
+                            {sectionExpanded[sectionId] && (
+                              <div className="mt-3">
+                                <YoutubeChannelModule
+                                  artistId={artist.pgId || artistId}
+                                  artistName={artist.name}
+                                  genre={(artist as any)?.genre || (artist as any)?.genres?.[0]}
+                                  colors={{ primary: colors.hexPrimary, accent: colors.hexAccent }}
                                   isOwner={!!isOwnProfile}
                                 />
                               </div>

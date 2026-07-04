@@ -100,10 +100,70 @@ function isCorrectAnswer(
   return false;
 }
 
+// ─── SELF-GROWING ACADEMY ────────────────────────────────────────────────
+// The catalog slowly seeds itself: when there are fewer than TARGET AI
+// courses, a new one is generated in the background (max 1 per cooldown
+// window) from a curated topic pool. Cost-bounded and stampede-safe.
+const ACADEMY_TARGET_AI_COURSES = 8;
+const ACADEMY_GROWTH_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 1 new course max every 6h
+let academyGrowthInFlight = false;
+let academyLastGrowthAt = 0;
+
+const ACADEMY_TOPIC_POOL = [
+  'Music Theory for Modern Producers',
+  'Vocal Recording & Production at Home',
+  'Spotify Playlist Pitching & Editorial Strategy',
+  'Sync Licensing: Get Your Music in Film & TV',
+  'Live Performance & Stage Presence Mastery',
+  'Music Copyright & Royalties for Independent Artists',
+  'TikTok & Short-Form Growth for Musicians',
+  'Songwriting: From Idea to Finished Song',
+  'Electronic Music Sound Design',
+  'Building a Fanbase from Zero',
+  'Music Video Production on a Budget',
+  'AI Tools for Music Creation & Marketing',
+];
+
+async function maybeGrowAcademy(existingCourses: Array<{ title: string; isAIGenerated: boolean | null }>) {
+  if (academyGrowthInFlight) return;
+  if (Date.now() - academyLastGrowthAt < ACADEMY_GROWTH_COOLDOWN_MS) return;
+  const aiCourses = existingCourses.filter(c => c.isAIGenerated);
+  if (aiCourses.length >= ACADEMY_TARGET_AI_COURSES) return;
+
+  // Pick the first pool topic not already covered by an existing course title
+  const existingTitles = existingCourses.map(c => c.title.toLowerCase());
+  const topic = ACADEMY_TOPIC_POOL.find(t => {
+    const key = t.toLowerCase().split(':')[0].slice(0, 20);
+    return !existingTitles.some(title => title.includes(key));
+  });
+  if (!topic) return;
+
+  // Need an instructor row to attribute the course to
+  const [instructor] = await db.select().from(courseInstructors).limit(1);
+  if (!instructor) return;
+
+  academyGrowthInFlight = true;
+  academyLastGrowthAt = Date.now();
+  console.log(`🌱 [academy-growth] Seeding new course: "${topic}"`);
+  void courseGenService.createProgressiveCourse({
+    topic,
+    level: 'Beginner',
+    lessonsCount: 12,
+    instructorId: instructor.id,
+    price: '0.00',
+    dripStrategy: 'sequential',
+  })
+    .then(r => console.log(`🌱 [academy-growth] ✅ Created course #${r.course.id}: ${r.course.title}`))
+    .catch(e => console.error('🌱 [academy-growth] failed:', e?.message))
+    .finally(() => { academyGrowthInFlight = false; });
+}
+
 router.get('/api/education/courses', async (req, res) => {
   try {
     const allCourses = await db.select().from(courses).orderBy(desc(courses.createdAt));
     res.json(allCourses);
+    // Fire-and-forget: let the academy grow slowly in the background
+    maybeGrowAcademy(allCourses).catch(() => {});
   } catch (error) {
     console.error('Error fetching courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });

@@ -457,21 +457,25 @@ router.post('/:artistSlug/mockup', async (req: Request, res: Response) => {
     // Find product in catalog to determine placement
     const { EXPANDED_CATALOG, getPlacementGeometry } = await import('../config/printful-expanded-catalog');
     const product = EXPANDED_CATALOG.find(p => p.printfulId === parseInt(printfulId));
-    const placementName = product?.placement || 'front';
+    // Category geometry knows the REAL placement key — caps/beanies need
+    // 'embroidery_front', not the catalog's generic 'front'.
+    const placementName = product ? getPlacementGeometry(product).placement : 'front';
 
     // Resolve REAL Printful geometry (cached) for this product+variant+placement.
     // Falls back to category-based estimate if Printful printfiles unavailable.
     const { getRealPlacementGeometry } = await import('../services/printful-printfiles');
+    const { getImageAspectRatio } = await import('../services/image-dimensions');
     const firstVariantId = Array.isArray(variantIds) && variantIds.length > 0
       ? parseInt(String(variantIds[0]), 10)
       : undefined;
+    // Measure the REAL master design so the mockup box matches the artwork
+    const realDesignAR = await getImageAspectRatio(designUrl, 1);
     const realGeo = await getRealPlacementGeometry(
       parseInt(printfulId),
       firstVariantId,
       placementName,
       {
-        // Brand mark is roughly square (4:5 generated → close to 1:1 for fit purposes)
-        designAspectRatio: 1,
+        designAspectRatio: realDesignAR,
         // Apparel/hoodies want chest-anchored, everything else centered
         verticalAlign: product && ['Apparel', 'Hoodies & Sweatshirts', 'Kids & Baby'].includes(product.category) ? 'top' : 'center',
         coverage: product?.isAllOverPrint ? 1 : 0.85,
@@ -1239,8 +1243,10 @@ router.post('/:artistSlug/mockups/generate-all', async (req: Request, res: Respo
 
     const toRender = products.filter(p => !cachedIds.has(p.printfulId));
 
-    // Pull the real-geometry helper once
+    // Pull the real-geometry helper once + measure the master design ONCE
     const { getRealPlacementGeometry } = await import('../services/printful-printfiles');
+    const { getImageAspectRatio } = await import('../services/image-dimensions');
+    const masterDesignAR = await getImageAspectRatio(designUrl, 1);
 
     let generated = 0;
     const failed: { printfulId: number; name: string; error: string }[] = [];
@@ -1282,7 +1288,8 @@ router.post('/:artistSlug/mockups/generate-all', async (req: Request, res: Respo
           failed.push({ printfulId: p.printfulId, name: p.name, error: 'No variants found' });
           continue;
         }
-        const placementName = p.placement || getPlacementGeometry(p).placement;
+        // Category geometry knows the REAL placement key (caps → embroidery_front)
+        const placementName = getPlacementGeometry(p).placement;
         // Resolve REAL Printful printfile geometry (cached). Falls back to
         // category estimate if Printful printfiles are unavailable.
         const geo = await getRealPlacementGeometry(
@@ -1290,7 +1297,7 @@ router.post('/:artistSlug/mockups/generate-all', async (req: Request, res: Respo
           firstVariantId,
           placementName,
           {
-            designAspectRatio: 1,
+            designAspectRatio: masterDesignAR,
             verticalAlign: ['Apparel', 'Hoodies & Sweatshirts', 'Kids & Baby'].includes(p.category) ? 'top' : 'center',
             coverage: p.isAllOverPrint ? 1 : 0.85,
           },

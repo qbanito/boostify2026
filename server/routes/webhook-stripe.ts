@@ -635,19 +635,48 @@ async function handleCartPurchase(session: Stripe.Checkout.Session) {
               zip: address?.postal_code || '',
               email: customerEmail,
             };
-            // Resolve real print-area geometry for proper design positioning
+            // Resolve placement + real print-area geometry so the logo sits
+            // correctly. Sources (in order): legacy PRODUCT_MAP → expanded
+            // catalog (matched by product name) → Printful auto-fit fallback.
             let explicitPosition: any;
-            if (mapping) {
-              try {
-                const { getRealPlacementGeometry } = await import('../services/printful-printfiles');
+            let fileType: string | undefined = mapping?.printfileSpec?.placement;
+            try {
+              const { getRealPlacementGeometry } = await import('../services/printful-printfiles');
+              const { getImageAspectRatio } = await import('../services/image-dimensions');
+              // Measure the REAL print file so the placement box matches the logo
+              const realAR = await getImageAspectRatio(printFileUrl, 1);
+
+              let catalogProductId: number | undefined = mapping?.printfulCatalogId;
+              let placement: string | undefined = mapping?.printfileSpec?.placement;
+              let verticalAlign: 'top' | 'center' = mapping?.technique === 'dtg' ? 'top' : 'center';
+              let coverage = 0.85;
+
+              if (!mapping) {
+                // Expanded catalog flow: productType carries the catalog product name
+                const { EXPANDED_CATALOG, getPlacementGeometry } = await import('../config/printful-expanded-catalog');
+                const catProd = EXPANDED_CATALOG.find(
+                  (p) => p.name.toLowerCase() === String(productType).toLowerCase()
+                );
+                if (catProd) {
+                  catalogProductId = catProd.printfulId;
+                  // Category geometry knows the REAL placement key (e.g. caps
+                  // need 'embroidery_front', not 'front')
+                  placement = getPlacementGeometry(catProd).placement;
+                  verticalAlign = ['Apparel', 'Hoodies & Sweatshirts', 'Kids & Baby'].includes(catProd.category) ? 'top' : 'center';
+                  coverage = catProd.isAllOverPrint ? 1 : 0.85;
+                }
+              }
+
+              if (catalogProductId && placement) {
                 const geo = await getRealPlacementGeometry(
-                  mapping.printfulCatalogId, explicitVariantId,
-                  mapping.printfileSpec.placement,
-                  { designAspectRatio: 1, coverage: 0.85, verticalAlign: mapping.technique === 'dtg' ? 'top' : 'center' }
+                  catalogProductId, explicitVariantId, placement,
+                  { designAspectRatio: realAR, coverage, verticalAlign }
                 );
                 explicitPosition = { area_width: geo.area_width, area_height: geo.area_height, width: geo.width, height: geo.height, top: geo.top, left: geo.left };
-              } catch (_) { /* fall through */ }
-            }
+                fileType = placement;
+                console.log(`[webhook] item ${i + 1} placement=${placement} geo=${geo.source} ar=${realAR.toFixed(3)}`);
+              }
+            } catch (_) { /* fall through — Printful auto-fit */ }
             orderData = {
               external_id: `stripe-${session.id}-${i}`,
               shipping: 'STANDARD',
@@ -657,7 +686,7 @@ async function handleCartPurchase(session: Stripe.Checkout.Session) {
                 quantity,
                 retail_price: String(unitPrice.toFixed(2)),
                 name: item.n || `${artistName} ${productType}`,
-                files: [{ url: printFileUrl, type: mapping?.printfileSpec?.placement || 'default', ...(explicitPosition ? { position: explicitPosition } : {}) }],
+                files: [{ url: printFileUrl, type: fileType || 'default', ...(explicitPosition ? { position: explicitPosition } : {}) }],
               }],
             };
           } else if (mapping) {
@@ -675,7 +704,10 @@ async function handleCartPurchase(session: Stripe.Checkout.Session) {
             if (orderData?.items?.[0]) orderData.items[0].quantity = quantity;
           }
 
+          // Send to Printful — but NEVER lose the sale record if it fails
+          let printfulFailed: string | null = null;
           if (orderData) {
+            try {
               const printful = getPrintfulService();
               const printfulOrder = await printful.createOrder(orderData, true);
               console.log(`✅ Cart item ${i + 1} → Printful #${printfulOrder.id}`);
@@ -691,21 +723,50 @@ async function handleCartPurchase(session: Stripe.Checkout.Session) {
                   });
                 }
               }
+            } catch (pfErr: any) {
+              printfulFailed = pfErr?.response?.data?.result || pfErr?.message || 'Printful order failed';
+              console.error(`❌ Cart item ${i + 1} Printful order failed (sale still recorded):`, printfulFailed);
+              // Flag order for manual retry — the customer HAS paid
+              if (firestoreOrderId) {
+                try {
+                  const { db: firestoreDb } = await import('../firebase');
+                  if (firestoreDb) {
+                    const { FieldValue } = await import('firebase-admin/firestore');
+                    await firestoreDb.collection('orders').doc(firestoreOrderId).update({
+                      'printful.status': 'failed',
+                      'printful.error': String(printfulFailed).slice(0, 500),
+                      status: 'needs_fulfillment_retry',
+                      updatedAt: FieldValue.serverTimestamp(),
+                    });
+                  }
+                } catch { /* best effort */ }
+              }
             }
-            // Record sale — fall back to flat margins when no legacy mapping exists
-            const profitSplit = mapping ? calculateProfitSplit(productType, size, true) : null;
+          }
+          // Record sale — ALWAYS (customer paid regardless of Printful outcome)
+          const profitSplit = mapping ? calculateProfitSplit(productType, size, true) : null;
+          await recordMerchSale({
+            artistUserId, productId, artistName, productType, size,
+            sessionAmountTotal: lineTotal,
+            customerEmail,
+            stripePaymentIntentId: session.payment_intent as string,
+            productionCost: profitSplit?.productionCost,
+            artistEarning: profitSplit?.artistEarning,
+            platformFee: profitSplit?.boostifyEarning,
+            quantity,
+          });
+        } catch (err) {
+          console.error(`❌ Cart item ${i + 1} processing failed:`, (err as any)?.message);
+          // Last-resort: still record the paid sale
+          try {
             await recordMerchSale({
               artistUserId, productId, artistName, productType, size,
               sessionAmountTotal: lineTotal,
               customerEmail,
               stripePaymentIntentId: session.payment_intent as string,
-              productionCost: profitSplit?.productionCost,
-              artistEarning: profitSplit?.artistEarning,
-              platformFee: profitSplit?.boostifyEarning,
               quantity,
             });
-        } catch (err) {
-          console.error(`❌ Cart item ${i + 1} Printful failed:`, (err as any)?.message);
+          } catch { /* logged inside recordMerchSale */ }
         }
       } else {
         // Custom product — record sale only

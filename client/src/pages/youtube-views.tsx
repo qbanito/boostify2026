@@ -25,6 +25,7 @@ import { Progress } from "../components/ui/progress";
 import { Badge } from "../components/ui/badge";
 import { ExtraServicesSection } from "../components/services/extra-services-section";
 import { ExtensionSyncTab } from "../components/youtube-views/extension-sync-tab";
+import { ChannelSeoWidgets } from "../components/youtube/channel-seo-widgets";
 import { YoutubePricing } from "../components/youtube-views/youtube-pricing";
 import { YouTubeSubscriptionBanner } from "../components/youtube-views/subscription-banner";
 import { PageDiagnosticPanel } from "../components/admin/page-diagnostic-panel";
@@ -169,7 +170,11 @@ export default function YoutubeViewsPage() {
   const { user, isAdmin, userSubscription } = useAuth();
   const { toast } = useToast();
   const { selectedArtist, getYouTubeData } = useArtistProfile();
-  const [activeTab, setActiveTab] = useState("pre-launch");
+  const [activeTab, setActiveTab] = useState(() => {
+    // Deep-link: /youtube-views?tab=channel-seo (from the artist profile module)
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t || "pre-launch";
+  });
   const [pricingOpen, setPricingOpen] = useState(false);
   
   // Pre-Launch Score states
@@ -1301,10 +1306,10 @@ export default function YoutubeViewsPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-white font-semibold text-sm">
-                          🚀 Boostify Chrome Extension disponible
+                          🚀 Boostify Chrome Extension available
                         </p>
                         <p className="text-green-100/70 text-xs truncate">
-                          Sincroniza YouTube en tiempo real · SEO automático · Análisis en vivo
+                          Real-time YouTube sync · Automatic SEO · Live analytics
                         </p>
                       </div>
                     </div>
@@ -1314,13 +1319,13 @@ export default function YoutubeViewsPage() {
                         className="flex items-center gap-1.5 bg-white text-green-700 hover:bg-green-50 font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] duration-300"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        Añadir a Chrome
+                        Add to Chrome
                       </button>
                       <button
                         onClick={() => setActiveTab('extension')}
                         className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white font-medium text-xs px-4 py-2.5 rounded-xl transition-all backdrop-blur-sm border border-white/10 duration-300"
                       >
-                        Conectar →
+                        Connect →
                       </button>
                     </div>
                   </div>
@@ -1330,6 +1335,11 @@ export default function YoutubeViewsPage() {
               {/* Tab Navigation - Modern Pill Design */}
               <div className="p-2 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
                 <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-1.5 h-auto bg-transparent p-1">
+                  {/* REAL CHANNEL — SEO cockpit (YouTube Data API) */}
+                  <TabsTrigger value="channel-seo" data-testid="tab-channel-seo" className="rounded-xl py-2.5 text-white/40 data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-600 data-[state=active]:to-rose-500 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(255,0,51,0.3)] transition-all duration-300 hover:text-white/60 hover:bg-white/[0.04]">
+                    <Gauge className="w-4 h-4 mr-1.5" />
+                    Channel SEO
+                  </TabsTrigger>
                   {/* PHASE 1 - CREATOR */}
                   <TabsTrigger value="pre-launch" data-testid="tab-pre-launch" className="rounded-xl py-2.5 text-white/40 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all duration-300 hover:text-white/60 hover:bg-white/[0.04]">
                     <Target className="w-4 h-4 mr-1.5" />
@@ -1389,6 +1399,29 @@ export default function YoutubeViewsPage() {
                   </TabsTrigger>
                 </TabsList>
               </div>
+
+            {/* CHANNEL SEO TAB — real channel cockpit (Data API v3 + GLM-5.2) */}
+            <TabsContent value="channel-seo">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                <div className="p-6 md:p-8 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
+                  <div className="flex items-center gap-5 mb-6">
+                    <div className="p-4 bg-gradient-to-br from-red-500/20 to-rose-500/10 rounded-2xl border border-red-500/10">
+                      <Gauge className="h-8 w-8 text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">Channel SEO Cockpit</h3>
+                      <p className="text-white/35">
+                        Real data from YOUR channel — monitor every video's SEO and apply AI fixes to YouTube in real time
+                      </p>
+                    </div>
+                  </div>
+                  <ChannelSeoWidgets
+                    artistName={(selectedArtist as any)?.artistName || (selectedArtist as any)?.name}
+                    genre={(selectedArtist as any)?.genre || (selectedArtist as any)?.genres?.[0]}
+                  />
+                </div>
+              </motion.div>
+            </TabsContent>
 
             {/* PRE-LAUNCH SCORE TAB - BASIC */}
             <TabsContent value="pre-launch">
