@@ -15,6 +15,7 @@ import {
   User, Bot
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { motion, useAnimation } from "framer-motion";
 import { TokenCardVisual } from "../components/boostiswap/token-card-visual";
 import { artistProfiles } from "../data/artist-profiles";
@@ -527,6 +528,18 @@ export default function HomePage() {
   
   // Dynamic platform stats
   const [stats, setStats] = useState(defaultStats);
+
+  // Real featured artists for the showcase (replaces fake testimonials)
+  const [featuredArtists, setFeaturedArtists] = useState<Array<{ name: string; slug: string; image: string; genre?: string | null }>>([]);
+
+  useEffect(() => {
+    fetch('/api/featured-artists')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.artists?.length) setFeaturedArtists(data.artists);
+      })
+      .catch(() => { /* showcase hidden when unavailable */ });
+  }, []);
   
   // Fetch dynamic stats from API
   useEffect(() => {
@@ -654,6 +667,34 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <Helmet>
+        <title>Boostify Music — The AI Career Platform for Artists</title>
+        <meta name="description" content="Create AI music videos, master your tracks, grow on YouTube, Spotify & TikTok, sell merch, tokenize your music and run your entire artist career from one platform. For human and AI artists." />
+        <link rel="canonical" href="https://boostifymusic.com/" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Boostify Music" />
+        <meta property="og:title" content="Boostify Music — The AI Career Platform for Artists" />
+        <meta property="og:description" content="60+ AI-powered tools to create, promote and monetize your music. Free artist profile, AI music videos, real YouTube/TikTok integrations, merch, Web3 and more." />
+        <meta property="og:url" content="https://boostifymusic.com/" />
+        <meta property="og:image" content="https://boostifymusic.com/assets/cover.jpg" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Boostify Music — The AI Career Platform for Artists" />
+        <meta name="twitter:description" content="Create, promote and monetize your music with AI. For human and AI artists." />
+        <meta name="twitter:image" content="https://boostifymusic.com/assets/cover.jpg" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "Boostify Music",
+          url: "https://boostifymusic.com",
+          logo: "https://boostifymusic.com/assets/cover.jpg",
+          description: "AI-powered music career platform: creation, promotion, monetization and Web3 tools for independent artists.",
+          sameAs: [
+            "https://www.youtube.com/@boostifymusic",
+            "https://www.instagram.com/boostifymusic",
+            "https://www.tiktok.com/@boostifymusic"
+          ]
+        })}</script>
+      </Helmet>
       {/* Hero Section - Modern and Eye-catching */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
         {/* Background video with overlay */}
@@ -1187,6 +1228,7 @@ export default function HomePage() {
                 loop
                 muted
                 playsInline
+                preload="metadata"
                 className="w-full h-auto"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent"></div>
@@ -1205,7 +1247,7 @@ export default function HomePage() {
                       Start Creating Today
                     </h3>
                     <p className="text-white/60 text-base md:text-lg max-w-xl leading-relaxed">
-                      Join thousands of artists using AI to create professional music videos
+                      Turn any song into a professional music video with AI — no camera, no crew, no editing
                     </p>
                   </div>
                   
@@ -1460,6 +1502,7 @@ export default function HomePage() {
                 loop 
                 muted 
                 playsInline
+                preload="metadata"
                 className="w-full h-auto rounded-2xl shadow-2xl"
               />
               
@@ -1472,8 +1515,8 @@ export default function HomePage() {
                   transition={{ delay: 0.6 }}
                   className="bg-black/60 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/10"
                 >
-                  <p className="text-xs text-white/60">Total Volume</p>
-                  <p className="text-lg font-bold text-white">$2.5M+</p>
+                  <p className="text-xs text-white/60">Trading</p>
+                  <p className="text-lg font-bold text-white">Live DEX</p>
                 </motion.div>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -1482,8 +1525,8 @@ export default function HomePage() {
                   transition={{ delay: 0.7 }}
                   className="bg-black/60 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/10"
                 >
-                  <p className="text-xs text-white/60">Artists</p>
-                  <p className="text-lg font-bold text-white">5,000+</p>
+                  <p className="text-xs text-white/60">Token Standard</p>
+                  <p className="text-lg font-bold text-white">BTF-2300</p>
                 </motion.div>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -1492,8 +1535,8 @@ export default function HomePage() {
                   transition={{ delay: 0.8 }}
                   className="bg-black/60 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/10 hidden sm:block"
                 >
-                  <p className="text-xs text-white/60">BTF-2300 Tokens</p>
-                  <p className="text-lg font-bold text-white">50K+</p>
+                  <p className="text-xs text-white/60">Settlement</p>
+                  <p className="text-lg font-bold text-white">On-chain</p>
                 </motion.div>
               </div>
             </div>
@@ -2049,6 +2092,7 @@ export default function HomePage() {
                         loop
                         muted
                         playsInline
+                        preload="metadata"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -2124,7 +2168,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Testimonials Section with Modern Cards */}
+      {/* Testimonials / Real Artists Showcase */}
       <section className="py-24 bg-zinc-950 relative overflow-hidden">
         <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-orange-500/5 rounded-full filter blur-3xl" />
         
@@ -2139,48 +2183,75 @@ export default function HomePage() {
               className="mb-4 bg-orange-500/20 text-orange-400 border-orange-500/30 px-4 py-1 text-sm"
               variant="outline"
             >
-              Success Stories
+              {featuredArtists.length >= 3 ? "Live on Boostify" : "Success Stories"}
             </Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">What Artists Say</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+              {featuredArtists.length >= 3 ? "Artists Already on Boostify" : "Built for Artists Like You"}
+            </h2>
             <p className="text-xl text-white/70 max-w-2xl mx-auto">
-              Join thousands of musicians who have transformed their careers with our platform
+              {featuredArtists.length >= 3
+                ? "Real artists with live profiles, music and stores — explore what they've built"
+                : "Everything an independent artist needs to create, promote and monetize — in one place"}
             </p>
           </motion.div>
 
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto"
-          >
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                variants={itemVariants}
-                whileHover={{ y: -10 }}
-                className="bg-black/40 backdrop-blur-sm border border-orange-500/10 rounded-xl p-8 hover:border-orange-500/30 transition-all duration-300 shadow-xl"
-              >
-                <div className="flex items-center mb-6">
-                  <img
-                    src={testimonial.avatar}
-                    alt={testimonial.name}
-                    className="w-14 h-14 rounded-full mr-4 border-2 border-orange-500/30"
-                  />
-                  <div>
-                    <h3 className="font-bold text-lg">{testimonial.name}</h3>
-                    <p className="text-white/60">{testimonial.role}</p>
+          {featuredArtists.length >= 3 ? (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto"
+            >
+              {featuredArtists.slice(0, 8).map((artist) => (
+                <motion.div key={artist.slug} variants={itemVariants} whileHover={{ y: -8 }}>
+                  <Link href={`/artist/${artist.slug}`}>
+                    <div className="group cursor-pointer bg-black/40 backdrop-blur-sm border border-orange-500/10 rounded-2xl overflow-hidden hover:border-orange-500/40 transition-all duration-300 shadow-xl">
+                      <div className="aspect-square overflow-hidden">
+                        <img
+                          src={artist.image}
+                          alt={artist.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <h3 className="font-bold text-white truncate">{artist.name}</h3>
+                        <p className="text-xs text-white/50 truncate">{artist.genre || "Artist"} · View profile →</p>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto"
+            >
+              {[
+                { icon: Video, title: "Create", text: "AI music videos, mastering, artwork and full releases — produced in minutes, not months." },
+                { icon: TrendingUp, title: "Promote", text: "YouTube, Spotify, TikTok and PR tools that run real campaigns on your actual accounts." },
+                { icon: Coins, title: "Monetize", text: "Merch, fan clubs, tokenized music and streaming rewards — every revenue stream in one dashboard." },
+              ].map((pillar) => (
+                <motion.div
+                  key={pillar.title}
+                  variants={itemVariants}
+                  whileHover={{ y: -10 }}
+                  className="bg-black/40 backdrop-blur-sm border border-orange-500/10 rounded-xl p-8 hover:border-orange-500/30 transition-all duration-300 shadow-xl"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center mb-5">
+                    <pillar.icon className="h-6 w-6 text-orange-400" />
                   </div>
-                </div>
-                <p className="text-white/80 mb-6 text-lg italic">"{testimonial.content}"</p>
-                <div className="flex">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-orange-400 fill-orange-400" />
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
+                  <h3 className="font-bold text-xl mb-3">{pillar.title}</h3>
+                  <p className="text-white/70">{pillar.text}</p>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
         </div>
       </section>
 
@@ -2204,7 +2275,7 @@ export default function HomePage() {
               </span>
             </h2>
             <p className="text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-              Join thousands of artists who are using Boostify to reach new audiences, optimize their promotion, and grow their music careers.
+              Create, promote and monetize your music with 60+ AI-powered tools — the complete career platform for human and AI artists.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
@@ -2261,16 +2332,16 @@ export default function HomePage() {
 
               <div className="grid grid-cols-3 gap-6 mb-8">
                 <div className="text-center">
-                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">500K+</h3>
-                  <p className="text-white/70 text-sm">Monthly Views</p>
+                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">SEO</h3>
+                  <p className="text-white/70 text-sm">Real-time Cockpit</p>
                 </div>
                 <div className="text-center">
-                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">50K+</h3>
-                  <p className="text-white/70 text-sm">New Subscribers</p>
+                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">1-Click</h3>
+                  <p className="text-white/70 text-sm">Video Publishing</p>
                 </div>
                 <div className="text-center">
-                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">90%</h3>
-                  <p className="text-white/70 text-sm">Engagement Rate</p>
+                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-1">AI</h3>
+                  <p className="text-white/70 text-sm">Growth Tools</p>
                 </div>
               </div>
 
@@ -2703,6 +2774,7 @@ export default function HomePage() {
                 loop
                 muted
                 playsInline
+                preload="metadata"
               />
             </div>
             

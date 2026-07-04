@@ -401,40 +401,82 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // (Health check movido a server/index.ts — handler único para evitar duplicados)
 
   // Platform stats for homepage (public endpoint - fetches from Supabase leads)
+  // Real platform stats — counted from the app DB (10-min in-memory cache).
+  // SECURITY: previous version had a hardcoded Supabase connection string here.
+  let platformStatsCache: { data: any; ts: number } | null = null;
   app.get('/api/platform-stats', async (req, res) => {
     try {
-      const pg = await import('pg');
-      const { Client } = pg.default || pg;
-      const supabaseUrl = 'postgresql://postgres.twlflkphpowpvjvoyrae:Metafeed2024%40@aws-0-us-west-2.pooler.supabase.com:6543/postgres';
-      
-      const client = new Client({ connectionString: supabaseUrl });
-      await client.connect();
-      
-      // Get leads count from Supabase
-      const leadsResult = await client.query('SELECT COUNT(*) FROM leads');
-      const leadsCount = parseInt(leadsResult.rows[0].count) || 0;
-      
-      await client.end();
-      
-      // Get songs count from Neon (main app db)
-      const { songs } = await import('./db/schema');
-      const songsResult = await db.select().from(songs);
-      
-      res.json({
-        activeArtists: leadsCount, // Leads as potential artists
-        musicVideosCreated: songsResult.length * 3 + 50000, // Estimated
-        tracksPromoted: leadsCount * 35 + 250000, // Estimated
-        monthlyViews: leadsCount * 2000 + 15000000 // Estimated
-      });
+      if (platformStatsCache && Date.now() - platformStatsCache.ts < 10 * 60 * 1000) {
+        return res.json(platformStatsCache.data);
+      }
+      const { sql } = await import('drizzle-orm');
+      const { songs: songsTable } = await import('./db/schema');
+
+      const [artistRow] = await db
+        .select({ c: sql<number>`count(*)` })
+        .from(users)
+        .where(sql`${users.artistName} IS NOT NULL`);
+      const [songRow] = await db.select({ c: sql<number>`count(*)` }).from(songsTable);
+
+      const artistCount = Number(artistRow?.c || 0);
+      const songCount = Number(songRow?.c || 0);
+      const data = {
+        activeArtists: artistCount,
+        musicVideosCreated: songCount, // real catalog size (songs + videos generated from them)
+        tracksPromoted: songCount,
+        monthlyViews: artistCount * 120 + songCount * 40, // estimated reach across channels
+        real: true,
+      };
+      platformStatsCache = { data, ts: Date.now() };
+      res.json(data);
     } catch (error) {
       console.error('Error fetching platform stats:', error);
-      // Fallback values
-      res.json({
-        activeArtists: 7500,
-        musicVideosCreated: 50000,
-        tracksPromoted: 250000,
-        monthlyViews: 15000000
-      });
+      res.status(500).json({ error: 'stats unavailable' });
+    }
+  });
+
+  // Featured artists — real public profiles for the homepage showcase (10-min cache).
+  let featuredArtistsCache: { data: any; ts: number } | null = null;
+  app.get('/api/featured-artists', async (req, res) => {
+    try {
+      if (featuredArtistsCache && Date.now() - featuredArtistsCache.ts < 10 * 60 * 1000) {
+        return res.json(featuredArtistsCache.data);
+      }
+      const { sql } = await import('drizzle-orm');
+      const rows = await db
+        .select({
+          name: users.artistName,
+          slug: users.slug,
+          image: users.profileImage,
+          genre: users.genre,
+        })
+        .from(users)
+        .where(
+          sql`${users.artistName} IS NOT NULL
+            AND length(${users.artistName}) >= 3
+            AND ${users.slug} IS NOT NULL
+            AND ${users.profileImage} IS NOT NULL
+            AND ${users.profileImage} LIKE 'http%'
+            AND ${users.profileImage} NOT LIKE '%ui-avatars.com%'
+            AND ${users.profileImage} NOT LIKE '%pravatar%'
+            AND ${users.profileImage} NOT LIKE '%placeholder%'`,
+        )
+        .orderBy(desc(users.id))
+        .limit(24);
+      // De-dupe by artist name (test/duplicate accounts) and cap at 8
+      const seen = new Set<string>();
+      const unique = rows.filter((r) => {
+        const key = (r.name || '').toLowerCase().trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 8);
+      const data = { success: true, artists: unique };
+      featuredArtistsCache = { data, ts: Date.now() };
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching featured artists:', error);
+      res.json({ success: false, artists: [] });
     }
   });
 
