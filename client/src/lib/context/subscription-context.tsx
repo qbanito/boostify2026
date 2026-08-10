@@ -50,7 +50,7 @@ export interface Subscription {
 export interface UserRole {
   id: number;
   userId: number;
-  role: 'user' | 'moderator' | 'support' | 'admin';
+  role: 'user' | 'moderator' | 'support' | 'admin' | 'tester';
   permissions: string[];
   grantedAt: Date;
 }
@@ -147,9 +147,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [error, setError] = useState<string | null>(null);
   
   // Calcular plan actual basado en el estado de la suscripción
-  const currentPlan: PlanType = subscription?.status === 'active' || subscription?.status === 'trialing'
-    ? subscription.plan 
-    : 'free';
+  const isComplimentaryFullAccess = userRole?.role === 'tester' || userRole?.role === 'admin' || isAdminEmail(user?.email);
+  const currentPlan: PlanType = isComplimentaryFullAccess
+    ? 'enterprise'
+    : (subscription?.status === 'active' || subscription?.status === 'trialing'
+      ? subscription.plan
+      : 'free');
   
   // Cargar datos de suscripción cuando cambia el usuario
   useEffect(() => {
@@ -222,7 +225,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
    */
   const hasAccess = (requiredPlan: PlanType | string): boolean => {
     // Admin tiene acceso a todo (por rol o por email)
-    if (userRole?.role === 'admin' || isAdminEmail(user?.email)) {
+    if (userRole?.role === 'admin' || userRole?.role === 'tester' || isAdminEmail(user?.email)) {
       return true;
     }
     

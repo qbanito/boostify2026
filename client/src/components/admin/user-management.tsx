@@ -47,6 +47,7 @@ interface AvailableRole {
 
 const PLAN_COLORS: Record<string, string> = {
   free: 'bg-slate-500/20 text-slate-300',
+  artist: 'bg-blue-500/20 text-blue-300',
   creator: 'bg-orange-500/20 text-orange-300',
   professional: 'bg-purple-500/20 text-purple-300',
   enterprise: 'bg-yellow-500/20 text-yellow-300',
@@ -62,6 +63,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 const PLAN_NAMES: Record<string, string> = {
   free: 'Discover',
+  artist: 'Artist',
   creator: 'Elevate',
   professional: 'Amplify',
   enterprise: 'Dominate',
@@ -559,6 +561,7 @@ export function UserManagement() {
                 <SelectItem value="moderator">Moderator</SelectItem>
                 <SelectItem value="support">Support</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="tester">Tester</SelectItem>
               </SelectContent>
             </Select>
             
@@ -570,6 +573,7 @@ export function UserManagement() {
                 <SelectItem value="all">All Plans</SelectItem>
                 <SelectItem value="none">No Subscription</SelectItem>
                 <SelectItem value="free">Discover (Free)</SelectItem>
+                <SelectItem value="artist">Artist ($19.99/mo)</SelectItem>
                 <SelectItem value="creator">Elevate</SelectItem>
                 <SelectItem value="professional">Amplify</SelectItem>
                 <SelectItem value="enterprise">Dominate</SelectItem>
@@ -815,6 +819,7 @@ export function UserManagement() {
                 </SelectTrigger>
                 <SelectContent className="z-[100000] bg-slate-800 border-slate-700">
                   <SelectItem value="free">Discover (Free)</SelectItem>
+                  <SelectItem value="artist">Artist ($19.99/mo)</SelectItem>
                   <SelectItem value="creator">Elevate ($49.99/mo)</SelectItem>
                   <SelectItem value="professional">Amplify ($89.99/mo)</SelectItem>
                   <SelectItem value="enterprise">Dominate ($149.99/mo)</SelectItem>

@@ -2485,7 +2485,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       setPromoteResolving(false);
     }
   }, [toast]);
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin } = useAuth();
   const {
     unlockedKeys: profileUnlockedKeys,
     allAccess: profileAllAccess,
@@ -4744,6 +4744,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     
     return false;
   })();
+  const canEditProfile = isOwnProfile || isAdmin;
   
   // Debug logging para verificar autenticaci�n
   useEffect(() => {
@@ -7428,6 +7429,35 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       </>
                     ) : (
                       <>
+                        {canEditProfile && (
+                          <EditProfileDialog
+                            artistId={String(userProfile?.pgId || artistId)}
+                            currentData={{
+                              displayName: userProfile?.displayName || userProfile?.name || "",
+                              biography: userProfile?.biography || "",
+                              genre: userProfile?.genre || "",
+                              location: userProfile?.location || "",
+                              profileImage: userProfile?.photoURL || userProfile?.profileImage || "",
+                              bannerImage: userProfile?.bannerImage || "",
+                              bannerPosition: String((userProfile as any)?.bannerPosition ?? "50"),
+                              loopVideoUrl: (userProfile as any)?.loopVideoUrl || "",
+                              slug: (userProfile as any)?.slug || "",
+                              contactEmail: userProfile?.email || userProfile?.contactEmail || "",
+                              contactPhone: userProfile?.phone || userProfile?.contactPhone || "",
+                              instagram: userProfile?.instagram || "",
+                              twitter: userProfile?.twitter || "",
+                              youtube: userProfile?.youtube || "",
+                              spotify: userProfile?.spotify || "",
+                              pageMode: (artist.pageMode as any) || 'artist',
+                            }}
+                            onUpdate={() => {
+                              setGalleriesRefreshKey(prev => prev + 1);
+                              refetchProfile();
+                            }}
+                            onProductsChanged={() => { refetchProducts(); }}
+                            onGalleryCreated={() => { setGalleriesRefreshKey(prev => prev + 1); }}
+                          />
+                        )}
                         {artist.website && (
                           <a 
                             href={artist.website}

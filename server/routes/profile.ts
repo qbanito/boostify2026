@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { users, songs, merchandise, artistMedia } from '../db/schema';
-import { eq, count, sql } from 'drizzle-orm';
+import { eq, count, or, sql } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth';
 import fileUpload from 'express-fileupload';
 import path from 'path';
@@ -281,11 +281,22 @@ router.get('/:slugOrId/analytics-summary', async (req: Request, res: Response) =
 // PUT /api/profile - Update own profile (authenticated)
 router.put('/', authenticate, async (req: Request, res: Response) => {
   try {
-    const firebaseUid = req.user!.uid || req.user!.id;
+    const authIdentifier = String(req.user!.uid || req.user!.id);
     const { artistName, biography, genre, location, website, instagramHandle, twitterHandle, youtubeChannel, slug: requestedSlug } = req.body;
     
-    // Find user by Firebase UID (stored in username)
-    const [currentUser] = await db.select().from(users).where(eq(users.username, firebaseUid)).limit(1);
+    // Clerk users are stored by clerkId; legacy Firebase/Replit users may use
+    // username. Support both so an admin can also edit a Clerk-owned profile.
+    const numericAuthId = Number(authIdentifier);
+    const identityConditions = [
+      eq(users.clerkId, authIdentifier),
+      eq(users.username, authIdentifier),
+      ...(Number.isInteger(numericAuthId) ? [eq(users.id, numericAuthId)] : []),
+    ];
+    const [currentUser] = await db
+      .select()
+      .from(users)
+      .where(or(...identityConditions))
+      .limit(1);
     if (!currentUser) {
       return res.status(404).json({ message: 'User not found' });
     }

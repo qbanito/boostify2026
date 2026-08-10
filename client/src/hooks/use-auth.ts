@@ -6,9 +6,7 @@ import { useUser, useClerk, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { useEffect, useRef } from "react";
-
-// Admin emails list - must match server/shared/constants.ts
-const ADMIN_EMAILS = ['convoycubano@gmail.com'];
+import { isAdminEmail } from "../../../shared/constants";
 
 // Tipo de usuario basado en el schema de la base de datos
 interface User {
@@ -21,6 +19,8 @@ interface User {
   profileImageUrl?: string | null;
   role: string;
   isAdmin?: boolean;
+  isTester?: boolean;
+  permissions?: string[] | null;
   subscriptionPlan?: string | null;
   // Artist profile fields
   slug?: string | null;
@@ -41,6 +41,7 @@ export function useAuth() {
       loading: false,
       isAuthenticated: false,
       isAdmin: false,
+      isTester: false,
       userSubscription: null,
       logout: async () => {},
       login: () => {},
@@ -58,7 +59,8 @@ export function useAuth() {
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: clerkLoaded && isSignedIn, // Only fetch when Clerk says user is signed in
     retry: false,
-    staleTime: 1000 * 60 * 5, // 5 minutos
+    staleTime: 1000 * 30, // Admin role/plan changes should propagate quickly
+    refetchOnWindowFocus: true,
   });
 
   const isLoading = !clerkLoaded || (isSignedIn && dbLoading);
@@ -79,11 +81,16 @@ export function useAuth() {
   const userEmail = user?.email || clerkUser?.primaryEmailAddress?.emailAddress;
   const isAdmin = Boolean(
     user?.isAdmin || 
-    (userEmail && ADMIN_EMAILS.includes(userEmail.toLowerCase()))
+    (userEmail && isAdminEmail(userEmail))
   );
 
-  // Get subscription plan (admin gets premium access)
-  const userSubscription = isAdmin ? 'premium' : (user?.subscriptionPlan?.toLowerCase() || null);
+  const isTester = Boolean(user?.isTester || user?.role === 'tester');
+
+  // Admins and testers receive complimentary full access. This is an
+  // entitlement, not a Stripe purchase, so they never need to pay to use it.
+  const userSubscription = isAdmin || isTester
+    ? 'enterprise'
+    : (user?.subscriptionPlan?.toLowerCase() || null);
 
   // Auto-sync real user to social network on first login
   const syncedRef = useRef(false);
@@ -117,6 +124,7 @@ export function useAuth() {
     loading: isLoading,
     isAuthenticated: isSignedIn ?? false,
     isAdmin,
+    isTester,
     userSubscription,
     logout,
     login,

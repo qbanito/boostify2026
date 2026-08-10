@@ -4,8 +4,8 @@ import { DecodedIdToken } from 'firebase-admin/auth';
 import { getAuth as getClerkAuth, clerkClient, verifyToken as verifyClerkToken } from '@clerk/express';
 import { isAdminEmail } from '../../shared/constants';
 import { db } from '../db';
-import { users } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { users, userRoles, subscriptions } from '../../db/schema';
+import { desc, eq } from 'drizzle-orm';
 
 /**
  * Decode a JWT payload WITHOUT verifying its signature.
@@ -46,7 +46,8 @@ function looksLikeClerkToken(payload: Record<string, any> | null): boolean {
  * - pro: Plan profesional ($99.99/mes)
  * - premium: Plan premium ($149.99/mes)
  */
-export type SubscriptionPlan = 'free' | 'basic' | 'pro' | 'premium';
+export type SubscriptionPlan =
+  | 'free' | 'artist' | 'basic' | 'creator' | 'pro' | 'professional' | 'premium' | 'enterprise';
 
 /**
  * Jerarquía de niveles de suscripción para comparaciones de acceso
@@ -54,9 +55,13 @@ export type SubscriptionPlan = 'free' | 'basic' | 'pro' | 'premium';
  */
 export const SUBSCRIPTION_LEVELS: Record<SubscriptionPlan, number> = {
   'free': 0,
-  'basic': 1,
-  'pro': 2,
-  'premium': 3
+  'artist': 1,
+  'basic': 2,
+  'creator': 2,
+  'pro': 3,
+  'professional': 3,
+  'premium': 4,
+  'enterprise': 4,
 };
 
 // Subscription interface
@@ -71,12 +76,68 @@ export interface Subscription {
 
 // Interface for the authenticated user
 export interface AuthUser {
-  uid?: string;   // Para autenticación Firebase
-  id?: string;    // Para autenticación de sesión
+  uid?: string;   // Para autenticación Firebase/Clerk
+  id?: string | number;    // ID de sesión o ID numérico de PostgreSQL
   email?: string | null;
   role?: string;
   isAdmin?: boolean;
+  isTester?: boolean;
+  permissions?: string[];
   subscription?: Subscription;
+}
+
+/** Load the entitlements assigned from the Admin panel for a PostgreSQL user. */
+async function getPostgresEntitlements(userId: number | string) {
+  const numericUserId = Number(userId);
+  if (!Number.isInteger(numericUserId) || numericUserId <= 0) return null;
+
+  try {
+    const [roleRecord] = await db
+      .select({ role: userRoles.role, permissions: userRoles.permissions })
+      .from(userRoles)
+      .where(eq(userRoles.userId, numericUserId))
+      .limit(1);
+    const [subscriptionRecord] = await db
+      .select({
+        plan: subscriptions.plan,
+        status: subscriptions.status,
+        currentPeriodEnd: subscriptions.currentPeriodEnd,
+        stripeCustomerId: subscriptions.stripeCustomerId,
+        stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+        cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, numericUserId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+
+    const role = roleRecord?.role;
+    const isTester = role === 'tester';
+    const subscription = subscriptionRecord
+      ? {
+          plan: subscriptionRecord.plan as SubscriptionPlan,
+          active: subscriptionRecord.status === 'active' || subscriptionRecord.status === 'trialing',
+          currentPeriodEnd: subscriptionRecord.currentPeriodEnd,
+          customerId: subscriptionRecord.stripeCustomerId || undefined,
+          subscriptionId: subscriptionRecord.stripeSubscriptionId || undefined,
+          cancelAtPeriodEnd: subscriptionRecord.cancelAtPeriodEnd,
+        }
+      : undefined;
+
+    return {
+      role,
+      permissions: (roleRecord?.permissions as string[] | null) || [],
+      isTester,
+      // Tester access is a complimentary full-access entitlement. It must not
+      // depend on a Stripe subscription row or a card payment.
+      subscription: isTester
+        ? { plan: 'enterprise' as SubscriptionPlan, active: true }
+        : subscription,
+    };
+  } catch (error) {
+    console.warn('[auth] Could not load PostgreSQL entitlements:', (error as Error).message);
+    return null;
+  }
 }
 
 // Explicitly define the user interface to match our AuthUser
@@ -137,13 +198,20 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
           console.warn('[auth] Could not resolve Clerk userId to integer pgUserId:', (dbErr as Error).message);
         }
 
+        const entitlements = await getPostgresEntitlements(pgUserId);
+        const isTester = entitlements?.isTester === true;
+
         req.user = {
           id: pgUserId as any,
           uid: clerkAuth.userId,
           email,
-          role: isAdmin ? 'admin' : 'artist',
+          role: isAdmin ? 'admin' : (entitlements?.role || 'artist'),
           isAdmin,
-          subscription: isAdmin ? { plan: 'premium', active: true } : undefined,
+          isTester,
+          permissions: entitlements?.permissions || [],
+          subscription: isAdmin
+            ? { plan: 'enterprise', active: true }
+            : entitlements?.subscription,
         };
         return next();
       }
@@ -288,13 +356,19 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
             }
 
             const isAdminClerk = isAdminEmail(email);
+            const entitlements = await getPostgresEntitlements(pgUserId);
+            const isTester = entitlements?.isTester === true;
             const clerkUser: AuthUser = {
               id: pgUserId as any,
               uid: clerkUserId,
               email,
-              role: isAdminClerk ? 'admin' : 'artist',
+              role: isAdminClerk ? 'admin' : (entitlements?.role || 'artist'),
               isAdmin: isAdminClerk,
-              subscription: isAdminClerk ? { plan: 'premium', active: true } : undefined,
+              isTester,
+              permissions: entitlements?.permissions || [],
+              subscription: isAdminClerk
+                ? { plan: 'enterprise', active: true }
+                : entitlements?.subscription,
             };
             req.user = clerkUser;
             if (req.session) req.session.user = clerkUser;
@@ -399,7 +473,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
  * @returns Middleware de Express
  */
 export function requireSubscription(requiredPlan: SubscriptionPlan) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     // Si no hay usuario autenticado, responder con error 401
     if (!req.user) {
       return res.status(401).json({
@@ -413,6 +487,24 @@ export function requireSubscription(requiredPlan: SubscriptionPlan) {
       return next();
     }
 
+    // Testers receive complimentary full-platform access from the Admin panel.
+    // Check the persisted role as well as the request snapshot so this works
+    // immediately after an admin grants the role, without requiring payment.
+    if (req.user.isTester || req.user.role === 'tester') {
+      return next();
+    }
+    const numericUserId = Number(req.user.id);
+    if (Number.isInteger(numericUserId) && numericUserId > 0) {
+      const [roleRecord] = await db
+        .select({ role: userRoles.role })
+        .from(userRoles)
+        .where(eq(userRoles.userId, numericUserId))
+        .limit(1);
+      if (roleRecord?.role === 'tester') {
+        return next();
+      }
+    }
+
     // Verificar si el usuario tiene una suscripción activa
     const userSubscription = req.user.subscription;
     if (!userSubscription || !userSubscription.active) {
@@ -424,8 +516,8 @@ export function requireSubscription(requiredPlan: SubscriptionPlan) {
     }
 
     // Obtener niveles numéricos para comparación
-    const userLevel = SUBSCRIPTION_LEVELS[userSubscription.plan as SubscriptionPlan];
-    const requiredLevel = SUBSCRIPTION_LEVELS[requiredPlan];
+    const userLevel = SUBSCRIPTION_LEVELS[userSubscription.plan as SubscriptionPlan] ?? 0;
+    const requiredLevel = SUBSCRIPTION_LEVELS[requiredPlan] ?? 0;
 
     // Verificar si el nivel de suscripción del usuario es suficiente
     if (userLevel < requiredLevel) {

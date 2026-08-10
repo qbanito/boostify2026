@@ -3771,12 +3771,14 @@ router.put("/update-artist/:artistId", isAuthenticated, async (req: Request, res
     const isOwnProfile = artist.id === pgUserId;
     const isGeneratedByUser = artist.generatedBy === pgUserId;
     const isVirtualArtist = artist.role === 'virtual_artist' || artist.isAIGenerated === true;
+    const isAdmin = isAdminEmail(req.user?.email);
     
     console.log(`🔐 Verificando permisos edición: pgUserId=${pgUserId}, artistId=${artist.id}, generatedBy=${artist.generatedBy}, role=${artist.role}`);
     console.log(`🔐 isOwnProfile=${isOwnProfile}, isGeneratedByUser=${isGeneratedByUser}, isVirtualArtist=${isVirtualArtist}`);
     
-    // Permitir editar si es el propio perfil, lo generó el usuario, o es un artista AI
-    const canEdit = isOwnProfile || isGeneratedByUser || (isVirtualArtist && artist.generatedBy === null);
+    // Permitir editar al dueño, a quien generó el artista, a perfiles virtuales
+    // sin dueño y al administrador autenticado.
+    const canEdit = isAdmin || isOwnProfile || isGeneratedByUser || (isVirtualArtist && artist.generatedBy === null);
     
     if (!canEdit) {
       return res.status(403).json({ error: 'No tienes permiso para editar este artista' });

@@ -20,6 +20,9 @@ import {
   isValidModuleKey,
 } from '../../shared/module-catalog';
 import { getUnlockedModuleKeys } from '../services/module-unlock-service';
+import { db } from '../db';
+import { userRoles } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 const router = Router();
 
@@ -64,6 +67,15 @@ router.get('/access', async (req: Request, res: Response) => {
     const user = (req as any).user;
     const pgUserId = resolvePgUserId(user);
     const isAdmin = !!(user?.email && isAdminEmail(user.email));
+    let isTester = user?.isTester === true || user?.role === 'tester';
+    if (!isTester && pgUserId) {
+      const [roleRecord] = await db
+        .select({ role: userRoles.role })
+        .from(userRoles)
+        .where(eq(userRoles.userId, pgUserId))
+        .limit(1);
+      isTester = roleRecord?.role === 'tester';
+    }
 
     let unlockedKeys: string[] = [];
     if (pgUserId) {
@@ -73,7 +85,9 @@ router.get('/access', async (req: Request, res: Response) => {
     res.json({
       unlockedKeys,
       allAccess: unlockedKeys.includes(ALL_ACCESS_KEY),
-      isAdmin,
+      // Testers get the same module-level access as an enterprise plan,
+      // without needing to purchase an unlock or subscription.
+      isAdmin: isAdmin || isTester,
     });
   } catch (err: any) {
     console.error('❌ [module-access] error:', err);

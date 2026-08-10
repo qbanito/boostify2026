@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 // Soporta AMBAS nomenclaturas para compatibilidad:
 // - Nueva: free, creator, professional, enterprise  
 // - Legacy: free, basic, pro, premium
-type SubscriptionPlan = 'free' | 'basic' | 'pro' | 'premium' | 'creator' | 'professional' | 'enterprise';
+type SubscriptionPlan = 'free' | 'artist' | 'basic' | 'pro' | 'premium' | 'creator' | 'professional' | 'enterprise';
 
 // Mapeo de nomenclatura para normalizar planes
 const PLAN_MAPPING: Record<string, string> = {
@@ -16,6 +16,7 @@ const PLAN_MAPPING: Record<string, string> = {
   'pro': 'professional',
   'premium': 'enterprise',
   'free': 'free',
+  'artist': 'artist',
   'creator': 'creator',
   'professional': 'professional',
   'enterprise': 'enterprise'
@@ -107,12 +108,13 @@ export function requireSubscription(requiredPlan: SubscriptionPlan = 'free') {
       // Map subscription plans to numeric values (usando nomenclatura normalizada)
       const planValues: Record<string, number> = {
         'free': 0,
-        'creator': 1,
-        'basic': 1,      // Legacy alias
-        'professional': 2,
-        'pro': 2,        // Legacy alias
-        'enterprise': 3,
-        'premium': 3     // Legacy alias
+        'artist': 1,
+        'creator': 2,
+        'basic': 2,      // Legacy alias
+        'professional': 3,
+        'pro': 3,        // Legacy alias
+        'enterprise': 4,
+        'premium': 4     // Legacy alias
       };
 
       // Normalizar planes

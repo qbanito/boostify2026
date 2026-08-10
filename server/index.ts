@@ -648,8 +648,8 @@ app.use((req, res, next) => {
         const isAdmin = isAdminEmail(userEmail);
         
         const { db } = await import('./db');
-        const { users } = await import('@db/schema');
-        const { eq } = await import('drizzle-orm');
+        const { users, userRoles, subscriptions } = await import('@db/schema');
+        const { desc, eq } = await import('drizzle-orm');
         
         // Try to find user by clerkId; if not found, create new user
         let [dbUser] = await db
@@ -671,12 +671,42 @@ app.use((req, res, next) => {
           dbUser = newUser;
         }
         
-        // Return user with admin status
-        audit({ action: 'auth.login', actorId: dbUser.id, actorEmail: userEmail || undefined, severity: 'info', ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || undefined, details: { isAdmin } });
+        // Resolve Admin-panel role, permissions, and manually granted plan.
+        // Tester access is complimentary and therefore maps to full access even
+        // when there is no Stripe subscription row.
+        const [assignedRole] = await db
+          .select({ role: userRoles.role, permissions: userRoles.permissions })
+          .from(userRoles)
+          .where(eq(userRoles.userId, dbUser.id))
+          .limit(1);
+        const [assignedSubscription] = await db
+          .select({
+            plan: subscriptions.plan,
+            status: subscriptions.status,
+            currentPeriodEnd: subscriptions.currentPeriodEnd,
+          })
+          .from(subscriptions)
+          .where(eq(subscriptions.userId, dbUser.id))
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(1);
+
+        const isTester = assignedRole?.role === 'tester';
+        const effectiveRole = isAdmin ? 'admin' : (assignedRole?.role || dbUser.role || 'artist');
+        const hasComplimentaryFullAccess = isAdmin || isTester;
+        const effectiveSubscriptionPlan = hasComplimentaryFullAccess
+          ? 'enterprise'
+          : (assignedSubscription?.plan || null);
+
+        audit({ action: 'auth.login', actorId: dbUser.id, actorEmail: userEmail || undefined, severity: 'info', ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || undefined, details: { isAdmin, isTester, plan: effectiveSubscriptionPlan } });
         res.json({
           ...dbUser,
           isAdmin,
-          role: isAdmin ? 'admin' : (dbUser.role || 'artist')
+          isTester,
+          permissions: (assignedRole?.permissions as string[] | null) || [],
+          role: effectiveRole,
+          subscriptionPlan: effectiveSubscriptionPlan,
+          subscriptionStatus: hasComplimentaryFullAccess ? 'active' : (assignedSubscription?.status || null),
+          subscriptionEnd: assignedSubscription?.currentPeriodEnd || null,
         });
       } catch (error) {
         console.error("Error fetching user:", error);
