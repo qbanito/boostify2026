@@ -23,7 +23,7 @@ import { Queue, type JobsOptions } from 'bullmq';
 import { getRedisConnection, redisUrl } from './connection';
 
 /** Single BullMQ queue; the job `name` discriminates the handler. */
-export const MEDIA_QUEUE = 'boostify:media';
+export const MEDIA_QUEUE = 'boostify-media';
 
 export type JobContext = { jobId?: string; name: string; attempt?: number };
 export type JobHandler = (data: any, ctx: JobContext) => Promise<any>;
