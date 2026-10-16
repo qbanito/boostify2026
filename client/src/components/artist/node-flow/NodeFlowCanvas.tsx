@@ -188,6 +188,33 @@ const EDGE_TYPES: EdgeTypes = {
   animated: NeonEdge,
 };
 
+/**
+ * React Flow keeps its own measured node/edge state. The profile canvas also
+ * receives derived arrays from a parent component, so comparing only array
+ * references causes a needless reset on every parent render. Keep the
+ * reconciliation semantic: return the previous reference when the graph did
+ * not actually change.
+ */
+function samePosition(a: any, b: any) {
+  return a?.x === b?.x && a?.y === b?.y;
+}
+
+function sameEdge(a: Edge, b: Edge) {
+  return a.id === b.id
+    && a.source === b.source
+    && a.target === b.target
+    && (a.sourceHandle ?? null) === (b.sourceHandle ?? null)
+    && (a.targetHandle ?? null) === (b.targetHandle ?? null)
+    && (a.type ?? 'default') === (b.type ?? 'default');
+}
+
+function sameNodeShape(a: any, b: any) {
+  return a.id === b.id
+    && (a.type ?? 'default') === (b.type ?? 'default')
+    && samePosition(a.position, b.position)
+    && a.hidden === b.hidden;
+}
+
 // ─── Node types available in right-click "Add node" menu ─────────────────────
 
 // Items with type '__section__' render as non-clickable section headers.
@@ -436,11 +463,15 @@ export function NodeFlowCanvas({ extraNodes = [], extraEdges = [], layoutKey = 0
   useEffect(() => {
     setRfExtraNodes(prev => {
       const prevById = new Map(prev.map(n => [n.id, n]));
-      return extraNodes.map(n => {
+      const next = extraNodes.map(n => {
         const existing = prevById.get(n.id);
         // Keep user-dragged position; update everything else (data, type, etc.)
         return existing ? { ...n, position: existing.position } : n;
       });
+      if (prev.length === next.length && prev.every((node, index) => sameNodeShape(node, next[index]))) {
+        return prev;
+      }
+      return next;
     });
   }, [extraNodes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sync layout edges from parent WITHOUT wiping user-drawn connections.
@@ -449,7 +480,11 @@ export function NodeFlowCanvas({ extraNodes = [], extraEdges = [], layoutKey = 0
     setRfExtraEdges(prev => {
       const propIdSet = new Set(extraEdges.map(e => e.id));
       const userEdges = prev.filter(e => String(e.id).startsWith('user-edge-') && !propIdSet.has(e.id));
-      return [...extraEdges, ...userEdges];
+      const next = [...extraEdges, ...userEdges];
+      if (prev.length === next.length && prev.every((edge, index) => sameEdge(edge, next[index]))) {
+        return prev;
+      }
+      return next;
     });
   }, [extraEdges]); // eslint-disable-line react-hooks/exhaustive-deps
 

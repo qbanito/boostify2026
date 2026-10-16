@@ -56,7 +56,13 @@ import {
 } from '@/constants/timeline-constants';
 import { 
   createProjectWithImages,
+  getVideoProject,
   getUserProjects,
+  updateProjectScript,
+  updateVideoProjectName,
+  uploadMultipleImages,
+  uploadTimelineMediaToStorage,
+  updateProjectImages,
   deleteVideoProject,
   type VideoProject
 } from '@/lib/services/video-project-service';
@@ -101,6 +107,8 @@ import { MusicVideoComposition } from '../../remotion/MusicVideoComposition';
 import { convertClipsToRemotionProps, calculateDurationInFrames } from '@/lib/utils/timeline-to-remotion';
 
 // Responsive layer width - se calcula din�micamente
+const WAN_REFERENCE_MODEL = 'alibaba/wan-3.0/reference-to-video';
+
 const getLayerLabelWidth = () => {
   if (typeof window === 'undefined') return 120;
   if (window.innerWidth < 480) return 50;
@@ -391,6 +399,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   const [firebaseProjects, setFirebaseProjects] = useState<VideoProject[]>([]);
   const [showProjectsPanel, setShowProjectsPanel] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const [activeSavedProjectId, setActiveSavedProjectId] = useState<string | null>(null);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [saveProgress, setSaveProgress] = useState(0);
   const [saveStatus, setSaveStatus] = useState('');
@@ -491,7 +500,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           id: p.id,
           name: p.name,
           thumbnail: p.images?.[0]?.publicUrl,
-          clips: p.script?.scenes?.map((scene, i) => ({
+          clips: p.script?.timelineClips?.length ? p.script.timelineClips.map(clip => {
+            const savedImage = p.images?.find(image => image.sceneId === `clip-${clip.id}`)?.publicUrl;
+            return savedImage && clip.type !== ClipType.VIDEO
+              ? { ...clip, url: savedImage, imageUrl: savedImage, thumbnailUrl: savedImage }
+              : clip;
+          }) : p.script?.scenes?.map((scene, i) => ({
             id: i + 1,
             start: scene.start_time || 0,
             duration: scene.duration || 3,
@@ -1487,14 +1501,6 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     
     // Verificar que hay im�genes para guardar
     const imagesWithUrls = generatedImages.filter(img => img.url);
-    if (imagesWithUrls.length === 0) {
-      toast({
-        title: "🖼️ Sin imágenes",
-        description: "Genera imágenes antes de guardar el proyecto",
-        variant: "destructive"
-      });
-      return;
-    }
     
     setIsSavingProject(true);
     setSaveProgress(0);
@@ -1502,8 +1508,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     
     try {
       // Preparar datos del script para Firebase
+      const visualClips = clips.filter(clip => clip.layerId === 1 && clip.type !== ClipType.AUDIO);
       const scriptData = {
-        scenes: clips.map((clip, i) => ({
+        scenes: visualClips.map((clip, i) => ({
           scene_number: i + 1,
           start_time: clip.start,
           duration: clip.duration,
@@ -1512,7 +1519,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
           camera: clip.metadata?.camera || 'Medium shot'
         })),
         duration: duration,
-        sceneCount: clips.length
+        sceneCount: visualClips.length,
+        timelineClips: clips.map(clip => ({
+          ...clip,
+          url: clip.url?.startsWith('data:') || clip.url?.startsWith('blob:') ? '' : clip.url,
+          imageUrl: clip.imageUrl?.startsWith('data:') || clip.imageUrl?.startsWith('blob:') ? '' : clip.imageUrl,
+          image_url: clip.image_url?.startsWith('data:') || clip.image_url?.startsWith('blob:') ? '' : clip.image_url,
+          generatedImageUrl: clip.generatedImageUrl?.startsWith('data:') || clip.generatedImageUrl?.startsWith('blob:') ? '' : clip.generatedImageUrl,
+        })),
       };
       
       // Preparar im�genes para subir a Firebase Storage
@@ -1520,35 +1534,79 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         sceneId: `scene-${i + 1}`,
         imageData: img.url // URL temporal de FAL que se convertir� a permanente
       }));
+      const clipImageEntries = new Map<string, string>();
+      visualClips.forEach(clip => {
+        const imageUrl = clip.imageUrl || clip.image_url || clip.generatedImageUrl || (clip.type === ClipType.VIDEO ? clip.thumbnailUrl : clip.url);
+        if (imageUrl) clipImageEntries.set(`clip-${clip.id}`, imageUrl);
+      });
+      imagesWithUrls.forEach((image, index) => {
+        if (!Array.from(clipImageEntries.values()).includes(image.url)) clipImageEntries.set(`generated-${index + 1}`, image.url);
+      });
+      const clipImagesToUpload = Array.from(clipImageEntries, ([sceneId, imageData]) => ({ sceneId, imageData }));
       
       // Crear proyecto con im�genes en Firebase
-      const { projectId, project } = await createProjectWithImages(
-        name,
-        String(user.id),
-        scriptData as any,
-        imagesToUpload,
-        {
+      let projectId: string;
+      let project: VideoProject;
+      if (activeSavedProjectId) {
+        projectId = activeSavedProjectId;
+        await updateVideoProjectName(projectId, name);
+        await updateProjectScript(projectId, scriptData as any);
+        const uploadedImages = await uploadMultipleImages(clipImagesToUpload, projectId, String(user.id), progress => {
+          setSaveProgress(progress);
+          setSaveStatus(`Subiendo imágenes... ${Math.round(progress)}%`);
+        });
+        await updateProjectImages(projectId, uploadedImages);
+        const updatedProject = await getVideoProject(projectId);
+        if (!updatedProject) throw new Error('No se pudo volver a leer el proyecto guardado');
+        project = updatedProject;
+      } else {
+        const result = await createProjectWithImages(name, String(user.id), scriptData as any, clipImagesToUpload, {
           createdFrom: 'TimelineEditor',
           director: projectContext?.videoStyle?.selectedDirector?.name,
           concept: projectContext?.selectedConcept
-        },
-        (progress, status) => {
+        }, (progress, status) => {
           setSaveProgress(progress);
           setSaveStatus(status);
-        }
-      );
+        });
+        projectId = result.projectId;
+        project = result.project;
+        setActiveSavedProjectId(projectId);
+      }
       
       // Actualizar lista de proyectos
+      const permanentImageByClip = new Map(project.images.filter(image => image.sceneId.startsWith('clip-')).map(image => [Number(image.sceneId.slice(5)), image.publicUrl] as [number, string]));
+      const mediaUrlByBlob = new Map<string, string>();
+      const clipsWithPermanentImages = await Promise.all(clips.map(async clip => {
+        let videoUrl = clip.videoUrl;
+        let clipUrl = clip.url;
+        const sourceMediaUrl = clip.type === ClipType.AUDIO ? clip.url : (clip.videoUrl || (clip.type === ClipType.VIDEO ? clip.url : undefined));
+        if (sourceMediaUrl?.startsWith('blob:')) {
+          let permanentUrl = mediaUrlByBlob.get(sourceMediaUrl);
+          if (!permanentUrl) {
+            const mediaResponse = await fetch(sourceMediaUrl);
+            if (!mediaResponse.ok) throw new Error(`No se pudo leer el medio local del clip ${clip.id}`);
+            const mediaBlob = await mediaResponse.blob();
+            const uploaded = await uploadTimelineMediaToStorage(mediaBlob, projectId, `clip-${clip.id}`, String(user.id), `${clip.id}.${mediaBlob.type.includes('audio') ? 'audio' : 'video'}`);
+            permanentUrl = uploaded.publicUrl;
+            mediaUrlByBlob.set(sourceMediaUrl, permanentUrl);
+          }
+          if (clip.type === ClipType.AUDIO) clipUrl = permanentUrl;
+          else videoUrl = permanentUrl;
+        }
+        const imageUrl = permanentImageByClip.get(clip.id);
+        const withMedia = { ...clip, ...(videoUrl ? { videoUrl } : {}), ...(clipUrl ? { url: clipUrl } : {}) };
+        return imageUrl && clip.type !== ClipType.VIDEO
+          ? { ...withMedia, url: imageUrl, imageUrl, thumbnailUrl: imageUrl }
+          : withMedia;
+      }));
+      if (permanentImageByClip.size > 0 || mediaUrlByBlob.size > 0) {
+        await updateProjectScript(projectId, { ...scriptData, timelineClips: clipsWithPermanentImages } as any);
+      }
       const newProject: SavedProject = {
         id: projectId,
         name,
         thumbnail: project.images?.[0]?.publicUrl,
-        clips: clips.map(c => ({
-          ...c,
-          // Actualizar URLs a las permanentes de Firebase
-          url: project.images?.find(img => img.sceneId === `scene-${c.id}`)?.publicUrl || c.url,
-          imageUrl: project.images?.find(img => img.sceneId === `scene-${c.id}`)?.publicUrl || c.imageUrl,
-        })),
+        clips: clipsWithPermanentImages,
         generatedImages: project.images?.map((img, i) => ({
           id: img.sceneId,
           url: img.publicUrl, // URL permanente de Firebase Storage
@@ -1559,8 +1617,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         updatedAt: project.updatedAt
       };
       
-      setSavedProjects(prev => [newProject, ...prev]);
-      setProjectName('');
+      setSavedProjects(prev => [newProject, ...prev.filter(saved => saved.id !== projectId)]);
+      setActiveSavedProjectId(projectId);
+      setProjectName(name);
       
       toast({
         title: "✅ Proyecto guardado en la nube",
@@ -1579,14 +1638,19 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       setSaveProgress(0);
       setSaveStatus('');
     }
-  }, [clips, generatedImages, duration, projectName, user?.id, projectContext, toast]);
+  }, [clips, generatedImages, duration, projectName, user?.id, projectContext, activeSavedProjectId, toast]);
 
   const handleLoadProject = useCallback((project: SavedProject) => {
     logger.info(`?? Cargando proyecto: ${project.name}`);
     logger.info(`?? Clips: ${project.clips?.length || 0}, Im�genes: ${project.generatedImages?.length || 0}`);
     
     // Usar normalizeClips para manejar la conversi�n de formato
-    const normalizedClips = normalizeClips(project.clips || []);
+    const hasNativeTimeline = (project.clips || []).every(clip =>
+      Number.isFinite(clip.start) && Number.isFinite(clip.duration) && Number.isFinite(clip.layerId)
+    );
+    const normalizedClips = hasNativeTimeline
+      ? (project.clips || []).map(clip => ({ ...clip, metadata: clip.metadata ? { ...clip.metadata } : undefined }))
+      : normalizeClips(project.clips || []);
     
     // Asociar im�genes generadas a los clips normalizados
     const loadedClips = normalizedClips.map((clip, index) => {
@@ -1599,12 +1663,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       });
       
       // Si el clip no tiene imagen pero hay una matching, asignarla
-      const finalImageUrl = clip.url || clip.imageUrl || matchingImage?.url || '';
+      const finalImageUrl = clip.imageUrl || clip.image_url || clip.generatedImageUrl || matchingImage?.url || clip.url || '';
       
       return {
         ...clip,
-        url: finalImageUrl,
-        imageUrl: finalImageUrl,
+        ...(clip.type === ClipType.VIDEO || clip.type === ClipType.AUDIO ? {} : { url: finalImageUrl, imageUrl: finalImageUrl }),
         thumbnailUrl: clip.thumbnailUrl || finalImageUrl,
       };
     });
@@ -1614,6 +1677,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     
     setClips(loadedClips);
     pushHistory(loadedClips);
+    setActiveSavedProjectId(project.id);
+    setProjectName(project.name);
     setShowProjectsPanel(false);
     
     toast({
@@ -1790,6 +1855,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   }, [clips, contextMenu.clipId, pushHistory, closeContextMenu]);
 
   const handleSplitAtPlayhead = useCallback(() => {
+    if (readOnly) return;
     // Route through the engine's splitClip so snap, in/out and min-duration
     // guards stay identical to the razor tool / keyboard split.
     const targetId = contextMenu.clipId ?? selectedClipId;
@@ -1801,7 +1867,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       }
     }
     closeContextMenu();
-  }, [contextMenu.clipId, selectedClipId, currentTime, engine, pushHistory, closeContextMenu]);
+  }, [readOnly, contextMenu.clipId, selectedClipId, currentTime, engine, pushHistory, closeContextMenu]);
 
   const handleSetPlayheadHere = useCallback(() => {
     setCurrentTime(contextMenu.time);
@@ -2930,8 +2996,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
         imageUrl: newImageUrl,
         url: newImageUrl,
         generatedImageUrl: newImageUrl,
+        videoUrl: undefined,
         metadata: {
           ...imageEditorModalClip.metadata,
+          videoUrl: undefined,
+          hasVideo: false,
+          videoStale: false,
           imagePrompt: newPrompt,
           isGeneratedImage: true
         }
@@ -3035,9 +3105,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
     if (cameraAnglesModalClip) {
       updateClip(cameraAnglesModalClip.id, {
         imageUrl,
+        url: imageUrl,
         thumbnailUrl: imageUrl,
+        videoUrl: undefined,
         metadata: {
           ...cameraAnglesModalClip.metadata,
+          videoUrl: undefined,
+          hasVideo: false,
+          videoStale: false,
           cameraAngle: angleName,
         },
       });
@@ -3071,9 +3146,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
       return {
         ...c,
         imageUrl,
+        url: imageUrl,
         thumbnailUrl: imageUrl,
+        videoUrl: undefined,
         metadata: {
           ...c.metadata,
+          videoUrl: undefined,
+          hasVideo: false,
+          videoStale: false,
           cameraAngle: angleName,
         },
       };
@@ -3242,20 +3322,14 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
             : projectContext?.artistReferenceImages)
         : undefined;
       
-      const endpoint = shouldUseReference
-        ? '/api/fal/nano-banana/generate-with-face'
-        : '/api/fal/nano-banana/generate';
-      
-      const requestBody = shouldUseReference
-        ? { 
-            prompt: enrichedPrompt,
-            referenceImages: referenceImages,
-            aspectRatio: aspectRatio
-          }
-        : { 
-            prompt: enrichedPrompt,
-            aspectRatio: aspectRatio
-          };
+      const endpoint = '/api/fal/wan-music-video/openai-image';
+      const requestBody = {
+        prompt: enrichedPrompt,
+        ...(shouldUseReference && referenceImages ? { referenceImages } : {}),
+        aspectRatio,
+        quality: 'high',
+        numImages: 1,
+      };
       
       logger.info(`?? [Timeline] Usando endpoint: ${endpoint}, con referencia: ${shouldUseReference}`);
       
@@ -3267,12 +3341,16 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
           imageUrl: newImageUrl,
           url: newImageUrl,
           thumbnailUrl: newImageUrl,
+          videoUrl: undefined,
           metadata: {
             ...clip.metadata,
+            videoUrl: undefined,
+            hasVideo: false,
+            videoStale: false,
             imagePrompt: enrichedPrompt,
             regeneratedAt: new Date().toISOString(),
             isGeneratedImage: true,
-            generatedWith: 'fal-nano-banana',
+            generatedWith: 'openai/gpt-image-2.5/flare',
             usedProjectContext: true,
             usedArtistReference: shouldUseReference,
           },
@@ -3483,19 +3561,64 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
   }, [activeClip, engine]);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState<number | null>(null);
   
-  // 🎬 Open Video Generation Modal directly — no budget gate
-  const handleGenerateVideo = useCallback((clip: TimelineClip) => {
-    const imageUrl = clip.imageUrl || clip.url || clip.thumbnailUrl;
+  const generateWanTimelineClip = useCallback(async (clip: TimelineClip) => {
+    const imageUrl = clip.imageUrl || clip.image_url || clip.generatedImageUrl || clip.thumbnailUrl || (clip.type === ClipType.VIDEO ? undefined : clip.url);
     if (!imageUrl) {
-      toast({
-        title: 'Sin imagen',
-        description: 'El clip necesita una imagen para generar video',
-        variant: 'destructive',
-      });
+      toast({ title: 'Sin imagen de referencia', description: 'Este clip necesita una imagen para Wan 3.0.', variant: 'destructive' });
       return;
     }
-    setVideoGenClip(clip);
-  }, [toast]);
+    const motionPrompt = clip.metadata?.motionPromptSuffix || clip.metadata?.cameraMovement || '';
+    const prompt = [clip.metadata?.imagePrompt || clip.metadata?.scene_description || clip.title || '', motionPrompt, 'Cinematic music-video shot, preserve the artist identity and wardrobe, natural continuous movement.'].filter(Boolean).join(' ');
+    updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: true, videoError: undefined, videoStale: false } });
+    try {
+      const submitted = await apiRequest({
+        url: '/api/fal/wan-music-video/generate',
+        method: 'POST',
+        data: {
+          prompt,
+          referenceImages: [imageUrl, ...(projectContext?.artistReferenceImages || [])].filter(Boolean).slice(0, 10),
+          ...(clip.metadata?.motionReferenceWanCompatible && clip.metadata?.motionReferenceVideoUrl
+            ? { referenceVideoUrls: [clip.metadata.motionReferenceVideoUrl] }
+            : {}),
+          duration: Math.max(2, Math.min(30, Math.round(clip.duration || 5))),
+          resolution: '1080p',
+          aspectRatio,
+        },
+      });
+      if (!submitted.requestId) throw new Error(submitted.error || 'Wan 3.0 no devolvió el ID de la tarea');
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const status = await apiRequest(`/api/fal/wan-music-video/${encodeURIComponent(submitted.requestId)}`);
+        if (status.status === 'FAILED') throw new Error(status.error || 'Wan 3.0 no pudo generar el clip');
+        if (status.status === 'COMPLETED' && status.videoUrl) {
+          updateClip(clip.id, {
+            videoUrl: status.videoUrl,
+            metadata: {
+              ...clip.metadata,
+              videoUrl: status.videoUrl,
+              hasVideo: true,
+              videoGenerating: false,
+              videoError: undefined,
+              videoStale: false,
+              generatedWith: WAN_REFERENCE_MODEL,
+              generatedDuration: status.duration ?? Math.max(2, Math.min(30, Math.round(clip.duration || 5))),
+              wanRequestId: submitted.requestId,
+            },
+          });
+          return;
+        }
+      }
+      throw new Error('Wan 3.0 sigue en cola; vuelve a consultar la tarea más tarde.');
+    } catch (error) {
+      updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: false, videoError: error instanceof Error ? error.message : 'Error generando con Wan 3.0' } });
+      toast({ title: `Falló el clip ${clip.id}`, description: error instanceof Error ? error.message : 'Error de Wan 3.0', variant: 'destructive' });
+    }
+  }, [updateClip, toast, projectContext?.artistReferenceImages, aspectRatio]);
+
+  // 🎬 Generate individual clips through the shared Wan timeline workflow
+  const handleGenerateVideo = useCallback((clip: TimelineClip) => {
+    void generateWanTimelineClip(clip);
+  }, [generateWanTimelineClip]);
   handleGenerateVideoRef.current = handleGenerateVideo;
 
   // Callback when VideoGenerationModal finishes generating
@@ -3528,6 +3651,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         
         if (data.status === 'completed' && (data.videoUrl || data.video_url)) {
           updateClip(clipId, {
+            videoUrl: data.videoUrl || data.video_url,
             metadata: {
               videoUrl: data.videoUrl || data.video_url,
               videoGeneratedAt: new Date().toISOString(),
@@ -3586,13 +3710,71 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
 
   // Batch generate videos for multiple clips without opening the modal
   const handleBatchGenerateVideos = useCallback(async (clipsToGenerate: TimelineClip[], overrideModel?: string) => {
-    const eligible = clipsToGenerate.filter(c => c.imageUrl || c.url || c.thumbnailUrl);
+    const model = overrideModel ?? batchVideoModel;
+    const eligible = clipsToGenerate.filter(c => model === WAN_REFERENCE_MODEL
+      ? c.imageUrl || c.image_url || c.generatedImageUrl || c.thumbnailUrl || (c.type !== ClipType.VIDEO && c.url)
+      : c.imageUrl || c.url || c.thumbnailUrl);
     if (eligible.length === 0) {
       toast({ title: 'Sin imágenes', description: 'Los clips necesitan imágenes para generar videos', variant: 'destructive' });
       return;
     }
 
-    const model = overrideModel ?? batchVideoModel;
+    if (model === WAN_REFERENCE_MODEL) {
+      toast({ title: 'Generando con Wan 3.0', description: `${eligible.length} clips desde el mismo timeline` });
+      for (const clip of eligible) {
+        const imageUrl = clip.imageUrl || clip.image_url || clip.generatedImageUrl || clip.thumbnailUrl || clip.url;
+        const motionPrompt = clip.metadata?.motionPromptSuffix || clip.metadata?.cameraMovement || '';
+        const prompt = [clip.metadata?.imagePrompt || clip.metadata?.scene_description || clip.title || '', motionPrompt, 'Cinematic music-video shot, preserve the artist identity and wardrobe, natural continuous movement.'].filter(Boolean).join(' ');
+        updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: true, videoError: undefined, videoStale: false } });
+        try {
+          const submitted = await apiRequest({
+            url: '/api/fal/wan-music-video/generate',
+            method: 'POST',
+            data: {
+              prompt,
+              referenceImages: [imageUrl, ...(projectContext?.artistReferenceImages || [])].filter(Boolean).slice(0, 10),
+              ...(clip.metadata?.motionReferenceWanCompatible && clip.metadata?.motionReferenceVideoUrl
+                ? { referenceVideoUrls: [clip.metadata.motionReferenceVideoUrl] }
+                : {}),
+              duration: Math.max(2, Math.min(30, Math.round(clip.duration || 5))),
+              resolution: '1080p',
+              aspectRatio,
+            },
+          });
+          if (!submitted.requestId) throw new Error(submitted.error || 'Wan 3.0 no devolvió el ID de la tarea');
+          let completed = false;
+          for (let attempt = 0; attempt < 90; attempt += 1) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            const status = await apiRequest(`/api/fal/wan-music-video/${encodeURIComponent(submitted.requestId)}`);
+            if (status.status === 'FAILED') throw new Error(status.error || 'Wan 3.0 no pudo generar el clip');
+            if (status.status === 'COMPLETED' && status.videoUrl) {
+              updateClip(clip.id, {
+                videoUrl: status.videoUrl,
+                metadata: {
+                  ...clip.metadata,
+                  videoUrl: status.videoUrl,
+                  hasVideo: true,
+                  videoGenerating: false,
+                  videoError: undefined,
+                  videoStale: false,
+                  generatedWith: WAN_REFERENCE_MODEL,
+                  generatedDuration: status.duration ?? Math.max(2, Math.min(30, Math.round(clip.duration || 5))),
+                  wanRequestId: submitted.requestId,
+                },
+              });
+              completed = true;
+              break;
+            }
+          }
+          if (!completed) throw new Error('Wan 3.0 sigue en cola; vuelve a consultar la tarea más tarde.');
+        } catch (error) {
+          updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: false, videoError: error instanceof Error ? error.message : 'Error generando con Wan 3.0' } });
+          toast({ title: `Falló el clip ${clip.id}`, description: error instanceof Error ? error.message : 'Error de Wan 3.0', variant: 'destructive' });
+        }
+      }
+      toast({ title: 'Lote finalizado', description: 'Los resultados quedaron vinculados a sus clips del timeline.' });
+      return;
+    }
     const isPixVerse = model.startsWith('pixverse-');
     const modelLabel = isPixVerse ? model.replace('pixverse-', 'PixVerse ') : `Kling v2.1`;
     toast({ title: '🎬 Generando videos en cola', description: `${eligible.length} videos serán generados con ${modelLabel}` });
@@ -3668,7 +3850,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
       // Stagger requests to avoid rate-limiting
       await new Promise(r => setTimeout(r, 800));
     }
-  }, [batchVideoModel, updateClip, pollVideoStatus, handleVideoGenerated, toast]);
+  }, [batchVideoModel, updateClip, pollVideoStatus, handleVideoGenerated, toast, projectContext?.artistReferenceImages, aspectRatio]);
 
   // ============================================================================
   // ?? LIPSYNC - Aplicar sincronizaci�n de labios a clips PERFORMANCE
@@ -5381,11 +5563,14 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         onRegenerateImage={handleRegenerateImage}
         onGenerateVideo={handleGenerateVideo}
         onBatchGenerateVideos={handleBatchGenerateVideos}
+        defaultVideoModel={WAN_REFERENCE_MODEL}
+        videoModelOptions={[{ value: WAN_REFERENCE_MODEL, label: 'Wan 3.0 Reference to Video' }]}
         onAnimatedScene={(order, videoUrl) => {
           const sorted = [...clips].filter(c => c.layerId === 1).sort((a, b) => a.start - b.start);
           const target = sorted[order];
           if (target) {
             updateClip(target.id, {
+              videoUrl,
               metadata: { videoUrl, hasVideo: true, videoGenerating: false, generatedWith: 'pipeline' },
             });
           }
@@ -5564,8 +5749,13 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         }}
         isAdmin={isAdmin}
         songDuration={duration}
-        numClips={clips.length}
-        clipDuration={clips.length > 0 ? Math.round(clips.reduce((sum, c) => sum + c.duration, 0) / clips.length) : 5}
+        numClips={clips.filter(c => c.layerId === 1 && c.type !== ClipType.AUDIO).length}
+        clipDuration={(() => {
+          const visualClips = clips.filter(c => c.layerId === 1 && c.type !== ClipType.AUDIO);
+          return visualClips.length > 0 ? Math.round(visualClips.reduce((sum, clip) => sum + clip.duration, 0) / visualClips.length) : 5;
+        })()}
+        videoClipDurations={clips.filter(c => c.layerId === 1 && c.type !== ClipType.AUDIO).map(c => c.duration)}
+        defaultVideoModelId="wan-3.0-reference"
         songTitle={projectName || projectContext?.songTitle || 'Video Musical'}
         userEmail={user?.email || ''}
         userId={user?.id ? String(user.id) : undefined}
@@ -5594,17 +5784,20 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
         clips={clips}
         selectedClipId={selectedClipId}
         onImageApplied={(clipId, newImageUrl, prompt) => {
-          setClips(prev => prev.map(c =>
+          const next = clipsRef.current.map(c =>
             c.id === clipId
-              ? { ...c, imageUrl: newImageUrl, url: newImageUrl, thumbnailUrl: newImageUrl, generatedImage: true, metadata: { ...c.metadata, imagePrompt: prompt } }
+              ? { ...c, imageUrl: newImageUrl, url: newImageUrl, thumbnailUrl: newImageUrl, generatedImage: true, videoUrl: undefined, metadata: { ...c.metadata, imagePrompt: prompt, videoUrl: undefined, hasVideo: false, videoStale: false } }
               : c
-          ));
+          );
+          pushHistory(next, 'image-applied');
         }}
         onAddAsNewClip={(imageUrl, prompt) => {
-          const maxId = clips.reduce((max, c) => Math.max(max, c.id), 0);
-          const lastClip = clips[clips.length - 1];
-          const start = lastClip ? lastClip.start + lastClip.duration : 0;
-          setClips(prev => [...prev, {
+          const current = clipsRef.current;
+          const maxId = current.reduce((max, c) => Math.max(max, c.id), 0);
+          const visualClips = current.filter(c => c.layerId === 1);
+          const lastClip = visualClips.reduce<TimelineClip | undefined>((latest, clip) => !latest || clip.start + clip.duration > latest.start + latest.duration ? clip : latest, undefined);
+          const start = Math.max(currentTime, lastClip ? lastClip.start + lastClip.duration : 0);
+          pushHistory([...current, {
             id: maxId + 1,
             layerId: 1,
             type: 'IMAGE' as any,
@@ -5616,7 +5809,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
             generatedImage: true,
             title: prompt.substring(0, 50),
             metadata: { imagePrompt: prompt },
-          }]);
+          }], 'image-added');
         }}
         initialReference={imageGenReference}
       />

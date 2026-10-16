@@ -22,6 +22,15 @@ export interface ModelPricing {
 }
 
 export const VIDEO_MODEL_PRICING: Record<string, ModelPricing> = {
+  'wan-3.0-reference': {
+    id: 'wan-3.0-reference',
+    name: 'Alibaba Wan 3.0 Reference to Video',
+    tier: 'studio',
+    costPerSecond: 0.05,
+    costPerSecondAudio: 0.05,
+    maxDuration: 30,
+    description: 'Fal reference-to-video; master song remains on the timeline audio track',
+  },
   'seedance-2-fast': {
     id: 'seedance-2-fast',
     name: 'Seedance 2.0 (ByteDance)',
@@ -88,6 +97,7 @@ export const VIDEO_MODEL_PRICING: Record<string, ModelPricing> = {
 };
 
 export const IMAGE_MODEL_PRICING: Record<string, { name: string; costPerImage: number }> = {
+  'openai-gpt-image-2.5': { name: 'OpenAI GPT Image 2.5 via fal (1 unit/image)', costPerImage: 1 },
   'seedream-4':    { name: 'Seedream 4 (ByteDance) — Most advanced, cinematic detail', costPerImage: 0.03 },
   'flux-2-pro':    { name: 'Flux 2 Pro — Best quality (recommended)', costPerImage: 0.05 },
   'flux-pro':      { name: 'Flux Pro — High quality, fast',           costPerImage: 0.005 },
@@ -124,6 +134,8 @@ export interface BudgetConfig {
   includesMotion: boolean;
   includesMicrocuts: boolean;
   resolution: '720p' | '1080p' | '4k';
+  numClipsOverride?: number;
+  clipDurationsSec?: number[];
 }
 
 export interface CostBreakdown {
@@ -170,10 +182,14 @@ export function calculateVideoBudget(config: BudgetConfig): BudgetResult {
   const imageModel = IMAGE_MODEL_PRICING[config.imageModelId] || IMAGE_MODEL_PRICING['flux-2-pro'];
   
   // Calculate clip counts
-  const numClips = Math.ceil(config.songDurationSec / config.clipDurationSec);
+  const numClips = config.clipDurationsSec?.length
+    ? config.clipDurationsSec.length
+    : (config.numClipsOverride ?? Math.ceil(config.songDurationSec / config.clipDurationSec));
   const numPerformanceClips = Math.ceil(numClips * PERFORMANCE_RATIO);
   const clipVideoSec = Math.min(config.clipDurationSec, videoModel.maxDuration);
-  const totalVideoSeconds = numClips * clipVideoSec;
+  const totalVideoSeconds = config.clipDurationsSec?.length
+    ? config.clipDurationsSec.reduce((sum, seconds) => sum + Math.min(Math.max(0, seconds), videoModel.maxDuration), 0)
+    : numClips * clipVideoSec;
   
   // Song duration in minutes for render
   const songMinutes = config.songDurationSec / 60;
@@ -184,8 +200,8 @@ export function calculateVideoBudget(config: BudgetConfig): BudgetResult {
   
   // ---- VIDEOS ----
   const videoCount = Math.ceil(numClips * VIDEO_REGEN_BUFFER);
-  const videoUnitCost = clipVideoSec * videoModel.costPerSecond;
-  const videoCost = videoCount * videoUnitCost;
+  const videoUnitCost = (totalVideoSeconds / Math.max(1, numClips)) * videoModel.costPerSecond;
+  const videoCost = totalVideoSeconds * videoModel.costPerSecond * VIDEO_REGEN_BUFFER;
   
   // ---- LIPSYNC ----
   let lipsyncCount = 0;

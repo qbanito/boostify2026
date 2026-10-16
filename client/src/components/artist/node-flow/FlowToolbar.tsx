@@ -10,14 +10,16 @@ import { useFlowRunner } from './useFlowRunner';
 
 interface FlowToolbarProps {
   onBack: () => void;
+  nodeCount?: number;
+  edgeCount?: number;
 }
 
-export function FlowToolbar({ onBack }: FlowToolbarProps) {
+export function FlowToolbar({ onBack, nodeCount: nodeCountOverride, edgeCount: edgeCountOverride }: FlowToolbarProps) {
   const store = useFlowStore();
   const { run } = useFlowRunner();
 
-  const nodeCount = store.nodes.length;
-  const edgeCount = store.edges.length;
+  const nodeCount = nodeCountOverride ?? store.nodes.length;
+  const edgeCount = edgeCountOverride ?? store.edges.length;
   const hasNodes = nodeCount > 0;
   const isRunning = store.isRunning;
 

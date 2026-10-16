@@ -15,6 +15,7 @@ import {
 import { TimelineClip } from '@/interfaces/timeline';
 import { logger } from '@/lib/logger';
 import { apiRequest } from '@/lib/queryClient';
+import { analyzeTimelineQuality } from '@/lib/services/montage-quality';
 
 // ── Export Formats ──────────────────────────────────────────
 const EXPORT_FORMATS = [
@@ -128,17 +129,23 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
     }
   }, [selectedRes, selectedAR]);
 
-  const videoClips = useMemo(() => clips.filter(c => c.layerId === 1), [clips]);
+  const videoClips = useMemo(() => clips.filter(c => c.layerId === 1 && c.type !== 'AUDIO'), [clips]);
   const audioClips = useMemo(() => clips.filter(c => c.layerId === 2), [clips]);
   const estimatedSize = useMemo(
     () => estimateFileSize(selectedQuality?.bitrate || 8, duration),
     [selectedQuality, duration]
   );
+  const qualityReport = useMemo(() => analyzeTimelineQuality(clips, { duration }), [clips, duration]);
+  const blockingIssues = qualityReport.issues.filter(issue => issue.severity === 'error');
 
   // ── Export Handler ────────────────────────────────────
   const handleExport = useCallback(async () => {
-    if (clips.length === 0) {
+    if (videoClips.length === 0) {
       toast({ title: 'Sin clips', description: 'Añade clips al timeline para exportar', variant: 'destructive' });
+      return;
+    }
+    if (blockingIssues.length > 0) {
+      toast({ title: 'Corrige el timeline antes de exportar', description: blockingIssues[0].message, variant: 'destructive' });
       return;
     }
 
@@ -146,16 +153,20 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
     setExportProgress(0);
     toast({ title: '🎬 Iniciando exportación...', description: `Formato: ${selectedFormat.label} • ${effectiveRes.w}×${effectiveRes.h}` });
 
+    let renderPolling = false;
     try {
       const exportData = {
-        clips: clips.map(c => ({
+        clips: videoClips.filter(c => c.type === 'VIDEO'
+          ? Boolean(c.videoUrl || c.metadata?.videoUrl || c.url)
+          : Boolean(c.videoUrl || c.metadata?.videoUrl || c.imageUrl || c.url || c.thumbnailUrl)).map(c => ({
           id: c.id,
           start: c.start,
           duration: c.duration,
           layerId: c.layerId,
           type: c.type,
-          imageUrl: c.imageUrl || c.url,
-          videoUrl: c.metadata?.videoUrl,
+          imageUrl: c.type === 'VIDEO' ? (c.imageUrl || c.thumbnailUrl) : (c.imageUrl || c.url || c.thumbnailUrl),
+          videoUrl: c.videoUrl || c.metadata?.videoUrl || (c.type === 'VIDEO' ? c.url : undefined),
+          sourceStart: c.sourceStart ?? c.in ?? 0,
           title: c.title,
           effects: c.effects,
           transition: c.transition,
@@ -187,6 +198,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         onExportComplete?.(data.downloadUrl);
         onClose();
       } else if (data.jobId) {
+        renderPolling = true;
         toast({ title: '🎬 Renderizando...', description: 'Tu video se está procesando...' });
         // Poll for render completion
         stopPolling();
@@ -216,8 +228,14 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
           }
         }, 5000);
         // Safety timeout: clear polling after 10 minutes
-        setTimeout(() => stopPolling(), 600000);
-        return; // Don't hit finally block yet
+        setTimeout(() => {
+          if (pollRef.current) {
+            stopPolling();
+            setIsExporting(false);
+            toast({ title: 'Render en curso', description: 'El render sigue en el servidor; vuelve a abrir Exportar para comprobar el estado.' });
+          }
+        }, 600000);
+        return;
       }
 
       logger.info('🎬 [Export] Exportación exitosa', data);
@@ -229,10 +247,12 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
         variant: 'destructive',
       });
     } finally {
-      setIsExporting(false);
-      setExportProgress(0);
+      if (!renderPolling) {
+        setIsExporting(false);
+        setExportProgress(0);
+      }
     }
-  }, [clips, duration, audioUrl, projectName, format, effectiveRes, selectedQuality, quality, customFps, selectedAspectRatio, selectedFormat, toast, onClose, onExportComplete, stopPolling]);
+  }, [clips, videoClips, duration, audioUrl, projectName, format, effectiveRes, selectedQuality, quality, customFps, selectedAspectRatio, selectedFormat, blockingIssues, toast, onClose, onExportComplete, stopPolling]);
 
   if (!open) return null;
 
@@ -481,7 +501,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({
 
           <Button
             onClick={handleExport}
-            disabled={isExporting || clips.length === 0}
+            disabled={isExporting || videoClips.length === 0 || blockingIssues.length > 0}
             className="h-10 px-6 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg"
           >
             {isExporting ? (

@@ -410,7 +410,7 @@ router.post('/generate', isAuthenticated, async (req: Request, res: Response) =>
     res.json(result);
   } catch (err: any) {
     console.error('[mini-studio] generate failed:', err);
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(err?.statusCode || 500).json({ success: false, error: err?.message });
   }
 });
 
@@ -557,18 +557,17 @@ router.post('/separate-stems', isAuthenticated, async (req: Request, res: Respon
     const { separateStems } = await import('../services/voice-ai-service');
     if (typeof separateStems === 'function') {
       const out = await separateStems(audioUrl);
-      return res.json({ success: true, ...out });
+      const stems = Array.isArray(out?.stems) ? out.stems : [];
+      if (out?.success && stems.some((stem: any) => stem?.audioUrl && stem.audioUrl !== audioUrl)) {
+        return res.json({ success: true, ...out });
+      }
+      return res.status(503).json({ success: false, error: out?.error || 'Stem separation is unavailable: configure a supported audio-separation provider.' });
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[mini-studio] voice-ai-service.separateStems unavailable:', (err as Error).message);
+    return res.status(503).json({ success: false, error: err?.message || 'Stem separation provider unavailable.' });
   }
-  // Graceful fallback: queued
-  res.json({
-    success: true,
-    queued: true,
-    message: 'Stem separation queued. No live separator configured.',
-    audioUrl,
-  });
+  return res.status(503).json({ success: false, error: 'Stem separation provider is not available.' });
 });
 
 // ---------------------------------------------------------------
@@ -576,36 +575,7 @@ router.post('/separate-stems', isAuthenticated, async (req: Request, res: Respon
 // ---------------------------------------------------------------
 
 router.post('/export', isAuthenticated, async (req: Request, res: Response) => {
-  const { projectId, songId = null, formats = ['wav-24'], target } = req.body || {};
-  if (!projectId) return res.status(400).json({ success: false, error: 'projectId required' });
-  const userId = getUserId(req);
-  if (!userId) return res.status(401).json({ success: false, error: 'unauthenticated' });
-  const ref = db.collection(COL).doc(projectId);
-  const doc = await ref.get();
-  if (doc.exists && (doc.data() as any).userId === userId) {
-    await ref.update({
-      status: 'export-queued',
-      exportFormats: formats,
-      exportTarget: target || null,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  }
-  if (songId) {
-    const access = await assertSongAccess(userId, String(songId));
-    if (access.ok) await access.ref.update({ miniStudioProjectId: projectId, exportStatus: 'queued', updatedAt: FieldValue.serverTimestamp() });
-  }
-  res.json({
-    success: true,
-    projectId,
-    songId,
-    target: target || null,
-    exports: formats.map((f: string) => ({
-      format: f,
-      url: null,
-      status: 'queued',
-    })),
-    note: 'Export queued. Hook to render worker for actual file delivery.',
-  });
+  return res.status(501).json({ success: false, error: 'Server-side export is not configured. Use the WAV export in the Mini Studio, which renders the loaded source in your browser.' });
 });
 
 // ---------------------------------------------------------------

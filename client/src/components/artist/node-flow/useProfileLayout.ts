@@ -438,7 +438,7 @@ export function useProfileLayout(
     setIsLoading(true);
     setNotes(loadNotes(artistSlug));
 
-    fetch(`/api/profile/${artistSlug}`)
+    fetch(`/api/profile/${artistSlug}/flow`)
       .then(r => r.ok ? r.json() : null)
       .then(async data => {
         if (!isMounted.current) return;
@@ -603,6 +603,9 @@ export function useProfileLayout(
   const songs  = mergeByTitle(apiSongs,  firestoreData?.songs  ?? []);
   const videos = mergeByTitle(apiVideos, firestoreData?.videos ?? []);
   const merch  = apiMerch.length > 0 ? apiMerch : (firestoreData?.merch ?? []);
+  const songCount = Number(artistData?.songCount ?? songs.length);
+  const videoCount = Number(artistData?.videoCount ?? videos.length);
+  const merchCount = Number(artistData?.merchCount ?? merch.length);
 
   const socialHandles = [
     artistData?.instagramHandle && { platform: 'Instagram', handle: artistData.instagramHandle },
@@ -654,9 +657,9 @@ export function useProfileLayout(
           noteText: notes[id] ?? '',
           onSaveNote: saveNote,
           // Stats
-          songCount: songs.length,
-          videoCount: videos.length,
-          merchCount: merch.length,
+          songCount,
+          videoCount,
+          merchCount,
           topSong: songs[0]?.title ?? songs[0]?.name ?? undefined,
           latestVideo: videos[0]?.title ?? videos[0]?.name ?? undefined,
           socialHandles,

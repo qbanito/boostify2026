@@ -273,6 +273,7 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   const [selectedPreset, setSelectedPreset] = useState(PRESETS[0]);
   const [selectedVideoType, setSelectedVideoType] = useState<string>('artist_promo');
   const [selectedSongId, setSelectedSongId] = useState<string>('');
+  const selectedSong = songs.find(song => String(song.id) === selectedSongId);
   const [selectedPlatform, setSelectedPlatform] = useState<string>('tiktok');
   const [selectedFormat, setSelectedFormat] = useState<string>('9:16');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
@@ -292,6 +293,7 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   const [sceneProfileUrl, setSceneProfileUrl] = useState<string>('');
   const [generatedScenes, setGeneratedScenes] = useState<AvatarScene[]>([]);
   const [selectedScenes, setSelectedScenes] = useState<string[]>([]);
+  const [studioWanVideoUrl, setStudioWanVideoUrl] = useState<string | null>(null);
 
   // ── Multilingual state ─────────────────────────────────────────────────────
   const [multilingualLanguages, setMultilingualLanguages] = useState<string[]>(['en', 'es']);
@@ -436,14 +438,27 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
   // ── Artist scene generator mutation ────────────────────────────────────────
   const scenesMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest({
-        url: `/api/ai-video-studio/${artistId}/generate-avatar-scenes`,
-        method: 'POST',
-        data: {
-          profileImageUrl: sceneProfileUrl || undefined,
-          scenes: selectedScenes.length > 0 ? selectedScenes : undefined,
-        },
-      });
+      const profileImageUrl = sceneProfileUrl || undefined;
+      const presets = SCENE_PRESETS.filter(scene => selectedScenes.length === 0 || selectedScenes.includes(scene.id));
+      const results = await Promise.allSettled(presets.map(async scene => {
+        const data = await apiRequest({
+          url: '/api/fal/wan-music-video/openai-image',
+          method: 'POST',
+          data: {
+            prompt: `Create a cinematic, photorealistic music-video still: ${scene.prompt}. Artist: ${artistName}; genre: ${artistGenre}. Preserve the same recognizable person, face, hair, skin tone, and identity as the reference image. Maintain a coherent visual identity; no text or watermark.`,
+            referenceImages: profileImageUrl ? [profileImageUrl] : [],
+            quality: 'xhigh',
+            aspectRatio: '3:4',
+            numImages: 1,
+          },
+        });
+        return { scene: scene.id, label: scene.label, icon: scene.icon, imageUrl: data.imageUrl || null, prompt: scene.prompt };
+      }));
+      return {
+        scenes: results.map((result, index) => result.status === 'fulfilled'
+          ? result.value
+          : { scene: presets[index].id, label: presets[index].label, icon: presets[index].icon, imageUrl: null, error: (result as PromiseRejectedResult).reason?.message || 'Image generation failed' }),
+      };
     },
     onSuccess: (data) => {
       setGeneratedScenes(data.scenes ?? []);
@@ -452,6 +467,66 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
     onError: (err: any) => {
       toast({ title: 'Generation failed', description: err.message, variant: 'destructive' });
     },
+  });
+
+  const wanStudioVideoMutation = useMutation({
+    mutationFn: async () => {
+      const referenceImages = generatedScenes.map(scene => scene.imageUrl).filter((url): url is string => !!url).slice(0, 10);
+      if (!referenceImages.length) throw new Error('Generate at least one reference image first.');
+      if (selectedSong?.audioUrl) {
+        const submit = await apiRequest({
+          url: `/api/promo-clips/${artistId}/generate-lipsync-video`,
+          method: 'POST',
+          data: {
+            mode: 'wan-reference-to-video',
+            imageUrl: referenceImages[0],
+            identityImageUrl: sceneProfileUrl || referenceImages[0],
+            audioUrl: selectedSong.audioUrl,
+            songTitle: selectedSong.name || selectedSong.title || 'Selected song',
+            klingPrompt: `Cinematic music video for ${artistName}, ${artistGenre}. Preserve the artist's exact identity, face, wardrobe, and coherent visual style from the reference images. Smooth camera movement and expressive performance.`,
+            clipStartSeconds: 0,
+            duration: 5,
+          },
+        });
+        if (!submit?.requestId || !submit?.endpoint) throw new Error(submit?.error || 'Wan 3.0 could not be queued.');
+        for (let attempt = 0; attempt < 60; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          const status = await apiRequest({
+            url: `/api/promo-clips/${artistId}/poll-fal`,
+            method: 'POST',
+            data: { requestId: submit.requestId, endpoint: submit.endpoint, statusUrl: submit.statusUrl, resultUrl: submit.resultUrl, audioUrl: selectedSong.audioUrl, clipStartSeconds: 0, duration: 5 },
+          });
+          if (status?.status === 'COMPLETED') {
+            const url = status.result?.video?.url || status.result?.video_url || status.result?.output?.video?.url || status.result?.output?.url || status.result?.url;
+            if (url) return url as string;
+            throw new Error('Wan 3.0 completed without returning a video URL.');
+          }
+          if (status?.status === 'FAILED' || status?.success === false) throw new Error(status?.error || 'Wan 3.0 video generation failed.');
+        }
+        throw new Error('Wan 3.0 is still processing. The job remains in fal’s queue; try again shortly.');
+      }
+      const submit = await apiRequest({
+        url: '/api/fal/wan-music-video/generate',
+        method: 'POST',
+        data: {
+          prompt: `Create a coherent cinematic music-video sequence featuring ${artistName}, ${artistGenre} artist. Keep the same face, wardrobe, color grade, and visual style across the entire video. Smooth natural camera movement, polished professional music-video cinematography.`,
+          referenceImages,
+          duration: 5,
+          resolution: '1080p',
+          aspectRatio: '9:16',
+        },
+      });
+      if (!submit?.requestId) throw new Error(submit?.error || 'Wan 3.0 could not be queued.');
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const status = await apiRequest({ url: `/api/fal/wan-music-video/${encodeURIComponent(submit.requestId)}`, method: 'GET' });
+        if (status?.status === 'COMPLETED' && status.videoUrl) return status.videoUrl as string;
+        if (status?.status === 'FAILED' || status?.success === false) throw new Error(status?.error || 'Wan 3.0 video generation failed.');
+      }
+      throw new Error('Wan 3.0 is still processing. Check again shortly; the job remains in fal’s queue.');
+    },
+    onSuccess: (videoUrl) => setStudioWanVideoUrl(videoUrl),
+    onError: (err: any) => toast({ title: 'Wan 3.0 video failed', description: err.message, variant: 'destructive' }),
   });
 
   // ── Create photo avatar mutation ───────────────────────────────────────────
@@ -762,12 +837,12 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                 <div className="bg-zinc-800/50 border border-violet-500/20 rounded-xl p-4 space-y-4">
                   <div className="flex items-center gap-2 text-sm font-semibold text-white">
                     <Sparkles className="w-4 h-4 text-violet-400" />
-                    Artist Scene Generator — AI Realistic Portraits
+                    Artist Scene Generator — GPT Image 2.5 + Wan 3.0
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Generate realistic images of the artist in different settings (studio, street, concert…)
-                    using their profile picture as identity reference. Then convert any image into a HeyGen
-                    talking photo avatar.
+                    Create high-quality, identity-consistent reference stills with OpenAI GPT Image 2.5. Use
+                    them with Alibaba Wan 3.0 for a coherent vertical video; select a song in Quick Generate
+                    to include its original audio in the rendered clip.
                   </p>
 
                   {/* Profile image URL */}
@@ -830,8 +905,22 @@ const AIVideoStudio: React.FC<AIVideoStudioProps> = ({
                   >
                     {scenesMutation.isPending
                       ? <><Loader2 className="w-4 h-4 animate-spin" />Generating scenes — this may take a minute…</>
-                      : <><Sparkles className="w-4 h-4" />Generate Realistic Artist Scenes</>}
+                      : <><Sparkles className="w-4 h-4" />Generate Consistent Images (GPT Image 2.5)</>}
                   </button>
+
+                  <button
+                    onClick={() => { setStudioWanVideoUrl(null); wanStudioVideoMutation.mutate(); }}
+                    disabled={wanStudioVideoMutation.isPending || !generatedScenes.some(scene => scene.imageUrl)}
+                    className="w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all border border-violet-400/40 text-white"
+                    style={{ background: 'linear-gradient(135deg, #4c1d95, #312e81)' }}
+                  >
+                    {wanStudioVideoMutation.isPending
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />Wan 3.0 is generating (may take several minutes)…</>
+                      : <><Video className="w-4 h-4" />Generate Coherent Video (Wan 3.0)</>}
+                  </button>
+                  {studioWanVideoUrl && (
+                    <video src={studioWanVideoUrl} controls className="w-full max-h-[520px] rounded-xl bg-black" />
+                  )}
 
                   {/* Generated scene grid */}
                   {generatedScenes.length > 0 && (

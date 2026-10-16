@@ -5455,6 +5455,7 @@ export async function generateArtistCharacterPack(
   artistName: string,
   genre: string = 'music',
   outputFolder: string = 'artist-character-packs',
+  characterStyle = '',
 ): Promise<CharacterPackResult> {
   if (!FAL_API_KEY) {
     return { success: false, images: [], error: 'FAL_API_KEY not configured' };
@@ -5475,20 +5476,23 @@ export async function generateArtistCharacterPack(
     // Stagger start times: 0ms, 400ms, 800ms, 1200ms
     await new Promise(r => setTimeout(r, index * 400));
 
-    const prompt = shot.prompt(artistName, genre);
+    const prompt = [
+      shot.prompt(artistName, genre),
+      characterStyle ? `Artist Character Card visual direction: ${characterStyle.slice(0, 700)}. Apply consistently to styling, palette, and mood, but do not modify the real person's identity.` : '',
+    ].filter(Boolean).join(' ');
     logger.log(`[FAL] 📸 Generating angle ${index + 1}/4: ${shot.label}`);
 
     try {
       const response = await axios.post(
-        `${FAL_BASE_URL}/${FAL_MODELS.FLUX_KONTEXT}`,
+        `${FAL_BASE_URL}/openai/gpt-image-2.5/sunburst/edit`,
         {
           prompt,
-          image_url: profileImageUrl,
+          image_urls: [profileImageUrl],
           image_size: 'square_hd',   // 1024×1024 — ideal for character references
-          output_format: 'jpeg',
-          guidance_scale: 3.5,
-          num_inference_steps: 28,
-          safety_tolerance: '6',
+          quality: 'xhigh',
+          num_images: 1,
+          output_format: 'png',
+          enable_safety_checker: true,
         },
         {
           headers: {

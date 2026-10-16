@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Check, Camera, RefreshCw, Sparkles, X, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { apiRequest } from "@/lib/queryClient";
 
 interface TimelineClip {
   id: number;
@@ -143,12 +144,7 @@ export default function CameraAnglesModal({
       logger.info(`🎬 [ANGLES] Generando ${angle.name} con Nano Banana Pro...`);
       logger.info(`📝 [ANGLES] Prompt: ${enhancedPrompt.substring(0, 100)}...`);
 
-      const response = await fetch('/api/fal/nano-banana', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const data = await apiRequest({ url: '/api/fal/wan-music-video/openai-image', method: 'POST', data: {
           prompt: enhancedPrompt,
           // 🎭 CLAVE: Usar referencias del artista para máxima consistencia
           referenceImages: artistReferenceImages.length > 0 
@@ -156,15 +152,8 @@ export default function CameraAnglesModal({
             : [sourceImageUrl], // Fallback a imagen actual si no hay referencias
           aspectRatio: '16:9',
           numImages: 1,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate variation');
-      }
-
-      const data = await response.json();
+          quality: 'high',
+        } });
 
       if (data.success && data.imageUrl) {
         logger.info(`✅ [ANGLES] ${angle.name} generado exitosamente`);

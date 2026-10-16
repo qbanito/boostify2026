@@ -308,6 +308,7 @@ router.post('/export', requireAuth, async (req: Request, res: Response) => {
         imageUrl: c.imageUrl || undefined,
         start: c.start || 0,
         duration: c.duration || 5,
+        sourceStart: Number(c.sourceStart ?? c.in ?? 0) || 0,
         transition: c.transition || 'fade',
       }));
 

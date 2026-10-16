@@ -2339,6 +2339,54 @@ router.post('/:artistId/generate-fal-image', authenticate, async (req: Request, 
     logger.log(`[PromoClips] 🎨 generate-fal-image — model=${imageModel || 'flux-kontext'} baseImage=${baseImageUrl ? baseImageUrl.substring(0, 60) : 'none (T2I)'}`);
     logger.log(`[PromoClips] Prompt: ${falImagePrompt.substring(0, 120)}...`);
 
+    // Default Promo Clips stills to OpenAI GPT Image 2.5: reference-edit mode
+    // preserves the artist identity, while premium Sunburst is used without refs.
+    const openAiImageEndpoint = baseImageUrl
+      ? 'openai/gpt-image-2.5/sunburst/edit'
+      : 'openai/gpt-image-2.5/sunburst/text-to-image';
+    const openAiImagePrompt = [
+      falImagePrompt,
+      baseImageUrl ? 'Preserve the exact identity and recognizable facial features of the artist in the reference image; do not alter or beautify their face.' : '',
+      'Create a cinematic, photorealistic music-promo image with coherent visual identity, intentional composition, and no text or watermark.',
+    ].filter(Boolean).join(' ');
+    const openAiReferenceUrls = [styleReferenceImageUrl, baseImageUrl]
+      .filter((url): url is string => typeof url === 'string' && /^https:\/\//i.test(url))
+      .slice(0, 16);
+    const openAiShotPrompts = [
+      openAiImagePrompt,
+      `${openAiImagePrompt} Medium close-up portrait, emotionally expressive, shallow depth of field.`,
+      `${openAiImagePrompt} Three-quarter camera angle, cinematic performance lighting, same artist and visual style.`,
+    ];
+    const openAiJobs = await Promise.allSettled(openAiShotPrompts.map((prompt, index) =>
+      submitFalQueue(openAiImageEndpoint, {
+        prompt,
+        image_size: 'portrait_16_9',
+        quality: 'high',
+        num_images: 1,
+        output_format: 'png',
+        enable_safety_checker: true,
+        ...(openAiReferenceUrls.length ? { image_urls: openAiReferenceUrls } : {}),
+      }, 20000).then(job => ({ ...job, shotType: ['scene', 'closeup', 'stage'][index] }))
+    ));
+    const queuedOpenAiJobs = openAiJobs
+      .filter((job): job is PromiseFulfilledResult<any> => job.status === 'fulfilled')
+      .map(job => job.value);
+    if (!queuedOpenAiJobs.length) {
+      const failures = openAiJobs.filter((job): job is PromiseRejectedResult => job.status === 'rejected')
+        .map(job => formatFalError(job.reason)).filter(Boolean).join(' | ');
+      throw new Error(failures || 'GPT Image 2.5 could not queue any images');
+    }
+    return res.json({
+      success: true,
+      pending: true,
+      jobs: queuedOpenAiJobs,
+      endpoint: openAiImageEndpoint,
+      mode: baseImageUrl ? 'gpt-image-2.5-reference-edit' : 'gpt-image-2.5-premium',
+      songName,
+      artistName: artistNameForGallery,
+      falImagePrompt: openAiImagePrompt,
+    });
+
     // ── EXACT-STYLE COMPOSITION TRANSFER ──────────────────────────────────────
     // Cuando el usuario elige un estilo (se manda styleReferenceImageUrl = la imagen
     // de preview de ese estilo) y tenemos la cara del artista, usamos nano-banana 2
@@ -2783,6 +2831,35 @@ router.post('/:artistId/generate-lipsync-video', authenticate, async (req: Reque
     if (!imageUrl) return res.status(400).json({ success: false, error: 'imageUrl required' });
     if (!audioUrl) return res.status(400).json({ success: false, error: 'audioUrl required' });
 
+    if (mode === 'wan-reference-to-video') {
+      if (!FAL_API_KEY) return res.status(503).json({ success: false, error: 'FAL_API_KEY not configured' });
+      const endpoint = 'alibaba/wan-3.0/reference-to-video';
+      const prompt = String(klingPrompt || seedancePrompt || `Cinematic music video performance for ${songTitle || 'the selected song'}, preserve the artist identity and styling from the reference image.`).slice(0, 20000);
+      const job = await submitFalQueue(endpoint, {
+        prompt,
+        reference_image_urls: [imageUrl, identityImageUrl].filter((url, index, all): url is string =>
+          typeof url === 'string' && /^https:\/\//i.test(url) && all.indexOf(url) === index
+        ).slice(0, 10),
+        duration: Math.min(30, Math.max(2, Number(req.body.duration) || 5)),
+        resolution: '1080p',
+        aspect_ratio: '9:16',
+        audio: false,
+        enable_prompt_expansion: true,
+        enable_thinking: false,
+        enable_safety_checker: true,
+      }, 20000);
+      return res.json({
+        success: true,
+        requestId: job.requestId,
+        endpoint,
+        statusUrl: job.statusUrl,
+        resultUrl: job.resultUrl,
+        mode,
+        duration: Math.min(30, Math.max(2, Number(req.body.duration) || 5)),
+        message: 'Wan 3.0 reference-to-video queued; original song audio will be applied after generation.',
+      });
+    }
+
     if (mode === 'omnihuman') {
       // Route A: OmniHuman v1.5 — 1-step image+audio → lipsync video
       const result = await generateOmniHumanLipsync({ imageUrl, audioUrl });
@@ -3196,6 +3273,20 @@ router.post('/:artistId/poll-fal', authenticate, async (req: Request, res: Respo
       const seedanceAudioUrl = audioUrl || seedanceAudioLock?.audioUrl;
       const seedanceClipStart = Number(clipStartSeconds) || seedanceAudioLock?.clipStartSeconds || 0;
       const seedanceDuration = Number(duration) || seedanceAudioLock?.duration || 5;
+
+      if (videoUrl && endpoint === 'alibaba/wan-3.0/reference-to-video' && audioUrl) {
+        const lockedWanVideo = await replaceVideoAudioWithOriginalSong({
+          videoUrl,
+          audioUrl,
+          clipStartSeconds: Number(clipStartSeconds) || 0,
+          duration: Number(duration) || 5,
+        });
+        if (!lockedWanVideo.success || !lockedWanVideo.videoUrl) {
+          return res.json({ success: false, status: 'FAILED', error: `Wan 3.0 completó, pero no se pudo aplicar la canción original: ${lockedWanVideo.error || 'error de audio'}` });
+        }
+        videoUrl = lockedWanVideo.videoUrl;
+        result = { ...result, video: { ...(result?.video || {}), url: videoUrl, audio_locked: true }, audio_locked: true };
+      }
 
       // Seedance MINI (modo económico): NO encadenar Sync-3 (un segundo job FAL caro y lento que puede
       // agotar el timeout del cliente). Seedance 2.0 ya sincroniza la boca al audio de referencia, así que

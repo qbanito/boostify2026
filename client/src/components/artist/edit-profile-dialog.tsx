@@ -108,6 +108,7 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
   const [isGeneratingBannerImage, setIsGeneratingBannerImage] = useState(false);
   const [isGeneratingCharacterPack, setIsGeneratingCharacterPack] = useState(false);
   const [characterPackImages, setCharacterPackImages] = useState<{ url: string; angle: string }[]>([]);
+  const [characterCard, setCharacterCard] = useState<Record<string, any> | null>(null);
   const [isUploadingReference, setIsUploadingReference] = useState(false);
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false);
   const [isUploadingBannerImage, setIsUploadingBannerImage] = useState(false);
@@ -146,8 +147,17 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
       logger.info('🔄 Dialog opened, setting formData from currentData');
       setFormData(currentData);
       setImageUpdateKey(0);
+      fetch(`/api/artist-profile/character-pack?artistId=${encodeURIComponent(artistId)}`, { credentials: 'include' })
+        .then(response => response.ok ? response.json() : null)
+        .then(data => {
+          if (data?.success && data.characterCard) {
+            setCharacterCard(data.characterCard);
+            setCharacterPackImages(data.images || []);
+          }
+        })
+        .catch(error => logger.warn('Could not load saved artist Character Card:', error));
     }
-  }, [isOpen]);
+  }, [isOpen, artistId]);
 
   // Cargar shows al abrir el diálogo
   useEffect(() => {
@@ -828,9 +838,11 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
       const downloadURL = await getDownloadURL(storageRef);
       
       setReferenceImage(downloadURL);
+      setCharacterCard(null);
+      setCharacterPackImages([]);
       toast({
         title: "Image Uploaded",
-        description: "Now you can generate tu perfil y banner con esta imagen de referencia.",
+        description: "OpenAI GPT Image 2.5 usará esta referencia para conservar tu identidad en las imágenes y crear tu Character Card.",
       });
     } catch (error) {
       logger.error("Error uploading reference image:", error);
@@ -1051,7 +1063,8 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
           artistName: formData.displayName,
           genre: formData.genre,
           style: "Professional portrait, studio lighting, artistic aesthetic",
-          referenceImage: referenceImage || undefined,
+          referenceImage: referenceImage || formData.profileImage || undefined,
+          characterCard: characterCard || undefined,
         }),
       });
 
@@ -1117,7 +1130,8 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                   ${referenceImage ? 'Incorporate the artist\'s face/identity from reference image naturally into the artistic scene.' : ''}
                   High-end music platform vibe, premium quality, artistic and creative atmosphere.`,
           mood: `Energetic, creative, professional music industry atmosphere with Boostify brand identity (orange and black accents)`,
-          referenceImage: referenceImage || undefined,
+          referenceImage: referenceImage || formData.profileImage || undefined,
+          characterCard: characterCard || undefined,
         }),
       });
 
@@ -1635,9 +1649,10 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                     <Button
                       type="button"
                       size="sm"
-                      disabled={isGeneratingCharacterPack || !formData.profileImage}
+                      disabled={isGeneratingCharacterPack || !(formData.profileImage || referenceImage)}
                       onClick={async () => {
-                        if (!formData.profileImage) {
+                        const characterReference = referenceImage || formData.profileImage;
+                        if (!characterReference) {
                           toast({ title: 'Sube primero una foto de perfil', description: 'Se necesita una foto de perfil para generar el pack.', variant: 'destructive' });
                           return;
                         }
@@ -1652,12 +1667,14 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                               artistId,
                               artistName: formData.displayName,
                               genre: formData.genre || 'music',
-                              profileImageUrl: formData.profileImage,
+                              biography: formData.biography || '',
+                              profileImageUrl: characterReference,
                             }),
                           });
                           const data = await res.json();
                           if (data.success && data.images?.length > 0) {
                             setCharacterPackImages(data.images);
+                            setCharacterCard(data.characterCard || null);
                             toast({ title: `✨ ${data.images.length} fotos generadas`, description: 'Tu Character Pack está listo' });
                           } else {
                             toast({ title: 'Error', description: data.error || 'No se pudieron generar las fotos', variant: 'destructive' });
@@ -1672,8 +1689,22 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                     >
                       {isGeneratingCharacterPack
                         ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" />Generando 4 fotos…</>
-                        : <><Camera className="mr-1 h-3 w-3" />Generar 4 Fotos (Character Pack)</>}
+                        : <><Camera className="mr-1 h-3 w-3" />Generar Character Card + 4 referencias (GPT Image 2.5)</>}
                     </Button>
+                    {characterCard && (
+                      <div className="rounded-xl border border-cyan-400/25 bg-gradient-to-br from-cyan-500/[0.08] to-violet-500/[0.06] p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">Artist Character Card · Visual DNA</p>
+                          <span className="text-[9px] text-white/35">GPT Image 2.5 Sunburst</span>
+                        </div>
+                        <p className="text-[11px] text-white/75">{characterCard.visualStyle}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                          <p className="text-white/50"><span className="text-cyan-200">Palette:</span> {characterCard.paletteDirection}</p>
+                          <p className="text-white/50"><span className="text-cyan-200">Wardrobe:</span> {characterCard.wardrobeDirection}</p>
+                          <p className="text-white/50 sm:col-span-2"><span className="text-cyan-200">Identity lock:</span> {characterCard.identityLock}</p>
+                        </div>
+                      </div>
+                    )}
                     {/* Character Pack results */}
                     {characterPackImages.length > 0 && (
                       <div className="mt-2">

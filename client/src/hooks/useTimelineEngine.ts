@@ -786,15 +786,18 @@ export function useTimelineEngine(initialConfig?: Partial<TimelineEngineConfig>)
     // Normal resize
     return clips.map(c =>
       c.id === clipId
-        ? {
-            ...c,
-            start: finalStart,
-            duration: finalDuration,
-            // Update sourceStart for start-edge trimming
-            sourceStart: edge === 'start'
-              ? (c.sourceStart || 0) + (finalStart - c.start)
-              : c.sourceStart,
-          }
+        ? (() => {
+            const sourceIn = c.in ?? c.sourceStart ?? 0;
+            const trimDelta = edge === 'start' ? finalStart - c.start : 0;
+            return {
+              ...c,
+              start: finalStart,
+              duration: finalDuration,
+              sourceStart: edge === 'start' ? sourceIn + trimDelta : c.sourceStart,
+              in: edge === 'start' ? sourceIn + trimDelta : sourceIn,
+              out: edge === 'end' ? sourceIn + finalDuration : (c.out ?? sourceIn + c.duration),
+            };
+          })()
         : c
     );
   }, []);
@@ -825,6 +828,8 @@ export function useTimelineEngine(initialConfig?: Partial<TimelineEngineConfig>)
     }
 
     const newClipId = Math.max(0, ...clips.map(c => c.id)) + 1;
+    const sourceIn = clip.in ?? clip.sourceStart ?? 0;
+    const sourceOut = clip.out ?? sourceIn + clip.duration;
 
     const rightClip: TimelineClip = {
       ...clip,
@@ -832,12 +837,13 @@ export function useTimelineEngine(initialConfig?: Partial<TimelineEngineConfig>)
       start: clip.start + relativeTime,
       duration: clip.duration - relativeTime,
       sourceStart: (clip.sourceStart || 0) + relativeTime,
-      in: (clip.in || 0) + relativeTime,
+      in: sourceIn + relativeTime,
+      out: sourceOut,
     };
 
     const updatedClips = clips.map(c =>
       c.id === clipId
-        ? { ...c, duration: relativeTime, out: (c.in || 0) + relativeTime }
+        ? { ...c, duration: relativeTime, out: sourceIn + relativeTime }
         : c
     );
 
@@ -884,11 +890,13 @@ export function useTimelineEngine(initialConfig?: Partial<TimelineEngineConfig>)
         start: clip.start + relativeTime,
         duration: clip.duration - relativeTime,
         sourceStart: (clip.sourceStart || 0) + relativeTime,
+        in: (clip.in ?? clip.sourceStart ?? 0) + relativeTime,
+        out: clip.out,
       };
 
       result = result.map(c =>
         c.id === clip.id
-          ? { ...c, duration: relativeTime }
+          ? { ...c, duration: relativeTime, out: (c.in ?? c.sourceStart ?? 0) + relativeTime }
           : c
       );
       result.push(rightClip);

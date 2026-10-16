@@ -2386,11 +2386,13 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   const [promoteResolving, setPromoteResolving] = useState(false);
   const [profileModuleCheckoutLoading, setProfileModuleCheckoutLoading] = useState<string | null>(null);
 
-  // ── Fan monetization (pay-what-you-want catalog unlock) ──────────────────
+  // ── Fan monetization (artist-controlled full-catalog unlock) ─────────────
   const [unlockModalOpen, setUnlockModalOpen] = useState(false);
-  const [unlockPlan, setUnlockPlan] = useState<"lifetime" | "monthly">("lifetime");
-  const [unlockAmount, setUnlockAmount] = useState<number>(5);
   const [unlockLoading, setUnlockLoading] = useState(false);
+  const [monetizationSettingsOpen, setMonetizationSettingsOpen] = useState(false);
+  const [monetizationEnabledDraft, setMonetizationEnabledDraft] = useState(true);
+  const [catalogPriceDraft, setCatalogPriceDraft] = useState('5.00');
+  const [savingMonetizationSettings, setSavingMonetizationSettings] = useState(false);
   const [guestFanEmail, setGuestFanEmail] = useState("");
   const [guestFanName, setGuestFanName] = useState("");
 
@@ -3877,7 +3879,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     staleTime: 60_000,
   });
 
-  const hasFullAccess = !!(accessData?.unlimited || accessData?.unlocked);
+  const hasFullAccess = accessData?.monetizationEnabled === false || !!(accessData?.unlimited || accessData?.unlocked);
   const previewSeconds = Number(accessData?.previewSeconds) || 30;
 
   // The single free song (first track flagged isSingle, respecting displayOrder).
@@ -3906,6 +3908,39 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     },
     [hasFullAccess, freeSingleId],
   );
+  const catalogPriceCents = Number(accessData?.catalogPriceCents) || 500;
+
+  const handleSaveMonetizationSettings = async () => {
+    if (!artistPgIdForAccess) {
+      toast({ title: 'Artist not found', description: 'The artist profile is missing its billing ID.', variant: 'destructive' });
+      return;
+    }
+    const priceCents = Math.round(Number(catalogPriceDraft) * 100);
+    if (!Number.isFinite(priceCents) || priceCents < 100 || priceCents > 500000) {
+      toast({ title: 'Invalid price', description: 'Set a catalog price between $1.00 and $5,000.00.', variant: 'destructive' });
+      return;
+    }
+    try {
+      setSavingMonetizationSettings(true);
+      await apiRequest({
+        url: `/api/artist/${artistPgIdForAccess}/monetization-settings`,
+        method: 'PUT',
+        data: { enabled: monetizationEnabledDraft, priceCents },
+      });
+      await refetchAccess();
+      setMonetizationSettingsOpen(false);
+      toast({
+        title: 'Music access settings saved',
+        description: monetizationEnabledDraft
+          ? `Fans can unlock the full album and catalog for $${(priceCents / 100).toFixed(2)}.`
+          : 'The full music catalog is now free to stream.',
+      });
+    } catch (error: any) {
+      toast({ title: 'Could not save settings', description: error?.message || 'Try again.', variant: 'destructive' });
+    } finally {
+      setSavingMonetizationSettings(false);
+    }
+  };
 
   // When a free preview hits its 30s cap, prompt the visitor to unlock.
   useEffect(() => {
@@ -3942,7 +3977,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start (or resume) a pay-what-you-want unlock checkout.
+  // Start a fixed-price lifetime checkout for the artist's full catalog.
   const handleUnlockCheckout = async () => {
     const emailForGuest = guestFanEmail.trim().toLowerCase();
     if (!isAuthenticated) {
@@ -3956,11 +3991,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         return;
       }
     }
-    const cents = Math.round(Number(unlockAmount) * 100);
-    if (!Number.isFinite(cents) || cents < 500) {
-      toast({ title: "Minimum is $5", description: "Your contribution must be at least $5.", variant: "destructive" });
-      return;
-    }
+    if (accessData?.monetizationEnabled === false) return;
     if (!artistPgIdForAccess) {
       toast({ title: "Error", description: "Could not identify the artist.", variant: "destructive" });
       return;
@@ -3975,7 +4006,6 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         url: `/api/artist/${artistPgIdForAccess}/unlock-checkout`,
         method: "POST",
         data: {
-          amount: cents,
           returnPath,
           fanEmail: !isAuthenticated ? emailForGuest : undefined,
           fanName: !isAuthenticated ? guestFanName.trim() || undefined : undefined,
@@ -3990,46 +4020,6 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       refetchAccess?.();
       toast({
         title: "Could not start checkout",
-        description: e?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setUnlockLoading(false);
-    }
-  };
-
-  // Start monthly artist-catalog subscription checkout ($20/mo).
-  const handleMonthlySubscriptionCheckout = async () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Login required",
-        description: "Monthly membership is linked to your account so your access syncs automatically.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!artistPgIdForAccess) {
-      toast({ title: "Error", description: "Could not identify the artist.", variant: "destructive" });
-      return;
-    }
-
-    try {
-      setUnlockLoading(true);
-      const returnPath = window.location.pathname + window.location.search;
-      const r: any = await apiRequest({
-        url: `/api/artist/${artistPgIdForAccess}/subscription-checkout`,
-        method: "POST",
-        data: { returnPath },
-      });
-      if (r?.url) {
-        window.location.href = r.url;
-        return;
-      }
-      throw new Error(r?.error || "Could not start subscription checkout");
-    } catch (e: any) {
-      refetchAccess?.();
-      toast({
-        title: "Could not start subscription",
         description: e?.message || "Please try again.",
         variant: "destructive",
       });
@@ -8378,6 +8368,63 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   isOwnProfile ? (
                     <>
                       <UploadLimitBanner current={songs.length} max={tierLimits.limits.songs} type="songs" accentColor={colors.hexAccent} />
+                      <Dialog open={monetizationSettingsOpen} onOpenChange={(open) => {
+                        setMonetizationSettingsOpen(open);
+                        if (open) {
+                          setMonetizationEnabledDraft(accessData?.monetizationEnabled !== false);
+                          setCatalogPriceDraft((catalogPriceCents / 100).toFixed(2));
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" className="rounded-full border-white/20 bg-black/20 text-white hover:bg-white/10">
+                            <Settings className="h-4 w-4 mr-1" /> Music Access
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Music access & pricing</DialogTitle>
+                            <DialogDescription>Control whether fans pay to hear your music and set the one-time price.</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-5 py-2">
+                            <label className="flex items-start gap-3 rounded-xl border p-4 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 accent-orange-500"
+                                checked={monetizationEnabledDraft}
+                                onChange={(event) => setMonetizationEnabledDraft(event.target.checked)}
+                              />
+                              <span className="space-y-1">
+                                <span className="block text-sm font-semibold">Charge fans to listen</span>
+                                <span className="block text-xs text-muted-foreground">Turn this off to make every song available to stream in full for free.</span>
+                              </span>
+                            </label>
+                            {monetizationEnabledDraft && (
+                              <div className="space-y-2">
+                                <Label htmlFor="artist-catalog-price">Full album & catalog price (USD)</Label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                  <Input
+                                    id="artist-catalog-price"
+                                    type="number"
+                                    min="1"
+                                    max="5000"
+                                    step="0.01"
+                                    value={catalogPriceDraft}
+                                    onChange={(event) => setCatalogPriceDraft(event.target.value)}
+                                    className="pl-7"
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground">One payment unlocks the complete album and all songs in your catalog for that fan. Price range: $1–$5,000.</p>
+                              </div>
+                            )}
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={handleSaveMonetizationSettings} disabled={savingMonetizationSettings}>
+                              {savingMonetizationSettings ? 'Saving…' : 'Save music settings'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                       <Dialog open={showUploadSongDialog} onOpenChange={setShowUploadSongDialog}>
                         <DialogTrigger asChild>
                           <Button
@@ -8936,10 +8983,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           <Lock className="h-4 w-4 flex-shrink-0" style={{ color: colors.hexAccent }} />
                           <span className="min-w-0">
                             <span className="block text-sm font-bold text-white truncate">
-                              Unlock the full catalog
+                              Unlock the complete album
                             </span>
                             <span className="block text-[11px] text-white/60 truncate">
-                              {previewSeconds}s free preview · lifetime from $5 · monthly $20
+                              {previewSeconds}s free preview · full catalog ${(catalogPriceCents / 100).toFixed(2)}
                             </span>
                           </span>
                         </span>
@@ -8947,7 +8994,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold text-white"
                           style={{ background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})` }}
                         >
-                          From $5 / $20mo
+                          ${(catalogPriceCents / 100).toFixed(2)} one-time
                         </span>
                       </button>
                     ) : null
@@ -12857,7 +12904,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         </DialogContent>
       </Dialog>
 
-      {/* ── Fan Monetization: pay-what-you-want catalog unlock modal ──────── */}
+      {/* ── Fan Monetization: artist-priced full-album unlock modal ──────── */}
       <Dialog open={unlockModalOpen} onOpenChange={setUnlockModalOpen}>
         <DialogContent className="max-w-md w-full bg-gray-950 border border-gray-800 text-white">
           <DialogHeader>
@@ -12866,45 +12913,15 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               Unlock the full catalog
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              You listened to your free {previewSeconds}s preview. Support{" "}
+              Unlock the complete album and music catalog from{" "}
               <span className="text-white font-semibold">
                 {(artist as any)?.artistName || artist?.name || "this artist"}
               </span>{" "}
-              and choose your access: lifetime unlock or monthly membership.
+              for a one-time payment. Every track will be available in full.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Plan selector */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setUnlockPlan("lifetime")}
-                className={`rounded-xl border p-3 text-left transition-all ${
-                  unlockPlan === "lifetime"
-                    ? "border-orange-400 bg-orange-500/15"
-                    : "border-gray-700 bg-gray-900/40 hover:border-orange-500/60"
-                }`}
-              >
-                <p className="text-xs uppercase tracking-wide text-orange-300">One-time</p>
-                <p className="text-sm font-bold text-white">Lifetime unlock</p>
-                <p className="text-[11px] text-gray-400">From $5 · keep access forever</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setUnlockPlan("monthly")}
-                className={`rounded-xl border p-3 text-left transition-all ${
-                  unlockPlan === "monthly"
-                    ? "border-pink-400 bg-pink-500/15"
-                    : "border-gray-700 bg-gray-900/40 hover:border-pink-500/60"
-                }`}
-              >
-                <p className="text-xs uppercase tracking-wide text-pink-300">Monthly</p>
-                <p className="text-sm font-bold text-white">$20 / month</p>
-                <p className="text-[11px] text-gray-400">Full catalog + monthly drops*</p>
-              </button>
-            </div>
-
             {!isAuthenticated && (
               <div className="space-y-2 rounded-xl border border-gray-700 bg-gray-900/60 p-3">
                 <p className="text-xs text-gray-300">
@@ -12927,62 +12944,16 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               </div>
             )}
 
-            {unlockPlan === "lifetime" ? (
-              <>
-                {/* Preset amounts */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[5, 10, 20].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setUnlockAmount(amt)}
-                      className={`py-3 rounded-xl font-bold text-lg transition-all border ${
-                        Number(unlockAmount) === amt
-                          ? "bg-gradient-to-br from-orange-500 to-orange-600 border-orange-400 text-white scale-105"
-                          : "bg-gray-900 border-gray-700 text-gray-200 hover:border-orange-500"
-                      }`}
-                    >
-                      ${amt}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom amount */}
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Or choose your contribution (minimum $5)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                    <input
-                      type="number"
-                      min={5}
-                      step={1}
-                      value={unlockAmount}
-                      onChange={(e) => setUnlockAmount(Number(e.target.value))}
-                      className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-white focus:border-orange-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-xl border border-pink-500/30 bg-pink-500/5 p-3 text-xs text-gray-200 space-y-1.5">
-                <p className="font-semibold text-pink-300">Monthly membership includes:</p>
-                <p>• Full access to all songs while your membership is active.</p>
-                <p>
-                  • {accessData?.benefits?.monthlyAlbumMessage || "1 album/month for AI artists, or album drops when available for human artists."}
-                </p>
-                <p>• Additional fan benefits when they are available.</p>
-                {!isAuthenticated && (
-                  <p className="text-amber-300">Login is required for monthly membership so we can sync your recurring access.</p>
-                )}
-              </div>
-            )}
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4 text-center">
+              <p className="text-xs uppercase tracking-wide text-orange-300">One-time full catalog access</p>
+              <p className="mt-1 text-3xl font-bold text-white">${(catalogPriceCents / 100).toFixed(2)}</p>
+              <p className="mt-1 text-xs text-gray-400">Unlock this album and every song in the artist's catalog.</p>
+            </div>
 
             <button
               type="button"
-              onClick={unlockPlan === "monthly" ? handleMonthlySubscriptionCheckout : handleUnlockCheckout}
-              disabled={unlockLoading || (unlockPlan === "lifetime" && Number(unlockAmount) < 5)}
+              onClick={handleUnlockCheckout}
+              disabled={unlockLoading || accessData?.monetizationEnabled === false}
               className="w-full py-3 rounded-xl font-bold text-white bg-gradient-to-r from-orange-500 to-pink-600 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {unlockLoading ? (
@@ -12990,14 +12961,12 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  {unlockPlan === "monthly" ? "Start monthly membership · $20/mo" : `Unlock for $${Number(unlockAmount) || 5}`}
+                  Unlock full album · $${(catalogPriceCents / 100).toFixed(2)}
                 </>
               )}
             </button>
             <p className="text-[11px] text-center text-gray-500">
-              {unlockPlan === "monthly"
-                ? "Secure Stripe checkout · $20/month · full catalog while active · monthly album for AI artists or when available for human artists"
-                : "Secure Stripe checkout · Lifetime access forever after payment · 85% goes directly to the artist"}
+              Secure Stripe checkout · One-time lifetime access · 85% goes directly to the artist
             </p>
           </div>
         </DialogContent>

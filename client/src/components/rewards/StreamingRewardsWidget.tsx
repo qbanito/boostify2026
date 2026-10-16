@@ -69,6 +69,8 @@ export default function StreamingRewardsWidget({ accentColor = '#f97316', primar
     onSuccess: (res: any) => {
       if (res?.claimed) {
         toast({ title: '¡BTF transferido!', description: `${fmtBtf(res.totalBtf)} BTF enviados a tu wallet. Tx: ${String(res.txHash).slice(0, 14)}…` });
+      } else if (res?.txHash) {
+        toast({ title: 'Transacción en confirmación', description: `${res.message} Tx: ${String(res.txHash).slice(0, 14)}…` });
       } else {
         toast({ title: res?.simulated ? 'Simulación (dry-run)' : 'No se pudo reclamar', description: res?.message || 'Inténtalo más tarde.' });
       }
@@ -82,7 +84,7 @@ export default function StreamingRewardsWidget({ accentColor = '#f97316', primar
 
   const { config, currentWeek } = data;
   const usdValue = (btf: number) => (btf * config.btfPriceUsd).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
-  const canClaim = data.claimableBtf >= config.minClaimBtf && !!data.wallet;
+  const canClaim = !config.dryRun && data.claimableBtf >= config.minClaimBtf && !!data.wallet;
 
   return (
     <motion.div
@@ -179,6 +181,11 @@ export default function StreamingRewardsWidget({ accentColor = '#f97316', primar
       )}
 
       {/* Claim */}
+      {config.dryRun && (
+        <p className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+          Modo prueba activo: no se transfieren BTF reales. El administrador debe habilitar los pagos reales.
+        </p>
+      )}
       <button
         onClick={() => claimMutation.mutate()}
         disabled={!canClaim || claimMutation.isPending}
@@ -187,7 +194,9 @@ export default function StreamingRewardsWidget({ accentColor = '#f97316', primar
         aria-label="Reclamar recompensas BTF"
       >
         {claimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coins className="h-4 w-4" />}
-        {canClaim
+        {config.dryRun
+          ? 'Reclamos desactivados en modo prueba'
+          : canClaim
           ? `Reclamar ${fmtBtf(data.claimableBtf)} BTF`
           : !data.wallet
             ? 'Registra tu wallet para reclamar'

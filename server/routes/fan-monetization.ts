@@ -20,6 +20,7 @@ import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { db } from '../db';
 import { artistAccessUnlocks, explicitSubscriptions, songs, users } from '../../db/schema';
 import { isAdminEmail, PRODUCTION_URL } from '../../shared/constants';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -31,8 +32,22 @@ const stripe = stripeKey
   : null;
 
 export const PREVIEW_SECONDS = 30;
-export const MIN_UNLOCK_CENTS = 500; // $5.00 minimum (pay-what-you-want floor)
+export const MIN_UNLOCK_CENTS = 100; // $1.00 minimum catalog price
 export const MONTHLY_CATALOG_SUB_CENTS = 2000; // $20.00 / month
+const DEFAULT_CATALOG_SETTINGS = { enabled: true, priceCents: 500 };
+const MIN_CATALOG_PRICE_CENTS = 100;
+const MAX_CATALOG_PRICE_CENTS = 500000;
+
+function readCatalogSettings(masterJson: unknown) {
+  const saved = (masterJson as any)?.fanMonetization;
+  const priceCents = Number(saved?.priceCents);
+  return {
+    enabled: typeof saved?.enabled === 'boolean' ? saved.enabled : DEFAULT_CATALOG_SETTINGS.enabled,
+    priceCents: Number.isInteger(priceCents) && priceCents >= MIN_CATALOG_PRICE_CENTS && priceCents <= MAX_CATALOG_PRICE_CENTS
+      ? priceCents
+      : DEFAULT_CATALOG_SETTINGS.priceCents,
+  };
+}
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -189,6 +204,8 @@ router.get('/:artistId/access', async (req: Request, res: Response) => {
       }
     }
 
+    const [artistRow] = await db.select({ masterJson: users.masterJson }).from(users).where(eq(users.id, artistId)).limit(1);
+    const catalogSettings = readCatalogSettings(artistRow?.masterJson);
     const benefits = await buildCatalogBenefits(artistId);
     const unlocked = lifetimeUnlocked || subscriptionActive;
     const accessType = unlimited ? 'owner' : lifetimeUnlocked ? 'lifetime' : subscriptionActive ? 'subscription' : 'none';
@@ -198,7 +215,9 @@ router.get('/:artistId/access', async (req: Request, res: Response) => {
       lifetimeUnlocked,
       subscriptionActive,
       unlocked,
-      hasAccess: unlimited || unlocked,
+      hasAccess: !catalogSettings.enabled || unlimited || unlocked,
+      monetizationEnabled: catalogSettings.enabled,
+      catalogPriceCents: catalogSettings.priceCents,
       accessType,
       previewSeconds: PREVIEW_SECONDS,
       minUnlockCents: MIN_UNLOCK_CENTS,
@@ -212,9 +231,54 @@ router.get('/:artistId/access', async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/artist/:artistId/monetization-settings
+ * Artist-owner-only switch and fixed one-time price for full-catalog access.
+ */
+router.put('/:artistId/monetization-settings', authenticate, async (req: Request, res: Response) => {
+  try {
+    const artistId = parseInt(req.params.artistId, 10);
+    if (!Number.isInteger(artistId) || artistId <= 0) return res.status(400).json({ error: 'Invalid artist id' });
+    const enabled = req.body?.enabled;
+    const priceCents = Math.round(Number(req.body?.priceCents));
+    if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+    if (!Number.isInteger(priceCents) || priceCents < MIN_CATALOG_PRICE_CENTS || priceCents > MAX_CATALOG_PRICE_CENTS) {
+      return res.status(400).json({ error: `Price must be between $${(MIN_CATALOG_PRICE_CENTS / 100).toFixed(2)} and $${(MAX_CATALOG_PRICE_CENTS / 100).toFixed(2)}` });
+    }
+
+    const actor = (req as any).user;
+    if (!actor) return res.status(401).json({ error: 'Authentication required' });
+    const numericActorId = Number(actor.id);
+    const actorConditions: any[] = [];
+    const actorUid = String(actor.uid || actor.clerkId || '');
+    if (actorUid) actorConditions.push(eq(users.clerkId, actorUid), eq(users.username, actorUid));
+    if (Number.isInteger(numericActorId) && numericActorId > 0) actorConditions.push(eq(users.id, numericActorId));
+    const [target, actorRow] = await Promise.all([
+      db.select({ id: users.id, generatedBy: users.generatedBy, masterJson: users.masterJson }).from(users).where(eq(users.id, artistId)).limit(1).then(rows => rows[0]),
+      actorConditions.length ? db.select({ id: users.id }).from(users).where(or(...actorConditions)).limit(1).then(rows => rows[0]) : Promise.resolve(undefined),
+    ]);
+    if (!target) return res.status(404).json({ error: 'Artist not found' });
+    const admin = actor.email && isAdminEmail(actor.email);
+    if (!admin && (!actorRow || (actorRow.id !== target.id && actorRow.id !== target.generatedBy))) {
+      return res.status(403).json({ error: 'Only this artist or its creator can manage monetization' });
+    }
+
+    const currentMasterJson = target.masterJson && typeof target.masterJson === 'object' ? target.masterJson as Record<string, any> : {};
+    const updatedMasterJson = {
+      ...currentMasterJson,
+      fanMonetization: { enabled, priceCents },
+    };
+    await db.update(users).set({ masterJson: updatedMasterJson as any, updatedAt: new Date() }).where(eq(users.id, artistId));
+    return res.json({ success: true, settings: { enabled, priceCents } });
+  } catch (err: any) {
+    console.error('[fan-monetization] settings update failed:', err);
+    return res.status(500).json({ error: 'Failed to save monetization settings' });
+  }
+});
+
+/**
  * POST /api/artist/:artistId/unlock-checkout
  * Creates a Stripe pay-what-you-want checkout session (logged-in OR guest).
- * Body: { amount: cents (>= 500), returnPath?: string, fanEmail?: string }
+ * Body: { returnPath?: string, fanEmail?: string }; price comes from artist settings.
  */
 router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) => {
   try {
@@ -230,10 +294,14 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) return res.status(400).json({ error: 'Invalid artist id' });
 
-    const amount = Math.round(Number(req.body?.amount));
-    if (!Number.isFinite(amount) || amount < MIN_UNLOCK_CENTS) {
-      return res.status(400).json({ error: `Minimum amount is $${(MIN_UNLOCK_CENTS / 100).toFixed(0)}` });
-    }
+    const [artist] = await db
+      .select({ artistName: users.artistName, realName: users.realName, username: users.username, masterJson: users.masterJson })
+      .from(users)
+      .where(eq(users.id, artistId))
+      .limit(1);
+    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    const catalogSettings = readCatalogSettings(artist.masterJson);
+    if (!catalogSettings.enabled) return res.status(409).json({ error: 'This artist is currently sharing the full catalog for free' });
 
     const pgUserId = resolvePgUserId(user);
 
@@ -241,13 +309,6 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
     if (await hasActiveUnlock(artistId, pgUserId, fanEmail)) {
       return res.status(409).json({ error: 'You already have access to this catalog', alreadyUnlocked: true });
     }
-
-    const [artist] = await db
-      .select({ artistName: users.artistName, realName: users.realName, username: users.username })
-      .from(users)
-      .where(eq(users.id, artistId))
-      .limit(1);
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
 
     const artistName = (artist.artistName || artist.realName || artist.username || 'this artist').toString();
     const returnPath = typeof req.body?.returnPath === 'string' && req.body.returnPath.startsWith('/')
@@ -267,7 +328,7 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
               name: `Unlock ${artistName} — full catalog`,
               description: 'Lifetime access to this artist\'s complete catalog. 85% goes directly to the artist.',
             },
-            unit_amount: amount,
+            unit_amount: catalogSettings.priceCents,
           },
           quantity: 1,
         },
@@ -280,6 +341,7 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
         artistId: String(artistId),
         fanUserId: pgUserId ? String(pgUserId) : '',
         fanEmail,
+        amountCents: String(catalogSettings.priceCents),
       },
     });
 
@@ -328,11 +390,13 @@ router.post('/:artistId/subscription-checkout', async (req: Request, res: Respon
     }
 
     const [artist] = await db
-      .select({ artistName: users.artistName, realName: users.realName, username: users.username })
+      .select({ artistName: users.artistName, realName: users.realName, username: users.username, masterJson: users.masterJson })
       .from(users)
       .where(eq(users.id, artistId))
       .limit(1);
     if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    const catalogSettings = readCatalogSettings(artist.masterJson);
+    if (!catalogSettings.enabled) return res.status(409).json({ error: 'This artist is currently sharing the full catalog for free' });
 
     const artistName = (artist.artistName || artist.realName || artist.username || 'this artist').toString();
 

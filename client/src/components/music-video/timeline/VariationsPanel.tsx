@@ -153,25 +153,22 @@ export function VariationsPanel({
       const activePerspectives = PERSPECTIVES.filter(p => selectedPerspectives.has(p.id));
       const prompts = activePerspectives.map(p => buildPrompt(p));
 
-      const data = await apiRequest({
-        url: '/api/fal/nano-banana/generate-batch',
-        method: 'POST',
-        data: {
-          prompts,
-          aspectRatio: '16:9',
-          referenceImages: [sourceUrl],
-        },
-      });
-      if (!data.success) throw new Error(data.error || 'Error generating variations');
+      const generated = await Promise.all(prompts.map(async variationPrompt => {
+        const data = await apiRequest({
+          url: '/api/fal/wan-music-video/openai-image',
+          method: 'POST',
+          data: { prompt: variationPrompt, aspectRatio: '16:9', referenceImages: [sourceUrl], quality: 'high', numImages: 1 },
+        });
+        if (!data.success || !data.imageUrl) throw new Error(data.error || 'Error generating variation');
+        return data.imageUrl as string;
+      }));
 
-      const newResults: VariationResult[] = (data.results || [])
-        .filter((r: any) => r.success && r.imageUrl)
-        .map((r: any, i: number) => ({
-          id: `var-${Date.now()}-${i}`,
-          url: r.imageUrl,
-          perspective: activePerspectives[r.index]?.label || activePerspectives[i]?.label || 'Unknown',
-          prompt: prompts[r.index] || prompts[i] || '',
-        }));
+      const newResults: VariationResult[] = generated.map((url, i) => ({
+        id: `var-${Date.now()}-${i}`,
+        url,
+        perspective: activePerspectives[i]?.label || 'Unknown',
+        prompt: prompts[i] || '',
+      }));
 
       setResults(newResults);
       onVariationsGenerated(newResults);

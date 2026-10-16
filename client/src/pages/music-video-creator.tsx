@@ -4,8 +4,7 @@ import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Video, Users, Star, Wand2, Bot, CloudCog, Edit, Sparkles, ArrowRight, Monitor, Apple, Download, Play, Zap, Film, Palette, Music, Crown, ChevronRight, Lock, Clapperboard, Layers, Mic2, Check } from "lucide-react";
-import { DirectorsList } from "../components/music-video/directors-list";
-import { MusicVideoAI } from "../components/music-video/music-video-ai";
+import { WanReferenceMusicVideoWorkflow } from "../components/music-video/wan-reference-music-video-workflow";
 import { MotionDNASection } from "../components/music-video/motion-dna-section";
 import { motion } from "framer-motion";
 import { Link, useSearch } from "wouter";
@@ -945,15 +944,12 @@ interface ContentSectionProps {
 const ContentSection = ({ activeTab, setActiveTab, selectedDirector, onDirectorSelected, preFilledData }: ContentSectionProps) => (
   <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-12 flex-1">
     <div className="flex flex-col items-center mb-4 sm:mb-8 text-center">
-      {/* Workflow Wizard */}
-      <WizardSteps
-        activeTab={activeTab}
-        selectedDirector={selectedDirector}
-        onTabChange={setActiveTab}
-      />
-      <h2 className="text-lg sm:text-2xl md:text-3xl font-bold mb-2 sm:mb-4">Choose Your Creation Path</h2>
+      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs text-orange-300">
+        <Sparkles className="h-3.5 w-3.5" /> Simplified Wan 3.0 workflow
+      </div>
+      <h2 className="text-lg sm:text-2xl md:text-3xl font-bold mb-2 sm:mb-4">Create your music video in one workflow</h2>
       <p className="text-xs sm:text-sm md:text-base text-muted-foreground max-w-xl mb-4 sm:mb-6 px-2 sm:px-4">
-        Choose a director for style inspiration, generate your video with AI, then fine-tune in the editor
+        Generate consistent artist images with OpenAI, animate each timeline segment with Wan 3.0, and keep your song as the master audio track.
       </p>
       <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 w-full sm:w-auto">
         <Button
@@ -968,15 +964,6 @@ const ContentSection = ({ activeTab, setActiveTab, selectedDirector, onDirectorS
         >
           <Bot className="h-4 w-4 mr-1 sm:mr-2" />
           <span className="whitespace-nowrap">AI Video Creation</span>
-        </Button>
-        <Button
-          variant={activeTab === 'directors' ? 'default' : 'outline'}
-          onClick={() => setActiveTab('directors')}
-          className="w-full sm:w-auto min-h-[40px] sm:min-h-[44px] text-sm sm:text-base py-1 px-3 sm:py-2 sm:px-4"
-          size="default"
-        >
-          <Users className="h-4 w-4 mr-1 sm:mr-2" />
-          <span className="whitespace-nowrap">Work with Directors</span>
         </Button>
         <Link href="/professional-editor">
           <Button
@@ -993,19 +980,14 @@ const ContentSection = ({ activeTab, setActiveTab, selectedDirector, onDirectorS
     <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-[1200px] mx-auto">
       {/* Main content area - Only showing content for active tab */}
       <div className="w-full">
-        {activeTab === 'directors' ? (
-          <DirectorsList onDirectorSelected={onDirectorSelected} />
-        ) : (
-          <MusicVideoAI 
-            preSelectedDirector={selectedDirector}
-            preFilledArtistName={preFilledData?.artistName}
-            preFilledArtistId={preFilledData?.artistId}
-            preFilledSongName={preFilledData?.songName}
-            preFilledAudioUrl={preFilledData?.audioUrl}
-            preFilledCoverArt={preFilledData?.coverArt}
-            preFilledImages={preFilledData?.images}
-          />
-        )}
+        <WanReferenceMusicVideoWorkflow
+          preFilledArtistName={preFilledData?.artistName}
+          preFilledSongName={preFilledData?.songName}
+          preFilledAudioUrl={preFilledData?.audioUrl}
+          preFilledCoverArt={preFilledData?.coverArt}
+          preFilledImages={preFilledData?.images}
+          selectedDirectorName={selectedDirector?.name}
+        />
       </div>
 
       {/* Pro Tip: MotionSync feature callout */}

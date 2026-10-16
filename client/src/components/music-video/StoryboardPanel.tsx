@@ -36,6 +36,8 @@ interface StoryboardPanelProps {
   onRegenerateImage: (clip: TimelineClip) => void;
   onGenerateVideo: (clip: TimelineClip) => void;
   onBatchGenerateVideos?: (clips: TimelineClip[], model?: string) => void;
+  videoModelOptions?: { value: string; label: string }[];
+  defaultVideoModel?: string;
   onAnimatedScene?: (order: number, videoUrl: string) => void;
   conceptProjectId?: number;
   onAddMusician: (clip: TimelineClip) => void;
@@ -76,7 +78,7 @@ function getClipCategory(clip: TimelineClip): string {
 
 function getClipStatus(clip: TimelineClip, regeneratingId?: number | null, generatingVideoId?: number | null): string {
   if (regeneratingId === clip.id || generatingVideoId === clip.id || clip.metadata?.videoGenerating) return 'generating';
-  if (clip.metadata?.videoUrl || clip.metadata?.hasVideo) return 'done';
+  if (clip.videoUrl || clip.metadata?.videoUrl || clip.metadata?.hasVideo) return 'done';
   if (clip.metadata?.videoError || clip.generationStatus === 'error') return 'error';
   if (clip.imageUrl || clip.url) return 'pending'; // Has image, no video yet
   return 'pending';
@@ -326,6 +328,8 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   onRegenerateImage,
   onGenerateVideo,
   onBatchGenerateVideos,
+  videoModelOptions,
+  defaultVideoModel,
   onAnimatedScene,
   conceptProjectId,
   onAddMusician,
@@ -341,7 +345,7 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [isPipelineAnimating, setIsPipelineAnimating] = useState(false);
   const [pipelineProgress, setPipelineProgress] = useState<{ done: number; total: number } | null>(null);
-  const [batchModel, setBatchModel] = useState<string>('kling-v2.1-standard');
+  const [batchModel, setBatchModel] = useState<string>(defaultVideoModel || 'kling-v2.1-standard');
   const [previewClip, setPreviewClip] = useState<TimelineClip | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -372,8 +376,8 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     if (filter === 'performance') result = result.filter(c => getClipCategory(c) === 'PERFORMANCE');
     else if (filter === 'b-roll') result = result.filter(c => getClipCategory(c) === 'B-ROLL');
     else if (filter === 'story') result = result.filter(c => getClipCategory(c) === 'STORY');
-    else if (filter === 'with-video') result = result.filter(c => c.metadata?.videoUrl || c.metadata?.hasVideo);
-    else if (filter === 'no-video') result = result.filter(c => !c.metadata?.videoUrl && !c.metadata?.hasVideo);
+    else if (filter === 'with-video') result = result.filter(c => c.videoUrl || c.metadata?.videoUrl || c.metadata?.hasVideo);
+    else if (filter === 'no-video') result = result.filter(c => !c.videoUrl && !c.metadata?.videoUrl && !c.metadata?.hasVideo);
 
     // Search filter
     if (searchQuery.trim()) {
@@ -391,7 +395,7 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // Stats
   const stats = useMemo(() => {
     const total = imageClips.length;
-    const withVideo = imageClips.filter(c => c.metadata?.videoUrl || c.metadata?.hasVideo).length;
+    const withVideo = imageClips.filter(c => c.videoUrl || c.metadata?.videoUrl || c.metadata?.hasVideo).length;
     const performance = imageClips.filter(c => getClipCategory(c) === 'PERFORMANCE').length;
     const broll = imageClips.filter(c => getClipCategory(c) === 'B-ROLL').length;
     const story = imageClips.filter(c => getClipCategory(c) === 'STORY').length;
@@ -422,7 +426,7 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const clipsNeedingVideo = useMemo(() => {
     return imageClips.filter(c => {
       const hasImage = !!(c.imageUrl || c.url || c.thumbnailUrl);
-      const hasVideo = !!(c.metadata?.videoUrl || c.metadata?.hasVideo);
+      const hasVideo = !!(c.videoUrl || c.metadata?.videoUrl || c.metadata?.hasVideo);
       const isGenerating = c.id === regeneratingId || c.id === generatingVideoId || c.metadata?.videoGenerating;
       return hasImage && !hasVideo && !isGenerating;
     });
@@ -636,12 +640,14 @@ export const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-[#1a1a2e] border-white/10 text-white">
-              <SelectItem value="kling-v2.1-standard" className="text-[10px]">Kling v2.1 Standard</SelectItem>
-              <SelectItem value="kling-v2.1-pro" className="text-[10px]">Kling v2.1 Pro</SelectItem>
-              <SelectItem value="pixverse-v6" className="text-[10px]">PixVerse V6</SelectItem>
-              <SelectItem value="pixverse-veo-3.1-fast" className="text-[10px]">PixVerse Veo 3.1 Fast</SelectItem>
-              <SelectItem value="pixverse-sora-2" className="text-[10px]">PixVerse Sora 2</SelectItem>
-              <SelectItem value="pixverse-seedance-2.0-fast" className="text-[10px]">PixVerse Seedance 2.0 Fast</SelectItem>
+              {(videoModelOptions || [
+                { value: 'kling-v2.1-standard', label: 'Kling v2.1 Standard' },
+                { value: 'kling-v2.1-pro', label: 'Kling v2.1 Pro' },
+                { value: 'pixverse-v6', label: 'PixVerse V6' },
+                { value: 'pixverse-veo-3.1-fast', label: 'PixVerse Veo 3.1 Fast' },
+                { value: 'pixverse-sora-2', label: 'PixVerse Sora 2' },
+                { value: 'pixverse-seedance-2.0-fast', label: 'PixVerse Seedance 2.0 Fast' },
+              ]).map(option => <SelectItem key={option.value} value={option.value} className="text-[10px]">{option.label}</SelectItem>)}
             </SelectContent>
           </Select>
         )}

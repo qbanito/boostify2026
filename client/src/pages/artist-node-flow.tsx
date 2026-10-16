@@ -254,10 +254,14 @@ export default function ArtistNodeFlowPage() {
   useEffect(() => {
     if (!slug) return;
     setSelectedSlug(slug);
-    fetch(`/api/profile/${slug}`)
+    fetch(`/api/profile/${slug}/flow`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        const id = data?.id ?? data?.pgId ?? null;
+        // Numeric slugs identify generated artists. Keep that ID available
+        // when Render/API is briefly unavailable, so Flow can still render
+        // the local profile graph and its default connections.
+        const slugId = /^\d+$/.test(String(slug)) ? Number(slug) : null;
+        const id = data?.id ?? data?.pgId ?? slugId;
         setSelectedArtistId(id);
         if (typeof id === 'number') setNumericArtistId(id);
         setSelectedArtistInfo({
@@ -268,7 +272,12 @@ export default function ArtistNodeFlowPage() {
         });
         store.setArtistContext(id, slug);
       })
-      .catch(() => { store.setArtistContext(null as any, slug ?? ''); });
+      .catch(() => {
+        const fallbackId = /^\d+$/.test(String(slug)) ? Number(slug) : null;
+        setSelectedArtistId(fallbackId);
+        if (fallbackId !== null) setNumericArtistId(fallbackId);
+        store.setArtistContext(fallbackId as any, slug ?? '');
+      });
   }, [slug]);
 
   const { profileNodes, profileEdges, inactiveModules, isLoading, dataSource, activateModule, activateModules, reorderModulesFromEdge, resetPositions } =
@@ -286,7 +295,7 @@ export default function ArtistNodeFlowPage() {
 
   // Switch artist from the ProfileRootNode picker
   const handleArtistSelect = useCallback(async (id: number, newSlug: string) => {
-    const data = await fetch(`/api/profile/${newSlug}`)
+    const data = await fetch(`/api/profile/${newSlug}/flow`)
       .then(r => r.ok ? r.json() : null)
       .catch(() => null);
     setSelectedArtistId(id);
@@ -340,6 +349,43 @@ export default function ArtistNodeFlowPage() {
     [profileNodes]
   );
 
+  // Keep graph inputs stable between renders. NodeFlowCanvas maintains
+  // measured React Flow state locally, so unstable array references can reset
+  // or drop derived connections while the profile is loading.
+  const profileCanvasNodes = useMemo(
+    () => [profileRootNode, ...profileNodes],
+    [profileRootNode, profileNodes],
+  );
+  const profileCanvasEdges = useMemo(
+    () => {
+      const edges = [...rootEdges, ...profileEdges];
+      const connected = new Set<string>();
+      edges.forEach(edge => {
+        connected.add(edge.source);
+        connected.add(edge.target);
+      });
+
+      // Every visible node must belong to the profile graph. The catalogue
+      // contains many optional widgets that do not have a semantic module edge
+      // yet, so attach those isolated nodes to the profile root with a quiet
+      // fallback edge instead of leaving them floating disconnected.
+      profileNodes.forEach(node => {
+        if (connected.has(node.id)) return;
+        edges.push({
+          id: `root-fallback-${node.id}`,
+          source: 'profile-root',
+          target: node.id,
+          type: 'animated',
+          style: { stroke: '#475569', strokeWidth: 1, strokeOpacity: 0.28, strokeDasharray: '5 5' },
+        });
+        connected.add(node.id);
+      });
+
+      return edges;
+    },
+    [rootEdges, profileEdges, profileNodes],
+  );
+
   // Module IDs that are currently active (for preset panel)
   const activeModuleIds = useMemo(() =>
     profileNodes.map(n => {
@@ -357,7 +403,11 @@ export default function ArtistNodeFlowPage() {
           style={{ height: '100dvh', width: '100vw', background: '#07070f', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}
         >
           {/* Toolbar */}
-          <FlowToolbar onBack={() => navigate(`/artist/${slug}`)} />
+          <FlowToolbar
+            onBack={() => navigate(`/artist/${slug}`)}
+            nodeCount={flowMode === 'profile' ? profileCanvasNodes.length : undefined}
+            edgeCount={flowMode === 'profile' ? profileCanvasEdges.length : undefined}
+          />
 
           {/* Mode tabs */}
           <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ background: 'rgba(7,7,15,0.98)', borderBottom: '1px solid rgba(99,102,241,0.12)', boxShadow: '0 1px 20px rgba(99,102,241,0.08)' }}>
@@ -476,8 +526,8 @@ export default function ArtistNodeFlowPage() {
             {/* CENTER CANVAS */}
             <div className="flex-1 relative min-w-0">
               <NodeFlowCanvas
-                extraNodes={flowMode === 'profile' ? [profileRootNode, ...profileNodes] : []}
-                extraEdges={flowMode === 'profile' ? [...rootEdges, ...profileEdges] : []}
+                extraNodes={flowMode === 'profile' ? profileCanvasNodes : []}
+                extraEdges={flowMode === 'profile' ? profileCanvasEdges : []}
                 layoutKey={layoutKey}
                 onAutoLayout={handleAutoLayout}
                 onModuleConnect={flowMode === 'profile' ? handleModuleConnect : undefined}

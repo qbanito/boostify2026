@@ -45,7 +45,7 @@ interface TimelineLayersProps extends ClipActionHandlers {
   onSelectClip: (clipId: number | null) => void;
   selectedClipId: number | null;
   onMoveClip?: (clipId: number, newStart: number, newLayerId: number) => void;
-  onResizeClip?: (clipId: number, newStart: number, newDuration: number) => void;
+  onResizeClip?: (clipId: number, newStart: number, newDuration: number, edge?: 'start' | 'end') => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onResizeStart?: () => void;

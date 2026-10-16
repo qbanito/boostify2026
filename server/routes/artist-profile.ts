@@ -2,13 +2,14 @@
  * Rutas para perfil de artista con generación automática de OpenAI + FAL Nano Banana
  */
 import { Router, Request, Response } from 'express';
-import { generateImageWithNanoBanana, editImageWithNanoBanana, generateMerchandiseImage, generateArtistDesignPack, generateArtistCharacterPack } from '../services/fal-service';
+import { generateImageWithNanoBanana, generateMerchandiseImage, generateArtistDesignPack, generateArtistCharacterPack } from '../services/fal-service';
 import { generateArtistBiography, type ArtistInfo } from '../services/openai-profile-service';
 import { getOrCreateBrandProfile, generateBrandProfile, loadBrandProfile } from '../services/artist-brand-profile';
 import Stripe from 'stripe';
 import { db } from '../db';
 import { users } from '../db/schema';
-import { isNull, and } from 'drizzle-orm';
+import { isNull, and, eq } from 'drizzle-orm';
+import { authenticate } from '../middleware/auth';
 import { db as firestoreDb } from '../firebase';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -16,9 +17,63 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
 
 const router = Router();
+const FAL_API_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY || process.env.FAL_AI_KEY || '';
+
+async function generateArtistImageWithGPT25(input: {
+  prompt: string;
+  referenceImage?: string;
+  imageSize: 'square_hd' | 'landscape_16_9';
+  quality?: 'high' | 'xhigh';
+}) {
+  if (!FAL_API_KEY) throw new Error('FAL_API_KEY is not configured on the server');
+  const hasReference = typeof input.referenceImage === 'string' && /^https:\/\//i.test(input.referenceImage);
+  const endpoint = hasReference
+    ? 'openai/gpt-image-2.5/sunburst/edit'
+    : 'openai/gpt-image-2.5/sunburst/text-to-image';
+  const response = await fetch(`https://fal.run/${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: input.prompt.slice(0, 30000),
+      image_size: input.imageSize,
+      quality: input.quality || 'xhigh',
+      num_images: 1,
+      output_format: 'png',
+      enable_safety_checker: true,
+      ...(hasReference ? { image_urls: [input.referenceImage] } : {}),
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  const images = Array.isArray(result?.images) ? result.images.filter((image: any) => typeof image?.url === 'string') : [];
+  if (!response.ok || !images.length) {
+    throw new Error(result?.detail || result?.error || `GPT Image 2.5 failed (${response.status})`);
+  }
+  return { success: true, imageUrl: images[0].url, images, provider: endpoint };
+}
+
+function buildArtistCharacterCard(artistName: string, genre: string, biography = '') {
+  const genreText = genre.trim() || 'Music';
+  const visualStyle = biography.trim()
+    ? biography.trim().slice(0, 500)
+    : `A distinctive ${genreText} artist identity; editorial, authentic, and consistent with the artist's own appearance and musical world.`;
+  return {
+    title: `${artistName} — Artist Character Card`,
+    artistName,
+    genre: genreText,
+    visualStyle,
+    identityLock: 'Preserve the same recognizable face, facial structure, skin tone, hair, age, and distinguishing features from the uploaded reference. Do not invent a new person or alter identity.',
+    paletteDirection: `Choose a cohesive palette that suits ${genreText} and the artist's reference photo; keep it consistent across profile, banner, and future campaign images.`,
+    wardrobeDirection: 'Artist-authentic styling that suits the genre and reference; avoid generic costume, visible brand logos, and unexplained wardrobe changes between a set.',
+    lightingDirection: 'Premium editorial music photography, natural skin texture, intentional cinematic key and rim light, coherent color grade.',
+    compositionDirection: 'Recognizable face and silhouette; clean focal hierarchy; portrait crops remain centered and banner crops leave safe negative space for profile UI.',
+    consistencyRules: ['Same person and facial identity in every image', 'Consistent genre-led palette and visual tone', 'No text, watermark, or fabricated logos'],
+    updatedAt: new Date().toISOString(),
+    model: 'openai/gpt-image-2.5/sunburst',
+  };
+}
 
 /**
- * Genera imagen de perfil de artista con FAL AI Nano Banana
+ * Generates profile imagery with premium OpenAI GPT Image 2.5 through fal.
  * Soporta imagen de referencia para preservar identidad facial
  */
 router.post('/generate-profile-image', async (req: Request, res: Response) => {
@@ -33,33 +88,17 @@ router.post('/generate-profile-image', async (req: Request, res: Response) => {
     }
     
     // Crear prompt optimizado para imagen de perfil
+    const characterCard = req.body.characterCard;
     const basePrompt = `Professional artist profile photo: ${artistName}, ${genre || 'musician'} artist. 
     ${style || 'Modern, professional headshot with artistic lighting'}. 
     ${biography ? `Artist background: ${biography.substring(0, 200)}` : ''}.
     High quality portrait photography, studio lighting, professional artist photograph, 
     centered composition, clean background, artistic and professional aesthetic.`;
     
-    console.log('🎨 Generating profile image with FAL AI Nano Banana...');
+    const cardRules = characterCard ? `Character Card style direction: ${characterCard.visualStyle || ''}. ${characterCard.paletteDirection || ''} ${characterCard.wardrobeDirection || ''} ${characterCard.identityLock || ''}` : '';
+    const result = await generateArtistImageWithGPT25({ prompt: `${basePrompt}\n${cardRules}`, referenceImage, imageSize: 'square_hd', quality: 'xhigh' });
     
-    let result;
-    
-    // Si hay imagen de referencia, usar edición con nano-banana
-    if (referenceImage) {
-      console.log('👤 Using reference image for facial consistency...');
-      result = await editImageWithNanoBanana(
-        [referenceImage],
-        basePrompt,
-        { aspectRatio: '1:1' }
-      );
-    } else {
-      // Sin referencia, usar generación normal
-      result = await generateImageWithNanoBanana(basePrompt, { aspectRatio: '1:1' });
-    }
-    
-    console.log('🎨 Profile image result:', { success: result.success, hasError: !!result.error, provider: result.provider });
-    if (!result.success) {
-      console.error('❌ Profile image generation failed:', result.error);
-    }
+    console.log('🎨 Profile image result:', { success: result.success, provider: result.provider });
     return res.json(result);
   } catch (error: any) {
     console.error('Error generating profile image:', error);
@@ -86,6 +125,7 @@ router.post('/generate-banner-image', async (req: Request, res: Response) => {
     }
     
     // Crear prompt optimizado para banner
+    const characterCard = req.body.characterCard;
     const basePrompt = `Professional artist banner cover image: ${artistName}, ${genre || 'musician'} artist. 
     ${style || 'Cinematic, wide-angle composition'}. 
     ${mood || 'Energetic and creative atmosphere'}. 
@@ -93,27 +133,10 @@ router.post('/generate-banner-image', async (req: Request, res: Response) => {
     Wide format banner, 16:9 aspect ratio, cinematic lighting, professional music artist aesthetic, 
     vibrant colors, high quality photography, artistic and dynamic composition.`;
     
-    console.log('🎨 Generating banner image with FAL AI Nano Banana...');
+    const cardRules = characterCard ? `Character Card style direction: ${characterCard.visualStyle || ''}. ${characterCard.paletteDirection || ''} ${characterCard.wardrobeDirection || ''} ${characterCard.identityLock || ''}` : '';
+    const result = await generateArtistImageWithGPT25({ prompt: `${basePrompt}\n${cardRules}`, referenceImage, imageSize: 'landscape_16_9', quality: 'xhigh' });
     
-    let result;
-    
-    // Si hay imagen de referencia, usar edición con nano-banana
-    if (referenceImage) {
-      console.log('👤 Using reference image for facial consistency in banner...');
-      result = await editImageWithNanoBanana(
-        [referenceImage],
-        basePrompt,
-        { aspectRatio: '16:9' }
-      );
-    } else {
-      // Sin referencia, usar generación normal
-      result = await generateImageWithNanoBanana(basePrompt, { aspectRatio: '16:9' });
-    }
-    
-    console.log('🎨 Banner image result:', { success: result.success, hasError: !!result.error, provider: result.provider });
-    if (!result.success) {
-      console.error('❌ Banner image generation failed:', result.error);
-    }
+    console.log('🎨 Banner image result:', { success: result.success, provider: result.provider });
     return res.json(result);
   } catch (error: any) {
     console.error('Error generating banner image:', error);
@@ -826,11 +849,13 @@ router.post('/character-pack', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'artistName is required' });
     }
 
+    const characterCard = buildArtistCharacterCard(artistName, genre || 'music', req.body.biography || '');
     const result = await generateArtistCharacterPack(
       profileImageUrl,
       artistName,
       genre || 'music',
       artistId ? `artist-character-packs/${artistId}` : 'artist-character-packs',
+      characterCard.visualStyle,
     );
 
     // Save to Firestore image_galleries so images appear in artist profile gallery
@@ -838,6 +863,17 @@ router.post('/character-pack', async (req: Request, res: Response) => {
       try {
         if (firestoreDb) {
           const fsUserId = artistId ? String(artistId) : 'unknown';
+          await firestoreDb.collection('artistCharacterPacks').doc(fsUserId).set({
+            userId: fsUserId,
+            artistName,
+            genre: genre || 'music',
+            profileImageUrl,
+            images: result.images,
+            characterCard,
+            model: 'openai/gpt-image-2.5/sunburst/edit',
+            updatedAt: new Date().toISOString(),
+            version: 2,
+          }, { merge: true });
           await firestoreDb.collection('image_galleries').add({
             userId: fsUserId,
             singleName: `Character Pack — ${artistName}`,
@@ -864,10 +900,33 @@ router.post('/character-pack', async (req: Request, res: Response) => {
       }
     }
 
-    return res.json(result);
+    return res.json({ ...result, characterCard });
   } catch (error: any) {
     console.error('[artist-profile] character-pack error:', error);
     return res.status(500).json({ success: false, error: error.message || 'Generation failed' });
+  }
+});
+
+router.get('/character-pack', authenticate, async (req: any, res: Response) => {
+  try {
+    const uid = req.user?.uid || req.user?.id;
+    const [user] = await db.select().from(users).where(eq(users.clerkId, uid)).limit(1);
+    if (!user) return res.status(404).json({ success: false, error: 'Artist profile not found' });
+    const { artistId } = req.query as { artistId?: string };
+    if (artistId && artistId !== String(user.id) && artistId !== String(user.firestoreId || '')) {
+      return res.status(403).json({ success: false, error: 'You can only view your own Character Card.' });
+    }
+    if (!firestoreDb) return res.json({ success: true, characterCard: null, images: [] });
+    let snapshot = await firestoreDb.collection('artistCharacterPacks').doc(String(user.id)).get();
+    if (!snapshot.exists && artistId && artistId === String(user.firestoreId || '')) {
+      snapshot = await firestoreDb.collection('artistCharacterPacks').doc(artistId).get();
+    }
+    if (!snapshot.exists) return res.json({ success: true, characterCard: null, images: [] });
+    const pack = snapshot.data() || {};
+    return res.json({ success: true, characterCard: pack.characterCard || null, images: pack.images || [] });
+  } catch (error: any) {
+    console.error('[artist-profile] character-pack read error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Could not load Character Card' });
   }
 });
 

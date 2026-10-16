@@ -80,6 +80,8 @@ interface VideoBudgetModalProps {
   userEmail: string;
   userId?: string;
   projectId?: number;
+  videoClipDurations?: number[];
+  defaultVideoModelId?: string;
 }
 
 // ============================================
@@ -193,15 +195,17 @@ export function VideoBudgetModal({
   userEmail,
   userId,
   projectId,
+  videoClipDurations,
+  defaultVideoModelId,
 }: VideoBudgetModalProps) {
   const { toast } = useToast();
   
   // Config state
-  const [videoModelId, setVideoModelId] = useState('kling-2.6-pro');
-  const [imageModelId, setImageModelId] = useState('flux-2-pro');
+  const [videoModelId, setVideoModelId] = useState(defaultVideoModelId || 'kling-2.6-pro');
+  const [imageModelId, setImageModelId] = useState('openai-gpt-image-2.5');
   const [resolution, setResolution] = useState<'720p' | '1080p' | '4k'>('1080p');
-  const [includesLipsync, setIncludesLipsync] = useState(true);
-  const [includesMotion, setIncludesMotion] = useState(true);
+  const [includesLipsync, setIncludesLipsync] = useState(defaultVideoModelId !== 'wan-3.0-reference');
+  const [includesMotion, setIncludesMotion] = useState(defaultVideoModelId !== 'wan-3.0-reference');
   const [includesMicrocuts, setIncludesMicrocuts] = useState(true);
   const [showInternalCosts, setShowInternalCosts] = useState(false);
   
@@ -227,7 +231,9 @@ export function VideoBudgetModal({
     includesMotion,
     includesMicrocuts,
     resolution,
-  }), [songDuration, clipDuration, videoModelId, imageModelId, includesLipsync, includesMotion, includesMicrocuts, resolution]);
+    numClipsOverride: numClips,
+    clipDurationsSec: videoClipDurations,
+  }), [songDuration, clipDuration, numClips, videoClipDurations, videoModelId, imageModelId, includesLipsync, includesMotion, includesMicrocuts, resolution]);
 
   const budget: BudgetResult = useMemo(() => calculateVideoBudget(budgetConfig), [budgetConfig]);
 
@@ -241,6 +247,11 @@ export function VideoBudgetModal({
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      if (defaultVideoModelId) setVideoModelId(defaultVideoModelId);
+      if (defaultVideoModelId === 'wan-3.0-reference') {
+        setIncludesLipsync(false);
+        setIncludesMotion(false);
+      }
       setStep('config');
       setContractAccepted(false);
       setTermsAccepted(false);
@@ -248,7 +259,7 @@ export function VideoBudgetModal({
       setClientSecret('');
       setBudgetId(null);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultVideoModelId]);
 
   // Admin bypass handler
   const handleAdminBypass = useCallback(async () => {

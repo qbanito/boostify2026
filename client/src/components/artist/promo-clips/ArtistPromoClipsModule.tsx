@@ -142,7 +142,7 @@ interface PromoClipsProps {
 }
 
 type Step = 'select' | 'analyze' | 'direction' | 'image' | 'video' | 'captions' | 'export';
-type LipsyncMode = 'omnihuman' | 'seedance-fast-r2v' | 'seedance-mini-r2v' | 'kling-v21-standard-sync3' | 'kling-v3-standard-sync3' | 'kling-v3-pro-sync3' | 'pixverse-v6' | 'pixverse-sora-2' | 'pixverse-veo-3.1-fast';
+type LipsyncMode = 'wan-reference-to-video' | 'omnihuman' | 'seedance-fast-r2v' | 'seedance-mini-r2v' | 'kling-v21-standard-sync3' | 'kling-v3-standard-sync3' | 'kling-v3-pro-sync3' | 'pixverse-v6' | 'pixverse-sora-2' | 'pixverse-veo-3.1-fast';
 type ClipDuration = 15 | 30 | 60;
 type Platform = 'tiktok' | 'instagram_reels' | 'youtube_shorts';
 type AudioClipLock = { audioUrl?: string; clipStartSeconds?: number; duration?: number };
@@ -277,6 +277,7 @@ const isPixVerseMode = (mode?: string): boolean => PIXVERSE_MODES.includes(mode 
 
 const BROLL_MODEL_OPTIONS: LipsyncMode[] = ['kling-v21-standard-sync3', 'kling-v3-standard-sync3', 'kling-v3-pro-sync3', 'pixverse-v6'];
 const LIPSYNC_COST_5S: Record<LipsyncMode, number> = {
+  'wan-reference-to-video': 1.00,
   omnihuman: 0.75,
   'seedance-fast-r2v': 1.88,
   'seedance-mini-r2v': 1.12,
@@ -314,6 +315,16 @@ const LYRICS_SOURCE_LABELS: Record<string, string> = {
 const getLyricsSourceLabel = (source?: string) => LYRICS_SOURCE_LABELS[source || ''] || source || 'No indicada';
 
 const LIPSYNC_MODE_INFO: Record<LipsyncMode, { label: string; shortLabel: string; generateLabel: string; pollingLabel: string; description: string; accent: string; cost5s?: string; cost30s?: string }> = {
+  'wan-reference-to-video': {
+    label: 'Wan 3.0 Reference-to-Video',
+    shortLabel: 'Wan 3.0',
+    generateLabel: 'Generar video coherente (Wan 3.0) ->',
+    pollingLabel: 'Wan 3.0 generando video desde la imagen de referencia...',
+    description: 'Genera una toma cinematográfica coherente desde la imagen seleccionada y luego aplica la canción original.',
+    accent: '#8b5cf6',
+    cost5s: '$1.00/5s (1080p)',
+    cost30s: '$6.00/30s (1080p)',
+  },
   omnihuman: {
     label: 'OmniHuman v1.5',
     shortLabel: 'Rapido',
@@ -439,7 +450,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
   const [clipDuration, setClipDuration] = useState<ClipDuration>(30);
   const [targetPlatforms, setTargetPlatforms] = useState<Platform[]>(['tiktok', 'instagram_reels']);
   const [promoWorkflow, setPromoWorkflow] = useState<PromoWorkflow>('single');
-  const [lipsyncMode, setLipsyncMode] = useState<LipsyncMode>('seedance-mini-r2v');
+  const [lipsyncMode, setLipsyncMode] = useState<LipsyncMode>('wan-reference-to-video');
   const [brollMode, setBrollMode] = useState<LipsyncMode>('kling-v3-standard-sync3');
   const [performancePercent, setPerformancePercent] = useState(40);
   const [lipsyncPercent, setLipsyncPercent] = useState(20);
@@ -895,6 +906,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
         bpmFeel: analysis?.detected_bpm_feel || '',
         segmentType: analysis?.segment_type || '',
         songTitle: selectedSong.name || selectedSong.title || '',
+        duration: Math.min(30, clipDuration),
         recordedVideoUrl: isSeedanceR2vMode(lipsyncMode) ? (recordedVideoUrl || undefined) : undefined,
       });
       if (!data.success) throw new Error(data.error || 'Video generation failed');
@@ -913,7 +925,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
     } finally {
       setVideoLoading(false);
     }
-  }, [selectedImageUrl, selectedSong, artistId, lipsyncMode, direction, analysis, artistProfileImage, referenceImageUrl, recordedVideoUrl]);
+  }, [selectedImageUrl, selectedSong, artistId, lipsyncMode, direction, analysis, artistProfileImage, referenceImageUrl, recordedVideoUrl, clipDuration]);
 
   const startVideoPolling = useCallback((
     requestId: string,
@@ -2114,8 +2126,8 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                 <label className="text-[11px] font-bold uppercase tracking-wider text-white/35 block mb-2">Duration</label>
                 <div className="flex gap-1.5">
                   {([15, 30, 60] as ClipDuration[]).map(d => (
-                    <button key={d} onClick={() => setClipDuration(d)}
-                      className="flex-1 py-2 text-xs rounded-xl font-bold transition-all"
+                    <button key={d} onClick={() => setClipDuration(d)} disabled={lipsyncMode === 'wan-reference-to-video' && d > 30}
+                      className="flex-1 py-2 text-xs rounded-xl font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                       style={{ background: clipDuration === d ? accent : 'rgba(255,255,255,0.06)', color: clipDuration === d ? '#fff' : 'rgba(255,255,255,0.55)', border: `1px solid ${clipDuration === d ? accent : 'transparent'}` }}>
                       {d}s
                     </button>
@@ -2141,6 +2153,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               <label className="text-[11px] font-bold uppercase tracking-wider text-white/35 block mb-2">Lipsync Engine</label>
               <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5">
                 {([
+                  { mode: 'wan-reference-to-video' as LipsyncMode, label: 'Wan 3.0', color: '#8b5cf6' },
                   { mode: 'omnihuman' as LipsyncMode, label: 'Fast', color: accent },
                   { mode: 'seedance-mini-r2v' as LipsyncMode, label: 'Eco', color: '#10b981' },
                   { mode: 'seedance-fast-r2v' as LipsyncMode, label: 'Rhythm', color: '#14b8a6' },
@@ -2148,7 +2161,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
                   { mode: 'kling-v3-standard-sync3' as LipsyncMode, label: 'Balance', color: '#f59e0b' },
                   { mode: 'kling-v3-pro-sync3' as LipsyncMode, label: 'Premium', color: '#f97316' },
                 ]).map(({ mode, label, color }) => (
-                  <button key={mode} onClick={() => setLipsyncMode(mode)}
+                  <button key={mode} onClick={() => { setLipsyncMode(mode); if (mode === 'wan-reference-to-video' && clipDuration > 30) setClipDuration(30); }}
                     className="py-2 text-xs rounded-xl font-bold transition-all"
                     style={{ background: lipsyncMode === mode ? color : 'rgba(255,255,255,0.05)', color: lipsyncMode === mode ? '#fff' : 'rgba(255,255,255,0.5)', border: `1px solid ${lipsyncMode === mode ? color : 'transparent'}` }}>
                     {label}
@@ -2456,7 +2469,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
               className="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
               style={{ background: `linear-gradient(135deg, ${accent}, #8b5cf6)` }}>
               {imageLoading ? <Loader2 size={16} className="animate-spin" /> : <Image size={16} />}
-              {imageLoading ? 'Generating with Flux Kontext Pro...' : 'Generate 9:16 Image →'}
+              {imageLoading ? 'Generating with OpenAI GPT Image 2.5…' : 'Generate Consistent Images (GPT Image 2.5) →'}
             </motion.button>
             {promoWorkflow === 'narrative-30s' && (
               <>

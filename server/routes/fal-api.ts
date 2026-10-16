@@ -8,6 +8,7 @@ import { Router, type Request, type Response } from 'express';
 import { logApiUsage } from '../utils/api-logger';
 import { chargeCredits, chargeCreditsFromUsd } from '../services/credit-engine';
 import type { OperationType } from '../../shared/credit-pricing';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -2326,6 +2327,204 @@ router.get('/pixverse-video/:taskId', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('❌ [PixVerse] /status error:', err.message);
     return res.status(500).json({ success: false, error: err.message || 'Failed to check task status' });
+  }
+});
+
+// ============================================================================
+// 🎬 SIMPLIFIED MUSIC VIDEO WORKFLOW
+// OpenAI GPT Image 1 (identity anchors) → Wan 3.0 Reference-to-Video (clips)
+// ============================================================================
+
+const WAN_REFERENCE_TO_VIDEO_ENDPOINT = 'alibaba/wan-3.0/reference-to-video';
+
+/**
+ * POST /api/fal/wan-music-video/openai-image
+ * Generates a consistent still for a music-video timeline scene.
+ * When references are provided, OpenAI edit mode is used so the identity/style
+ * is carried into the next scene. Without references it creates an anchor image.
+ */
+router.post('/wan-music-video/openai-image', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { prompt, referenceImages = [], quality = 'high', aspectRatio = '16:9', numImages = 1, negativePrompt = '' } = req.body || {};
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const refs = Array.isArray(referenceImages)
+      ? referenceImages.filter((url: unknown): url is string => typeof url === 'string' && url.startsWith('https://')).slice(0, 16)
+      : [];
+    const ratioMap: Record<string, string> = {
+      '16:9': 'landscape_16_9', '9:16': 'portrait_16_9', '1:1': 'square', '4:3': 'landscape_4_3', '3:4': 'portrait_4_3',
+    };
+    const endpoint = refs.length ? 'openai/gpt-image-2.5/sunburst/edit' : 'openai/gpt-image-2.5/sunburst/text-to-image';
+    const safeQuality = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'].includes(quality) ? quality : 'high';
+    const count = Math.max(1, Math.min(10, Math.round(Number(numImages) || 1)));
+    const finalPrompt = [prompt.slice(0, 30000), typeof negativePrompt === 'string' && negativePrompt.trim() ? `Avoid: ${negativePrompt.trim().slice(0, 2000)}` : ''].filter(Boolean).join('\n\n');
+    const falResponse = await fetchWithFailover(`https://fal.run/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: finalPrompt,
+        image_size: ratioMap[aspectRatio] || 'landscape_16_9',
+        quality: safeQuality,
+        num_images: count,
+        output_format: 'png',
+        enable_safety_checker: true,
+        ...(refs.length ? { image_urls: refs } : {}),
+      }),
+    }, 'GPT Image 2.5 music video anchor');
+    const result = await falResponse.json().catch(() => ({}));
+    const images = Array.isArray(result.images) ? result.images.filter((image: any) => typeof image?.url === 'string') : [];
+    if (!falResponse.ok || images.length === 0) {
+      return res.status(falResponse.status >= 400 ? falResponse.status : 502).json({ success: false, error: result.detail || result.error || 'GPT Image 2.5 returned no images' });
+    }
+
+    return res.json({
+      success: true,
+      imageUrl: images[0].url,
+      images,
+      provider: `openai/gpt-image-2.5/sunburst/${refs.length ? 'edit' : 'text-to-image'}`,
+      usedReferences: refs.length,
+    });
+  } catch (error: any) {
+    console.error('❌ [MUSIC VIDEO] OpenAI consistency image error:', error?.message || error);
+    return res.status(500).json({ success: false, error: error?.message || 'OpenAI image generation failed' });
+  }
+});
+
+/**
+ * POST /api/fal/wan-music-video/generate
+ * Submits one timeline segment to the exact Wan 3.0 endpoint. The request is
+ * asynchronous because video generation can take several minutes.
+ */
+router.post('/wan-music-video/generate', authenticate, async (req: Request, res: Response) => {
+  try {
+    if (!FAL_API_KEY) {
+      return res.status(503).json({ success: false, error: 'FAL_KEY is not configured on the server' });
+    }
+
+    const {
+      prompt,
+      referenceImages = [],
+      referenceVideoUrls = [],
+      duration = 5,
+      resolution = '1080p',
+      aspectRatio = '16:9',
+    } = req.body || {};
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const safeDuration = Math.min(30, Math.max(2, Math.round(Number(duration) || 5)));
+    const safeReferences = Array.isArray(referenceImages)
+      ? referenceImages.filter((url: unknown): url is string => typeof url === 'string' && url.length > 0).slice(0, 10)
+      : [];
+    const safeReferenceVideos = Array.isArray(referenceVideoUrls)
+      ? referenceVideoUrls.filter((url: unknown): url is string => typeof url === 'string' && url.startsWith('http')).slice(0, 5)
+      : [];
+    const safeResolution = ['480p', '720p', '1080p'].includes(resolution) ? resolution : '1080p';
+    const safeAspectRatio = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16'].includes(aspectRatio)
+      ? aspectRatio
+      : '16:9';
+
+    const response = await fetchWithFailover(
+      `https://queue.fal.run/${WAN_REFERENCE_TO_VIDEO_ENDPOINT}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: prompt.slice(0, 20000),
+          reference_image_urls: safeReferences,
+          ...(safeReferenceVideos.length ? { reference_video_urls: safeReferenceVideos } : {}),
+          duration: safeDuration,
+          // The uploaded song is the timeline's master audio track.
+          audio: false,
+          resolution: safeResolution,
+          aspect_ratio: safeAspectRatio,
+          enable_prompt_expansion: true,
+          enable_thinking: false,
+          enable_safety_checker: true,
+        }),
+      },
+      'Wan 3.0 music video segment'
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.request_id) {
+      await logFalUsage(WAN_REFERENCE_TO_VIDEO_ENDPOINT, 0, JSON.stringify(data));
+      return res.status(response.status >= 400 ? response.status : 502).json({
+        success: false,
+        error: data.detail || data.error || `Wan 3.0 submission failed (${response.status})`,
+        details: data,
+      });
+    }
+
+    await logFalUsage(WAN_REFERENCE_TO_VIDEO_ENDPOINT, 1);
+    return res.json({
+      success: true,
+      requestId: data.request_id,
+      statusUrl: data.status_url,
+      responseUrl: data.response_url,
+      cancelUrl: data.cancel_url,
+      endpoint: WAN_REFERENCE_TO_VIDEO_ENDPOINT,
+      estimatedTime: '60-240 seconds',
+    });
+  } catch (error: any) {
+    console.error('❌ [MUSIC VIDEO] Wan 3.0 submit error:', error?.message || error);
+    return res.status(500).json({ success: false, error: error?.message || 'Wan 3.0 generation failed' });
+  }
+});
+
+/**
+ * GET /api/fal/wan-music-video/:requestId
+ * Polls one Wan 3.0 segment and returns its video URL when complete.
+ */
+router.get('/wan-music-video/:requestId', authenticate, async (req: Request, res: Response) => {
+  try {
+    if (!FAL_API_KEY) {
+      return res.status(503).json({ success: false, error: 'FAL_KEY is not configured on the server' });
+    }
+
+    const { requestId } = req.params;
+    const statusResponse = await fetchWithFailover(
+      `https://queue.fal.run/${WAN_REFERENCE_TO_VIDEO_ENDPOINT}/requests/${encodeURIComponent(requestId)}/status`,
+      { headers: {} },
+      'Wan 3.0 music video status'
+    );
+    const statusData = await statusResponse.json().catch(() => ({}));
+
+    if (!statusResponse.ok) {
+      return res.status(statusResponse.status).json({ success: false, error: statusData.detail || 'Unable to read Wan 3.0 status' });
+    }
+
+    if (statusData.status !== 'COMPLETED') {
+      return res.json({ success: true, status: statusData.status, queuePosition: statusData.queue_position ?? null });
+    }
+
+    const resultResponse = await fetchWithFailover(
+      `https://queue.fal.run/${WAN_REFERENCE_TO_VIDEO_ENDPOINT}/requests/${encodeURIComponent(requestId)}`,
+      { headers: {} },
+      'Wan 3.0 music video result'
+    );
+    const resultData = await resultResponse.json().catch(() => ({}));
+    const videoUrl = resultData.video?.url || resultData.output?.video?.url || resultData.output_url || resultData.url;
+
+    if (!resultResponse.ok || !videoUrl) {
+      return res.status(502).json({ success: false, status: 'FAILED', error: resultData.detail || 'Wan 3.0 returned no video', details: resultData });
+    }
+
+    return res.json({
+      success: true,
+      status: 'COMPLETED',
+      videoUrl,
+      duration: resultData.duration ?? resultData.video?.duration ?? null,
+      metadata: resultData,
+    });
+  } catch (error: any) {
+    console.error('❌ [MUSIC VIDEO] Wan 3.0 status error:', error?.message || error);
+    return res.status(500).json({ success: false, error: error?.message || 'Unable to read Wan 3.0 job' });
   }
 });
 

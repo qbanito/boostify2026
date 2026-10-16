@@ -95,6 +95,14 @@ export class ChannelStrip {
   private sum: GainNode;
   private limiter: DynamicsCompressorNode;
   private limiterMakeup: GainNode;
+  private stereoSplit: ChannelSplitterNode;
+  private stereoMerge: ChannelMergerNode;
+  private midLeft: GainNode;
+  private midRight: GainNode;
+  private sideLeftToLeft: GainNode;
+  private sideLeftToRight: GainNode;
+  private sideRightToLeft: GainNode;
+  private sideRightToRight: GainNode;
   private panner: StereoPannerNode;
   private channelGain: GainNode;
 
@@ -123,6 +131,14 @@ export class ChannelStrip {
     this.limiter = ctx.createDynamicsCompressor();
     this.limiter.ratio.value = 20; this.limiter.attack.value = 0.003; this.limiter.release.value = 0.08;
     this.limiterMakeup = ctx.createGain();
+    this.stereoSplit = ctx.createChannelSplitter(2);
+    this.stereoMerge = ctx.createChannelMerger(2);
+    this.midLeft = ctx.createGain(); this.midLeft.gain.value = 0.5;
+    this.midRight = ctx.createGain(); this.midRight.gain.value = 0.5;
+    this.sideLeftToLeft = ctx.createGain(); this.sideLeftToLeft.gain.value = 0.5;
+    this.sideLeftToRight = ctx.createGain(); this.sideLeftToRight.gain.value = -0.5;
+    this.sideRightToLeft = ctx.createGain(); this.sideRightToLeft.gain.value = -0.5;
+    this.sideRightToRight = ctx.createGain(); this.sideRightToRight.gain.value = 0.5;
     this.panner = ctx.createStereoPanner();
     this.channelGain = ctx.createGain();
     this.output = ctx.createGain();
@@ -155,7 +171,18 @@ export class ChannelStrip {
 
     this.sum.connect(this.limiter);
     this.limiter.connect(this.limiterMakeup);
-    this.limiterMakeup.connect(this.panner);
+    // Mid/side matrix: width=1 is transparent, 0 is mono, 2 doubles the side.
+    this.limiterMakeup.connect(this.stereoSplit);
+    this.stereoSplit.connect(this.midLeft, 0); this.stereoSplit.connect(this.midRight, 1);
+    this.stereoSplit.connect(this.sideLeftToLeft, 0); this.stereoSplit.connect(this.sideLeftToRight, 0);
+    this.stereoSplit.connect(this.sideRightToLeft, 1); this.stereoSplit.connect(this.sideRightToRight, 1);
+    this.midLeft.connect(this.stereoMerge, 0, 0); this.midLeft.connect(this.stereoMerge, 0, 1);
+    this.midRight.connect(this.stereoMerge, 0, 0); this.midRight.connect(this.stereoMerge, 0, 1);
+    this.sideLeftToLeft.connect(this.stereoMerge, 0, 0);
+    this.sideLeftToRight.connect(this.stereoMerge, 0, 1);
+    this.sideRightToLeft.connect(this.stereoMerge, 0, 0);
+    this.sideRightToRight.connect(this.stereoMerge, 0, 1);
+    this.stereoMerge.connect(this.panner);
     this.panner.connect(this.channelGain);
     this.channelGain.connect(this.output);
     if (this.analyser) this.channelGain.connect(this.analyser);
@@ -182,6 +209,23 @@ export class ChannelStrip {
   }
 
   setBpm(bpm: number) { this.bpm = bpm; }
+
+  setMasteringSettings(settings: { glue: number; width: number; limiter: number }) {
+    const glue = clamp(settings.glue, 0, 100);
+    this.comp.threshold.value = -glue * 0.24;
+    this.comp.ratio.value = 1 + glue * 0.04;
+    this.comp.knee.value = 12;
+    this.comp.attack.value = 0.02;
+    this.comp.release.value = 0.18;
+    this.limiter.threshold.value = clamp(settings.limiter, -12, 0);
+    this.limiter.ratio.value = 20;
+    this.limiter.knee.value = 0;
+    const side = clamp(settings.width / 50, 0, 2) * 0.5;
+    this.sideLeftToLeft.gain.value = side;
+    this.sideLeftToRight.gain.value = -side;
+    this.sideRightToLeft.gain.value = -side;
+    this.sideRightToRight.gain.value = side;
+  }
 
   // pan: -1..1, gain: 0..1
   setPan(pan: number) { this.panner.pan.value = clamp(pan, -1, 1); }
@@ -297,7 +341,9 @@ export class ChannelStrip {
   disconnect() {
     [this.input, this.hp, this.eqLow, this.eqMid, this.eqHigh, this.comp, this.saturator,
      this.satMakeup, this.dry, this.reverb, this.reverbWet, this.delay, this.delayFeedback,
-     this.delayWet, this.sum, this.limiter, this.limiterMakeup, this.panner, this.channelGain,
+     this.delayWet, this.sum, this.limiter, this.limiterMakeup, this.stereoSplit, this.stereoMerge,
+     this.midLeft, this.midRight, this.sideLeftToLeft, this.sideLeftToRight,
+     this.sideRightToLeft, this.sideRightToRight, this.panner, this.channelGain,
      this.output].forEach((n) => { try { n.disconnect(); } catch {} });
     if (this.analyser) { try { this.analyser.disconnect(); } catch {} }
   }
@@ -373,9 +419,107 @@ export async function decodePeaks(ctx: AudioContext, audioUrl: string, bins = 20
 // a WAV Blob — a real, downloadable export with no backend render worker.
 export interface ExportOptions {
   plugins?: PluginLike[];
+  mastering?: { glue: number; width: number; limiter: number };
   gain?: number;       // 0..1.5 master gain
   bpm?: number;
   sampleRate?: number;
+}
+
+export interface TimelineRenderClip {
+  id: string; trackId: string; start: number; width: number; audioUrl?: string;
+  sourceOffsetSec?: number; muted?: boolean; gain?: number; fadeIn?: number; fadeOut?: number;
+}
+export interface TimelineRenderTrack {
+  id: string; vol: number; pan: number; mute: boolean; solo: boolean;
+}
+export interface TimelineRenderOptions {
+  durationSec?: number; bpm?: number; pluginsByTrack?: Record<string, PluginLike[]>;
+  masterChain?: { glue: number; width: number; limiter: number }; masterGain?: number;
+}
+
+/** Mixes all audible timeline regions, track strips and master processing offline. */
+export async function renderTimelineToBuffer(
+  clips: TimelineRenderClip[], tracks: TimelineRenderTrack[], opts: TimelineRenderOptions = {},
+): Promise<AudioBuffer> {
+  const renderable = clips.filter((clip) => clip.audioUrl && !clip.muted && clip.width > 0);
+  if (!renderable.length) throw new Error('The timeline has no audio regions to render.');
+
+  const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+  const probe: AudioContext = new Ctor();
+  const decoded = new Map<string, AudioBuffer>();
+  try {
+    await Promise.all([...new Set(renderable.map((clip) => clip.audioUrl!))].map(async (url) => {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) throw new Error(`Could not load audio (${response.status}): ${url}`);
+      decoded.set(url, await probe.decodeAudioData(await response.arrayBuffer()));
+    }));
+  } finally {
+    await probe.close().catch(() => {});
+  }
+
+  const guessedTimelineSec = Math.max(30, ...renderable.map((clip) => {
+    const source = decoded.get(clip.audioUrl!)!;
+    return source.duration * 100 / Math.max(1, clip.width);
+  }));
+  const timelineSec = Math.max(1, opts.durationSec || guessedTimelineSec);
+  const endPct = Math.max(...renderable.map((clip) => Math.min(100, clip.start + clip.width)));
+  const renderSec = Math.max(0.1, timelineSec * endPct / 100);
+  const sampleRate = 44100;
+  const offline = new OfflineAudioContext(2, Math.ceil(renderSec * sampleRate), sampleRate);
+  const soloActive = tracks.some((track) => track.solo);
+  const master = new ChannelStrip(offline, { bpm: opts.bpm, withAnalyser: false });
+  if (opts.masterChain) master.setMasteringSettings(opts.masterChain);
+  master.setGain(opts.masterGain ?? 1);
+  master.output.connect(offline.destination);
+
+  const strips = new Map<string, ChannelStrip>();
+  for (const track of tracks) {
+    if (track.mute || (soloActive && !track.solo)) continue;
+    const strip = new ChannelStrip(offline, { bpm: opts.bpm, withAnalyser: false });
+    strip.setGain(Math.max(0, Math.min(1.5, track.vol / 100)));
+    strip.setPan(Math.max(-1, Math.min(1, track.pan / 50)));
+    strip.applyPlugins(opts.pluginsByTrack?.[track.id] || []);
+    strip.output.connect(master.input);
+    strips.set(track.id, strip);
+  }
+
+  for (const clip of renderable) {
+    const strip = strips.get(clip.trackId);
+    const buffer = decoded.get(clip.audioUrl!)!;
+    if (!strip || (clip.sourceOffsetSec ?? 0) >= buffer.duration) continue;
+    const slotStart = Math.max(0, clip.start / 100 * timelineSec);
+    const slotDuration = Math.max(0, clip.width / 100 * timelineSec);
+    const sourceOffset = Math.max(0, clip.sourceOffsetSec ?? 0);
+    const duration = Math.min(slotDuration, buffer.duration - sourceOffset, renderSec - slotStart);
+    if (duration <= 0) continue;
+
+    const source = offline.createBufferSource();
+    const clipGain = offline.createGain();
+    source.buffer = buffer;
+    clipGain.gain.setValueAtTime(Math.max(0, Math.min(1.5, clip.gain ?? 1)), slotStart);
+    const fadeInSec = Math.min(duration, duration * Math.max(0, Math.min(100, clip.fadeIn ?? 0)) / 100);
+    const fadeOutSec = Math.min(duration, duration * Math.max(0, Math.min(100, clip.fadeOut ?? 0)) / 100);
+    if (fadeInSec > 0) {
+      clipGain.gain.setValueAtTime(0, slotStart);
+      clipGain.gain.linearRampToValueAtTime(Math.max(0, Math.min(1.5, clip.gain ?? 1)), slotStart + fadeInSec);
+    }
+    if (fadeOutSec > 0) {
+      const fadeStart = slotStart + duration - fadeOutSec;
+      clipGain.gain.setValueAtTime(Math.max(0, Math.min(1.5, clip.gain ?? 1)), fadeStart);
+      clipGain.gain.linearRampToValueAtTime(0, slotStart + duration);
+    }
+    source.connect(clipGain);
+    clipGain.connect(strip.input);
+    source.start(slotStart, sourceOffset, duration);
+  }
+
+  return offline.startRendering();
+}
+
+export async function renderTimelineToWav(
+  clips: TimelineRenderClip[], tracks: TimelineRenderTrack[], opts: TimelineRenderOptions = {},
+): Promise<Blob> {
+  return encodeWav(await renderTimelineToBuffer(clips, tracks, opts));
 }
 
 export async function renderUrlToWav(audioUrl: string, opts: ExportOptions = {}): Promise<Blob> {
@@ -396,6 +540,7 @@ export async function renderUrlToWav(audioUrl: string, opts: ExportOptions = {})
 
   const strip = new ChannelStrip(offline, { bpm: opts.bpm, withAnalyser: false });
   if (opts.plugins) strip.applyPlugins(opts.plugins);
+  if (opts.mastering) strip.setMasteringSettings(opts.mastering);
   strip.setGain(opts.gain ?? 1);
   source.connect(strip.input);
   strip.output.connect(offline.destination);

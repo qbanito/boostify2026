@@ -8,8 +8,8 @@
  *   - mastering presets metadata
  *   - stem separation (delegates to voice-ai-service)
  *
- * All functions degrade gracefully when API keys are absent so
- * the UI keeps working in dev with placeholder audio.
+ * Generation fails explicitly when no provider is configured. Placeholder
+ * URLs are not valid audio and must never be presented as successful output.
  */
 
 import * as fal from '@fal-ai/serverless-client';
@@ -175,17 +175,9 @@ export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerat
     }
   }
 
-  // Strategy 3 — Placeholder (silent dev mode)
-  return {
-    success: true,
-    kind: req.kind,
-    audioUrl: `https://cdn.boostify.local/placeholder/${req.kind}.mp3`,
-    durationSec,
-    bpm,
-    key,
-    provider: 'placeholder',
-    meta: { prompt, note: 'No FAL_KEY or REPLICATE_API_TOKEN configured.' },
-  };
+  const err = new Error('Audio generation is unavailable: configure FAL_KEY or REPLICATE_API_TOKEN, or check the provider credentials and try again.') as Error & { statusCode?: number };
+  err.statusCode = 503;
+  throw err;
 }
 
 // ---------------------------------------------------------------

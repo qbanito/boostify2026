@@ -7,6 +7,7 @@ import { db, storage } from '../firebase';
 import { collection, addDoc, doc, getDoc, getDocs, query, where, orderBy, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import type { MusicVideoScene } from '../../types/music-video-scene';
+import type { TimelineClip } from '../../interfaces/timeline';
 
 export interface VideoProject {
   id: string;
@@ -16,6 +17,7 @@ export interface VideoProject {
     scenes: MusicVideoScene[];
     duration: number;
     sceneCount: number;
+    timelineClips?: TimelineClip[];
   };
   images: {
     sceneId: string;
@@ -53,7 +55,7 @@ export async function uploadImageToStorage(
       // Es base64 con prefijo data:image/...
       const response = await fetch(imageData);
       imageBlob = await response.blob();
-    } else if (imageData.startsWith('http')) {
+    } else if (imageData.startsWith('http') || imageData.startsWith('blob:')) {
       // Es una URL, descargar la imagen
       const response = await fetch(imageData, { mode: 'cors' });
       imageBlob = await response.blob();
@@ -96,6 +98,25 @@ export async function uploadImageToStorage(
   }
 }
 
+/** Uploads locally imported audio/video media so saved timelines do not depend on blob URLs. */
+export async function uploadTimelineMediaToStorage(
+  media: Blob,
+  projectId: string,
+  assetId: string,
+  userId: string,
+  fileName = 'media'
+): Promise<{ storageUrl: string; publicUrl: string }> {
+  const safeId = assetId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const extension = fileName.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'bin';
+  const path = `video-projects/${userId}/${projectId}/assets/${safeId}.${extension}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, media, {
+    contentType: media.type || 'application/octet-stream',
+    customMetadata: { projectId, userId, assetId: safeId, uploadedAt: new Date().toISOString() },
+  });
+  return { storageUrl: `gs://${storage.app.options.storageBucket}/${path}`, publicUrl: await getDownloadURL(storageRef) };
+}
+
 /**
  * Sube múltiples imágenes en batch a Firebase Storage
  */
@@ -129,7 +150,7 @@ export async function uploadMultipleImages(
 export async function createVideoProject(
   name: string,
   userId: string,
-  script: { scenes: MusicVideoScene[]; duration: number; sceneCount: number },
+  script: { scenes: MusicVideoScene[]; duration: number; sceneCount: number; timelineClips?: TimelineClip[] },
   metadata?: any
 ): Promise<string> {
   try {
@@ -251,7 +272,7 @@ export async function getUserProjects(userId: string): Promise<VideoProject[]> {
  */
 export async function updateProjectScript(
   projectId: string,
-  script: { scenes: MusicVideoScene[]; duration: number; sceneCount: number }
+  script: { scenes: MusicVideoScene[]; duration: number; sceneCount: number; timelineClips?: TimelineClip[] }
 ): Promise<void> {
   try {
     const projectRef = doc(db, 'videoProjects', projectId);
@@ -265,6 +286,10 @@ export async function updateProjectScript(
     logger.error('Error actualizando script:', error);
     throw new Error(`Failed to update script: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+export async function updateVideoProjectName(projectId: string, name: string): Promise<void> {
+  await updateDoc(doc(db, 'videoProjects', projectId), { name: name.trim(), updatedAt: serverTimestamp() });
 }
 
 /**

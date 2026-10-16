@@ -398,6 +398,50 @@ export async function getTreasuryBtfBalance(): Promise<number> {
 
 const claimLocks = new Set<number>();
 
+async function reconcileClaimingRewards(artistId: number) {
+  const sql = getSql();
+  const publicClient = createPublicClient({ chain: polygon, transport: rpcTransport() });
+  const rows = await sql`
+    SELECT DISTINCT tx_hash FROM streaming_reward_entries
+    WHERE artist_id = ${artistId} AND status = 'claiming' AND tx_hash IS NOT NULL
+  ` as any[];
+  let changed = false;
+
+  for (const row of rows) {
+    const txHash = String(row.tx_hash);
+    try {
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+      if (receipt.status === 'success') {
+        await sql`
+          UPDATE streaming_reward_entries
+          SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), error = NULL
+          WHERE artist_id = ${artistId} AND status = 'claiming' AND tx_hash = ${txHash}
+        `;
+        changed = true;
+      } else {
+        await sql`
+          UPDATE streaming_reward_entries
+          SET status = 'approved', tx_hash = NULL, error = 'On-chain transfer reverted; reward is claimable again.'
+          WHERE artist_id = ${artistId} AND status = 'claiming' AND tx_hash = ${txHash}
+        `;
+      }
+    } catch {
+      // Still pending or temporarily unreachable: keep entries locked against duplicate payment.
+    }
+  }
+
+  if (changed) {
+    await sql`
+      UPDATE streaming_reward_epochs e SET status = 'paid'
+      WHERE e.status = 'approved'
+        AND NOT EXISTS (
+          SELECT 1 FROM streaming_reward_entries en
+          WHERE en.epoch_id = e.id AND en.status <> 'paid'
+        )
+    `;
+  }
+}
+
 export async function claimRewards(artistId: number): Promise<{
   claimed: boolean; totalBtf: number; txHash?: string; simulated?: boolean; message: string;
 }> {
@@ -414,6 +458,7 @@ export async function claimRewards(artistId: number): Promise<{
       return { claimed: false, totalBtf: 0, message: 'No valid reward wallet registered' };
     }
 
+    await reconcileClaimingRewards(artistId);
     const claimable = await sql`
       SELECT id, total_btf FROM streaming_reward_entries
       WHERE artist_id = ${artistId} AND status = 'approved'
@@ -434,11 +479,17 @@ export async function claimRewards(artistId: number): Promise<{
       WHERE id = ANY(${ids}) AND status = 'approved'
       RETURNING id
     ` as any[];
+    const lockedIds = locked.map((r) => Number(r.id));
     if (locked.length !== ids.length) {
-      await sql`UPDATE streaming_reward_entries SET status = 'approved' WHERE id = ANY(${ids}) AND status = 'claiming'`;
+      if (lockedIds.length) {
+        await sql`UPDATE streaming_reward_entries SET status = 'approved' WHERE id = ANY(${lockedIds}) AND status = 'claiming' AND tx_hash IS NULL`;
+      }
       return { claimed: false, totalBtf, message: 'Entries changed state — try again' };
     }
 
+    let txHash: `0x${string}` | undefined;
+    let broadcastAttempted = false;
+    let receiptConfirmedReverted = false;
     try {
       const account = getTreasuryAccount();
       const walletClient = createWalletClient({ account, chain: polygon, transport: rpcTransport() });
@@ -446,14 +497,19 @@ export async function claimRewards(artistId: number): Promise<{
       const amountWei = parseUnits(totalBtf.toFixed(4), 18);
 
       console.log(`[Streaming Rewards] Claiming ${totalBtf} BTF → ${wallet} (artist ${artistId})`);
-      const txHash = await walletClient.writeContract({
+      broadcastAttempted = true;
+      txHash = await walletClient.writeContract({
         address: BTF_TOKEN_ADDRESS,
         abi: TRANSFER_ABI,
         functionName: 'transfer',
         args: [wallet as `0x${string}`, amountWei],
       });
+      await sql`UPDATE streaming_reward_entries SET tx_hash = ${txHash}, error = NULL WHERE id = ANY(${ids}) AND status = 'claiming'`;
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
-      if (receipt.status !== 'success') throw new Error(`Transfer reverted: ${txHash}`);
+      if (receipt.status !== 'success') {
+        receiptConfirmedReverted = true;
+        throw new Error(`Transfer reverted: ${txHash}`);
+      }
 
       await sql`
         UPDATE streaming_reward_entries
@@ -474,10 +530,20 @@ export async function claimRewards(artistId: number): Promise<{
     } catch (err: any) {
       await sql`
         UPDATE streaming_reward_entries
-        SET status = 'approved', error = ${String(err?.message || err).slice(0, 500)}
+        SET status = CASE WHEN ${broadcastAttempted && !receiptConfirmedReverted} THEN 'claiming' ELSE 'approved' END,
+            tx_hash = CASE WHEN ${broadcastAttempted && !receiptConfirmedReverted} THEN COALESCE(tx_hash, ${txHash || null}) ELSE NULL END,
+            error = ${String(err?.message || err).slice(0, 500)}
         WHERE id = ANY(${ids}) AND status = 'claiming'
       `;
       console.error('[Streaming Rewards] Claim transfer failed:', err?.message || err);
+      if (broadcastAttempted && txHash) {
+        return {
+          claimed: false,
+          totalBtf,
+          txHash,
+          message: 'Transaction sent; waiting for Polygon confirmation. The reward is locked against duplicate payment.',
+        };
+      }
       return { claimed: false, totalBtf, message: 'On-chain transfer failed — rewards remain claimable. Try again later.' };
     }
   } finally {

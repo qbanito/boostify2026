@@ -106,6 +106,14 @@ export function ImageGeneratorPanel({
     }
     return [];
   });
+  useEffect(() => {
+    setReferences(current => {
+      const withoutInitial = current.filter(reference => reference.id !== 'ref-initial');
+      return initialReference
+        ? [{ id: 'ref-initial', url: initialReference.url, type: initialReference.type }, ...withoutInitial]
+        : withoutInitial;
+    });
+  }, [initialReference]);
 
   // Generation settings
   const [prompt, setPrompt] = useState('');
@@ -207,25 +215,24 @@ export function ImageGeneratorPanel({
       const trimmedNegative = negativePrompt.trim();
 
       if (quantity > 1) {
-        // Batch generation
-        const prompts = Array(quantity).fill(finalPrompt);
         const data = await apiRequest({
-          url: '/api/fal/nano-banana/generate-batch',
+          url: '/api/fal/wan-music-video/openai-image',
           method: 'POST',
           data: {
-            prompts,
+            prompt: finalPrompt,
+            numImages: quantity,
             aspectRatio,
             ...(trimmedNegative ? { negativePrompt: trimmedNegative } : {}),
             ...(hasReferences && consistencyMode ? { referenceImages: referenceUrls } : {}),
           },
         });
-        if (!data.success) throw new Error(data.error || 'Error en batch generation');
+        if (!data.success) throw new Error(data.error || 'Error generando imágenes');
 
-        const newResults: GeneratedResult[] = (data.results || [])
-          .filter((r: any) => r.success && r.imageUrl)
-          .map((r: any, i: number) => ({
+        const newResults: GeneratedResult[] = (data.images || [])
+          .filter((image: any) => typeof image.url === 'string')
+          .map((image: any, i: number) => ({
             id: `gen-${Date.now()}-${i}`,
-            url: r.imageUrl,
+            url: image.url,
             prompt: finalPrompt,
             timestamp: Date.now(),
           }));
@@ -238,25 +245,15 @@ export function ImageGeneratorPanel({
 
       } else {
         // Single image
-        const endpoint = hasReferences && consistencyMode
-          ? '/api/fal/nano-banana/generate-with-face'
-          : '/api/fal/nano-banana/generate';
-
-        const body: any = {
+        const body = {
           prompt: finalPrompt,
           aspectRatio,
+          quality: 'high',
+          numImages: 1,
+          ...(trimmedNegative ? { negativePrompt: trimmedNegative } : {}),
+          ...(hasReferences && consistencyMode ? { referenceImages: referenceUrls } : {}),
         };
-
-        if (trimmedNegative) {
-          body.negativePrompt = trimmedNegative;
-        }
-
-        if (hasReferences && consistencyMode) {
-          body.referenceImages = referenceUrls;
-          body.shotCategory = 'PERFORMANCE'; // default to high fidelity
-        }
-
-        const data = await apiRequest({ url: endpoint, method: 'POST', data: body });
+        const data = await apiRequest({ url: '/api/fal/wan-music-video/openai-image', method: 'POST', data: body });
         if (!data.success) throw new Error(data.error || 'Error generando imagen');
 
         const imageUrl = data.imageUrl || data.images?.[0]?.url;

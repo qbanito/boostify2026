@@ -20,7 +20,7 @@
  * Boostify orange/amber accents.
  */
 
-import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentType, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '../../hooks/use-auth';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -35,7 +35,7 @@ import {
   Copy, Trash2, Pencil, GripVertical, PanelLeft,
 } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
-import { ChannelStrip, LoudnessMeter, decodePeaks, renderUrlToWav, type PluginLike } from './miniStudioAudio';
+import { ChannelStrip, LoudnessMeter, decodePeaks, renderTimelineToBuffer, renderTimelineToWav, type PluginLike } from './miniStudioAudio';
 
 /* ============================================================
    Constants — matches the reference mock 1:1
@@ -78,6 +78,7 @@ interface Track {
   solo: boolean;
   rec: boolean;
   audioUrl?: string;
+  sourceOffsetSec?: number;
 }
 
 interface ArtistLibrarySong {
@@ -172,17 +173,8 @@ interface MasterChainState {
   limiter: number;
   targetLufs: number;
 }
-const INITIAL_CLIPS: Clip[] = [
-  { id: 'clip-vocal-1', trackId: 't1', name: 'Vocal Principal_01', start: 1,  width: 35 },
-  { id: 'clip-vocal-2', trackId: 't1', name: 'Vocal Principal_02', start: 38, width: 30 },
-  { id: 'clip-coros-1', trackId: 't2', name: 'Coros_01',           start: 16, width: 25 },
-  { id: 'clip-beat-1', trackId: 't3', name: 'Beat_DeepHouse_122bpm', start: 1, width: 95 },
-  { id: 'clip-bass-1', trackId: 't4', name: 'Bass_Main',          start: 4,  width: 90 },
-  { id: 'clip-synth-1', trackId: 't5', name: 'Synth Pad_Atmos',    start: 8,  width: 78 },
-  { id: 'clip-piano-1', trackId: 't6', name: 'Piano_Chords',       start: 14, width: 56 },
-  { id: 'clip-fx-1', trackId: 't7', name: 'FX Atmosphere',      start: 22, width: 60 },
-  { id: 'clip-ref-1', trackId: 't8', name: 'Ocean Waves',        start: 0,  width: 96 },
-];
+// A new session starts empty; demo regions without audio looked editable but were not.
+const INITIAL_CLIPS: Clip[] = [];
 
 const SIDEBAR_NAV: Array<{ id: string; label: string; icon: any; active: boolean; href?: string }> = [
   { id: 'studio',     label: 'Studio',       icon: Disc3,        active: true },
@@ -292,13 +284,7 @@ const RELEASE_TILES = [
 ];
 
 const EXPORT_FORMATS = [
-  { id: 'wav',     label: 'WAV 24bit',     active: true },
-  { id: 'mp3',     label: 'MP3 320kbps',   active: false },
-  { id: 'stems',   label: 'STEMS',         active: true },
-  { id: 'acapella',label: 'ACAPELLA',      active: false },
-  { id: 'club',    label: 'eClub',         active: false },
-  { id: 'radio',   label: 'eRadio',        active: false },
-  { id: 'instr',   label: 'INSTRUMENTAL',  active: false },
+  { id: 'wav',     label: 'WAV 16-bit',    active: true },
 ];
 
 /* ============================================================
@@ -311,8 +297,9 @@ const apiFetch = async <T,>(url: string, opts: RequestInit = {}): Promise<T> => 
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
     ...opts,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+  return payload;
 };
 
 function waveBars(seed: number, n: number): number[] {
@@ -1477,8 +1464,9 @@ function TimelineClip({ clip, color, selected, editorTool, onSelect, onSplit, on
   );
 }
 
-function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn, snapOn, quantize, onTool, onSeekClick, onClipSelect, onClipUpdate, onClipSplit, onClipContextMenu, onClipDuplicate, onClipDelete, onClipRename }: {
+function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn, snapOn, quantize, timelineDurationSec, onTool, onSeekClick, onClipSelect, onClipUpdate, onClipSplit, onClipContextMenu, onClipDuplicate, onClipDelete, onClipRename }: {
   tracks: Track[]; clips: Clip[]; playhead: number; gridOn: boolean; snapOn: boolean; quantize: string;
+  timelineDurationSec: number;
   selectedClipId: string | null; editorTool: ClipEditTool;
   onTool: (tool: string) => void; onSeekClick: (pct: number) => void;
   onClipSelect: (clipId: string | null) => void;
@@ -1535,7 +1523,11 @@ function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn,
     if (drag.mode === 'trim-start') {
       const rawStart = snapTimelinePct(drag.originalStart + deltaPct, snapOn, quantize);
       const nextStart = Math.max(0, Math.min(drag.originalStart + drag.originalWidth - 2, rawStart));
-      onClipUpdate(drag.clipId, { start: nextStart, width: drag.originalWidth + (drag.originalStart - nextStart) });
+      onClipUpdate(drag.clipId, {
+        start: nextStart,
+        width: drag.originalWidth + (drag.originalStart - nextStart),
+        sourceOffsetSec: (clips.find((clip) => clip.id === drag.clipId)?.sourceOffsetSec || 0) + Math.max(0, nextStart - drag.originalStart) / 100 * timelineDurationSec,
+      });
       return;
     }
 
@@ -1619,8 +1611,6 @@ function Timeline({ tracks, clips, selectedClipId, editorTool, playhead, gridOn,
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => onTool('select')} className={editorTool === 'select' ? 'text-orange-400' : 'hover:text-white'} title="Mover clips"><ArrowLeftRight className="w-3.5 h-3.5" /></button>
           <button onClick={() => onTool('cut')} className={editorTool === 'cut' ? 'text-orange-400' : 'hover:text-white'} title="Cortar clips"><Scissors className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onTool('loop')} className="hover:text-white"><Repeat className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onTool('layers')} className="hover:text-white"><Layers className="w-3.5 h-3.5" /></button>
           <div className="w-32 h-1 bg-white/5 rounded-full overflow-hidden ml-2">
             <div className="h-full bg-orange-500 w-1/3" />
           </div>
@@ -1923,18 +1913,12 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             <audio controls src={recordedUrl} className="w-full mt-2 h-8 [&::-webkit-media-controls]:rounded-lg" />
           )}
 
-          <div className="grid grid-cols-4 gap-1.5 mt-2">
-            <button onClick={() => { onSettingsChange({ metronome: !settings.metronome }); onTool('metronome'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.metronome ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Tempo click">
-              <Music className="w-4 h-4" /><span className="text-[8px] font-bold">Click</span>
-            </button>
+          <div className="grid grid-cols-2 gap-1.5 mt-2">
             <button onClick={() => { onSettingsChange({ tuning: !settings.tuning }); onTool('tuning'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.tuning ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Auto-tune">
               <Wand2 className="w-4 h-4" /><span className="text-[8px] font-bold">Tune</span>
             </button>
             <button onClick={() => { onSettingsChange({ noise: !settings.noise }); onTool('noise'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.noise ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Noise reduction">
               <Activity className="w-4 h-4" /><span className="text-[8px] font-bold">Clean</span>
-            </button>
-            <button onClick={() => { onSettingsChange({ monitoring: !settings.monitoring }); onTool('monitoring'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.monitoring ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Monitoring">
-              <Headphones className="w-4 h-4" /><span className="text-[8px] font-bold">Mon</span>
             </button>
           </div>
 
@@ -2896,7 +2880,7 @@ function FloatingPanel({
   onFocus, onDragStart, onResizeStart, onToggleMinimize,
   children, minW = 160,
 }: {
-  id: string; title: string; Icon: ComponentType<{ className?: string }>; color?: string;
+  id: string; title: string; Icon: ComponentType<{ className?: string; style?: CSSProperties }>; color?: string;
   config: FloatWin;
   onFocus: (id: string) => void;
   onDragStart: (e: React.MouseEvent, id: string) => void;
@@ -2967,13 +2951,7 @@ export function MiniStudio() {
   const [masterChain, setMasterChain] = useState<MasterChainState>(DEFAULT_MASTER_CHAIN);
   const [aiLabSettings, setAiLabSettings] = useState<AILabSessionState>(DEFAULT_AI_LAB_SETTINGS);
   const [lastAiResult, setLastAiResult] = useState<AILabLastResult | null>(null);
-  const [clips, setClips] = useState<Clip[]>(() => {
-    try {
-      const saved = localStorage.getItem('ms-clips-v1');
-      if (saved) return JSON.parse(saved) as Clip[];
-    } catch {}
-    return INITIAL_CLIPS;
-  });
+  const [clips, setClips] = useState<Clip[]>(INITIAL_CLIPS);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>('t1');
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [editorTool, setEditorTool] = useState<ClipEditTool>('select');
@@ -3013,6 +2991,7 @@ export function MiniStudio() {
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [renderingTimeline, setRenderingTimeline] = useState(false);
   const [bpm, setBpm] = useState(PROJECT.bpm);
   const [keyName, setKeyName] = useState(PROJECT.key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -3021,6 +3000,12 @@ export function MiniStudio() {
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<'timeline'|'vocal'|'mixer'|'ai'|'release'>('timeline');
+  const [dockPanel, setDockPanel] = useState<string>(() => {
+    try { return localStorage.getItem('ms-dock-panel') || 'mixer'; } catch { return 'mixer'; }
+  });
+  const [dockHeight, setDockHeight] = useState<number>(() => {
+    try { const saved = Number(localStorage.getItem('ms-dock-height')); return saved >= 140 && saved <= 440 ? saved : 250; } catch { return 250; }
+  });
   const [releasingText, setReleasingText] = useState('');
 
   // ── Layout / panel resize state ──────────────────────────────
@@ -3077,6 +3062,18 @@ export function MiniStudio() {
   const stemPartsRef = useRef<Map<string, { el: HTMLAudioElement; strip: ChannelStrip | null; url: string }>>(new Map());
   const currentMasterUrlRef = useRef<string | undefined>(undefined);
   const animFrameRef = useRef<number>(0);
+  const timelineBufferRef = useRef<AudioBuffer | null>(null);
+  const timelineSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const timelineDurationRef = useRef(0);
+  const timelineStartedAtRef = useRef(0);
+  const timelineStartOffsetRef = useRef(0);
+
+  // Any arrangement or processing edit invalidates the audition mix so the
+  // next playback/export always reflects the current project state.
+  useEffect(() => {
+    timelineBufferRef.current = null;
+    timelineDurationRef.current = 0;
+  }, [clips, tracks, pluginsByTrack, masterChain, bpm]);
   const recTimerRef = useRef<number>(0);
   const deepLinkLoadedRef = useRef(false);
   const autoLoadedRef = useRef(false);
@@ -3157,39 +3154,86 @@ export function MiniStudio() {
     });
   }, []);
 
-  // Playback control
+  const startTimelineBufferAt = useCallback((buffer: AudioBuffer, requestedOffset: number) => {
+    const ctx = getAudioCtx();
+    const previous = timelineSourceRef.current;
+    timelineSourceRef.current = null;
+    try { previous?.stop(); } catch {}
+    const offset = Math.max(0, Math.min(buffer.duration - 0.01, requestedOffset));
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(masterGainRef.current!);
+    timelineSourceRef.current = source;
+    timelineStartedAtRef.current = ctx.currentTime;
+    timelineStartOffsetRef.current = offset;
+    source.onended = () => {
+      if (timelineSourceRef.current !== source) return;
+      timelineSourceRef.current = null;
+      setCurrentTime(buffer.duration);
+      setPlayhead(100);
+      setIsPlaying(false);
+    };
+    source.start(0, offset);
+    setCurrentTime(offset);
+    setPlayhead((offset / buffer.duration) * 100);
+    setIsPlaying(true);
+  }, [getAudioCtx]);
+
+  // Build a true offline mix of all clips, then audition that exact arrangement.
   const handlePlay = useCallback(() => {
-    const master = audioRef.current;
-    const hasMaster = !!(master && master.src);
-    const hasStems = stemPartsRef.current.size > 0;
-    if (!hasMaster && !hasStems) {
-      toast({ title: 'No audio', description: 'Load a song or project first to play.', variant: 'destructive' });
+    if (isPlaying) {
+      const ctx = audioCtxRef.current;
+      const elapsed = ctx ? ctx.currentTime - timelineStartedAtRef.current : 0;
+      const nextTime = Math.min(timelineDurationRef.current, timelineStartOffsetRef.current + Math.max(0, elapsed));
+      const source = timelineSourceRef.current;
+      timelineSourceRef.current = null;
+      try { source?.stop(); } catch {}
+      setCurrentTime(nextTime);
+      setPlayhead(timelineDurationRef.current ? (nextTime / timelineDurationRef.current) * 100 : 0);
+      setIsPlaying(false);
       return;
     }
-    const ctx = getAudioCtx();
-    const doPlay = async () => {
-      if (ctx.state === 'suspended') await ctx.resume();
-      if (master) connectMaster(master);
-      if (isPlaying) {
-        master?.pause();
-        syncStemsTo(master?.currentTime ?? 0, false);
-        cancelAnimationFrame(animFrameRef.current);
-        setIsPlaying(false);
-      } else {
-        if (master) {
-          master.play().catch((err) => {
-            console.warn('[mini-studio] play error:', err);
-            toast({ title: 'Playback blocked', description: 'The browser blocked autoplay. Click again.', variant: 'destructive' });
+
+    const play = async () => {
+      try {
+        const ctx = getAudioCtx();
+        if (ctx.state === 'suspended') await ctx.resume();
+        let buffer = timelineBufferRef.current;
+        if (!buffer) {
+          const clipUrls = new Set(clips.filter((clip) => clip.audioUrl).map((clip) => clip.audioUrl));
+          const legacyTrackClips: Clip[] = tracks
+            .filter((track) => track.audioUrl && !clipUrls.has(track.audioUrl))
+            .map((track) => ({ id: `legacy-${track.id}`, trackId: track.id, name: track.name, start: 0, width: 100, audioUrl: track.audioUrl }));
+          const renderClips = [...clips, ...legacyTrackClips];
+          if (!renderClips.some((clip) => clip.audioUrl)) throw new Error('Import audio or generate a region before playback.');
+          setRenderingTimeline(true);
+          buffer = await renderTimelineToBuffer(renderClips, tracks, {
+            durationSec: masterDuration || undefined,
+            bpm,
+            pluginsByTrack: pluginsByTrack as Record<string, PluginLike[]>,
+            masterChain,
+            // Keep transport volume live on the shared output bus; applying it
+            // here as well would multiply the master gain twice during audition.
+            masterGain: 1,
           });
+          timelineBufferRef.current = buffer;
+          timelineDurationRef.current = buffer.duration;
+          setMasterDuration(buffer.duration);
         }
-        syncStemsTo(master?.currentTime ?? 0, true);
-        setIsPlaying(true);
+        startTimelineBufferAt(buffer, currentTime);
+      } catch (error: any) {
+        toast({ title: 'Timeline playback failed', description: error?.message || 'Could not mix the audio regions.', variant: 'destructive' });
+      } finally {
+        setRenderingTimeline(false);
       }
     };
-    void doPlay();
-  }, [isPlaying, connectMaster, getAudioCtx, syncStemsTo, toast]);
+    void play();
+  }, [isPlaying, clips, tracks, masterDuration, bpm, pluginsByTrack, masterChain, currentTime, getAudioCtx, startTimelineBufferAt, toast]);
 
   const handleStop = useCallback(() => {
+    const timelineSource = timelineSourceRef.current;
+    timelineSourceRef.current = null;
+    try { timelineSource?.stop(); } catch {}
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
     syncStemsTo(0, false);
     cancelAnimationFrame(animFrameRef.current);
@@ -3197,17 +3241,31 @@ export function MiniStudio() {
     setIsRecording(false);
     setPlayhead(0);
     setCurrentTime(0);
+    timelineStartOffsetRef.current = 0;
   }, [syncStemsTo]);
 
   const handleRewind = useCallback(() => {
+    const timelineSource = timelineSourceRef.current;
+    timelineSourceRef.current = null;
+    try { timelineSource?.stop(); } catch {}
     if (audioRef.current) audioRef.current.currentTime = 0;
     syncStemsTo(0, false);
     setPlayhead(0);
     setCurrentTime(0);
     setIsPlaying(false);
+    timelineStartOffsetRef.current = 0;
   }, [syncStemsTo]);
 
   const handleForward = useCallback(() => {
+    if (timelineDurationRef.current > 0) {
+      const nextTime = Math.min(timelineDurationRef.current, currentTime + timelineDurationRef.current * 0.08);
+      if (isPlaying && timelineBufferRef.current) startTimelineBufferAt(timelineBufferRef.current, nextTime);
+      else {
+        setCurrentTime(nextTime);
+        setPlayhead((nextTime / timelineDurationRef.current) * 100);
+      }
+      return;
+    }
     if (audioRef.current && audioRef.current.duration) {
       const next = Math.min(audioRef.current.duration, audioRef.current.currentTime + (audioRef.current.duration * 0.08));
       audioRef.current.currentTime = next;
@@ -3215,18 +3273,21 @@ export function MiniStudio() {
     } else {
       setPlayhead((p) => Math.min(99, p + 8));
     }
-  }, [isPlaying, syncStemsTo]);
+  }, [currentTime, isPlaying, startTimelineBufferAt, syncStemsTo]);
 
   const handleSeek = useCallback((pct: number) => {
-    const raw = pct / 100;
-    setPlayhead(pct);
-    if (audioRef.current && audioRef.current.duration) {
-      const t = raw * audioRef.current.duration;
-      audioRef.current.currentTime = t;
-      syncStemsTo(t, isPlaying);
-      setCurrentTime(t);
+    const duration = timelineDurationRef.current || audioRef.current?.duration || 0;
+    if (!duration) { setPlayhead(pct); return; }
+    const t = Math.max(0, Math.min(duration, pct / 100 * duration));
+    if (isPlaying && timelineBufferRef.current) {
+      startTimelineBufferAt(timelineBufferRef.current, t);
+      return;
     }
-  }, [isPlaying, syncStemsTo]);
+    setPlayhead((t / duration) * 100);
+    setCurrentTime(t);
+    if (audioRef.current && audioRef.current.duration) audioRef.current.currentTime = Math.min(t, audioRef.current.duration);
+    syncStemsTo(t, isPlaying);
+  }, [isPlaying, startTimelineBufferAt, syncStemsTo]);
 
   const handleSeekByFraction = useCallback((frac: number) => {
     handleSeek(frac * 100);
@@ -3250,8 +3311,12 @@ export function MiniStudio() {
     }
     let loudFrame = 0;
     const tick = () => {
-      // Update time from audio element
-      if (audioRef.current && audioRef.current.duration) {
+      // Drive the transport from the rendered timeline buffer, not the raw song element.
+      if (timelineSourceRef.current && audioCtxRef.current && timelineDurationRef.current) {
+        const t = Math.min(timelineDurationRef.current, timelineStartOffsetRef.current + audioCtxRef.current.currentTime - timelineStartedAtRef.current);
+        setCurrentTime(t);
+        setPlayhead((t / timelineDurationRef.current) * 100);
+      } else if (audioRef.current && audioRef.current.duration) {
         const t = audioRef.current.currentTime;
         setCurrentTime(t);
         setPlayhead((t / audioRef.current.duration) * 100);
@@ -3486,11 +3551,6 @@ export function MiniStudio() {
   useEffect(() => { try { localStorage.setItem('ms-grid', String(gridOn)); } catch {} }, [gridOn]);
   useEffect(() => { try { localStorage.setItem('ms-snap', String(snapOn)); } catch {} }, [snapOn]);
   useEffect(() => { try { localStorage.setItem('ms-quantize', quantize); } catch {} }, [quantize]);
-
-  // Persist clips to localStorage so session survives reloads
-  useEffect(() => {
-    try { localStorage.setItem('ms-clips-v1', JSON.stringify(clips)); } catch {}
-  }, [clips]);
 
   // Drag-to-resize panel widths (left tracks panel, right agents panel) — for non-studio sections
   useEffect(() => {
@@ -3894,7 +3954,7 @@ export function MiniStudio() {
           }),
         });
         setMasterChain((current) => ({ ...current, targetLufs: r?.measured?.integratedLufs ?? -14, limiter: r?.measured?.truePeakDb ?? -1, glue: Math.max(current.glue, 40) }));
-        toast({ title: 'Master ready', description: `${r?.preset?.name} · ${r?.measured?.integratedLufs} LUFS` });
+        toast({ title: 'Master targets applied', description: `${r?.preset?.name} targets saved. No mastered audio file was rendered.` });
       } else {
         const mappedKind = kind === 'mix' ? 'beat' : kind === 'tiktok' ? 'hook' : kind;
         const r: any = await apiFetch('/api/mini-studio/generate', {
@@ -3959,6 +4019,13 @@ export function MiniStudio() {
     try {
       const activeFormats = exportFormats.filter((f) => f.active).map((f) => f.id);
       if (activeFormats.length === 0) throw new Error('Select at least one export format.');
+      if (activeFormats.some((format) => format !== 'wav')) throw new Error('Only WAV export is currently available.');
+      const clipUrls = new Set(clips.filter((clip) => clip.audioUrl).map((clip) => clip.audioUrl));
+      const legacyTrackClips: Clip[] = tracks
+        .filter((track) => track.audioUrl && !clipUrls.has(track.audioUrl))
+        .map((track) => ({ id: `legacy-${track.id}`, trackId: track.id, name: track.name, start: 0, width: 100, audioUrl: track.audioUrl }));
+      const renderClips = [...clips, ...legacyTrackClips];
+      if (!renderClips.some((clip) => clip.audioUrl)) throw new Error('Add audio to the timeline before exporting.');
       const created: any = await apiFetch(currentProjectId ? `/api/mini-studio/projects/${currentProjectId}` : '/api/mini-studio/projects', {
         method: currentProjectId ? 'PUT' : 'POST',
         body: JSON.stringify(currentSnapshot()),
@@ -3966,15 +4033,14 @@ export function MiniStudio() {
       const projectId = created?.project?.id || currentProjectId;
       if (projectId) setCurrentProjectId(projectId);
 
-      // Real, client-side WAV render of the loaded master through its DSP chain.
-      // Delivers a downloadable file immediately without a backend render worker.
       const wantsWav = activeFormats.some((f) => f.toLowerCase().includes('wav'));
-      if (wantsWav && currentAudioUrl) {
+      if (wantsWav) {
         try {
-          const masterTrack = tracks.find((t) => t.audioUrl && t.audioUrl === currentAudioUrl);
-          const blob = await renderUrlToWav(currentAudioUrl, {
-            plugins: masterTrack ? (pluginsByTrack[masterTrack.id] || []) as PluginLike[] : [],
-            gain: masterVolumeRef.current,
+          const blob = await renderTimelineToWav(renderClips, tracks, {
+            durationSec: masterDuration || undefined,
+            pluginsByTrack: pluginsByTrack as Record<string, PluginLike[]>,
+            masterChain,
+            masterGain: masterVolumeRef.current,
             bpm,
           });
           const url = URL.createObjectURL(blob);
@@ -3985,18 +4051,13 @@ export function MiniStudio() {
           a.click();
           a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 4000);
-          toast({ title: 'WAV exported', description: 'Local render completed and downloaded.' });
+          toast({ title: 'WAV exported', description: 'The complete timeline mix was rendered to 16-bit stereo WAV.' });
         } catch (renderErr: any) {
           console.warn('[mini-studio] local WAV render failed:', renderErr?.message);
-          toast({ title: 'Local render unavailable', description: 'The file is cross-origin without CORS; it was queued on the server.', variant: 'destructive' });
+          throw new Error(`WAV render failed: ${renderErr?.message || 'audio could not be decoded (the source may deny cross-origin access).'}`);
         }
       }
 
-      const r: any = await apiFetch('/api/mini-studio/export', {
-        method: 'POST',
-        body: JSON.stringify({ projectId, songId: selectedSong?.id || selectedSongId, formats: activeFormats }),
-      });
-      toast({ title: 'Export queued', description: `${r?.exports?.length || activeFormats.length} formats queued.` });
     } catch (e: any) {
       toast({ title: 'Export failed', description: e.message, variant: 'destructive' });
     } finally {
@@ -4178,7 +4239,6 @@ export function MiniStudio() {
 
   const handleNewProject = () => {
     try { localStorage.removeItem('ms-last-project-id'); } catch {}
-    try { localStorage.removeItem('ms-clips-v1'); } catch {}
     autoLoadedRef.current = true; // prevent auto-load from overriding blank session
     setProjectName('New project');
     setCurrentProjectId(null);
@@ -4291,7 +4351,8 @@ export function MiniStudio() {
       if (clip.id !== clipId) return [clip];
       return [
         { ...clip, width: splitAt - clip.start },
-        { ...clip, id: rightClipId, name: `${clip.name}_cut`, start: splitAt, width: clipEnd - splitAt },
+        { ...clip, id: rightClipId, name: `${clip.name}_cut`, start: splitAt, width: clipEnd - splitAt,
+          sourceOffsetSec: (clip.sourceOffsetSec || 0) + (splitAt - clip.start) / 100 * (masterDuration || 120) },
       ];
     }));
     setSelectedClipId(rightClipId);
@@ -4803,9 +4864,10 @@ export function MiniStudio() {
       } else {
         strip.setGain(masterAudible ? 1 : 0, true);
       }
+      strip.setMasteringSettings(masterChain);
     }
     if (audioRef.current) audioRef.current.muted = !masterAudible && webAudioBypassRef.current;
-  }, [tracks, currentAudioUrl, pluginsByTrack, bpm]);
+  }, [tracks, currentAudioUrl, pluginsByTrack, bpm, masterChain]);
 
   // Clean up the entire audio engine on unmount.
   useEffect(() => () => {
@@ -4856,6 +4918,7 @@ export function MiniStudio() {
       gridOn={gridOn}
       snapOn={snapOn}
       quantize={quantize}
+      timelineDurationSec={masterDuration || 120}
       onTool={handleTimelineTool}
       onSeekClick={handleSeek}
       onClipSelect={setSelectedClipId}
@@ -5116,88 +5179,43 @@ export function MiniStudio() {
         </div>
       );
     }
-    // Default: Studio — fully free-floating window layout
+    // Default Studio: a single docked workspace keeps the track list,
+    // arrangement and tools together instead of scattering floating windows.
     return (
-      <div ref={studioContainerRef} className="flex-1 min-w-0 relative overflow-hidden bg-[#080810] flex flex-col">
-
-        {/* ── Floating window canvas ── */}
-        <div className="flex-1 relative overflow-hidden">
-          {FLOAT_WIN_DEFS.map(({ id, title, Icon, color, minW, minH }) => (
-            <FloatingPanel
-              key={id} id={id} title={title} Icon={Icon} color={color}
-              config={floatWins[id] ?? FLOAT_WIN_DEFAULTS[id]}
-              onFocus={focusFloatWin}
-              onDragStart={startFloatDrag}
-              onResizeStart={startFloatResize}
-              onToggleMinimize={toggleMinimizeWin}
-              minW={minW}
-            >
-              {id === 'tracks'   && renderTracksPanel()}
-              {id === 'timeline' && renderTimeline()}
-              {id === 'agents'   && renderAgentsPanel()}
-              {id === 'vocal'    && renderVocalBooth()}
-              {id === 'plugin'   && renderPluginRack()}
-              {id === 'ai'       && renderAiLab()}
-              {id === 'mixer'    && renderMixerConsole()}
-              {id === 'master'   && (
-                <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_2fr] gap-1.5 p-1.5">
-                  <MasterRoom peaks={masterPeaks} durationLabel={masterDurationLabel} /><Loudness meter={meter} /><Comparar peaks={masterPeaks} />{renderExportPanel()}<ReleaseRoom onTile={handleTile} />
-                </div>
-              )}
-            </FloatingPanel>
-          ))}
+      <div ref={studioContainerRef} className="flex-1 min-w-0 min-h-0 overflow-hidden bg-[#080810] flex flex-col gap-2 p-2">
+        <div className="flex flex-1 min-h-[180px] min-w-0 gap-2 overflow-hidden">
+          <div className="w-[210px] xl:w-[240px] shrink-0 min-h-0 rounded-xl border border-white/10 overflow-hidden">{renderTracksPanel()}</div>
+          <div className="flex-1 min-w-0 min-h-0 rounded-xl border border-white/10 overflow-hidden">{renderTimeline()}</div>
         </div>
 
-        {/* ── Control bar at bottom ── */}
-        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[#0d0d10]/95 border-t border-white/5 flex-wrap backdrop-blur-sm" style={{ zIndex: 9999 }}>
-          {/* Window toggle pills */}
-          {FLOAT_WIN_DEFS.map(({ id, title, Icon, color }) => {
-            const win = floatWins[id] ?? FLOAT_WIN_DEFAULTS[id];
-            const active = !win.minimized;
-            return (
-              <button
-                key={id}
-                onClick={() => { toggleMinimizeWin(id); focusFloatWin(id); }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all border"
-                style={{
-                  background: active ? `${color}14` : 'rgba(255,255,255,0.03)',
-                  color: active ? color : '#374151',
-                  borderColor: active ? `${color}35` : 'rgba(255,255,255,0.07)',
-                }}
-                title={active ? `Minimize ${title}` : `Restore ${title}`}
-              >
-                <Icon className="w-3 h-3" />
-                <span className="hidden sm:inline">{title}</span>
+        <section className="shrink-0 min-h-0 rounded-xl border border-white/10 bg-[#0d0d12] overflow-hidden flex flex-col" style={{ height: dockHeight }}>
+          <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-white/5 overflow-x-auto">
+            {FLOAT_WIN_DEFS.filter(({ id }) => !['tracks', 'timeline'].includes(id)).map(({ id, title, Icon, color }) => (
+              <button key={id} onClick={() => { setDockPanel(id); try { localStorage.setItem('ms-dock-panel', id); } catch {} }}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium border transition-colors"
+                style={{ color: dockPanel === id ? color : '#9ca3af', background: dockPanel === id ? `${color}16` : 'transparent', borderColor: dockPanel === id ? `${color}45` : 'transparent' }}>
+                <Icon className="w-3.5 h-3.5" />{title}
               </button>
-            );
-          })}
-          <div className="flex-1" />
-          {/* Action buttons */}
-          <button
-            onClick={showAllFloatWins}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all hover:text-orange-300 hover:border-orange-400/30"
-            style={{ color: '#6b7280', borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
-            title="Show all windows"
-          >
-            <ChevronDown className="w-3 h-3" /> Show all
-          </button>
-          <button
-            onClick={tileFloatLayout}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all hover:text-purple-300 hover:border-purple-400/30"
-            style={{ color: '#6b7280', borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
-            title="Tile windows in a grid"
-          >
-            <Layers className="w-3 h-3" /> Tile
-          </button>
-          <button
-            onClick={resetFloatLayout}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-all hover:text-red-300 hover:border-red-400/30"
-            style={{ color: '#6b7280', borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.03)' }}
-            title="Restaurar layout por defecto"
-          >
-            <RefreshCw className="w-3 h-3" /> Reset
-          </button>
-        </div>
+            ))}
+            <div className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[10px] text-zinc-500" title="Ajustar altura del panel de herramientas">
+              <span>Panel</span>
+              <input aria-label="Altura del panel de herramientas" type="range" min="140" max="440" step="10" value={dockHeight}
+                onChange={(event) => { const value = Number(event.target.value); setDockHeight(value); try { localStorage.setItem('ms-dock-height', String(value)); } catch {} }} className="w-20 accent-orange-500" />
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto p-2">
+            {dockPanel === 'agents' && renderAgentsPanel()}
+            {dockPanel === 'vocal' && renderVocalBooth()}
+            {dockPanel === 'plugin' && renderPluginRack()}
+            {dockPanel === 'ai' && renderAiLab()}
+            {dockPanel === 'mixer' && renderMixerConsole()}
+            {dockPanel === 'master' && (
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2">
+                <MasterRoom peaks={masterPeaks} durationLabel={masterDurationLabel} /><Loudness meter={meter} /><Comparar peaks={masterPeaks} />{renderExportPanel()}<ReleaseRoom onTile={handleTile} />
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     );
   };

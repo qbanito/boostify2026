@@ -61,7 +61,8 @@ const VISUAL_LAYER = 1;
 const AUDIO_LAYER = 2;
 
 const isStill = (c: TimelineClip): boolean =>
-  (c.type === ClipType.IMAGE || c.type === ClipType.GENERATED_IMAGE) && !c.videoUrl;
+  (c.type === ClipType.IMAGE || c.type === ClipType.GENERATED_IMAGE) &&
+  !(c.videoUrl || c.metadata?.videoUrl);
 
 const isVisual = (c: TimelineClip): boolean =>
   c.layerId === VISUAL_LAYER &&
@@ -143,7 +144,7 @@ export function analyzeTimelineQuality(
 
   // ── Placeholders / media faltante ──
   const placeholders = clips.filter(
-    (c) => c.type === ClipType.PLACEHOLDER || (isVisual(c) && !c.url && !c.imageUrl && !c.image_url && !c.generatedImageUrl && c.type !== ClipType.TEXT)
+    (c) => c.type === ClipType.PLACEHOLDER || (isVisual(c) && !c.url && !c.imageUrl && !c.image_url && !c.generatedImageUrl && !c.videoUrl && !c.metadata?.videoUrl && c.type !== ClipType.TEXT)
   );
   if (placeholders.length > 0) {
     issues.push({
@@ -152,6 +153,19 @@ export function analyzeTimelineQuality(
       message: `${placeholders.length} clip(s) sin media (placeholder) — genera o asigna imágenes/videos antes de exportar`,
       clipIds: placeholders.map((c) => c.id),
     });
+  }
+
+  const staleVideoClips = visual.filter(c => c.metadata?.videoStale);
+  if (staleVideoClips.length) {
+    issues.push({ severity: 'error', code: 'stale-video', message: `${staleVideoClips.length} clip(s) conservan un video anterior a la imagen o movimiento actual. Regenera el video antes de exportar.`, clipIds: staleVideoClips.map(c => c.id) });
+  }
+  const generatingClips = visual.filter(c => c.metadata?.videoGenerating || c.generationStatus === 'generating');
+  if (generatingClips.length) {
+    issues.push({ severity: 'warning', code: 'generation-pending', message: `${generatingClips.length} clip(s) siguen generándose y no estarán en el export final.`, clipIds: generatingClips.map(c => c.id) });
+  }
+  const invalidTimingClips = clips.filter(c => !Number.isFinite(c.start) || !Number.isFinite(c.duration) || c.start < 0 || c.duration <= 0 || (c.sourceStart ?? c.in ?? 0) < 0);
+  if (invalidTimingClips.length) {
+    issues.push({ severity: 'error', code: 'invalid-timing', message: `${invalidTimingClips.length} clip(s) tienen tiempos o recortes de origen inválidos.`, clipIds: invalidTimingClips.map(c => c.id) });
   }
 
   // ── Audio ──
@@ -165,7 +179,7 @@ export function analyzeTimelineQuality(
   }
 
   // ── Factores de riesgo "slideshow" (0-100 cada uno) ──
-  const videoClips = visual.filter((c) => c.type === ClipType.VIDEO || !!c.videoUrl);
+  const videoClips = visual.filter((c) => c.type === ClipType.VIDEO || !!c.videoUrl || !!c.metadata?.videoUrl);
   const stillClips = visual.filter(isStill);
   const totalVisualSeconds = visual.reduce((a, c) => a + c.duration, 0) || 1;
   const stillSeconds = stillClips.reduce((a, c) => a + c.duration, 0);

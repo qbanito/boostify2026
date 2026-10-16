@@ -142,6 +142,84 @@ router.get('/user/profile', authenticate, async (req: Request, res: Response) =>
   }
 });
 
+// GET /api/profile/:slugOrId/flow - Lightweight payload for the node-flow canvas.
+// The public profile endpoint intentionally returns complete catalog records for
+// the profile page. Flow only needs layout, identity, counters, and a small
+// preview, so keep this response bounded to avoid loading hundreds of products
+// into the Render web process on every canvas open.
+router.get('/:slugOrId/flow', async (req: Request, res: Response) => {
+  try {
+    const { slugOrId } = req.params;
+    const user = await findProfileUser(slugOrId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Artist not found' });
+    }
+
+    const [userSongs, userMerch, userVideos, songCount, merchCount, videoCount] = await Promise.all([
+      db.select({
+        id: songs.id,
+        title: songs.title,
+        description: songs.description,
+        audioUrl: songs.audioUrl,
+        duration: songs.duration,
+        genre: songs.genre,
+        coverArt: songs.coverArt,
+        plays: songs.plays,
+        isSingle: songs.isSingle,
+      }).from(songs).where(eq(songs.userId, user.id)).limit(12),
+      db.select({
+        id: merchandise.id,
+        name: merchandise.name,
+        description: merchandise.description,
+        price: merchandise.price,
+        category: merchandise.category,
+        isAvailable: merchandise.isAvailable,
+        productStatus: merchandise.productStatus,
+      }).from(merchandise).where(eq(merchandise.userId, user.id)).limit(12),
+      db.select({
+        id: artistMedia.id,
+        title: artistMedia.title,
+        storagePath: artistMedia.storagePath,
+        duration: artistMedia.duration,
+        thumbnail: artistMedia.thumbnail,
+        description: artistMedia.description,
+        views: artistMedia.views,
+      }).from(artistMedia).where(eq(artistMedia.userId, user.id)).limit(12),
+      db.select({ value: count() }).from(songs).where(eq(songs.userId, user.id)),
+      db.select({ value: count() }).from(merchandise).where(eq(merchandise.userId, user.id)),
+      db.select({ value: count() }).from(artistMedia).where(eq(artistMedia.userId, user.id)),
+    ]);
+
+    res.json({
+      id: user.id,
+      pgId: user.id,
+      username: user.username,
+      artistName: user.artistName || user.username,
+      slug: user.slug,
+      genre: user.genre,
+      location: user.location,
+      profileImage: user.profileImage,
+      coverImage: user.coverImage,
+      instagramHandle: user.instagramHandle,
+      twitterHandle: user.twitterHandle,
+      youtubeChannel: user.youtubeChannel,
+      spotifyUrl: user.spotifyUrl,
+      firestoreId: user.firestoreId,
+      profileLayout: user.profileLayout,
+      songs: userSongs,
+      merchandise: userMerch,
+      videos: userVideos,
+      songCount: Number(songCount[0]?.value ?? 0),
+      merchCount: Number(merchCount[0]?.value ?? 0),
+      videoCount: Number(videoCount[0]?.value ?? 0),
+    });
+  } catch (error) {
+    console.error('Error getting lightweight flow profile:', error);
+    res.status(500).json({ message: 'Error getting flow profile' });
+  }
+});
+
 // GET /api/profile/:slugOrId - Get public profile by slug, ID, or firestoreId
 router.get('/:slugOrId', async (req: Request, res: Response) => {
   try {

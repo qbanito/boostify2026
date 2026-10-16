@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/queryClient';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -61,6 +62,17 @@ interface EditModel {
 }
 
 const PROMPT_MODELS: EditModel[] = [
+  {
+    id: 'openai-gpt-image-2.5',
+    label: 'OpenAI GPT Image 2.5',
+    sublabel: 'Reference-aware editing',
+    description: 'Current OpenAI image editing model through fal',
+    badge: 'NEW',
+    badgeClass: 'bg-emerald-600/20 text-emerald-400 border-emerald-600/30',
+    estimatedTime: '30–90s',
+    supportsStrength: false,
+    icon: Sparkles,
+  },
   {
     id: 'nano-banana-2',
     label: 'Nano Banana 2',
@@ -223,7 +235,7 @@ export function ImageEditorModal({
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Model selector
-  const [selectedModelId, setSelectedModelId] = useState<string>('nano-banana-2');
+  const [selectedModelId, setSelectedModelId] = useState<string>('openai-gpt-image-2.5');
   const [strength, setStrength] = useState(0.85);
   const [numOutputs, setNumOutputs] = useState(1);
   const [activePresetCategory, setActivePresetCategory] = useState<PresetCategory>('style');
@@ -333,7 +345,7 @@ export function ImageEditorModal({
 
   // Reset model selection when switching modes
   useEffect(() => {
-    setSelectedModelId(mode === 'inpaint' ? 'flux-fill' : 'nano-banana-2');
+    setSelectedModelId(mode === 'inpaint' ? 'flux-fill' : 'openai-gpt-image-2.5');
   }, [mode]);
 
   /* ----- Comparison slider drag ----- */
@@ -529,18 +541,24 @@ export function ImageEditorModal({
         ...(activeModel?.supportsStrength ? { strength } : {}),
       };
 
-      const response = await fetch('/api/fal/nano-banana/edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to edit image');
-      }
-
-      const data = await response.json();
+      const data = requestModel === 'openai-gpt-image-2.5'
+        ? await apiRequest({
+            url: '/api/fal/wan-music-video/openai-image',
+            method: 'POST',
+            data: { prompt: editInstructions, referenceImages: [imageUrl], numImages: numOutputs, quality: 'high' },
+          })
+        : await (async () => {
+            const response = await fetch('/api/fal/nano-banana/edit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+            });
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.error || 'Failed to edit image');
+            }
+            return response.json();
+          })();
 
       if (previewUrl) {
         setEditHistory(prev => [...prev, previewUrl]);
