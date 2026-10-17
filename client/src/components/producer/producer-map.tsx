@@ -73,6 +73,7 @@ const getInstrumentIcon = (instrument: string) => INSTRUMENT_SVGS[instrument] ||
 interface MapStyleDef {
   label: string;
   url: string;
+  attribution: string;
   subdomains?: string;
   maxZoom: number;
   bg: string;      // leaflet container background while tiles load
@@ -83,42 +84,58 @@ const MAP_STYLES: Record<string, MapStyleDef> = {
   dark: {
     label: "Dark",
     url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: "abcd", maxZoom: 19, bg: "#16181d",
     swatch: "linear-gradient(135deg,#1b1e26,#3d434f)", dark: true,
   },
   light: {
     label: "Light",
     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: "abcd", maxZoom: 19, bg: "#e9e9e7",
     swatch: "linear-gradient(135deg,#f5f5f3,#c9d2da)", dark: false,
   },
   voyager: {
     label: "Voyager",
     url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: "abcd", maxZoom: 19, bg: "#d5e3ea",
     swatch: "linear-gradient(135deg,#cfe3da,#f3e7cd)", dark: false,
   },
   streets: {
-    label: "Streets",
+    label: "OpenStreetMap",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     subdomains: "abc", maxZoom: 19, bg: "#dee5e9",
     swatch: "linear-gradient(135deg,#e8eef2,#b8d4a8)", dark: false,
   },
   satellite: {
     label: "Satellite",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Sources: Esri, Maxar, Earthstar Geographics',
     maxZoom: 19, bg: "#0b0f14",
     swatch: "linear-gradient(135deg,#233a22,#3a5b74)", dark: true,
   },
   terrain: {
     label: "Terrain",
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: &copy; <a href="https://opentopomap.org/">OpenTopoMap</a>',
     subdomains: "abc", maxZoom: 17, bg: "#dfe8dc",
     swatch: "linear-gradient(135deg,#d9e6cf,#a9c4b0)", dark: false,
   },
 };
 const MAP_STYLE_KEY = "boostify_producer_map_style";
 const CARTO_API_KEY = import.meta.env.CARTO_API_KEY?.trim();
+// Start with a keyless, independent basemap every session. CARTO remains an
+// optional style, never a dependency for opening the map.
+const DEFAULT_MAP_STYLE = "streets";
+const usesCartoTiles = (style: MapStyleDef) => style.url.includes("basemaps.cartocdn.com");
+const isStyleAvailable = (style: MapStyleDef) => Boolean(CARTO_API_KEY) || !usesCartoTiles(style);
+const AVAILABLE_MAP_STYLES = Object.entries(MAP_STYLES).filter(([, style]) => isStyleAvailable(style));
+const resolveMapStyle = (styleKey: string) => {
+  const style = MAP_STYLES[styleKey];
+  return style && isStyleAvailable(style) ? styleKey : DEFAULT_MAP_STYLE;
+};
 const withCartoApiKey = (url: string) => {
   if (!CARTO_API_KEY || !url.includes("basemaps.cartocdn.com")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(CARTO_API_KEY)}`;
@@ -276,11 +293,14 @@ export function ProducerMap() {
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [mapStyle, setMapStyle] = useState<string>(() => {
-    if (typeof window === "undefined") return "dark";
+    if (typeof window === "undefined") return DEFAULT_MAP_STYLE;
     try {
       const saved = localStorage.getItem(MAP_STYLE_KEY);
-      return saved && MAP_STYLES[saved] ? saved : "dark";
-    } catch { return "dark"; }
+      const savedStyle = saved ? MAP_STYLES[saved] : undefined;
+      // Do not restore a CARTO style blindly: an old, missing, or rejected
+      // key can return a 200 watermark tile instead of a normal tile error.
+      return savedStyle && !usesCartoTiles(savedStyle) ? saved! : DEFAULT_MAP_STYLE;
+    } catch { return DEFAULT_MAP_STYLE; }
   });
   const [styleMenuOpen, setStyleMenuOpen] = useState(false);
   const { toast } = useToast();
@@ -369,16 +389,16 @@ export function ProducerMap() {
       center: [38.0, -40.0],
       zoom: 3,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
       minZoom: 2,
       maxZoom: 18,
       worldCopyJump: true,
     });
 
-    // User-selectable tile style (persisted). Default: modern dark gray.
-    const initialStyle = MAP_STYLES[mapStyle] || MAP_STYLES.dark;
+    // Keep the map usable without CARTO credentials; OSM Streets is the no-key fallback.
+    const initialStyle = MAP_STYLES[resolveMapStyle(mapStyle)] || MAP_STYLES.streets;
     tileLayerRef.current = L.tileLayer(withCartoApiKey(initialStyle.url), {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      attribution: initialStyle.attribution,
       ...(initialStyle.subdomains ? { subdomains: initialStyle.subdomains } : {}),
       maxZoom: initialStyle.maxZoom,
     }).addTo(map);
@@ -454,13 +474,29 @@ export function ProducerMap() {
     const map = mapRef.current;
     const st = MAP_STYLES[mapStyle];
     if (!map || !st) return;
+    const resolvedStyle = resolveMapStyle(mapStyle);
+    if (resolvedStyle !== mapStyle) {
+      setMapStyle(resolvedStyle);
+      return;
+    }
     try { localStorage.setItem(MAP_STYLE_KEY, mapStyle); } catch { /* noop */ }
     if (tileLayerRef.current) map.removeLayer(tileLayerRef.current);
-    tileLayerRef.current = L.tileLayer(withCartoApiKey(st.url), {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    const nextTileLayer = L.tileLayer(withCartoApiKey(st.url), {
+      attribution: st.attribution,
       ...(st.subdomains ? { subdomains: st.subdomains } : {}),
       maxZoom: st.maxZoom,
-    }).addTo(map);
+    });
+    let fallbackTriggered = false;
+    nextTileLayer.on("tileerror", () => {
+      if (fallbackTriggered || !usesCartoTiles(st)) return;
+      fallbackTriggered = true;
+      setMapStyle("streets");
+      toast({
+        title: "CARTO no está disponible",
+        description: "El mapa cambió a OpenStreetMap para que puedas seguir usándolo.",
+      });
+    });
+    tileLayerRef.current = nextTileLayer.addTo(map);
     map.getContainer().style.background = st.bg;
   }, [mapStyle]);
 
@@ -1132,7 +1168,7 @@ export function ProducerMap() {
                 >
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold px-1.5 pb-1.5">Map style</div>
                   <div className="space-y-1">
-                    {Object.entries(MAP_STYLES).map(([key, st]) => (
+                    {AVAILABLE_MAP_STYLES.map(([key, st]) => (
                       <button
                         key={key}
                         onClick={() => { setMapStyle(key); setStyleMenuOpen(false); }}
