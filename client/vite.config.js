@@ -105,6 +105,11 @@ function ogMetaPlugin() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // CARTO basemap keys are browser-facing. Expose only this variable to the
+  // client build; build-for-deploy.js runs Vite from the client directory.
+  define: {
+    'import.meta.env.CARTO_API_KEY': JSON.stringify(process.env.CARTO_API_KEY || ''),
+  },
   plugins: [
     ogMetaPlugin(),
     react(),
