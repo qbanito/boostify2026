@@ -1,7 +1,7 @@
 /**
  * FashionTryOnPanel — Virtual try-on + fan scene community gallery
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -35,9 +35,10 @@ interface Props {
   brand: FashionBrand | null;
   isOwner: boolean;
   colors: { hexPrimary: string; hexAccent: string; hexBorder: string };
+  initialProductId?: number;
 }
 
-export function FashionTryOnPanel({ artistId, brand, isOwner, colors }: Props) {
+export function FashionTryOnPanel({ artistId, brand, isOwner, colors, initialProductId }: Props) {
   const { toast } = useToast();
   const modelInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +67,16 @@ export function FashionTryOnPanel({ artistId, brand, isOwner, colors }: Props) {
   const products = productsData?.products || [];
   const fanScenes = galleryData?.scenes || [];
 
+  useEffect(() => {
+    if (!initialProductId) {
+      setSelectedProduct(null);
+      return;
+    }
+    if (products.length === 0) return;
+    const product = products.find(item => item.id === initialProductId);
+    if (product) setSelectedProduct(product);
+  }, [initialProductId, products]);
+
   const tryOnMutation = useMutation({
     mutationFn: () => {
       const garmentUrl = selectedProduct?.productImageUrls?.[0] || '';
@@ -90,6 +101,16 @@ export function FashionTryOnPanel({ artistId, brand, isOwner, colors }: Props) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({ title: 'Use a PNG, JPEG, or WebP photo', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 7 * 1024 * 1024) {
+      toast({ title: 'Image is too large', description: 'Choose a photo 7 MB or smaller.', variant: 'destructive' });
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -126,7 +147,10 @@ export function FashionTryOnPanel({ artistId, brand, isOwner, colors }: Props) {
               </div>
             )}
           </div>
-          <input ref={modelInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+          <input ref={modelInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleFileUpload} />
+          <p className="mt-2 text-[10px] text-white/30">
+            Your photo is processed by FAL to create the preview. It appears in the public fan gallery only if you enable sharing.
+          </p>
         </div>
 
         {/* Select garment */}

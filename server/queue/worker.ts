@@ -1,7 +1,7 @@
 /**
  * BullMQ media worker
  * ===================
- * Consumes the `boostify:media` queue and dispatches each job to its registered
+ * Consumes the `boostify-media` queue and dispatches each job to its registered
  * handler. Started by the dedicated `worker` Render service (or
  * `npm run start:worker`). Requires REDIS_URL.
  */

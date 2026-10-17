@@ -23,6 +23,8 @@ import { Queue, type JobsOptions } from 'bullmq';
 import { getRedisConnection, redisUrl } from './connection';
 
 /** Single BullMQ queue; the job `name` discriminates the handler. */
+// BullMQ queue names cannot contain `:`. Keep the namespace separator in the
+// logical name in comments, but use a valid queue identifier at runtime.
 export const MEDIA_QUEUE = 'boostify-media';
 
 export type JobContext = { jobId?: string; name: string; attempt?: number };

@@ -33,11 +33,12 @@ interface Props {
   brand: FashionBrand | null;
   isOwner: boolean;
   colors: { hexPrimary: string; hexAccent: string; hexBorder: string };
+  onTryOn: (productId: number) => void;
 }
 
 const CATEGORIES = ['all', 'top', 'bottom', 'outerwear', 'footwear', 'accessory', 'headwear', 'bodysuit', 'set'];
 
-export function VirtualStorefront({ artistId, brand, isOwner, colors }: Props) {
+export function VirtualStorefront({ artistId, brand, isOwner, colors, onTryOn }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [filter, setFilter] = useState('all');
@@ -45,7 +46,6 @@ export function VirtualStorefront({ artistId, brand, isOwner, colors }: Props) {
   const [genResult, setGenResult] = useState<Partial<Product> | null>(null);
   const [genCategory, setGenCategory] = useState('top');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedSize, setSelectedSize] = useState('');
 
   const { data, isLoading } = useQuery<{ success: boolean; products: Product[] }>({
     queryKey: ['fashion-products', artistId],
@@ -123,7 +123,7 @@ export function VirtualStorefront({ artistId, brand, isOwner, colors }: Props) {
       )}
 
       {/* Product Detail Modal */}
-      <Dialog open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
+      <Dialog open={!!selectedProduct} onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}>
         <DialogContent className="bg-[#08080f] border-white/10 text-white max-w-md">
           {selectedProduct && (
             <>
@@ -135,32 +135,21 @@ export function VirtualStorefront({ artistId, brand, isOwner, colors }: Props) {
                   className="w-full h-52 object-cover rounded-xl" />
               )}
               <p className="text-white/60 text-sm">{selectedProduct.description}</p>
-              <div className="flex items-center gap-3">
-                <span className="text-white font-bold text-xl">${selectedProduct.price}</span>
-                {selectedProduct.compareAtPrice && (
-                  <span className="text-white/30 line-through text-sm">${selectedProduct.compareAtPrice}</span>
-                )}
-              </div>
-              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                <div>
-                  <p className="text-white/30 text-xs mb-2">Select Size</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {selectedProduct.sizes.map(sz => (
-                      <button key={sz} onClick={() => setSelectedSize(sz)}
-                        className="w-10 h-10 rounded-lg text-xs font-bold transition-all"
-                        style={selectedSize === sz
-                          ? { background: colors.hexPrimary, color: 'white' }
-                          : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
-                        {sz}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <p className="text-white/35 text-[11px]">
+                Checkout for digital fashion is not available yet.
+              </p>
               <Button className="w-full rounded-xl font-semibold"
                 style={{ background: colors.hexPrimary }}
-                disabled={!selectedSize && (selectedProduct.sizes?.length || 0) > 0}>
-                <ShoppingBag className="w-4 h-4 mr-2" /> Buy Now
+                disabled={!selectedProduct.isAvailable || !selectedProduct.productImageUrls?.[0]}
+                onClick={() => {
+                  const productId = selectedProduct.id;
+                  setSelectedProduct(null);
+                  onTryOn(productId);
+                }}>
+                <Shirt className="w-4 h-4 mr-2" />
+                {!selectedProduct.isAvailable
+                  ? 'Look Unavailable'
+                  : selectedProduct.productImageUrls?.[0] ? 'Try On This Look' : 'Try-on Image Missing'}
               </Button>
             </>
           )}

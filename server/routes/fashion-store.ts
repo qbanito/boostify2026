@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { fal } from '@fal-ai/client';
 import { db } from '../db';
 import {
   fashionBrands,
@@ -22,11 +23,32 @@ import {
   generateProductConcept,
   generateProductLineup,
   generateFashionCampaign,
+  normalizeProductCategory,
   isLikelyImageUrl,
 } from '../services/fashion-ai-service';
 import { rateLimitAiGen } from '../middleware/rate-limit';
 
 const router = Router();
+const FAL_API_KEY = process.env.FAL_KEY || process.env.FAL_AI_KEY || process.env.FAL_API_KEY || '';
+
+async function uploadTryOnInput(input: unknown): Promise<string> {
+  if (typeof input !== 'string' || input.length === 0) {
+    throw new Error('An image is required for virtual try-on');
+  }
+
+  if (/^https:\/\//i.test(input)) return input;
+
+  const match = input.match(/^data:image\/(png|jpeg|webp);base64,([a-z0-9+/=]+)$/i);
+  if (!match) throw new Error('Use a PNG, JPEG, or WebP image');
+
+  const mimeType = `image/${match[1].toLowerCase()}`;
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > 7 * 1024 * 1024) throw new Error('Image must be 7 MB or smaller');
+  if (bytes.length === 0) throw new Error('The uploaded image is empty');
+
+  const imageBlob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+  return fal.storage.upload(imageBlob as any);
+}
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -681,7 +703,7 @@ router.post('/:artistId/generate-universe', authenticate, rateLimitAiGen, async 
           collectionId: collection.id,
           name: p.name,
           description: p.description,
-          category: p.category || 'top',
+          category: normalizeProductCategory(p.category),
           price: String(p.price || '0'),
           compareAtPrice: p.compareAtPrice ? String(p.compareAtPrice) : undefined,
           productImageUrls: p.productImageUrls || [],
@@ -741,28 +763,60 @@ router.post('/:artistId/generate-universe', authenticate, rateLimitAiGen, async 
  * POST /api/fashion-store/tryon
  * Virtual try-on session using Kling AI
  */
-router.post('/tryon', async (req: Request, res: Response) => {
+router.post('/tryon', authenticate, rateLimitAiGen, async (req: Request, res: Response) => {
   try {
     const { modelImageUrl, garmentImageUrl, productId, brandId, isFanScene, fanName, isPublic } = req.body;
 
     if (!modelImageUrl || !garmentImageUrl) {
       return res.status(400).json({ error: 'modelImageUrl and garmentImageUrl are required' });
     }
+    if (!FAL_API_KEY) return res.status(503).json({ error: 'Virtual try-on is temporarily unavailable' });
 
-    // Forward to the existing Kling try-on endpoint
-    const klingRes = await fetch(`${process.env.BASE_URL || 'http://localhost:5000'}/api/kling/virtual-tryon`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modelImage: modelImageUrl, clothImage: garmentImageUrl }),
+    const parsedBrandId = Number(brandId);
+    if (!Number.isInteger(parsedBrandId) || parsedBrandId <= 0) {
+      return res.status(400).json({ error: 'A valid fashion brand is required' });
+    }
+    const [brand] = await db.select({ id: fashionBrands.id })
+      .from(fashionBrands)
+      .where(eq(fashionBrands.id, parsedBrandId))
+      .limit(1);
+    if (!brand) return res.status(404).json({ error: 'Fashion brand not found' });
+
+    let category: 'tops' | 'bottoms' | 'full-body' = 'tops';
+    if (productId) {
+      const parsedProductId = Number(productId);
+      if (!Number.isInteger(parsedProductId) || parsedProductId <= 0) {
+        return res.status(400).json({ error: 'A valid fashion item is required' });
+      }
+      const [product] = await db.select({ brandId: fashionProducts.brandId, category: fashionProducts.category })
+        .from(fashionProducts)
+        .where(eq(fashionProducts.id, parsedProductId))
+        .limit(1);
+      if (!product || product.brandId !== parsedBrandId) {
+        return res.status(404).json({ error: 'Fashion item not found for this brand' });
+      }
+      if (product.category === 'bottom') category = 'bottoms';
+      else if (product.category === 'bodysuit' || product.category === 'set') category = 'full-body';
+    }
+
+    fal.config({ credentials: FAL_API_KEY });
+    const [uploadedModelImageUrl, uploadedGarmentImageUrl] = await Promise.all([
+      uploadTryOnInput(modelImageUrl),
+      uploadTryOnInput(garmentImageUrl),
+    ]);
+    const result: any = await fal.subscribe('fal-ai/idm-vton', {
+      input: {
+        human_image_url: uploadedModelImageUrl,
+        garment_image_url: uploadedGarmentImageUrl,
+        category,
+        auto_mask: true,
+        auto_crop: true,
+      },
+      logs: false,
     });
-
-    let resultImageUrl: string | null = null;
-    let status: 'completed' | 'failed' = 'failed';
-
-    if (klingRes.ok) {
-      const klingData = await klingRes.json();
-      resultImageUrl = klingData.imageUrl || klingData.result || null;
-      status = resultImageUrl ? 'completed' : 'failed';
+    const resultImageUrl = result?.image?.url;
+    if (!resultImageUrl || !/^https:\/\//i.test(resultImageUrl)) {
+      return res.status(502).json({ error: 'Virtual try-on did not return an image. Please try again.' });
     }
 
     // Save session
@@ -773,20 +827,22 @@ router.post('/tryon', async (req: Request, res: Response) => {
         productId: productId ? Number(productId) : undefined,
         userId: pgUserId || undefined,
         brandId: brandId ? Number(brandId) : undefined,
-        modelImageUrl,
-        garmentImageUrl,
-        resultImageUrl: resultImageUrl || undefined,
+        modelImageUrl: uploadedModelImageUrl,
+        garmentImageUrl: uploadedGarmentImageUrl,
+        resultImageUrl,
         isFanScene: isFanScene ?? false,
         fanName: fanName || undefined,
         isPublic: isPublic ?? false,
-        status,
+        status: 'completed',
       })
       .returning();
 
     return res.json({ success: true, session, resultImageUrl });
   } catch (err: any) {
     console.error('[fashion-store] tryon error:', err.message);
-    return res.status(500).json({ error: err.message });
+    const status = /7 MB or smaller/.test(err.message) ? 413
+      : /image is required|PNG, JPEG, or WebP|empty/i.test(err.message) ? 400 : 500;
+    return res.status(status).json({ error: status === 500 ? 'Could not complete virtual try-on. Please try again.' : err.message });
   }
 });
 
@@ -807,7 +863,12 @@ router.get('/:artistId/tryon/fan-gallery', async (req: Request, res: Response) =
     if (!brand) return res.json({ success: true, scenes: [] });
 
     const scenes = await db
-      .select()
+      .select({
+        id: fashionTryonSessions.id,
+        resultImageUrl: fashionTryonSessions.resultImageUrl,
+        fanName: fashionTryonSessions.fanName,
+        createdAt: fashionTryonSessions.createdAt,
+      })
       .from(fashionTryonSessions)
       .where(
         and(

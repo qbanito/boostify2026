@@ -124,7 +124,6 @@ import {
   Star,
   Maximize2,
   Minimize2,
-  LogIn,
   LogOut,
   Trophy,
   Shield,
@@ -135,7 +134,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery, CACHE_TTL } from "../../hooks/use-cached-query";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
 import { db, storage } from "../../firebase";
@@ -2340,7 +2339,7 @@ function ParallaxOrbs({ hexPrimary, hexAccent }: { hexPrimary: string; hexAccent
         <motion.div
           className="rounded-full"
           style={{ width: '65vw', height: '65vw', background: hexPrimary, opacity: 0.07, filter: 'blur(90px)' }}
-          animate={{ x: [0, 80, 30, 0], y: [0, 50, 100, 0] }}
+          animate={reduceMotion ? { x: 0, y: 0 } : { x: [0, 80, 30, 0], y: [0, 50, 100, 0] }}
           transition={{ duration: 24, repeat: Infinity, ease: 'easeInOut' }}
         />
       </motion.div>
@@ -2349,7 +2348,7 @@ function ParallaxOrbs({ hexPrimary, hexAccent }: { hexPrimary: string; hexAccent
         <motion.div
           className="rounded-full"
           style={{ width: '55vw', height: '55vw', background: hexAccent, opacity: 0.055, filter: 'blur(110px)' }}
-          animate={{ x: [0, -50, -80, 0], y: [0, 70, 20, 0] }}
+          animate={reduceMotion ? { x: 0, y: 0 } : { x: [0, -50, -80, 0], y: [0, 70, 20, 0] }}
           transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut', delay: 5 }}
         />
       </motion.div>
@@ -2358,7 +2357,7 @@ function ParallaxOrbs({ hexPrimary, hexAccent }: { hexPrimary: string; hexAccent
         <motion.div
           className="rounded-full"
           style={{ width: '45vw', height: '45vw', background: hexPrimary, opacity: 0.045, filter: 'blur(130px)' }}
-          animate={{ x: [-40, 60, 10, -40], y: [0, -70, -30, 0] }}
+          animate={reduceMotion ? { x: 0, y: 0 } : { x: [-40, 60, 10, -40], y: [0, -70, -30, 0] }}
           transition={{ duration: 38, repeat: Infinity, ease: 'easeInOut', delay: 12 }}
         />
       </motion.div>
@@ -2376,6 +2375,7 @@ function ParallaxOrbs({ hexPrimary, hexAccent }: { hexPrimary: string; hexAccent
 
 export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfileProps) {
   const { t } = useTranslation();
+  const prefersReducedMotion = useReducedMotion();
   // Global audio queue (single shared <audio>; survives across sections)
   const audioPlayer = useAudioPlayer();
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
@@ -4953,7 +4953,35 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     pageMode: initialArtistData?.pageMode || userProfile?.pageMode || 'artist',
     blockchainArtistId: initialArtistData?.blockchainArtistId || userProfile?.blockchainArtistId || null,
     isMinted: !!(initialArtistData?.blockchainArtistId || userProfile?.blockchainArtistId),
+    isVerified: Boolean(initialArtistData?.isVerified ?? initialArtistData?.verified ?? userProfile?.isVerified ?? userProfile?.verified),
   };
+
+  // Reuse the streaming follow system for a real, persistent fan action in the hero.
+  const heroArtistId = Number(artist.pgId);
+  const canFollowFromHero = Number.isInteger(heroArtistId) && heroArtistId > 0;
+  const { data: heroFollowData } = useQuery<{ ids: number[] }>({
+    queryKey: ["/api/streaming/follows/ids"],
+    enabled: isAuthenticated && canFollowFromHero,
+    queryFn: async () => {
+      const response = await apiRequest("/api/streaming/follows/ids");
+      return { ids: Array.isArray(response?.ids) ? response.ids.map(Number) : [] };
+    },
+  });
+  const isFollowingFromHero = (heroFollowData?.ids || []).includes(heroArtistId);
+  const [heroFollowerCount, setHeroFollowerCount] = useState<number | null>(null);
+  const heroFollowMutation = useMutation({
+    mutationFn: async (follow: boolean) => apiRequest(`/api/streaming/follows/${heroArtistId}`, { method: follow ? "POST" : "DELETE" }),
+    onSuccess: (result: any) => {
+      if (Number.isFinite(Number(result?.followers))) setHeroFollowerCount(Number(result.followers));
+      queryClient.invalidateQueries({ queryKey: ["/api/streaming/follows/ids"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/streaming/following/feed"] });
+    },
+    onError: (error: any) => toast({
+      title: "No se pudo actualizar el seguimiento",
+      description: error?.message || "Inténtalo de nuevo.",
+      variant: "destructive",
+    }),
+  });
 
   /** Extract dominant colours from the artist's profile image and build a
    *  custom colour palette + font pairing that adapts to the image aesthetic. */
@@ -6444,7 +6472,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       <audio ref={audioRef} onEnded={() => setPlayingSongId(null)} />
       
       {/* Hero Header - Dise�o Ultra Premium 2025 */}
-      <header className="relative h-[100dvh] w-full overflow-hidden" style={{ margin: 0, padding: 0, top: 0, left: 0 }}>
+      <header className="relative h-[88svh] min-h-[620px] max-h-[900px] w-full overflow-hidden md:h-[90svh]" style={{ margin: 0, padding: 0, top: 0, left: 0 }}>
         {/* Background con efecto cinematogr�fico */}
         <div className="absolute inset-0">
           {(() => {
@@ -6459,7 +6487,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                 <video
                   key={artist.loopVideoUrl}
                   src={artist.loopVideoUrl}
-                  autoPlay
+                  autoPlay={!prefersReducedMotion}
                   muted
                   loop
                   playsInline
@@ -6484,7 +6512,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   <video
                     key={artist.bannerImage}
                     src={artist.bannerImage}
-                    autoPlay
+                    autoPlay={!prefersReducedMotion}
                     muted
                     loop
                     playsInline
@@ -6517,7 +6545,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
             return (
               <video
                 key={DEFAULT_HERO_VIDEO}
-                autoPlay
+                autoPlay={!prefersReducedMotion}
                 muted
                 loop
                 playsInline
@@ -6548,25 +6576,25 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               linear-gradient(90deg, ${colors.hexAccent}40 1px, transparent 1px)
             `,
             backgroundSize: '50px 50px',
-            animation: 'grid-move 20s linear infinite'
+            animation: prefersReducedMotion ? 'none' : 'grid-move 20s linear infinite'
           }}
         ></div>
         
         {/* Part�culas flotantes mejoradas */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(12)].map((_, i) => (
+          {[...Array(8)].map((_, i) => (
             <div
               key={i}
               className="absolute rounded-full blur-sm"
               style={{
-                width: `${Math.random() * 6 + 2}px`,
-                height: `${Math.random() * 6 + 2}px`,
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
+                width: `${3 + (i % 3) * 2}px`,
+                height: `${3 + (i % 3) * 2}px`,
+                top: `${10 + ((i * 37) % 78)}%`,
+                left: `${7 + ((i * 53) % 86)}%`,
                 backgroundColor: colors.hexAccent,
-                opacity: Math.random() * 0.4 + 0.1,
-                animation: `float ${Math.random() * 10 + 15}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 5}s`
+                opacity: 0.12 + (i % 4) * 0.06,
+                animation: prefersReducedMotion ? 'none' : `float ${18 + (i % 4) * 4}s ease-in-out infinite`,
+                animationDelay: prefersReducedMotion ? '0s' : `${(i % 5) * 0.7}s`
               }}
             />
           ))}
@@ -6652,12 +6680,12 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         {/* Contenido principal del hero - Layout centrado */}
         <div className="absolute inset-0 flex items-center justify-center z-20">
           <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-            <div className="text-center space-y-6 md:space-y-8">
+            <div className="text-center space-y-4 md:space-y-6">
               
               {/* Nombre del artista */}
               <div className="space-y-3">
                 <h1 
-                  className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black leading-none tracking-tighter"
+                  className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black leading-none tracking-tighter"
                   style={{
                     backgroundImage: `linear-gradient(135deg, #FFFFFF 0%, ${colors.hexAccent} 30%, ${colors.hexPrimary} 50%, ${colors.hexAccent} 70%, #FFFFFF 100%)`,
                     backgroundSize: '200% 200%',
@@ -6665,7 +6693,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                     filter: `drop-shadow(0 0 40px ${colors.hexAccent}90) drop-shadow(0 4px 20px rgba(0,0,0,0.9))`,
-                    animation: 'gradient-x 6s ease infinite',
+                    animation: prefersReducedMotion ? 'none' : 'gradient-x 6s ease infinite',
                     textTransform: 'uppercase',
                     letterSpacing: '-0.05em'
                   }}
@@ -6709,7 +6737,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               </div>
 
               {/* G�nero y ubicaci�n con �conos */}
-              <div className="flex flex-wrap items-center justify-center gap-4 text-xl md:text-2xl lg:text-3xl font-bold"
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm sm:text-base md:text-lg font-semibold"
                 style={{ textShadow: `0 2px 20px rgba(0,0,0,0.8), 0 0 40px ${colors.hexAccent}40` }}>
                 {/* Mode badge - only show for non-artist modes */}
                 {pageMode !== 'artist' && (
@@ -6724,62 +6752,72 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   </>
                 )}
                 <div className="flex items-center gap-2">
-                  <Music className="h-5 w-5 md:h-6 md:w-6" style={{ color: colors.hexAccent, filter: `drop-shadow(0 0 6px ${colors.hexAccent}80)` }} />
+                  <Music className="h-4 w-4" style={{ color: colors.hexAccent }} />
                   <span className="text-white">{artist.genre || modeConfig.defaultGenreLabel}</span>
                 </div>
                 {artist.location && (
                   <>
-                    <span className="inline-block w-2 h-2 rounded-full bg-white/40 mx-1"></span>
+                      <span className="inline-block w-1 h-1 rounded-full bg-white/40 mx-1"></span>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-5 w-5 md:h-6 md:w-6" style={{ color: colors.hexAccent, filter: `drop-shadow(0 0 6px ${colors.hexAccent}80)` }} />
+                      <MapPin className="h-4 w-4" style={{ color: colors.hexAccent }} />
                       <span className="text-white/90">{formatLocation(artist.location)}</span>
                     </div>
                   </>
                 )}
               </div>
 
-              {/* Estad�sticas mejoradas */}
-              <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mt-6">
+              {artist.biography && (
+                <p className="mx-auto max-w-xl px-4 text-sm sm:text-base leading-relaxed text-white/80 line-clamp-2" style={{ textShadow: '0 2px 12px rgba(0,0,0,.9)' }}>
+                  {artist.biography}
+                </p>
+              )}
+
+              {!isOwnProfile && (
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        handleHeroSignIn();
+                        return;
+                      }
+                      if (canFollowFromHero && !heroFollowMutation.isPending) {
+                        heroFollowMutation.mutate(!isFollowingFromHero);
+                      }
+                    }}
+                    disabled={!canFollowFromHero || heroFollowMutation.isPending}
+                    aria-pressed={isFollowingFromHero}
+                    className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.03] active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transform-none"
+                    style={{ background: isFollowingFromHero ? 'rgba(255,255,255,.14)' : `linear-gradient(135deg, ${colors.hexAccent}, ${colors.hexPrimary})`, border: '1px solid rgba(255,255,255,.28)', boxShadow: `0 8px 28px ${colors.hexAccent}35` }}
+                    data-testid="button-hero-follow"
+                  >
+                    <Heart className="h-4 w-4" fill={isFollowingFromHero ? 'currentColor' : 'none'} />
+                    {heroFollowMutation.isPending ? '…' : t(isFollowingFromHero ? 'profile.following' : 'profile.follow')}
+                  </button>
+                  <a
+                    href="#music"
+                    className="inline-flex items-center justify-center rounded-full border border-white/30 bg-black/30 px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  >
+                    Explorar música
+                  </a>
+                </div>
+              )}
+
+              {/* Datos auténticos, compactos y con menos peso visual */}
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 pt-1">
                 {songs.length > 0 && (
-                  <div className="group relative">
-                    <div 
-                      className="absolute -inset-2 rounded-3xl blur-xl opacity-50 group-hover:opacity-80 transition-all duration-300"
-                      style={{ backgroundColor: colors.hexAccent }}
-                    ></div>
-                    <div className="relative backdrop-blur-2xl bg-gradient-to-br from-white/20 to-white/5 border-2 rounded-3xl px-6 md:px-8 py-4 md:py-6 transform group-hover:scale-110 transition-all duration-300"
-                      style={{ borderColor: `${colors.hexAccent}60` }}
-                    >
-                      <div className="text-4xl md:text-5xl font-black mb-1" style={{ color: colors.hexAccent }}>{songs.length}</div>
-                      <div className="text-xs md:text-sm text-white font-bold uppercase tracking-widest">Canciones</div>
-                    </div>
+                  <div className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-sm text-white/90 backdrop-blur-md">
+                    <span className="font-bold text-white">{songs.length}</span> {songs.length === 1 ? 'canción' : 'canciones'}
                   </div>
                 )}
                 {videos.length > 0 && (
-                  <div className="group relative">
-                    <div 
-                      className="absolute -inset-2 rounded-3xl blur-xl opacity-50 group-hover:opacity-80 transition-all duration-300"
-                      style={{ backgroundColor: colors.hexAccent }}
-                    ></div>
-                    <div className="relative backdrop-blur-2xl bg-gradient-to-br from-white/20 to-white/5 border-2 rounded-3xl px-6 md:px-8 py-4 md:py-6 transform group-hover:scale-110 transition-all duration-300"
-                      style={{ borderColor: `${colors.hexAccent}60` }}
-                    >
-                      <div className="text-4xl md:text-5xl font-black mb-1" style={{ color: colors.hexAccent }}>{videos.length}</div>
-                      <div className="text-xs md:text-sm text-white font-bold uppercase tracking-widest">Videos</div>
-                    </div>
+                  <div className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-sm text-white/90 backdrop-blur-md">
+                    <span className="font-bold text-white">{videos.length}</span> {videos.length === 1 ? 'video' : 'videos'}
                   </div>
                 )}
-                {artist.instagram && (
-                  <div className="group relative">
-                    <div 
-                      className="absolute -inset-2 rounded-3xl blur-xl opacity-50 group-hover:opacity-80 transition-all duration-300"
-                      style={{ backgroundColor: colors.hexAccent }}
-                    ></div>
-                    <div className="relative backdrop-blur-2xl bg-gradient-to-br from-white/20 to-white/5 border-2 rounded-3xl px-6 md:px-8 py-4 md:py-6 flex flex-col items-center gap-2 transform group-hover:scale-110 transition-all duration-300"
-                      style={{ borderColor: `${colors.hexAccent}60` }}
-                    >
-                      <Instagram className="h-6 w-6 md:h-8 md:w-8" style={{ color: colors.hexAccent }} />
-                      <span className="text-sm md:text-base font-black text-white">@{artist.instagram}</span>
-                    </div>
+                {(heroFollowerCount ?? Number(artist.followers)) > 0 && (
+                  <div className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-sm text-white/90 backdrop-blur-md">
+                    <span className="font-bold text-white">{(heroFollowerCount ?? Number(artist.followers)).toLocaleString()}</span> {t('profile.followers')}
                   </div>
                 )}
               </div>
@@ -6787,14 +6825,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               {/* Foto de perfil circular abajo + Badge de verificaci�n */}
               <div className="relative z-40 inline-block mt-4 pointer-events-auto" data-chrome-keep>
                 <div 
-                  className="absolute -inset-4 rounded-full blur-3xl opacity-50 animate-pulse pointer-events-none"
+                  className={`absolute -inset-4 rounded-full blur-3xl opacity-50 pointer-events-none ${prefersReducedMotion ? '' : 'animate-pulse'}`}
                   style={{ backgroundColor: colors.hexAccent }}
                 ></div>
                 <div className="relative">
                   <img
                     src={artist.profileImage}
                     alt={`${artist.name} Avatar`}
-                    className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full object-cover border-4 shadow-2xl transform hover:scale-110 transition-all duration-500 mx-auto"
+                    className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover border-4 shadow-2xl transition-transform duration-500 mx-auto hover:scale-105 motion-reduce:transform-none"
                     style={{ 
                       borderColor: colors.hexAccent,
                       boxShadow: `0 20px 60px ${colors.hexAccent}70, 0 0 40px ${colors.hexAccent}50, inset 0 0 20px rgba(255,255,255,0.1)`
@@ -6812,19 +6850,18 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   </div>
                 </div>
                 {/* Badge de verificaci�n - peque�o debajo de foto */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-xl bg-white/5 border shadow-lg mt-3"
+                {artist.isVerified && <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-xl bg-white/5 border shadow-lg mt-3"
                   style={{ 
                     borderColor: `${colors.hexAccent}30`,
                     boxShadow: `0 4px 16px ${colors.hexAccent}20`
                   }}
                 >
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" style={{ boxShadow: '0 0 8px #4ade80' }}></div>
+                  <div className={`w-1.5 h-1.5 rounded-full bg-green-400 ${prefersReducedMotion ? '' : 'animate-pulse'}`} style={{ boxShadow: '0 0 8px #4ade80' }}></div>
                   <span className="text-xs font-semibold text-white/90 tracking-wide">Verified</span>
-                </div>
+                </div>}
 
-                {/* Sign-in / logout � small discrete link below Verified badge */}
-                <div className="relative z-50 mt-2 flex justify-center pointer-events-auto">
-                  {isAuthenticated ? (
+                {/* Optional account sign-out for the authenticated profile owner. */}
+                {isAuthenticated && <div className="relative z-50 mt-2 flex justify-center pointer-events-auto">
                     <button
                       type="button"
                       onClick={(event) => {
@@ -6838,34 +6875,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       <LogOut className="h-2.5 w-2.5" />
                       <span>Sign out</span>
                     </button>
-                  ) : (
-                    <a
-                      href="/auth"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleHeroSignIn();
-                      }}
-                      className="relative z-50 flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-medium border transition-colors duration-200 pointer-events-auto"
-                      style={{
-                        color: colors.hexAccent,
-                        borderColor: `${colors.hexAccent}40`,
-                        background: `${colors.hexAccent}15`,
-                      }}
-                      title="Sign in"
-                      data-testid="button-hero-signin"
-                    >
-                      <LogIn className="h-2.5 w-2.5" />
-                      <span>Sign in</span>
-                    </a>
-                  )}
-                </div>
+                </div>}
               </div>
             </div>
           </div>
         </div>
 
         {/* Indicador de scroll */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 animate-bounce pointer-events-none">
+        <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-30 pointer-events-none ${prefersReducedMotion ? '' : 'animate-bounce'}`}>
           <ChevronDown className="h-8 w-8 md:h-10 md:w-10 text-white/60" />
         </div>
 
@@ -13059,8 +13076,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       )}
 
       {/* --------- Owner quick-edit pill (top-right) ---------
-          Visible only when viewing your own profile.
-          Sign-in / logout is now shown inline below the Verified badge. */}
+          Visible only when viewing your own profile. */}
       {isOwnProfile && (
         <div
           className={`fixed z-40 flex items-center gap-1 rounded-full backdrop-blur-xl border shadow-lg transition-all duration-300 ${

@@ -35,6 +35,8 @@ services:
         value: 3000
       - key: DATABASE_URL
         sync: false
+      - key: SESSION_SECRET
+        sync: false
       - key: VITE_FIREBASE_API_KEY
         sync: false
       - key: VITE_FIREBASE_AUTH_DOMAIN
@@ -85,7 +87,7 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+      - key: FIREBASE_ADMIN_KEY
         sync: false
       - key: VITE_WALLETCONNECT_PROJECT_ID
         sync: false
@@ -105,7 +107,7 @@ services:
       - key: BTF_TOKEN_ADDRESS
         sync: false
       - key: ONEINCH_API_KEY
-        value: "Sjc51tFglRJw6EsHseREwqBegGFEK0F8"
+        sync: false
       # Profit-cascade threshold ($). Defaults to 0.01 in code so even
       # tiny simulated yields surface in the artist profile dashboard.
       - key: ECONOMIC_ENGINE_CASCADE_THRESHOLD
@@ -125,7 +127,7 @@ services:
           property: connectionString
 
   # ════════════════════════════════════════════════════════════════════
-  # BACKGROUND WORKER — processes the BullMQ `boostify:media` queue.
+  # BACKGROUND WORKER — processes the BullMQ `boostify-media` queue.
   # Heavy/long-running jobs survive web redeploys and are auto-retried.
   # ════════════════════════════════════════════════════════════════════
   - type: worker
@@ -157,7 +159,7 @@ services:
       # needs the same backing-service credentials. Set each in the dashboard.
       - key: DATABASE_URL
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+      - key: FIREBASE_ADMIN_KEY
         sync: false
       - key: VITE_FIREBASE_STORAGE_BUCKET
         sync: false
@@ -218,7 +220,7 @@ services:
         sync: false
       - key: VITE_FIREBASE_APP_ID
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+      - key: FIREBASE_ADMIN_KEY
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false

@@ -84,6 +84,18 @@ export function FashionVirtualStore({
 }: FashionVirtualStoreProps) {
   const [activeTab, setActiveTab] = useState('brand');
   const [landingOpen, setLandingOpen] = useState(false);
+  const [tryOnProductId, setTryOnProductId] = useState<number | undefined>();
+
+  const openTryOn = (productId?: number) => {
+    setTryOnProductId(productId);
+    setLandingOpen(false);
+    setActiveTab('tryon');
+  };
+
+  const openCampaigns = () => {
+    setLandingOpen(false);
+    setActiveTab('campaigns');
+  };
 
   const { data: brandData, isLoading, refetch: refetchBrand } = useQuery<{ success: boolean; brand: FashionBrand | null }>({
     queryKey: ['fashion-brand', artistId],
@@ -220,6 +232,7 @@ export function FashionVirtualStore({
                 brand={brand}
                 isOwner={isOwner}
                 colors={colors}
+                onTryOn={openTryOn}
               />
             </TabsContent>
 
@@ -238,6 +251,7 @@ export function FashionVirtualStore({
                 brand={brand}
                 isOwner={isOwner}
                 colors={colors}
+                initialProductId={tryOnProductId}
               />
             </TabsContent>
 
@@ -261,6 +275,8 @@ export function FashionVirtualStore({
           brand={brand}
           isOwner={isOwner}
           onClose={() => setLandingOpen(false)}
+          onTryOn={openTryOn}
+          onOpenCampaigns={openCampaigns}
         />
       )}
     </div>
