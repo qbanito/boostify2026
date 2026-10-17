@@ -118,6 +118,11 @@ const MAP_STYLES: Record<string, MapStyleDef> = {
   },
 };
 const MAP_STYLE_KEY = "boostify_producer_map_style";
+const CARTO_API_KEY = import.meta.env.CARTO_API_KEY?.trim();
+const withCartoApiKey = (url: string) => {
+  if (!CARTO_API_KEY || !url.includes("basemaps.cartocdn.com")) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(CARTO_API_KEY)}`;
+};
 
 // ── Create Leaflet divIcon per instrument ──
 function makeInstrumentMarker(instrument: string, isRequest: boolean, sizeFactor = 1) {
@@ -372,7 +377,7 @@ export function ProducerMap() {
 
     // User-selectable tile style (persisted). Default: modern dark gray.
     const initialStyle = MAP_STYLES[mapStyle] || MAP_STYLES.dark;
-    tileLayerRef.current = L.tileLayer(initialStyle.url, {
+    tileLayerRef.current = L.tileLayer(withCartoApiKey(initialStyle.url), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       ...(initialStyle.subdomains ? { subdomains: initialStyle.subdomains } : {}),
       maxZoom: initialStyle.maxZoom,
@@ -451,7 +456,7 @@ export function ProducerMap() {
     if (!map || !st) return;
     try { localStorage.setItem(MAP_STYLE_KEY, mapStyle); } catch { /* noop */ }
     if (tileLayerRef.current) map.removeLayer(tileLayerRef.current);
-    tileLayerRef.current = L.tileLayer(st.url, {
+    tileLayerRef.current = L.tileLayer(withCartoApiKey(st.url), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       ...(st.subdomains ? { subdomains: st.subdomains } : {}),
       maxZoom: st.maxZoom,

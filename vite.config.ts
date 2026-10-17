@@ -20,6 +20,11 @@ const isIgnorableRuntimeError = (error: Error) => {
 };
 
 export default defineConfig({
+  // CARTO basemap keys are browser-facing; expose only this named variable,
+  // rather than widening Vite's envPrefix to every server-side secret.
+  define: {
+    "import.meta.env.CARTO_API_KEY": JSON.stringify(process.env.CARTO_API_KEY || ""),
+  },
   plugins: [
     ogMetaPlugin(),
     react(),
