@@ -1,5 +1,6 @@
 import { fal } from "@fal-ai/client";
 import { logger } from "../logger";
+import { apiRequest } from "../queryClient";
 
 /**
  * FAL Video Generation Service
@@ -38,6 +39,27 @@ export interface VideoGenerationResult {
   width?: number;
   height?: number;
   fps?: number;
+}
+
+async function prepareWanReferences(images: Array<string | undefined>): Promise<string[]> {
+  const prepared: string[] = [];
+  for (const image of images) {
+    if (!image) continue;
+    if (image.startsWith('https://')) {
+      prepared.push(image);
+    } else if (/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(image)) {
+      // The original creator keeps local artist uploads as data URLs. Upload only
+      // when Wan is selected so the other image workflows remain unchanged.
+      const uploaded = await apiRequest({
+        url: '/api/upload-image',
+        method: 'POST',
+        data: { imageData: image, fileName: 'wan-artist-reference.png', folder: 'music-video-references' },
+      });
+      if (!uploaded.imageUrl) throw new Error(uploaded.error || 'No se pudo subir una foto de referencia');
+      prepared.push(uploaded.imageUrl);
+    }
+  }
+  return prepared.filter((url, index, all) => all.indexOf(url) === index).slice(0, 10);
 }
 
 /**
@@ -242,6 +264,15 @@ export const FAL_VIDEO_MODELS = {
     type: "image-to-video",
     maxDuration: 10,
     pricing: "$0.40/video"
+  },
+
+  WAN_3_REF2V: {
+    id: "alibaba/wan-3.0/reference-to-video",
+    name: "Wan 3.0 (Reference-to-Video)",
+    description: "Anima escenas usando la imagen del timeline y las fotos de referencia del artista",
+    type: "reference-to-video",
+    maxDuration: 30,
+    pricing: "Segun duracion"
   },
   
   // Luma Dream Machine
@@ -495,7 +526,38 @@ export async function generateVideoWithFAL(
 ): Promise<VideoGenerationResult> {
   try {
     logger.info(`🎬 Generando video con modelo: ${modelId}`);
-    logger.info('Opciones:', options);
+    logger.info('Opciones:', { duration: options.duration, aspectRatio: options.aspectRatio, references: options.referenceImages?.length || 0 });
+
+    // Wan uses the authenticated server queue, not browser-side FAL credentials.
+    if (modelId === FAL_VIDEO_MODELS.WAN_3_REF2V.id) {
+      const referenceImages = await prepareWanReferences([options.imageUrl, ...(options.referenceImages || [])]);
+      if (!referenceImages.length) throw new Error('Wan 3.0 necesita una imagen publica de la escena o del artista');
+
+      const submitted = await apiRequest({
+        url: '/api/fal/wan-music-video/generate',
+        method: 'POST',
+        data: {
+          prompt: options.prompt,
+          referenceImages,
+          duration: Number(options.duration || 5),
+          aspectRatio: options.aspectRatio === 'auto' ? 'adaptive' : (options.aspectRatio || '16:9'),
+          resolution: options.resolution || '1080p',
+        },
+      });
+      if (!submitted.success || !submitted.requestId) {
+        throw new Error(submitted.error || 'No se pudo iniciar Wan 3.0');
+      }
+
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const status = await apiRequest(`/api/fal/wan-music-video/${encodeURIComponent(submitted.requestId)}`);
+        if (status.status === 'FAILED') throw new Error(status.error || 'Wan 3.0 no pudo generar el clip');
+        if (status.status === 'COMPLETED' && status.videoUrl) {
+          return { success: true, videoUrl: status.videoUrl, metadata: status.metadata };
+        }
+      }
+      throw new Error('Wan 3.0 excedio el tiempo de espera; revisa el trabajo antes de reintentar');
+    }
 
     const input: any = {
       prompt: options.prompt,
@@ -590,6 +652,10 @@ export async function generateMultipleVideos(
   if (isReferenceModel && referenceImages?.length) {
     logger.info(`🎨 Usando modelo O1 reference-to-video con ${referenceImages.length} imágenes de referencia`);
   }
+
+  const preparedReferences = modelId === FAL_VIDEO_MODELS.WAN_3_REF2V.id
+    ? await prepareWanReferences(referenceImages || [])
+    : referenceImages;
   
   const promises = scenes.map((scene, index) => 
     generateVideoWithFAL(modelId, {
@@ -598,7 +664,7 @@ export async function generateMultipleVideos(
       duration: "5", // 5 segundos por defecto
       aspectRatio: "16:9",
       // Pasar imágenes de referencia para consistencia de personajes
-      referenceImages: isReferenceModel ? referenceImages : undefined
+      referenceImages: isReferenceModel ? preparedReferences : undefined
     }).then(result => {
       logger.info(`✅ Video ${index + 1}/${scenes.length} completado`);
       return result;

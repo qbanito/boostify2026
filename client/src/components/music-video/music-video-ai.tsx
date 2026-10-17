@@ -4754,6 +4754,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
         imageUrl,
         duration: "5",
         aspectRatio: videoAspectRatio || "16:9",
+        referenceImages: modelId.includes('reference-to-video') ? artistReferenceImages : undefined,
         negativePrompt: 'blur, distort, static, frozen, morphing face, deformed',
         cfgScale: 0.5
       });
@@ -4789,7 +4790,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
    * Generar videos para todas las escenas
    */
   const handleGenerateAllVideos = async (modelId: string) => {
-    const scenesWithImages = timelineItems.filter(item => item.generatedImage);
+    const scenesWithImages = timelineItems.filter(item => item.generatedImage || item.imageUrl || item.firebaseUrl);
     
     if (scenesWithImages.length === 0) {
       toast({
@@ -4810,11 +4811,15 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
         const base = item.imagePrompt || item.description || 'Cinematic video animation';
         return {
           prompt: `${base}${camMove ? `, ${camMove}` : ''}${fLook ? `, ${fLook} film look` : ''}, professional music video`,
-          imageUrl: (item.generatedImage || item.firebaseUrl || "") as string
+          imageUrl: (item.generatedImage || item.imageUrl || item.firebaseUrl || "") as string
         };
       });
 
-      const results = await generateMultipleVideos(modelId, scenes);
+      const results = await generateMultipleVideos(
+        modelId,
+        scenes,
+        modelId.includes('reference-to-video') ? artistReferenceImages : undefined
+      );
 
       let successCount = 0;
       const updatedItems = [...timelineItems];
