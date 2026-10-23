@@ -4,6 +4,35 @@
     radial-gradient(ellipse at 8% 75%, rgba(35, 65, 104, 0.13), transparent 38rem);
 }
 
+.funding-hero {
+  animation: funding-rise-in 700ms cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.funding-info-card {
+  transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease;
+}
+
+.funding-info-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(251, 146, 60, .3);
+  background-color: rgba(255, 255, 255, .045);
+}
+
+.funding-dashboard-hero {
+  background:
+    radial-gradient(ellipse at 90% 10%, rgba(249, 115, 22, .13), transparent 24rem),
+    linear-gradient(135deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012));
+}
+
+@keyframes funding-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .funding-hero { border-radius: 24px; }
+}
+
 .funding-grain {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
 }
@@ -14,4 +43,6 @@
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+
+  .funding-info-card:hover { transform: none; }
 }
