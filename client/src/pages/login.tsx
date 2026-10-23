@@ -9,6 +9,15 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   
   const handleLogin = () => {
+    const redirectUrl = new URLSearchParams(window.location.search).get("redirect_url");
+    const safeRedirect = redirectUrl && redirectUrl.startsWith("/") && !redirectUrl.startsWith("//")
+      ? redirectUrl
+      : "/dashboard";
+    try {
+      localStorage.setItem("auth_redirect_path", safeRedirect);
+    } catch {
+      // The auth page still has a safe default if browser storage is unavailable.
+    }
     setLocation("/auth");
   };
 

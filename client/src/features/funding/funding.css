@@ -1,0 +1,17 @@
+.funding-shell {
+  background-image:
+    radial-gradient(ellipse at 82% 0%, rgba(245, 112, 38, 0.075), transparent 34rem),
+    radial-gradient(ellipse at 8% 75%, rgba(35, 65, 104, 0.13), transparent 38rem);
+}
+
+.funding-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .funding-shell *, .funding-shell *::before, .funding-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

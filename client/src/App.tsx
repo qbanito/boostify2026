@@ -123,6 +123,7 @@ const KlingTestPage = lazy(() => import("./pages/kling-test"));
 const ManagerToolsPage = lazy(() => import("./pages/manager-tools"));
 const MerchandisePage = lazy(() => import("./pages/merchandise"));
 const MessagesPage = lazy(() => import("./pages/messages"));
+const FundingPage = lazy(() => import("./features/funding/pages/funding-page"));
 const MusicVideoCreator = lazy(() => import("./pages/music-video-creator"));
 const MusicVideoWorkflowPage = lazy(() => import("./pages/music-video-workflow-page"));
 const MusicVideoWorkflowEnhancedPage = lazy(() => import("./pages/music-video-workflow-enhanced"));
@@ -453,6 +454,7 @@ const Router = () => {
 
   // Aplicamos el HOC a todos los componentes de página
   const WrappedHomePage = withPageWrapper(HomePage);
+  const WrappedFundingPage = withPageWrapper(FundingPage);
   const WrappedTermsPage = withPageWrapper(TermsPage);
   const WrappedPrivacyPage = withPageWrapper(PrivacyPage);
   const WrappedPrivacyExtensionPage = withPageWrapper(PrivacyExtensionPage);
@@ -606,6 +608,8 @@ const Router = () => {
           <Switch>
           {/* Rutas públicas - accesibles sin autenticación */}
           {getRouteComponent("/", WrappedHomePage, null)}
+          {getRouteComponent("/funding", WrappedFundingPage, null)}
+          {getRouteComponent("/funding/:section", WrappedFundingPage, null)}
           {getRouteComponent("/auth", WrappedAuthPage, null)}
           {getRouteComponent("/auth/register", WrappedAuthSignupPage, null)}
           {getRouteComponent("/register", WrappedAuthSignupPage, null)}

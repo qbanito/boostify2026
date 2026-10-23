@@ -255,13 +255,13 @@ export function ArtistLandingPage() {
 
   // When a visitor clicks "Sign in" from an artist profile page, that page
   // stores the profile path in `auth_redirect_path`. Honor it so the user
-  // lands back on the artist page after authenticating instead of the default
-  // dashboard. Only artist-profile paths (/artist/...) are honored — a normal
-  // login still goes to /my-artists.
+  // lands back on its originating page after authenticating. Only local
+  // artist and Funding paths are accepted, so untrusted external redirects
+  // cannot be injected into Clerk's post-auth URL.
   const [postAuthRedirect] = useState<string>(() => {
     try {
       const stored = localStorage.getItem("auth_redirect_path");
-      if (stored && /^\/artist\/[^/]/.test(stored)) {
+      if (stored && ( /^\/artist\/[^/]/.test(stored) || /^\/funding(?:\/|$)/.test(stored) )) {
         // Consume it so a later, unrelated login doesn't reuse a stale value.
         localStorage.removeItem("auth_redirect_path");
         return stored;

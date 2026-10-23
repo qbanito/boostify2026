@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 import {
   Home, Video, Music2, Bot, User, Radio, Menu, ChevronLeft, ChevronRight, Mic, BarChart2,
   MessageSquare, ShoppingBag, PhoneCall, Users, Layers, BarChart, Settings, BookOpen,
-  Headphones, FileText, Rss, Send, Shield, Upload, Zap, Activity, Sparkles, Theater, PartyPopper, Archive, Monitor, Clapperboard
+  Headphones, FileText, Rss, Send, Shield, Upload, Zap, Activity, Sparkles, Theater, PartyPopper, Archive, Monitor, Clapperboard, WalletCards
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -50,6 +50,13 @@ export function BottomNav() {
       icon: User,
       href: profileHref,
       plan: "free"
+    },
+    {
+      title: "Funding",
+      icon: WalletCards,
+      href: "/funding",
+      plan: "free",
+      highlight: true
     },
     {
       title: "My Artists",

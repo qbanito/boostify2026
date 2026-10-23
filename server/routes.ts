@@ -97,6 +97,7 @@ import agentsSdkRouter from './routes/agents-sdk'; // Import OpenAI Agents SDK r
 import agentMarketplaceRouter from './routes/agent-marketplace'; // Import Agent Marketplace router
 import aiAdvisorRouter from './routes/ai-advisor'; // Import AI Advisor Chat router
 import contractsRouter from './routes/contracts'; // Import the contracts router with Gemini AI
+import fundingRouter from './routes/funding';
 import falApiRouter from './routes/fal-api'; // Import the FAL AI router for secure backend processing
 import creditsRouter from './routes/credits'; // Import the credits and payments router
 import adminPricingRouter from './routes/admin-pricing'; // Import the admin pricing management router
@@ -1901,6 +1902,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   
   // Register contracts router (Passport is initialized in server/index.ts)
   app.use('/api/contracts', contractsRouter);
+  app.use('/api/funding', fundingRouter);
   console.log('✅ Router de contratos registrado');
   
   // Register BoostiSwap Smart Contracts router
