@@ -1,16 +1,7 @@
-# Boostify Funding — V1 UI
+# Boostify Capital
 
-The Funding page is mounted at `/funding`; `/funding/eligibility`, `/application`, `/documents`, `/status`, `/offers`, and `/dashboard` reuse the same module surface. It is available through Boostify's existing route wrapper and bottom navigation.
-
-## Current behavior
-
-- A five-step readiness flow collects profile, catalog, rights, revenue and request context.
-- A configurable readiness estimate lives in `config/fundingRules.ts`. Its result is based on whether information is present, not partner underwriting criteria.
-- Draft answers and the local status marker are stored in user-scoped browser `sessionStorage` for this prototype. They are not submitted to Boostify's server or RUN.
-- Document checkboxes are a preparation checklist only. No file is uploaded or stored.
-- Support links open Boostify's existing `/messages` inbox.
-- RUN is shown as Funding Partner #1 with criteria pending confirmation.
-
-## Production integration needed
-
-Before collecting real applications, move draft data into an authenticated, owner-scoped server API; add private document storage with access control and audit logs; persist explicit partner consent server-side; and connect partner submissions only after requirements and consent copy are approved. The repository currently uses Clerk, Drizzle and Firebase messaging rather than a configured Supabase Funding service.
+- The Funding experience supports role-specific profiles for artists, songwriters/composers, producers, independent labels, catalog owners and publishers.
+- Eligibility answers and application requests are saved to the authenticated account through the Funding API; browser session storage provides a recovery copy.
+- Funding readiness is an internal estimate only and is not approval or an offer.
+- Applications remain private to Boostify until applicable agreements are reviewed, signed and verified.
+- Meeting bookings use the configured scheduling link; alternate-time requests are saved and emailed to the applicant and Boostify team when email delivery is configured.

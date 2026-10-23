@@ -32,8 +32,8 @@ export function getReadinessScore(input: {
 }
 
 export function scoreLabel(score: number) {
-  if (score >= 80) return "Strong readiness profile";
+  if (score >= 80) return "Strong profile";
   if (score >= 65) return "Potentially eligible";
-  if (score >= 45) return "Needs more information";
+  if (score >= 45) return "Needs more data";
   return "Not ready yet";
 }

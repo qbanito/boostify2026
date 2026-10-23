@@ -7,9 +7,10 @@ import { sendNotificationEmail } from '../services/brevo-email-service';
 const router = Router();
 const emailSchema = z.string().email().max(254);
 const fundingDraftSchema = z.object({
-  artistName: z.string().max(120), country: z.string().max(100), entityType: z.string().max(80), yearsActive: z.string().max(20),
+  profileType: z.string().max(80), artistName: z.string().max(120), country: z.string().max(100), entityType: z.string().max(80), yearsActive: z.string().max(20),
   releasedSongs: z.string().max(20), catalogYears: z.string().max(20), distributor: z.string().max(120),
-  masterOwnership: z.string().max(20), publishingOwnership: z.string().max(20), hasAdvance: z.string().max(20),
+  masterOwnership: z.string().max(20), publishingOwnership: z.string().max(20), hasAdvance: z.string().max(20), musicRevenueStatus: z.string().max(20),
+  existingObligations: z.string().max(20), rightsRegistered: z.string().max(20), splitsOrganized: z.string().max(20),
   monthlyRevenue: z.string().max(40), monthsHistory: z.string().max(20), growth: z.string().max(20),
   amount: z.string().max(40), purpose: z.string().max(120),
 }).strict();
