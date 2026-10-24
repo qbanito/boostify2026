@@ -1,9 +1,14 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { isAuthenticated } from '../middleware/clerk-auth';
 import { matchSongAcrossPlatforms, type CrossPlatformResult, type PlatformMatch } from '../services/cross-platform-matching';
 
 const router = Router();
+// This engine contains private catalog research and generated rights materials.
+// Enforce auth here as well as at the page gate; global Clerk middleware only
+// attaches the current user and does not reject anonymous API requests.
+router.use(isAuthenticated);
 
 const briefPdfPath = path.resolve(process.cwd(), 'public/assets/Boostify_Catalog_Resurrection.pdf');
 // Persistent file cache — survives server restarts; images are uploaded to Firebase so URLs never expire
