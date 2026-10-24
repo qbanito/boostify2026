@@ -83,6 +83,7 @@ interface Track {
 
 interface ArtistLibrarySong {
   id: string;
+  postgresId?: number;
   title?: string;
   name?: string;
   audioUrl?: string;
@@ -292,9 +293,12 @@ const EXPORT_FORMATS = [
 ============================================================ */
 
 const apiFetch = async <T,>(url: string, opts: RequestInit = {}): Promise<T> => {
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  const headers = new Headers(opts.headers || {});
+  if (!isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const res = await fetch(url, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers,
     ...opts,
   });
   const payload = await res.json().catch(() => ({}));
@@ -1795,7 +1799,7 @@ function AgentsPanel({ onAgentRun, onQuickAction, runningAgent, runningAction }:
   );
 }
 
-function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, onSettingsChange, onTool, isRecording, onStartRecording, onStopRecording, recordingTime, recordedUrl, lyrics, onShowLyrics, onTrackSelect, onArmTrack, onTakeSelect, onTakeMute, onTakeDuplicate, onTakeDelete, onTakeRename, onSaveSession, plugins = [], levels = [], bpm, keyName, projectName }: {
+function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, onSettingsChange, onTool, isRecording, isSavingRecording, onStartRecording, onStopRecording, recordingTime, recordedUrl, lyrics, onShowLyrics, onTrackSelect, onArmTrack, onTakeSelect, onTakeMute, onTakeDuplicate, onTakeDelete, onTakeRename, onSaveSession, plugins = [], bpm, keyName, projectName, audioInputDevices, selectedAudioInputId, onAudioInputChange, inputLevel }: {
   tracks: Track[];
   clips: Clip[];
   track: Track | null;
@@ -1804,6 +1808,7 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
   onSettingsChange: (patch: Partial<VocalBoothSettings>) => void;
   onTool: (tool: string) => void;
   isRecording: boolean;
+  isSavingRecording: boolean;
   onStartRecording: (trackId?: string) => void;
   onStopRecording: () => void;
   recordingTime: number;
@@ -1819,23 +1824,22 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
   onTakeRename: (clipId: string) => void;
   onSaveSession: () => void;
   plugins: PluginState[];
-  levels: number[];
   bpm: number;
   keyName: string;
   projectName: string;
+  audioInputDevices: MediaDeviceInfo[];
+  selectedAudioInputId: string;
+  onAudioInputChange: (id: string) => void;
+  inputLevel: number;
 }) {
   const vocalTracks = tracks.filter((item) => item.type.toLowerCase().includes('vocal') || item.name.toLowerCase().includes('vocal') || item.rec);
   const activeTrack = track || vocalTracks[0] || tracks[0] || null;
-  const activeTrackIndex = activeTrack ? Math.max(0, tracks.findIndex((item) => item.id === activeTrack.id)) : 0;
-  const activeLevel = Math.min(1, Math.max(levels[activeTrackIndex] || 0, isRecording ? 0.56 : 0));
   const takeClips = activeTrack ? clips.filter((clip) => clip.trackId === activeTrack.id).sort((a, b) => a.start - b.start) : [];
   const selectedTake = takeClips.find((clip) => clip.id === selectedClipId) || [...takeClips].reverse().find((clip) => clip.audioUrl) || takeClips[0] || null;
   const savedTakeCount = takeClips.filter((clip) => clip.audioUrl && !clip.audioUrl.startsWith('blob:')).length;
   const lyricsLines = lyrics ? lyrics.split('\n').filter(Boolean) : ['Verse ready to record', 'Breathe before you come in', 'Keep the hook up front', 'Double at the end of the bar'];
-  const levelSeed = isRecording ? Date.now() % 9999 : settings.inputGain + takeClips.length * 13;
-  const pitchOffset = Math.round(((settings.inputGain + takeClips.length * 9) % 25) - 12);
   const enabledChain = plugins.filter((plugin) => plugin.enabled);
-  const inputPercent = Math.min(100, Math.max(8, Math.round((activeLevel * 100) || settings.inputGain)));
+  const inputPercent = Math.min(100, Math.max(0, Math.round(inputLevel * 100)));
 
   return (
     <div className="bg-[#101015] border border-white/5 rounded-lg p-3 flex flex-col min-h-[330px] overflow-hidden">
@@ -1869,6 +1873,17 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
         </div>
       </div>
 
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 pt-2">
+        <label className="min-w-0 flex items-center gap-2 rounded-md bg-black/30 border border-white/10 px-2 text-[9px] text-zinc-400">
+          <span className="shrink-0">Audio input</span>
+          <select aria-label="Audio input device" value={selectedAudioInputId} onChange={(event) => onAudioInputChange(event.target.value)} className="min-w-0 flex-1 h-8 bg-transparent text-[10px] text-zinc-100 outline-none">
+            <option value="">System default input</option>
+            {audioInputDevices.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Audio interface / input ${index + 1}`}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={() => onSettingsChange({ monitoring: !settings.monitoring })} className={`rounded-md px-2 text-[9px] font-semibold border ${settings.monitoring ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 bg-white/5 text-zinc-400'}`} title="Direct input monitoring can cause feedback; use headphones">{settings.monitoring ? 'Monitor on' : 'Monitor off'}</button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[1.08fr_0.82fr_0.98fr] gap-2 flex-1 min-h-0 pt-2">
         <div className="rounded-lg bg-black/25 border border-white/5 p-2 flex flex-col min-h-[250px]">
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -1882,30 +1897,21 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             <div className={`font-mono text-[11px] ${isRecording ? 'text-rose-300 animate-pulse' : 'text-zinc-400'}`}>{formatTime(recordingTime)}</div>
           </div>
 
-          <div className="h-20 rounded bg-black/40 border border-white/5 p-1.5 flex items-center gap-px overflow-hidden">
-            {waveBars(levelSeed, 104).map((bar, index) => (
-              <div
-                key={index}
-                className={`flex-1 rounded-sm ${isRecording ? 'bg-rose-500' : selectedTake ? 'bg-orange-400/70' : 'bg-zinc-700'}`}
-                style={{ height: `${Math.max(6, bar * (isRecording ? 92 : 72))}%`, opacity: isRecording ? 0.95 : 0.45 + bar * 0.45 }}
-              />
-            ))}
+          <div className="h-20 rounded bg-black/40 border border-white/5 p-3 flex flex-col justify-center gap-2">
+            <div className="flex items-center justify-between text-[9px] text-zinc-400"><span>Live input level</span><span className={inputPercent > 92 ? 'text-rose-300' : 'text-emerald-300'}>{inputPercent}%</span></div>
+            <div className="h-3 rounded-full bg-white/5 overflow-hidden"><div className={`h-full transition-[width] duration-75 ${inputPercent > 92 ? 'bg-rose-500' : inputPercent > 75 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${inputPercent}%` }} /></div>
+            <div className="text-[8px] text-zinc-600">Signal measured from the selected input</div>
           </div>
 
-          <div className="grid grid-cols-[1fr_54px] gap-2 mt-2">
+          <div className="grid grid-cols-1 gap-2 mt-2">
             <div className="rounded bg-black/30 border border-white/5 p-2">
               <div className="flex items-center justify-between text-[8px] text-zinc-400 mb-1">
-                <span>Input</span><span className="font-mono text-zinc-200">{inputPercent}%</span>
+                <span>Recording gain</span><span className="font-mono text-zinc-200">{settings.inputGain}%</span>
               </div>
               <div className="h-2 rounded-full bg-white/5 overflow-hidden">
                 <div className={`h-full ${inputPercent > 86 ? 'bg-rose-500' : inputPercent > 58 ? 'bg-orange-500' : 'bg-emerald-500'}`} style={{ width: `${inputPercent}%` }} />
               </div>
               <input type="range" min={0} max={100} value={settings.inputGain} onChange={(e) => onSettingsChange({ inputGain: Number(e.target.value) })} className="w-full h-1 accent-orange-500 mt-2" />
-            </div>
-            <div className="rounded bg-black/30 border border-white/5 p-2 text-center">
-              <div className="text-[8px] text-zinc-500 uppercase tracking-wider">Pitch</div>
-              <div className={`text-sm font-mono font-bold ${Math.abs(pitchOffset) < 5 ? 'text-emerald-300' : 'text-orange-300'}`}>{pitchOffset > 0 ? '+' : ''}{pitchOffset}</div>
-              <div className="text-[7px] text-zinc-500">cents</div>
             </div>
           </div>
 
@@ -1914,11 +1920,11 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
           )}
 
           <div className="grid grid-cols-2 gap-1.5 mt-2">
-            <button onClick={() => { onSettingsChange({ tuning: !settings.tuning }); onTool('tuning'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.tuning ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Auto-tune">
-              <Wand2 className="w-4 h-4" /><span className="text-[8px] font-bold">Tune</span>
+            <button onClick={() => { onSettingsChange({ tuning: !settings.tuning }); onTool('tuning'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.tuning ? 'bg-orange-500/15 text-orange-300 border border-orange-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Pitch correction on track playback and mix, not during capture">
+              <Wand2 className="w-4 h-4" /><span className="text-[8px] font-bold">Track Tune FX</span>
             </button>
-            <button onClick={() => { onSettingsChange({ noise: !settings.noise }); onTool('noise'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.noise ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Noise reduction">
-              <Activity className="w-4 h-4" /><span className="text-[8px] font-bold">Clean</span>
+            <button onClick={() => { onSettingsChange({ noise: !settings.noise }); onTool('noise'); }} className={`h-10 rounded flex flex-col items-center justify-center gap-0.5 ${settings.noise ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-white/5 hover:bg-white/10 text-zinc-400'}`} title="Noise reduction on track playback and mix, not during capture">
+              <Activity className="w-4 h-4" /><span className="text-[8px] font-bold">Track Clean FX</span>
             </button>
           </div>
 
@@ -1926,6 +1932,8 @@ function VocalBooth({ tracks = [], clips = [], track, selectedClipId, settings, 
             <button onClick={onStopRecording} className="mt-2 h-10 rounded bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center gap-2 text-[11px] font-bold">
               <Square className="w-4 h-4" /> STOP & SAVE TAKE
             </button>
+          ) : isSavingRecording ? (
+            <div role="status" className="mt-2 h-10 rounded bg-amber-500/10 border border-amber-500/20 text-amber-200 flex items-center justify-center gap-2 text-[11px] font-semibold"><Loader2 className="w-4 h-4 animate-spin" /> Uploading and saving project…</div>
           ) : (
             <button onClick={() => onStartRecording(activeTrack?.id)} className="mt-2 h-10 rounded bg-rose-500/90 hover:bg-rose-500 text-white flex items-center justify-center gap-2 text-[11px] font-bold">
               <CircleDot className="w-4 h-4" /> RECORD ON SELECTED TRACK
@@ -2336,7 +2344,7 @@ function PluginRack({ track, plugins, onTogglePlugin, onParamChange, onAddPlugin
   );
 }
 
-function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, keyName, settings, lastResult, onSettingsChange, onGenerate, generating, generatedUrl }: {
+function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, keyName, settings, lastResult, onSettingsChange, onGenerate, generating, generatedUrl, providersReady }: {
   tracks: Track[];
   selectedTrackId: string | null;
   selectedClip: Clip | null;
@@ -2349,6 +2357,7 @@ function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, k
   onGenerate: (request: AILabGenerateRequest) => void;
   generating: string | null;
   generatedUrl: string | null;
+  providersReady: boolean | null;
 }) {
   const [tab, setTab] = useState<'GENERATE'|'INSTRUMENTS'|'VOCALS'|'EFFECTS'|'REMIX'>('GENERATE');
   const activeTargetTrackId = settings.targetTrackId || selectedTrackId || tracks[0]?.id || '';
@@ -2373,7 +2382,7 @@ function AILabPanel({ tracks, selectedTrackId, selectedClip, projectName, bpm, k
         <div className="flex items-center gap-2 text-[8px] text-zinc-500">
           <span className="font-mono text-zinc-300">{bpm} BPM</span>
           <span className="font-mono text-zinc-300">{keyName}</span>
-          <Power className="w-3 h-3 text-emerald-400" />
+          <span className={`rounded px-1.5 py-0.5 border ${providersReady === true ? 'text-emerald-300 border-emerald-500/20 bg-emerald-500/10' : providersReady === false ? 'text-rose-300 border-rose-500/20 bg-rose-500/10' : 'text-zinc-400 border-white/10'}`}>{providersReady === true ? 'Provider credentials detected' : providersReady === false ? 'Configure FAL or Replicate' : 'Provider status unavailable'}</span>
         </div>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-1.5 mb-2">
@@ -2981,6 +2990,7 @@ export function MiniStudio() {
   const [exportFormats, setExportFormats] = useState(EXPORT_FORMATS);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSavingRecording, setIsSavingRecording] = useState(false);
   const [playhead, setPlayhead] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [levels, setLevels] = useState<number[]>(new Array(TRACKS.length).fill(0));
@@ -2998,10 +3008,13 @@ export function MiniStudio() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioInputId, setSelectedAudioInputId] = useState('');
+  const [inputLevel, setInputLevel] = useState(0);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<'timeline'|'vocal'|'mixer'|'ai'|'release'>('timeline');
   const [dockPanel, setDockPanel] = useState<string>(() => {
-    try { return localStorage.getItem('ms-dock-panel') || 'mixer'; } catch { return 'mixer'; }
+    try { return localStorage.getItem('ms-dock-panel') || 'vocal'; } catch { return 'vocal'; }
   });
   const [dockHeight, setDockHeight] = useState<number>(() => {
     try { const saved = Number(localStorage.getItem('ms-dock-height')); return saved >= 140 && saved <= 440 ? saved : 250; } catch { return 250; }
@@ -3082,6 +3095,12 @@ export function MiniStudio() {
   // Recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingGraphRef = useRef<{ source: MediaStreamAudioSourceNode; gain: GainNode; analyser: AnalyserNode; destination: MediaStreamAudioDestinationNode } | null>(null);
+  const inputMeterFrameRef = useRef<number>(0);
+  const recordingStartPctRef = useRef(0);
+  const recordingStartedAtRef = useRef(0);
+  const recordingActionsRef = useRef<{ snapshot: (() => any) | null; persist: ((snapshot: any) => Promise<any>) | null; refresh: (() => void) | null }>({ snapshot: null, persist: null, refresh: null });
 
   // Initialize (or reuse) the shared AudioContext + master bus.
   const getAudioCtx = useCallback((): AudioContext => {
@@ -3103,6 +3122,33 @@ export function MiniStudio() {
     }
     return audioCtxRef.current;
   }, []);
+
+  const refreshAudioInputDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'audioinput');
+    setAudioInputDevices(devices);
+    if (selectedAudioInputId && !devices.some((device) => device.deviceId === selectedAudioInputId)) setSelectedAudioInputId('');
+  }, [selectedAudioInputId]);
+
+  useEffect(() => {
+    void refreshAudioInputDevices().catch(() => {});
+    const onDeviceChange = () => { void refreshAudioInputDevices().catch(() => {}); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    return () => navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+  }, [refreshAudioInputDevices]);
+
+  useEffect(() => {
+    const gain = recordingGraphRef.current?.gain;
+    if (gain && audioCtxRef.current) gain.gain.setTargetAtTime(Math.max(0, Math.min(2, vocalSettings.inputGain / 75)), audioCtxRef.current.currentTime, 0.015);
+  }, [vocalSettings.inputGain]);
+
+  useEffect(() => {
+    const graph = recordingGraphRef.current;
+    const master = masterGainRef.current;
+    if (!graph || !master) return;
+    try { graph.gain.disconnect(master); } catch {}
+    if (vocalSettings.monitoring) graph.gain.connect(master);
+  }, [vocalSettings.monitoring]);
 
   // Route the master <audio> element into the Web Audio graph exactly once,
   // through a full DSP channel strip. A MediaElementSource can only be created a
@@ -3345,89 +3391,147 @@ export function MiniStudio() {
 
   // Recording engine
   const handleStartRecording = useCallback(async (overrideTrackId?: string) => {
+    if (isSavingRecording) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
-      const mr = new MediaRecorder(stream, { mimeType });
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        throw new Error('Audio recording is not supported in this browser. Open Mini Studio over HTTPS in a current browser.');
+      }
+      const audio: MediaTrackConstraints = {
+        ...(selectedAudioInputId ? { deviceId: { exact: selectedAudioInputId } } : {}),
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: { ideal: 2 },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
+      recordingStreamRef.current = stream;
+      await refreshAudioInputDevices().catch(() => {});
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+      const source = ctx.createMediaStreamSource(stream);
+      const gain = ctx.createGain();
+      gain.gain.value = Math.max(0, Math.min(2, vocalSettings.inputGain / 75));
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      const destination = ctx.createMediaStreamDestination();
+      source.connect(analyser);
+      source.connect(gain);
+      gain.connect(destination);
+      if (vocalSettings.monitoring && masterGainRef.current) gain.connect(masterGainRef.current);
+      recordingGraphRef.current = { source, gain, analyser, destination };
+
+      const supportedMime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg']
+        .find((type) => MediaRecorder.isTypeSupported(type));
+      const mr = new MediaRecorder(destination.stream, supportedMime ? { mimeType: supportedMime } : undefined);
       recordingChunksRef.current = [];
+      recordingStartPctRef.current = playhead;
+      recordingStartedAtRef.current = performance.now();
       mr.ondataavailable = (e) => { if (e.data.size > 0) recordingChunksRef.current.push(e.data); };
       mr.onstop = async () => {
+        setIsSavingRecording(true);
+        const mimeType = mr.mimeType || supportedMime || 'audio/webm';
         const blob = new Blob(recordingChunksRef.current, { type: mimeType });
         const localUrl = URL.createObjectURL(blob);
         setRecordedUrl(localUrl);
         stream.getTracks().forEach((t) => t.stop());
+        destination.stream.getTracks().forEach((t) => t.stop());
+        try { source.disconnect(); gain.disconnect(); analyser.disconnect(); } catch {}
+        recordingGraphRef.current = null;
+        recordingStreamRef.current = null;
+        cancelAnimationFrame(inputMeterFrameRef.current);
+        setInputLevel(0);
         clearInterval(recTimerRef.current);
 
-        // Add local clip to timeline immediately on the selected/armed track
+        // Keep the take locally while uploading, but only call it saved once
+        // durable storage and the project snapshot have both succeeded.
         const targetTrackId = overrideTrackId || selectedTrackId || tracks.find((track) => track.rec)?.id || 't1';
         const targetTrack = tracks.find((track) => track.id === targetTrackId) || tracks[0];
         const takeName = `${targetTrack?.name || 'Audio'} Take ${new Date().toLocaleTimeString()}`;
         const takeClipId = makeClipId();
-        const maxEnd = clips.filter(c => c.trackId === targetTrackId).reduce((mx, c) => Math.max(mx, c.start + c.width), 0);
-        const takeClip: Clip = { id: takeClipId, trackId: targetTrackId, name: takeName, start: Math.min(maxEnd, 85), width: 15, audioUrl: localUrl };
+        const startPct = Math.max(0, Math.min(99, recordingStartPctRef.current));
+        let durationSec = Math.max(0.1, (performance.now() - recordingStartedAtRef.current) / 1000);
+        try {
+          const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+          durationSec = decoded.duration;
+        } catch {}
+        const durationBasis = timelineDurationRef.current || masterDuration || 120;
+        const takeWidth = Math.max(0.2, Math.min(100 - startPct, durationSec / durationBasis * 100));
+        const takeClip: Clip = { id: takeClipId, trackId: targetTrackId, name: takeName, start: startPct, width: takeWidth, audioUrl: localUrl };
         const nextClipsLocal = [...clips, takeClip];
         const nextTracksLocal = tracks.map((track) => track.id === targetTrackId ? { ...track, audioUrl: localUrl, rec: true } : track);
         setClips(nextClipsLocal);
         setTracks(nextTracksLocal);
         setSelectedClipId(takeClipId);
 
-        // Upload to server in background
         try {
-          const reader = new FileReader();
-          reader.onloadend = async () => {
-            const base64 = (reader.result as string).split(',')[1];
-            const artistId = selectedArtistId;
-            const r: any = await apiFetch('/api/mini-studio/upload-recording', {
-              method: 'POST',
-              body: JSON.stringify({ base64Audio: base64, mimeType, projectId: currentProjectId, artistId, title: takeName }),
-            });
-            if (r?.audioUrl && r.audioUrl !== localUrl) {
-              // Replace blob URL with permanent URL in clips
-              const nextClipsPermanent = nextClipsLocal.map(c => c.id === takeClipId ? { ...c, audioUrl: r.audioUrl } : c);
-              const nextTracksPermanent = nextTracksLocal.map((track) => track.id === targetTrackId && track.audioUrl === localUrl ? { ...track, audioUrl: r.audioUrl } : track);
-              setClips(nextClipsPermanent);
-              setTracks(nextTracksPermanent);
-              setRecordedUrl(r.audioUrl);
-              if (r.songId) setSelectedSongId(r.songId);
-              const saved: any = await persistProjectSnapshot({
-                ...currentSnapshot(),
-                songId: r.songId || selectedSongId,
-                tracks: nextTracksPermanent,
-                clips: nextClipsPermanent,
-                sessionState: {
-                  selectedTrackId: targetTrackId,
-                  selectedClipId: takeClipId,
-                  editorTool,
-                  gridOn,
-                  snapOn,
-                  quantize,
-                  vocalSettings,
-                  aiLabSettings,
-                  generatedUrl,
-                  lastAiResult,
-                },
-              });
-              if (saved?.project?.id) setCurrentProjectId(saved.project.id);
-            }
-            libraryQuery.refetch();
-            projectsQuery.refetch();
-          };
-          reader.readAsDataURL(blob);
-        } catch {
-          /* upload failed — local URL still works in current session */
+          const body = new FormData();
+          body.append('audio', blob, `${takeClipId}.${mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm'}`);
+          if (currentProjectId) body.append('projectId', currentProjectId);
+          if (selectedArtistId) body.append('artistId', selectedArtistId);
+          body.append('title', takeName);
+          const uploaded: any = await apiFetch('/api/mini-studio/upload-recording', { method: 'POST', body });
+          if (!uploaded?.audioUrl) throw new Error('Storage did not return a durable audio URL.');
+          const nextClipsPermanent = nextClipsLocal.map((clip) => clip.id === takeClipId ? { ...clip, audioUrl: uploaded.audioUrl } : clip);
+          const nextTracksPermanent = nextTracksLocal.map((track) => track.id === targetTrackId && track.audioUrl === localUrl ? { ...track, audioUrl: uploaded.audioUrl } : track);
+          setClips(nextClipsPermanent);
+          setTracks(nextTracksPermanent);
+          setRecordedUrl(uploaded.audioUrl);
+          if (uploaded.songId) setSelectedSongId(uploaded.songId);
+          const snapshot = recordingActionsRef.current.snapshot?.() || {};
+          const saved: any = await recordingActionsRef.current.persist?.({
+            ...snapshot,
+            songId: uploaded.songId || selectedSongId,
+            tracks: nextTracksPermanent,
+            clips: nextClipsPermanent,
+            sessionState: { selectedTrackId: targetTrackId, selectedClipId: takeClipId, editorTool, gridOn, snapOn, quantize, vocalSettings, aiLabSettings, generatedUrl, lastAiResult },
+          });
+          if (!saved?.success && !saved?.project?.id) throw new Error('Audio was uploaded, but the project could not be saved. Save the project before leaving.');
+          if (saved?.project?.id) setCurrentProjectId(saved.project.id);
+          URL.revokeObjectURL(localUrl);
+          recordingActionsRef.current.refresh?.();
+          toast({ title: 'Recording saved', description: 'Take uploaded securely and added to the project timeline.' });
+        } catch (uploadError: any) {
+          toast({ title: 'Take is not saved to the cloud', description: `${uploadError?.message || 'Upload failed.'} Keep this tab open and export a local backup before leaving.`, variant: 'destructive' });
+        } finally {
+          setIsSavingRecording(false);
         }
-
-        toast({ title: 'Recording complete', description: 'Take saved to the timeline and uploaded to the server.' });
       };
       mr.start(100);
       mediaRecorderRef.current = mr;
       setIsRecording(true);
       setRecordingTime(0);
       recTimerRef.current = window.setInterval(() => setRecordingTime((t) => t + 1), 1000);
+      const samples = new Uint8Array(analyser.fftSize);
+      const meterTick = () => {
+        const graph = recordingGraphRef.current;
+        if (!graph) return;
+        graph.analyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) { const normalized = (sample - 128) / 128; sum += normalized * normalized; }
+        setInputLevel(Math.min(1, Math.sqrt(sum / samples.length) * 2.6));
+        inputMeterFrameRef.current = requestAnimationFrame(meterTick);
+      };
+      meterTick();
     } catch (err: any) {
-      toast({ title: 'Microphone unavailable', description: err.message || 'Allow microphone access.', variant: 'destructive' });
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      try {
+        recordingGraphRef.current?.source.disconnect();
+        recordingGraphRef.current?.gain.disconnect();
+        recordingGraphRef.current?.analyser.disconnect();
+        recordingGraphRef.current?.destination.stream.getTracks().forEach((track) => track.stop());
+      } catch {}
+      recordingGraphRef.current = null;
+      recordingStreamRef.current = null;
+      const message = err?.name === 'NotAllowedError'
+        ? 'Allow microphone access in the browser and try again.'
+        : err?.name === 'NotFoundError'
+          ? 'The selected input was not found. Connect it or choose System default input.'
+          : err?.name === 'OverconstrainedError'
+            ? 'The selected input is unavailable. Choose another device.'
+            : err?.message || 'Check the input device and browser permissions.';
+      toast({ title: 'Could not start recording', description: message, variant: 'destructive' });
     }
-  }, [toast, selectedArtistId, currentProjectId, selectedSongId, selectedTrackId, tracks, clips, editorTool, gridOn, snapOn, quantize, vocalSettings, aiLabSettings, generatedUrl, lastAiResult]);
+  }, [toast, isSavingRecording, selectedArtistId, currentProjectId, selectedSongId, selectedTrackId, selectedAudioInputId, tracks, clips, editorTool, gridOn, snapOn, quantize, vocalSettings, aiLabSettings, generatedUrl, lastAiResult, playhead, masterDuration, getAudioCtx, refreshAudioInputDevices]);
 
   const handleStopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current?.stop();
@@ -3459,6 +3563,13 @@ export function MiniStudio() {
     queryKey: ['mini-studio-library'],
     queryFn: () => apiFetch<{ success: boolean; artists: ArtistLibraryArtist[]; songs: ArtistLibrarySong[] }>('/api/mini-studio/library'),
     staleTime: 30_000,
+    retry: false,
+  });
+
+  const generationProvidersQuery = useQuery({
+    queryKey: ['mini-studio-audio-providers'],
+    queryFn: () => apiFetch<{ success: boolean; audioGeneration: { fal: { configured: boolean }; replicate: { configured: boolean }; preferred: string | null } }>('/api/mini-studio/providers'),
+    staleTime: 60_000,
     retry: false,
   });
 
@@ -3522,6 +3633,12 @@ export function MiniStudio() {
       method: projectIdForWrite ? 'PUT' : 'POST',
       body: JSON.stringify(finalSnapshot),
     });
+  };
+
+  recordingActionsRef.current = {
+    snapshot: currentSnapshot,
+    persist: (snapshot) => persistProjectSnapshot(snapshot),
+    refresh: () => { void libraryQuery.refetch(); void projectsQuery.refetch(); },
   };
 
   const saveMut = useMutation({
@@ -3944,17 +4061,54 @@ export function MiniStudio() {
       } else if (kind === 'release') {
         releaseMut.mutate();
       } else if (kind === 'master') {
-        const r: any = await apiFetch('/api/mini-studio/master', {
+        const sourceAudioUrl = selectedClip?.audioUrl || selectedSong?.audioUrl || tracks.find((track) => track.audioUrl && !track.mute)?.audioUrl;
+        if (!sourceAudioUrl) throw new Error('Load a song or select an audio clip before mastering.');
+        const r: any = await apiFetch('/api/mastering/master', {
           method: 'POST',
-          body: JSON.stringify({
-            presetId: 'spotify',
-            songId: selectedSong?.id,
-            projectId: currentProjectId,
-            measured: meter.integratedLufs > -70 ? { integratedLufs: meter.integratedLufs, truePeakDb: meter.truePeakDb } : undefined,
-          }),
+          body: JSON.stringify({ audioUrl: sourceAudioUrl, preset: 'streaming' }),
         });
-        setMasterChain((current) => ({ ...current, targetLufs: r?.measured?.integratedLufs ?? -14, limiter: r?.measured?.truePeakDb ?? -1, glue: Math.max(current.glue, 40) }));
-        toast({ title: 'Master targets applied', description: `${r?.preset?.name} targets saved. No mastered audio file was rendered.` });
+        if (!r?.audioUrl) throw new Error('The mastering service did not return a rendered file.');
+        const sourceTrack = selectedTrack || tracks[0];
+        if (!sourceTrack) throw new Error('Add an audio track to the project before mastering.');
+        const masteredTrackId = `mastered-${Date.now()}`;
+        const masteredClipId = makeClipId();
+        const masteredTrack: Track = {
+          ...sourceTrack,
+          id: masteredTrackId,
+          name: `${sourceTrack.name.slice(0, 12)} Master`,
+          audioUrl: r.audioUrl,
+          mute: false,
+          solo: false,
+          rec: false,
+          vol: 100,
+          pan: 0,
+        };
+        const masteredClip: Clip = {
+          id: masteredClipId,
+          trackId: masteredTrackId,
+          name: `${projectName} Mastered`,
+          start: 0,
+          width: 100,
+          audioUrl: r.audioUrl,
+          gain: 1,
+          sourceSongId: selectedSong?.id || selectedSongId || undefined,
+        };
+        const nextTracks = [...tracks, masteredTrack];
+        const nextClips = [...clips, masteredClip];
+        setTracks(nextTracks);
+        setClips(nextClips);
+        setSelectedTrackId(masteredTrackId);
+        setSelectedClipId(masteredClipId);
+        if (audioRef.current) { audioRef.current.src = r.audioUrl; audioRef.current.load(); }
+        const saved: any = await persistProjectSnapshot({
+          ...currentSnapshot(),
+          tracks: nextTracks,
+          clips: nextClips,
+          sessionState: { ...currentSnapshot().sessionState, selectedTrackId: masteredTrackId, selectedClipId: masteredClipId, lastAiResult: { kind: 'master', audioUrl: r.audioUrl, stats: r.stats } },
+        });
+        if (saved?.project?.id) setCurrentProjectId(saved.project.id);
+        projectsQuery.refetch();
+        toast({ title: 'Mastered track added to the timeline', description: `${r.presetLabel || 'Streaming'} · ${r.stats?.outputLufs ?? -14} LUFS output.` });
       } else {
         const mappedKind = kind === 'mix' ? 'beat' : kind === 'tiktok' ? 'hook' : kind;
         const r: any = await apiFetch('/api/mini-studio/generate', {
@@ -4067,6 +4221,11 @@ export function MiniStudio() {
 
   const handleLoadSong = async (song: ArtistLibrarySong) => {
     try {
+      if (song.postgresId) {
+        const imported: any = await apiFetch(`/api/mini-studio/songs/import-generated/${song.postgresId}`, { method: 'POST' });
+        if (!imported?.song) throw new Error('The generated song could not be linked to Mini Studio.');
+        song = imported.song;
+      }
       const songTitle = song.title || song.name || PROJECT.name;
       const audioUrl = song.audioUrl || (song as any).audioURL || (song as any).fileUrl || (song as any).url || (song as any).streamUrl || '';
       let linkedProject = projects.find((project: any) => project.id === song.miniStudioProjectId || String(project.songId || '') === String(song.id));
@@ -4190,8 +4349,19 @@ export function MiniStudio() {
     const params = new URLSearchParams(query);
     const artistParam = params.get('artistId');
     const songId = params.get('songId');
+    const generatedSongId = params.get('generatedSongId');
     const audioUrl = params.get('audioUrl') || undefined;
     const songTitle = params.get('song') || params.get('title') || undefined;
+    if (generatedSongId) {
+      deepLinkLoadedRef.current = true;
+      void apiFetch(`/api/mini-studio/songs/import-generated/${encodeURIComponent(generatedSongId)}`, { method: 'POST' })
+        .then((result: any) => {
+          if (!result?.song) throw new Error('The generated song could not be linked to Mini Studio.');
+          return handleLoadSong(result.song);
+        })
+        .catch((error: any) => toast({ title: 'Could not open generated song', description: error.message, variant: 'destructive' }));
+      return;
+    }
     if (!artistParam && !songId && !audioUrl) return;
 
     const artistMatch = artists.find((artist) => [artist.id, artist.firestoreId, artist.pgId ? String(artist.pgId) : null].filter(Boolean).map(String).includes(String(artistParam)));
@@ -4206,13 +4376,23 @@ export function MiniStudio() {
 
     if (audioUrl) {
       deepLinkLoadedRef.current = true;
-      void handleLoadSong({
-        id: songId || `external-${Date.now()}`,
-        title: songTitle || 'Imported song',
-        name: songTitle || 'Imported song',
-        audioUrl,
-        artistId: artistMatch?.id || artistParam || undefined,
-      });
+      void (async () => {
+        const importedSong = {
+          id: songId || `external-${Date.now()}`,
+          title: songTitle || 'Imported song',
+          name: songTitle || 'Imported song',
+          audioUrl,
+          artistId: artistMatch?.id || artistParam || undefined,
+        };
+        if (importedSong.artistId) {
+          const saved: any = await apiFetch('/api/mini-studio/songs', {
+            method: 'POST',
+            body: JSON.stringify({ ...importedSong, source: 'music-generator-mastered' }),
+          });
+          if (saved?.song) return handleLoadSong(saved.song);
+        }
+        return handleLoadSong(importedSong);
+      })().catch((error: any) => toast({ title: 'Could not import audio', description: error.message, variant: 'destructive' }));
     }
   }, [allSongs, artists, libraryQuery.isLoading, location]);
 
@@ -4871,6 +5051,13 @@ export function MiniStudio() {
 
   // Clean up the entire audio engine on unmount.
   useEffect(() => () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingGraphRef.current?.destination.stream.getTracks().forEach((track) => track.stop());
+    cancelAnimationFrame(inputMeterFrameRef.current);
+    clearInterval(recTimerRef.current);
     cancelAnimationFrame(animFrameRef.current);
     stemPartsRef.current.forEach(({ el, strip }) => {
       try { el.pause(); } catch {}
@@ -4950,10 +5137,15 @@ export function MiniStudio() {
       onSettingsChange={(patch) => setVocalSettings((current) => ({ ...current, ...patch }))}
       onTool={handleVocalTool}
       isRecording={isRecording}
+      isSavingRecording={isSavingRecording}
       onStartRecording={handleStartRecording}
       onStopRecording={handleStopRecording}
       recordingTime={recordingTime}
       recordedUrl={recordedUrl}
+      audioInputDevices={audioInputDevices}
+      selectedAudioInputId={selectedAudioInputId}
+      onAudioInputChange={setSelectedAudioInputId}
+      inputLevel={inputLevel}
       lyrics={lyrics}
       onShowLyrics={() => setShowLyricsPanel(true)}
       onTrackSelect={setSelectedTrackId}
@@ -4965,7 +5157,6 @@ export function MiniStudio() {
       onTakeRename={handleRenameClip}
       onSaveSession={() => saveMut.mutate()}
       plugins={selectedTrackPlugins}
-      levels={levels}
       bpm={bpm}
       keyName={keyName}
       projectName={projectName}
@@ -5012,6 +5203,7 @@ export function MiniStudio() {
       onGenerate={handleGenerate}
       generating={generating}
       generatedUrl={generatedUrl}
+      providersReady={generationProvidersQuery.data ? Boolean(generationProvidersQuery.data.audioGeneration?.preferred) : null}
     />
   );
 
@@ -5409,6 +5601,7 @@ export function MiniStudio() {
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {renderVocalBooth()}
             {renderPluginRack()}
+            <div className="h-[280px] min-h-[220px] rounded-lg overflow-hidden border border-white/10">{renderTimeline()}</div>
           </div>
         )}
 
@@ -5416,6 +5609,7 @@ export function MiniStudio() {
         {!['projects','settings'].includes(activeSection) && mobilePanel === 'mixer' && (
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {renderMixerConsole()}
+            <div className="h-[280px] min-h-[220px] rounded-lg overflow-hidden border border-white/10">{renderTimeline()}</div>
           </div>
         )}
 
@@ -5424,6 +5618,7 @@ export function MiniStudio() {
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {renderAiLab()}
             {renderAgentsPanel()}
+            <div className="h-[280px] min-h-[220px] rounded-lg overflow-hidden border border-white/10">{renderTimeline()}</div>
           </div>
         )}
 

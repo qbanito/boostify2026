@@ -114,6 +114,8 @@ export default function MusicGeneratorPage() {
   const [musicPrompt, setMusicPrompt] = useState("");
   const [musicTitle, setMusicTitle] = useState("");
   const [selectedModel, setSelectedModel] = useState("music-lyria3");
+  const [modelAvailability, setModelAvailability] = useState<Record<string, { available: boolean; provider?: string; reason?: string }>>({});
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [selectedGenreTemplate, setSelectedGenreTemplate] = useState("pop");
   const [isGeneratingMusic, setIsGeneratingMusic] = useState(false);
   const [musicGenerationProgress, setMusicGenerationProgress] = useState(0);
@@ -149,6 +151,7 @@ export default function MusicGeneratorPage() {
   const [masteringFile, setMasteringFile] = useState<File | null>(null);
   const [isMastering, setIsMastering] = useState(false);
   const [masteringResult, setMasteringResult] = useState<any>(null);
+  const [masteringPreset, setMasteringPreset] = useState('streaming');
   const [masteringProgress, setMasteringProgress] = useState(0);
   const masteringFileRef = useRef<HTMLInputElement>(null);
   
@@ -207,6 +210,28 @@ export default function MusicGeneratorPage() {
   });
   
   useEffect(() => { loadRecentGenerations(); }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/music/providers', { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Provider status unavailable (${response.status})`);
+        return response.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        const next = data?.models || {};
+        setModelAvailability(next);
+        const firstAvailable = Object.keys(next).find((id) => next[id]?.available);
+        if (firstAvailable) setSelectedModel((current) => next[current]?.available ? current : firstAvailable);
+      })
+      .catch((error) => {
+        logger.error('Could not load music provider status:', error);
+        if (active) setModelAvailability({});
+      })
+      .finally(() => { if (active) setIsLoadingModels(false); });
+    return () => { active = false; };
+  }, []);
   
   // Check generation status polling — resilient: up to 3 consecutive errors; 5-min timeout
   useEffect(() => {
@@ -226,7 +251,7 @@ export default function MusicGeneratorPage() {
         }
         try {
           let status;
-          if (selectedModel === 'music-lyria3') {
+          if (selectedModel === 'music-lyria3' || selectedModel === 'music-lyria-clip') {
             status = await checkLyria3Status(currentTaskId);
           } else if (selectedModel === 'music-stable') {
             status = await checkStableAudioStatus(currentTaskId);
@@ -249,7 +274,7 @@ export default function MusicGeneratorPage() {
                 id: `local_gen_${Date.now()}`,
                 taskId: currentTaskId,
                 title: musicTitle || 'Untitled Generation',
-                model: selectedModel,
+                model: status.provider || selectedModel,
                 prompt: musicPrompt,
                 audioUrl: status.audioUrl,
                 createdAt: new Date().toISOString(),
@@ -257,12 +282,17 @@ export default function MusicGeneratorPage() {
               };
               setRecentGenerations(prev => [newGeneration, ...prev]);
               try {
-                await saveGeneratedSongToProfile({
+                const savedSong = await saveGeneratedSongToProfile({
                   title: musicTitle || 'Untitled Generation',
                   audioUrl: status.audioUrl,
                   prompt: musicPrompt,
                   genre: selectedGenreTemplate,
+                  aiProvider: status.provider || selectedModel,
+                  lyrics: status.lyrics || advancedParams.customLyrics || undefined,
                 });
+                if (savedSong?.id) {
+                  setRecentGenerations((prev) => prev.map((item) => item.id === newGeneration.id ? { ...item, pgId: savedSong.id, model: savedSong.aiProvider || item.model, source: 'profile' } : item));
+                }
                 toast({ title: "✅ Track ready!", description: "Song saved to your artist library." });
               } catch (e) { logger.error('Profile save error:', e); }
             } else {
@@ -402,11 +432,12 @@ export default function MusicGeneratorPage() {
     try {
       let result: { taskId?: string; requestId?: string };
       pollAttemptsRef.current = 0; // reset poll counter for new generation
-      if (selectedModel === 'music-lyria3') {
+      if (selectedModel === 'music-lyria3' || selectedModel === 'music-lyria-clip') {
         try {
           result = await generateMusicWithLyria3({
             prompt: musicPrompt,
-            duration: 120,
+            duration: selectedModel === 'music-lyria-clip' ? 30 : 120,
+            useClipModel: selectedModel === 'music-lyria-clip',
             instrumental: advancedParams.makeInstrumental,
             genre: selectedGenreTemplate || undefined,
             bpm: advancedParams.tempo || undefined,
@@ -418,7 +449,7 @@ export default function MusicGeneratorPage() {
           logger.warn('Lyria 3 unavailable, falling back to FAL Minimax:', lyria3Err);
           toast({ title: "⚡ Switching to backup model", description: "Lyria 3 is temporarily unavailable — using FAL Minimax.", duration: 4000 });
           try {
-            result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 30 });
+            result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 90, lyrics: advancedParams.customLyrics });
             setSelectedModel('music-fal');
             setCurrentTaskId(result.requestId || '');
           } catch (falErr) {
@@ -435,13 +466,13 @@ export default function MusicGeneratorPage() {
         } catch (stableErr) {
           logger.warn('Stable Audio unavailable, falling back to FAL Minimax:', stableErr);
           toast({ title: "⚡ Switching to backup model", description: "Stable Audio unavailable — using FAL Minimax.", duration: 4000 });
-          result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 30 });
+          result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 90, lyrics: advancedParams.customLyrics });
           setSelectedModel('music-fal');
           setCurrentTaskId(result.requestId || '');
         }
       } else if (selectedModel === 'music-fal') {
         try {
-          result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 30 });
+          result = await generateMusicWithFAL({ prompt: musicPrompt, duration: 90, lyrics: advancedParams.customLyrics });
           setCurrentTaskId(result.requestId || '');
         } catch (falErr) {
           logger.warn('FAL Minimax unavailable, falling back to Stable Audio:', falErr);
@@ -510,31 +541,33 @@ export default function MusicGeneratorPage() {
       // Upload file first
       const formData = new FormData();
       formData.append('audio', masteringFile);
-      const uploadRes = await fetch('/api/kits/upload-audio', {
+      const uploadRes = await fetch('/api/mastering/upload', {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
-      if (!uploadRes.ok) throw new Error('Upload failed');
+      if (!uploadRes.ok) throw new Error((await uploadRes.json().catch(() => ({}))).error || 'Upload failed');
       const uploadData = await uploadRes.json();
-      const audioUrl = uploadData.url || uploadData.soundFile;
+      const audioUrl = uploadData.audioUrl;
+      if (!audioUrl) throw new Error('Audio upload did not return a stored URL.');
       setMasteringProgress(40);
 
-      // Separate stems via FAL Demucs (synchronous — no polling)
-      const masterRes = await fetch('/api/mastering/separate-stems', {
+      const masterRes = await fetch('/api/mastering/master', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl, model: 'htdemucs' }),
+        body: JSON.stringify({ audioUrl, preset: masteringPreset }),
       });
-      if (!masterRes.ok) throw new Error('Mastering failed');
+      if (!masterRes.ok) throw new Error((await masterRes.json().catch(() => ({}))).error || 'Mastering failed');
       const masterData = await masterRes.json();
+      if (!masterData.audioUrl) throw new Error('Mastering finished without a downloadable audio file.');
       setMasteringProgress(100);
       setMasteringResult({
-        vocals: masterData.stems?.vocals || null,
-        instrumentals: masterData.stems?.other || masterData.stems?.accompaniment || null,
-        drums: masterData.stems?.drums || null,
-        bass: masterData.stems?.bass || null,
+        audioUrl: masterData.audioUrl,
+        presetLabel: masterData.presetLabel,
+        stats: masterData.stats,
       });
-      toast({ title: '✅ Mastering complete!', description: 'Stems extracted with FAL Demucs.' });
+      toast({ title: 'Mastering complete', description: `${masterData.presetLabel || 'Streaming'} master saved to your audio library.` });
     } catch (error: any) {
       logger.error('Mastering error:', error);
       toast({ title: 'Error processing audio', description: error.message, variant: 'destructive' });
@@ -811,6 +844,8 @@ export default function MusicGeneratorPage() {
                       setMusicTitle={setMusicTitle}
                       selectedModel={selectedModel}
                       setSelectedModel={setSelectedModel}
+                      modelAvailability={modelAvailability}
+                      isLoadingModels={isLoadingModels}
                       showAdvancedParams={showAdvancedParams}
                       setShowAdvancedParams={setShowAdvancedParams}
                       advancedModeType={advancedModeType}
@@ -833,31 +868,6 @@ export default function MusicGeneratorPage() {
                   </motion.div>
                 )}
 
-                {/* Quick models info */}
-                <div className="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {[
-                    { name: "Lyria 3 Pro", badge: "👑 #1", icon: Sparkles, active: selectedModel === 'music-lyria3' },
-                    { name: "Minimax", badge: "Fast", icon: Zap, active: selectedModel === 'music-fal' },
-                    { name: "Stable Audio", badge: "HiFi", icon: AudioWaveform, active: selectedModel === 'music-stable' },
-                    { name: "Suno", badge: "Vocals", icon: Music, active: selectedModel === 'music-s' },
-                    { name: "Udio", badge: "Pro", icon: Headphones, active: selectedModel === 'music-u' },
-                  ].map(m => (
-                    <div
-                      key={m.name}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-default ${
-                        m.active 
-                          ? 'border-white/20 bg-white/[0.06]' 
-                          : 'border-white/[0.04] bg-white/[0.01]'
-                      }`}
-                    >
-                      <m.icon className={`w-4 h-4 ${m.active ? 'text-white' : 'text-white/20'}`} />
-                      <div>
-                        <div className={`text-xs font-medium ${m.active ? 'text-white' : 'text-white/30'}`}>{m.name}</div>
-                        <div className="text-[10px] text-white/20">{m.badge}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </motion.div>
             )}
 
@@ -1016,12 +1026,23 @@ export default function MusicGeneratorPage() {
                               Drop your audio file here
                             </p>
                             <p className="text-xs text-white/20 mt-1">
-                              WAV, MP3, FLAC — up to 50MB
+                              WAV, MP3, FLAC — up to 100MB
                             </p>
                           </div>
                         </div>
                       )}
                     </div>
+
+                    <label className="block mt-5 text-xs text-white/50">
+                      Mastering target
+                      <select value={masteringPreset} onChange={(e) => setMasteringPreset(e.target.value)} disabled={isMastering} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white">
+                        <option value="streaming">Streaming (-14 LUFS)</option>
+                        <option value="tiktok">TikTok / Social (-10 LUFS)</option>
+                        <option value="club">Club (-8 LUFS)</option>
+                        <option value="radio">Radio (-16 LUFS)</option>
+                        <option value="podcast">Podcast / Voice (-16 LUFS)</option>
+                      </select>
+                    </label>
 
                     {/* Process button */}
                     <button
@@ -1053,57 +1074,20 @@ export default function MusicGeneratorPage() {
                       </div>
                     )}
 
-                    {/* Result */}
                     {masteringResult && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mt-8 space-y-4"
-                      >
-                        <div className="flex items-center gap-2 text-emerald-400">
-                          <Check className="w-4 h-4" />
-                          <span className="text-sm font-medium">Mastering complete</span>
-                        </div>
-
-                        {/* Output tracks */}
-                        <div className="space-y-3">
-                          {masteringResult.vocals && (
-                            <AudioResultRow
-                              label="Vocals"
-                              url={masteringResult.vocals}
-                              onPlay={(url) => handlePlay(url, 'master-vox')}
-                              onDownload={(url) => handleDownload(url, 'mastered-vocals')}
-                              isPlaying={currentPlayingId === 'master-vox' && isPlaying}
-                            />
-                          )}
-                          {masteringResult.instrumentals && (
-                            <AudioResultRow
-                              label="Instrumental / Other"
-                              url={masteringResult.instrumentals}
-                              onPlay={(url) => handlePlay(url, 'master-inst')}
-                              onDownload={(url) => handleDownload(url, 'mastered-instrumental')}
-                              isPlaying={currentPlayingId === 'master-inst' && isPlaying}
-                            />
-                          )}
-                          {masteringResult.drums && (
-                            <AudioResultRow
-                              label="Drums"
-                              url={masteringResult.drums}
-                              onPlay={(url) => handlePlay(url, 'master-drums')}
-                              onDownload={(url) => handleDownload(url, 'mastered-drums')}
-                              isPlaying={currentPlayingId === 'master-drums' && isPlaying}
-                            />
-                          )}
-                          {masteringResult.bass && (
-                            <AudioResultRow
-                              label="Bass"
-                              url={masteringResult.bass}
-                              onPlay={(url) => handlePlay(url, 'master-bass')}
-                              onDownload={(url) => handleDownload(url, 'mastered-bass')}
-                              isPlaying={currentPlayingId === 'master-bass' && isPlaying}
-                            />
-                          )}
-                        </div>
+                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-8 space-y-4">
+                        <div className="flex items-center gap-2 text-emerald-400"><Check className="w-4 h-4" /><span className="text-sm font-medium">Mastered file ready — {masteringResult.presetLabel}</span></div>
+                        <AudioResultRow
+                          label="Mastered track"
+                          url={masteringResult.audioUrl}
+                          onPlay={(url) => handlePlay(url, 'mastered-track')}
+                          onDownload={(url) => handleDownload(url, musicTitle || masteringFile?.name || 'mastered-track')}
+                          isPlaying={currentPlayingId === 'mastered-track' && isPlaying}
+                        />
+                        {masteringResult.stats && (
+                          <p className="text-xs text-white/45">Input {masteringResult.stats.inputLufs} LUFS → output {masteringResult.stats.outputLufs} LUFS; target {masteringResult.stats.targetLufs} LUFS; true peak {masteringResult.stats.outputTruePeak} dBTP.</p>
+                        )}
+                        <a href={`/mini-studio?audioUrl=${encodeURIComponent(masteringResult.audioUrl)}&title=${encodeURIComponent(`${masteringFile?.name || 'Mastered track'} (mastered)`)}`} className="inline-flex items-center gap-2 rounded-lg bg-white/[0.08] px-3 py-2 text-xs font-semibold text-white hover:bg-white/[0.14]">Open mastered audio in Mini Studio <ArrowRight className="w-3 h-3" /></a>
                       </motion.div>
                     )}
                   </div>
@@ -1113,7 +1097,7 @@ export default function MusicGeneratorPage() {
                 <div className="mt-6 flex items-start gap-3 text-white/20 text-xs">
                   <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p>
-                    Powered by Kits.ai. Your audio is processed securely and never stored permanently.
+                    Two-pass EBU R128 loudness mastering. The rendered master is stored in your audio library and can be opened in Mini Studio.
                   </p>
                 </div>
               </motion.div>
@@ -1760,9 +1744,9 @@ export default function MusicGeneratorPage() {
                             <h3 className="text-sm font-semibold text-white truncate">{gen.title}</h3>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-white/50 font-medium">
-                                {gen.model === 'music-fal' || gen.model === 'fal-minimax-music-v2' ? 'Minimax' :
+                                {gen.model === 'music-fal' || gen.model === 'minimax/music-3' || gen.model === 'fal-minimax-music-v2' ? 'MiniMax Music 3' :
                                  gen.model === 'music-stable' ? 'Stable Audio' :
-                                 gen.model === 'music-lyria3' || (gen.model || '').includes('lyria') ? 'Lyria 3' :
+                                 gen.model === 'music-lyria3' || (gen.model || '').includes('lyria') ? 'Lyria 3.5' :
                                  gen.model === 'music-s' ? 'Suno' :
                                  (gen.model && gen.model !== 'unknown') ? gen.model : 'AI'}
                               </span>
@@ -1777,7 +1761,16 @@ export default function MusicGeneratorPage() {
                               <span className="text-[10px] text-white/20">{formatDate(gen.createdAt)}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            {gen.pgId && (
+                              <button
+                                onClick={() => { window.location.href = `/mini-studio?generatedSongId=${encodeURIComponent(String(gen.pgId))}`; }}
+                                className="px-2 h-8 rounded-lg bg-white/[0.08] hover:bg-white/[0.14] text-[10px] font-semibold text-white/70 flex items-center gap-1"
+                                title="Open this saved track in Mini Studio"
+                              >
+                                Open in Studio <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDownload(gen.audioUrl, gen.title)}
                               className="w-8 h-8 rounded-lg hover:bg-white/[0.08] flex items-center justify-center transition-colors"
@@ -2027,7 +2020,7 @@ function AudioResultRow({
 // ─── LOCKED PAGE ────────────────────────────────────────────────────────
 
 const LOCKED_FEATURES = [
-  { icon: Wand2, title: "5 AI Music Models", desc: "Lyria 3 Pro, Suno, Udio, Stable Audio & FAL Minimax", gradient: "from-orange-500 to-pink-500" },
+  { icon: Wand2, title: "Live provider status", desc: "Only models configured on the server can be selected", gradient: "from-orange-500 to-pink-500" },
   { icon: Mic, title: "Voice AI Studio", desc: "Clone your voice and apply to any track", gradient: "from-blue-500 to-purple-500" },
   { icon: PenLine, title: "AI Lyrics", desc: "Copyright-protected songwriting workflow", gradient: "from-emerald-500 to-cyan-500" },
   { icon: BarChart3, title: "AI Mastering", desc: "Professional mastering powered by Kits.ai", gradient: "from-yellow-500 to-orange-500" },

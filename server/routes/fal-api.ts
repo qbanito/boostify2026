@@ -9,8 +9,36 @@ import { logApiUsage } from '../utils/api-logger';
 import { chargeCredits, chargeCreditsFromUsd } from '../services/credit-engine';
 import type { OperationType } from '../../shared/credit-pricing';
 import { authenticate } from '../middleware/auth';
+import { db as firebaseDb, FieldValue } from '../firebase';
 
 const router = Router();
+
+const musicJobCollection = 'music_provider_jobs';
+function getAuthenticatedOwner(req: Request): string {
+  return String(req.user?.uid || req.user?.id || '');
+}
+async function saveMusicJob(req: Request, provider: string, submitData: any) {
+  const requestId = String(submitData?.request_id || '');
+  const ownerId = getAuthenticatedOwner(req);
+  if (!requestId || !ownerId) throw new Error('Could not identify the generation request or account.');
+  const fallbackBase = provider === 'minimax/music-3' ? `https://queue.fal.run/${provider}` : `https://queue.fal.run/${provider}`;
+  await firebaseDb.collection(musicJobCollection).doc(requestId).set({
+    requestId,
+    ownerId,
+    provider,
+    statusUrl: submitData.status_url || `${fallbackBase}/requests/${requestId}/status`,
+    responseUrl: submitData.response_url || `${fallbackBase}/requests/${requestId}`,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return requestId;
+}
+async function getOwnedMusicJob(req: Request, requestId: string) {
+  const snapshot = await firebaseDb.collection(musicJobCollection).doc(requestId).get();
+  if (!snapshot.exists) return { error: 'Generation not found', status: 404 as const };
+  const job: any = snapshot.data();
+  if (job.ownerId !== getAuthenticatedOwner(req)) return { error: 'This generation belongs to another account', status: 403 as const };
+  return { job };
+}
 
 // Verificar que las API keys estén configuradas (principal + backup)
 const FAL_API_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY;
@@ -587,7 +615,7 @@ router.get('/status/:requestId', async (req: Request, res: Response) => {
  * POST /api/fal/minimax-music
  * Genera música usando FAL AI minimax-music/v2
  */
-router.post('/minimax-music', async (req: Request, res: Response) => {
+router.post('/minimax-music', authenticate, async (req: Request, res: Response) => {
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -596,7 +624,7 @@ router.post('/minimax-music', async (req: Request, res: Response) => {
       });
     }
 
-    const { prompt, duration, reference_audio_url } = req.body;
+    const { prompt, duration, lyrics } = req.body;
 
     if (!prompt) {
       return res.status(400).json({
@@ -612,7 +640,7 @@ router.post('/minimax-music', async (req: Request, res: Response) => {
 
     // Submit job a FAL AI minimax-music/v2 con failover automático
     const submitResponse = await fetchWithFailover(
-      'https://queue.fal.run/fal-ai/minimax-music/v2',
+      'https://queue.fal.run/minimax/music-3',
       {
         method: 'POST',
         headers: {
@@ -620,8 +648,8 @@ router.post('/minimax-music', async (req: Request, res: Response) => {
         },
         body: JSON.stringify({
           prompt,
-          duration: duration || 30,
-          reference_audio_url: reference_audio_url || undefined
+          duration: Math.min(Math.max(Number(duration) || 90, 30), 300),
+          lyrics: typeof lyrics === 'string' && lyrics.trim() ? lyrics.trim() : undefined,
         })
       },
       'Minimax Music Submit'
@@ -638,15 +666,15 @@ router.post('/minimax-music', async (req: Request, res: Response) => {
     }
 
     const submitData = await submitResponse.json();
-    const requestId = submitData.request_id;
+    const requestId = await saveMusicJob(req, 'minimax/music-3', submitData);
 
     console.log(`⏳ [FAL-BACKEND] Music job submitted: ${requestId}`);
 
     // 💳 Charge credits for music generation
-    const userEmail = req.body.userEmail;
+    const userEmail = req.user?.email;
     if (userEmail) {
       await chargeCredits(userEmail, 'audio.minimax_music' as OperationType, {
-        description: 'Music Generation (MiniMax v2)',
+        description: 'Music Generation (MiniMax Music 3)',
       });
     }
 
@@ -670,7 +698,7 @@ router.post('/minimax-music', async (req: Request, res: Response) => {
  * GET /api/fal/minimax-music/:requestId
  * Obtiene el estado de una generación de música
  */
-router.get('/minimax-music/:requestId', async (req: Request, res: Response) => {
+router.get('/minimax-music/:requestId', authenticate, async (req: Request, res: Response) => {
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -680,12 +708,14 @@ router.get('/minimax-music/:requestId', async (req: Request, res: Response) => {
     }
 
     const { requestId } = req.params;
+    const owned = await getOwnedMusicJob(req, requestId);
+    if ('error' in owned) return res.status(owned.status).json({ success: false, error: owned.error });
 
     // Check status first con failover automático
     console.log(`🔍 [FAL-BACKEND] Checking status for: ${requestId}`);
     
     const statusResponse = await fetchWithFailover(
-      `https://queue.fal.run/fal-ai/minimax-music/requests/${requestId}/status`,
+      owned.job.statusUrl,
       {
         headers: {}
       },
@@ -709,7 +739,7 @@ router.get('/minimax-music/:requestId', async (req: Request, res: Response) => {
     // If completed, get the result con failover automático
     if (statusData.status === 'COMPLETED') {
       const resultResponse = await fetchWithFailover(
-        `https://queue.fal.run/fal-ai/minimax-music/requests/${requestId}`,
+        owned.job.responseUrl,
         {
           headers: {}
         },
@@ -721,8 +751,10 @@ router.get('/minimax-music/:requestId', async (req: Request, res: Response) => {
         return res.json({
           success: true,
           status: 'completed',
-          audioUrl: resultData.audio?.url,
+          audioUrl: resultData.audio?.url || resultData.audio_url || resultData.url,
+          provider: 'minimax/music-3',
           duration: resultData.duration,
+          lyrics: resultData.lyrics,
           data: resultData
         });
       }
@@ -748,7 +780,7 @@ router.get('/minimax-music/:requestId', async (req: Request, res: Response) => {
  * POST /api/fal/stable-audio
  * Genera música usando FAL AI Stable Audio 2.5
  */
-router.post('/stable-audio', async (req: Request, res: Response) => {
+router.post('/stable-audio', authenticate, async (req: Request, res: Response) => {
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -797,12 +829,12 @@ router.post('/stable-audio', async (req: Request, res: Response) => {
     }
 
     const submitData = await submitResponse.json();
-    const requestId = submitData.request_id;
+    const requestId = await saveMusicJob(req, 'fal-ai/stable-audio-25/text-to-audio', submitData);
 
     console.log(`⏳ [FAL-BACKEND] Stable Audio job submitted: ${requestId}`);
 
     // 💳 Charge credits for stable audio
-    const userEmail = req.body.userEmail;
+    const userEmail = req.user?.email;
     if (userEmail) {
       await chargeCredits(userEmail, 'audio.stable_audio' as OperationType, {
         description: 'Audio Generation (Stable Audio 2.5)',
@@ -829,7 +861,7 @@ router.post('/stable-audio', async (req: Request, res: Response) => {
  * GET /api/fal/stable-audio/:requestId
  * Obtiene el estado de una generación de Stable Audio
  */
-router.get('/stable-audio/:requestId', async (req: Request, res: Response) => {
+router.get('/stable-audio/:requestId', authenticate, async (req: Request, res: Response) => {
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -839,12 +871,14 @@ router.get('/stable-audio/:requestId', async (req: Request, res: Response) => {
     }
 
     const { requestId } = req.params;
+    const owned = await getOwnedMusicJob(req, requestId);
+    if ('error' in owned) return res.status(owned.status).json({ success: false, error: owned.error });
 
     // Check status first con failover automático
     console.log(`🔍 [FAL-BACKEND] Checking Stable Audio status for: ${requestId}`);
     
     const statusResponse = await fetchWithFailover(
-      `https://queue.fal.run/fal-ai/stable-audio-25/requests/${requestId}/status`,
+      owned.job.statusUrl,
       {
         headers: {}
       },
@@ -868,7 +902,7 @@ router.get('/stable-audio/:requestId', async (req: Request, res: Response) => {
     // If completed, get the result con failover automático
     if (statusData.status === 'COMPLETED') {
       const resultResponse = await fetchWithFailover(
-        `https://queue.fal.run/fal-ai/stable-audio-25/requests/${requestId}`,
+        owned.job.responseUrl,
         {
           headers: {}
         },
@@ -880,7 +914,8 @@ router.get('/stable-audio/:requestId', async (req: Request, res: Response) => {
         return res.json({
           success: true,
           status: 'completed',
-          audioUrl: resultData.audio?.url,
+          audioUrl: resultData.audio?.url || resultData.audio_url || resultData.url,
+          provider: 'fal-ai/stable-audio-25/text-to-audio',
           duration: resultData.duration,
           data: resultData
         });
@@ -997,7 +1032,7 @@ router.post('/nano-banana/generate', async (req: Request, res: Response) => {
     await logFalUsage('nano-banana-2', data.images?.length || 1);
 
     // 💳 Charge credits for image generation
-    const userEmail = req.body.userEmail;
+    const userEmail = req.user?.email;
     if (userEmail) {
       const imgCount = data.images?.length || 1;
       await chargeCredits(userEmail, 'image.nano_banana_2' as OperationType, {

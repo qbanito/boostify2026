@@ -354,11 +354,11 @@ router.post('/generated', authenticate, async (req: Request, res: Response) => {
         lyrics: lyrics || null,
         artistGender: artistGender || null,
         generatedWithAI: true,
-        aiProvider: aiProvider || 'fal-minimax-music-v2',
+        aiProvider: aiProvider || 'minimax/music-3',
         coverArt: coverArt || null,
         duration: duration || null,
         releaseDate: new Date(),
-        isPublished: true,
+        isPublished: false,
         plays: 0,
         analysisStatus: 'pending',
       })
@@ -367,10 +367,6 @@ router.post('/generated', authenticate, async (req: Request, res: Response) => {
     // 🎵 Audio analysis pipeline (OpenAI Whisper + fal sound model + GPT insights)
     triggerSongAnalysis(newSong.id);
 
-    // Fire monetization pipeline (distribution, tokenization, sync, outreach) — fire-and-forget
-    triggerSongMonetizationPipeline(newSong.id).catch((err) =>
-      console.warn(`⚠️ [Songs] Monetization pipeline error for song #${newSong.id}:`, err.message),
-    );
 
     res.json({ 
       success: true,

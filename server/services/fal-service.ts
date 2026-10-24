@@ -77,7 +77,7 @@ export const FAL_MODELS = {
   // ========== MÚSICA ==========
   // MiniMax Music V2: Canciones completas con voces y letras
   // Requiere: prompt (estilo) + lyrics_prompt (letras con [verse][chorus])
-  MUSIC_GENERATION: 'fal-ai/minimax-music/v2',
+  MUSIC_GENERATION: 'minimax/music-3',
   
   // ========== LEGACY (mantener compatibilidad) ==========
   FLUX_SCHNELL: 'fal-ai/flux/schnell',
@@ -501,7 +501,7 @@ export interface FalMusicResult {
   duration?: number;
   lyrics?: string;
   error?: string;
-  provider?: 'fal-minimax-music-v2' | 'fal-stable-audio' | 'lyria-3-pro' | 'lyria-3-clip';
+  provider?: 'minimax/music-3' | 'fal-stable-audio' | 'lyria-3.5' | 'lyria-3-clip-preview';
 }
 
 /**
@@ -1702,16 +1702,11 @@ export async function generateMusicWithMiniMax(
     // Construir request body según API de minimax-music/v2
     const requestBody: any = {
       prompt: stylePrompt,
-      lyrics_prompt: lyricsPrompt,
+      lyrics: lyricsPrompt,
+      duration: 120,
     };
 
     // Configuración de audio - SIEMPRE usar máxima calidad
-    requestBody.audio_setting = {
-      sample_rate: options.sampleRate || 44100,
-      bitrate: options.bitrate || 256000, // Máximo bitrate disponible
-      format: options.format || 'mp3'
-    };
-
     const response = await axios.post(
       `${FAL_BASE_URL}/${FAL_MODELS.MUSIC_GENERATION}`,
       requestBody,
@@ -1732,8 +1727,8 @@ export async function generateMusicWithMiniMax(
       // Log API usage
       logApiUsage({
         apiProvider: 'fal',
-        endpoint: `fal-ai/minimax-music/v2`,
-        model: 'minimax-music-v2',
+        endpoint: 'minimax/music-3',
+        model: 'minimax/music-3',
         status: 'success',
         metadata: { function: 'generateMusicWithFAL' },
       }).catch(() => {});
@@ -1759,7 +1754,7 @@ export async function generateMusicWithMiniMax(
           audioUrl: permanentUrl,
           audioBase64: audioBase64,
           lyrics: lyricsPrompt,
-          provider: 'fal-minimax-music-v2'
+          provider: 'minimax/music-3'
         };
       } catch (uploadError: any) {
         logger.warn('[FAL] Error subiendo audio a Storage, usando URL temporal:', uploadError.message);
@@ -1767,7 +1762,7 @@ export async function generateMusicWithMiniMax(
           success: true,
           audioUrl: audioUrl,
           lyrics: lyricsPrompt,
-          provider: 'fal-minimax-music-v2'
+          provider: 'minimax/music-3'
         };
       }
     }

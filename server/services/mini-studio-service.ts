@@ -12,7 +12,7 @@
  * URLs are not valid audio and must never be presented as successful output.
  */
 
-import * as fal from '@fal-ai/serverless-client';
+import { fal } from '@fal-ai/client';
 import Replicate from 'replicate';
 
 const FAL_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY || '';
@@ -66,6 +66,14 @@ export interface MSGenerationResult {
   meta?: Record<string, any>;
 }
 
+export function getAudioGenerationProviderStatus() {
+  return {
+    fal: { configured: Boolean(FAL_KEY), models: ['fal-ai/stable-audio-25/text-to-audio', 'fal-ai/stable-audio-25/audio-to-audio'] },
+    replicate: { configured: Boolean(REPLICATE_KEY), models: ['meta/musicgen'] },
+    preferred: FAL_KEY ? 'fal' : REPLICATE_KEY ? 'replicate' : null,
+  };
+}
+
 // ---------------------------------------------------------------
 // Prompt templates per kind
 // ---------------------------------------------------------------
@@ -108,6 +116,11 @@ const KIND_PROMPTS: Record<MSGenerationKind, (r: MSGenerationRequest) => string>
 // ---------------------------------------------------------------
 
 export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerationResult> {
+  if (req.kind === 'remix' && !req.reference) {
+    const err = new Error('To remix audio, first select an audio clip or song as the reference.') as Error & { statusCode?: number };
+    err.statusCode = 400;
+    throw err;
+  }
   const prompt = KIND_PROMPTS[req.kind](req);
   const durationSec = Math.min(Math.max(req.durationSec || 15, 3), 47);
   const bpm = req.bpm || 122;
@@ -116,15 +129,17 @@ export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerat
   // Strategy 1 — FAL stable-audio if available
   if (FAL_KEY) {
     try {
-      const result: any = await fal.subscribe('fal-ai/stable-audio', {
-        input: {
-          prompt,
-          seconds_total: durationSec,
-        },
+      const model = req.kind === 'remix' ? 'fal-ai/stable-audio-25/audio-to-audio' : 'fal-ai/stable-audio-25/text-to-audio';
+      const input = req.kind === 'remix'
+        ? { prompt, audio_url: req.reference!, duration: durationSec }
+        : { prompt, duration: Math.min(durationSec, 190) };
+      const result: any = await fal.subscribe(model, {
+        input,
         logs: false,
       });
+      const data = result?.data || result;
       const audioUrl: string | undefined =
-        result?.audio_file?.url || result?.audio?.url || result?.url;
+        data?.audio_file?.url || data?.audio?.url || data?.url;
       if (audioUrl) {
         return {
           success: true,
@@ -134,7 +149,7 @@ export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerat
           bpm,
           key,
           provider: 'fal',
-          meta: { model: 'fal-ai/stable-audio', prompt },
+          meta: { model, prompt },
         };
       }
     } catch (err) {
@@ -143,7 +158,7 @@ export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerat
   }
 
   // Strategy 2 — Replicate (Meta MusicGen) if available
-  if (replicate) {
+  if (replicate && req.kind !== 'remix') {
     try {
       const output: any = await replicate.run(
         'meta/musicgen:b05b1dff1d8c6dc63d14b0cdb42135378dcb87f6373b0d3d341ede46e59e2b38',
@@ -175,7 +190,10 @@ export async function generateAudio(req: MSGenerationRequest): Promise<MSGenerat
     }
   }
 
-  const err = new Error('Audio generation is unavailable: configure FAL_KEY or REPLICATE_API_TOKEN, or check the provider credentials and try again.') as Error & { statusCode?: number };
+  const message = req.kind === 'remix'
+    ? 'Audio remix requires a working FAL_KEY and a reference audio URL; the text-to-audio fallback cannot remix a source.'
+    : 'Audio generation is unavailable: configure FAL_KEY or REPLICATE_API_TOKEN, or check the provider credentials and try again.';
+  const err = new Error(message) as Error & { statusCode?: number };
   err.statusCode = 503;
   throw err;
 }

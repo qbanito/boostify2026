@@ -5,45 +5,42 @@
  * GET  /audio/:id   — serve locally saved audio files
  */
 import { Router, Request, Response } from "express";
-import { generateMusicWithLyria3, type Lyria3CompositionParams } from "../services/lyria3-service";
+import { generateMusicWithLyria3, isLyriaConfigured, type Lyria3CompositionParams } from "../services/lyria3-service";
+import { isAuthenticated, getUserId } from "../middleware/clerk-auth";
+import { db, FieldValue } from "../firebase";
 import path from "path";
 import fs from "fs";
 
 const router = Router();
 
-// In-memory job cache
-interface LyriaJob {
-  status: "pending" | "processing" | "completed" | "failed";
-  audioUrl?: string;
-  lyrics?: string;
-  error?: string;
-  createdAt: number;
-}
-const jobs = new Map<string, LyriaJob>();
-
-// Cleanup old jobs every 30 minutes
-setInterval(() => {
-  const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour
-  for (const [id, job] of jobs) {
-    if (job.createdAt < cutoff) jobs.delete(id);
-  }
-}, 30 * 60 * 1000);
+const JOBS = "music_generation_jobs";
 
 /**
  * POST /api/music/lyria/generate
  */
-router.post("/generate", async (req: Request, res: Response) => {
+router.post("/generate", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { prompt, duration, instrumental, genre, bpm, key, mood, customLyrics, language, useClipModel } = req.body;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, error: "Sign in to generate music." });
+    const { prompt, duration, instrumental, genre, bpm, key, mood, customLyrics, language, useClipModel } = req.body || {};
 
-    if (!prompt) {
-      return res.status(400).json({ success: false, error: "prompt is required" });
+    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 5000) {
+      return res.status(400).json({ success: false, error: "Enter a prompt up to 5,000 characters." });
+    }
+    if (!isLyriaConfigured()) {
+      return res.status(503).json({ success: false, error: "Google music generation is not configured." });
     }
 
     const requestId = `lyria_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-    // Store job as processing
-    jobs.set(requestId, { status: "processing", createdAt: Date.now() });
+    const jobRef = db.collection(JOBS).doc(requestId);
+    await jobRef.set({
+      userId,
+      provider: useClipModel ? "lyria-3-clip-preview" : "lyria-3.5",
+      status: "processing",
+      prompt: prompt.trim(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
 
     console.log(`🎵 [Lyria3-Route] Starting generation: ${requestId}`);
 
@@ -82,27 +79,32 @@ router.post("/generate", async (req: Request, res: Response) => {
             audioUrl = `/api/music/lyria/audio/${fileName}`;
           }
 
-          jobs.set(requestId, {
+        await jobRef.set({
+          userId,
             status: "completed",
+          provider: result.provider,
             audioUrl,
             lyrics: result.lyrics,
-            createdAt: Date.now(),
-          });
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
           console.log(`✅ [Lyria3-Route] Completed: ${requestId} → ${audioUrl}`);
         } else {
-          jobs.set(requestId, {
+          await jobRef.set({
+            userId,
             status: "failed",
             error: result.error || "Generation failed",
-            createdAt: Date.now(),
-          });
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
           console.error(`❌ [Lyria3-Route] Failed: ${requestId} — ${result.error}`);
         }
       } catch (err: any) {
-        jobs.set(requestId, {
+        await jobRef.set({
+          userId,
           status: "failed",
           error: err.message || "Unknown error",
-          createdAt: Date.now(),
-        });
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
         console.error(`❌ [Lyria3-Route] Error: ${requestId} — ${err.message}`);
       }
     })();
@@ -118,13 +120,17 @@ router.post("/generate", async (req: Request, res: Response) => {
 /**
  * GET /api/music/lyria/status/:requestId
  */
-router.get("/status/:requestId", (req: Request, res: Response) => {
+router.get("/status/:requestId", isAuthenticated, async (req: Request, res: Response) => {
   const { requestId } = req.params;
-  const job = jobs.get(requestId);
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ success: false, error: "Sign in to view this generation." });
+  const snapshot = await db.collection(JOBS).doc(requestId).get();
+  const job: any = snapshot.exists ? snapshot.data() : null;
 
   if (!job) {
     return res.status(404).json({ success: false, error: "Job not found" });
   }
+  if (job.userId !== userId) return res.status(403).json({ success: false, error: "This generation belongs to another account." });
 
   if (job.status === "completed") {
     res.json({
@@ -132,17 +138,20 @@ router.get("/status/:requestId", (req: Request, res: Response) => {
       status: "completed",
       audioUrl: job.audioUrl,
       lyrics: job.lyrics,
+      provider: job.provider,
     });
   } else if (job.status === "failed") {
     res.json({
       success: false,
       status: "failed",
       error: job.error,
+      provider: job.provider,
     });
   } else {
     res.json({
       success: true,
       status: job.status,
+      provider: job.provider,
     });
   }
 });

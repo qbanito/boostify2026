@@ -3,10 +3,10 @@
  * LYRIA 3 MUSIC GENERATION SERVICE
  * ============================================================
  * Google DeepMind's most advanced music generation model
- * Uses Gemini API with lyria-3-pro-preview & lyria-3-clip-preview
+ * Uses the Gemini Interactions API with Lyria 3.5 and Lyria Clip.
  * 
  * Models:
- *   - lyria-3-pro-preview: Full-length songs (up to 3 min) with vocals, lyrics, structure
+ *   - lyria-3.5: Full-length songs with vocals and lyrics
  *   - lyria-3-clip-preview: 30-second clips for quick previews
  * 
  * Features:
@@ -18,16 +18,16 @@
  *   - MP3 or WAV output
  */
 
-import { GoogleGenAI } from "@google/genai";
-import axios from "axios";
 import { log } from "../vite";
+import { storage as firebaseStorage } from "../firebase";
 
 // Use real Google API keys for Lyria 3 (not Replit proxy)
-const LYRIA_API_KEY = process.env.GOOGLE_API_KEY2 || process.env.GOOGLE_API_KEY3 || process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "";
+const LYRIA_API_KEY = [process.env.GOOGLE_API_KEY, process.env.GOOGLE_API_KEY2, process.env.GOOGLE_API_KEY3, process.env.GOOGLE_AI_API_KEY, process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY2, process.env.AI_INTEGRATIONS_GEMINI_API_KEY]
+  .find((value) => Boolean(value && value !== "_DUMMY_API_KEY_" && !value.toLowerCase().startsWith("your_"))) || "";
 
-const lyria3Client = new GoogleGenAI({
-  apiKey: LYRIA_API_KEY,
-});
+export function isLyriaConfigured() {
+  return Boolean(LYRIA_API_KEY);
+}
 
 // ============================================================
 // INTERFACES
@@ -56,11 +56,11 @@ export interface Lyria3CompositionParams {
   language?: string;
   /** Artist vocal style description */
   vocalStyle?: string;
-  /** Duration hint (for Pro model) */
+  /** Duration hint for full-length generation */
   durationHint?: string;
   /** Output format */
   outputFormat?: "mp3" | "wav";
-  /** Use clip model (30s) instead of pro (full length) */
+  /** Use the 30-second clip model instead of full-length generation */
   useClipModel?: boolean;
   /** Artist gender for vocal generation */
   artistGender?: "male" | "female";
@@ -86,7 +86,7 @@ export interface Lyria3Result {
   lyrics?: string;
   duration?: number;
   error?: string;
-  provider: "lyria-3-pro" | "lyria-3-clip";
+  provider: "lyria-3.5" | "lyria-3-clip-preview";
   format?: "mp3" | "wav";
 }
 
@@ -94,15 +94,7 @@ export interface Lyria3Result {
 // FIREBASE STORAGE UPLOAD HELPER
 // ============================================================
 
-let storage: any = null;
-try {
-  const admin = require("firebase-admin");
-  if (admin.apps.length > 0) {
-    storage = admin.storage();
-  }
-} catch (e) {
-  // Firebase not initialized
-}
+const storage = firebaseStorage;
 
 async function uploadAudioToStorage(
   audioData: Buffer,
@@ -111,15 +103,7 @@ async function uploadAudioToStorage(
 ): Promise<string> {
   try {
     if (!storage) {
-      log("[Lyria3] Firebase Storage not available, saving locally", "lyria3");
-      const fs = await import("fs");
-      const path = await import("path");
-      const os = await import("os");
-      const ext = mimeType.includes("wav") ? "wav" : "mp3";
-      const fileName = `lyria3_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-      const filePath = path.join(os.tmpdir(), fileName);
-      fs.writeFileSync(filePath, audioData);
-      return filePath;
+      throw new Error("Firebase Storage is not configured; generated audio cannot be saved durably.");
     }
 
     const timestamp = Date.now();
@@ -238,7 +222,7 @@ function buildLyria3Prompt(
 // ============================================================
 
 /**
- * Generate music using Google Lyria 3
+ * Generate music using Google's Gemini Interactions API.
  * @param prompt - Text description of the music to generate
  * @param params - Enhanced composition parameters
  * @returns Lyria3Result with audio URL, lyrics, etc.
@@ -247,13 +231,13 @@ export async function generateMusicWithLyria3(
   prompt: string,
   params: Lyria3CompositionParams = {}
 ): Promise<Lyria3Result> {
-  const model = params.useClipModel ? "lyria-3-clip-preview" : "lyria-3-pro-preview";
-  const provider = params.useClipModel ? "lyria-3-clip" as const : "lyria-3-pro" as const;
+  const model = params.useClipModel ? "lyria-3-clip-preview" : "lyria-3.5";
+  const provider = params.useClipModel ? "lyria-3-clip-preview" as const : "lyria-3.5" as const;
 
   log(`[Lyria3] 🎵 Generating music with ${model}...`, "lyria3");
   log(`[Lyria3] Prompt: ${prompt.substring(0, 150)}...`, "lyria3");
 
-  if (!LYRIA_API_KEY || LYRIA_API_KEY === "_DUMMY_API_KEY_") {
+  if (!isLyriaConfigured()) {
     return {
       success: false,
       error: "Google API key not configured for Lyria 3. Set GOOGLE_API_KEY2 or GEMINI_API_KEY.",
@@ -266,42 +250,42 @@ export async function generateMusicWithLyria3(
     const fullPrompt = buildLyria3Prompt(prompt, params);
     log(`[Lyria3] Full prompt (${fullPrompt.length} chars): ${fullPrompt.substring(0, 300)}...`, "lyria3");
 
-    // Configure generation
-    const config: any = {
-      responseModalities: ["AUDIO", "TEXT"],
-    };
-
-    // Set output format for Pro model
-    if (!params.useClipModel && params.outputFormat === "wav") {
-      config.responseMimeType = "audio/wav";
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": LYRIA_API_KEY,
+      },
+      body: JSON.stringify({
+        model,
+        input: fullPrompt,
+        ...(params.outputFormat === "wav" && !params.useClipModel
+          ? { response_format: { type: "audio" } }
+          : {}),
+      }),
+    });
+    const interaction: any = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const details = interaction?.error?.message || interaction?.message || `Google music API returned ${response.status}`;
+      throw new Error(details);
     }
 
-    const response = await lyria3Client.models.generateContent({
-      model,
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: fullPrompt }],
-        },
-      ],
-      config,
-    });
-
-    // Parse response - extract audio and text parts
+    // Lyria Interactions return audio and lyrics as typed content blocks.
     let audioData: Buffer | null = null;
     let audioMimeType = "audio/mpeg";
     const lyricsText: string[] = [];
-
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.text) {
-          lyricsText.push(part.text);
-        } else if (part.inlineData) {
-          audioData = Buffer.from(part.inlineData.data!, "base64");
-          audioMimeType = part.inlineData.mimeType || "audio/mpeg";
+    for (const step of interaction?.steps || []) {
+      if (step?.type !== "model_output") continue;
+      for (const block of step?.content || []) {
+        if (block?.type === "audio" && block?.data) {
+          audioData = Buffer.from(block.data, "base64");
+          audioMimeType = block.mime_type || block.mimeType || "audio/mpeg";
+        } else if (block?.type === "text" && block?.text) {
+          lyricsText.push(block.text);
         }
       }
     }
+    if (!lyricsText.length && interaction?.output_text) lyricsText.push(interaction.output_text);
 
     if (!audioData) {
       log(`[Lyria3] ❌ No audio data in response`, "lyria3");
@@ -317,7 +301,8 @@ export async function generateMusicWithLyria3(
       log(`[Lyria3] 📝 Lyrics/structure: ${lyricsText.join("\n").substring(0, 200)}...`, "lyria3");
     }
 
-    // Upload to Firebase Storage
+    // Persist generated audio in durable object storage. Local temp files do not
+    // survive deploys and cannot safely back a user's saved music library.
     const audioUrl = await uploadAudioToStorage(audioData, audioMimeType, "lyria3-music");
 
     return {

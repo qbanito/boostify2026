@@ -53,6 +53,8 @@ export interface MusicGenerationStatus {
   audioUrl?: string;
   message: string;
   error?: string;
+  provider?: string;
+  lyrics?: string;
 }
 
 /**
@@ -414,6 +416,8 @@ export async function saveGeneratedSongToProfile(generation: {
   genre?: string;
   duration?: string;
   coverArt?: string;
+  aiProvider?: string;
+  lyrics?: string;
 }): Promise<any> {
   try {
     // Intentar obtener token de Firebase Auth primero
@@ -449,7 +453,9 @@ export async function saveGeneratedSongToProfile(generation: {
         genre: generation.genre,
         duration: generation.duration,
         prompt: generation.prompt,
-        coverArt: generation.coverArt
+        coverArt: generation.coverArt,
+        aiProvider: generation.aiProvider,
+        lyrics: generation.lyrics
       })
     });
     
@@ -477,6 +483,7 @@ export async function generateMusicWithFAL(options: {
   prompt: string;
   duration?: number;
   reference_audio_url?: string;
+  lyrics?: string;
 }): Promise<{ requestId: string }> {
   try {
     logger.info('Generando música con FAL AI minimax-music/v2:', options);
@@ -489,7 +496,8 @@ export async function generateMusicWithFAL(options: {
       body: JSON.stringify({
         prompt: options.prompt,
         duration: options.duration || 30,
-        reference_audio_url: options.reference_audio_url
+        reference_audio_url: options.reference_audio_url,
+        lyrics: options.lyrics
       })
     });
     
@@ -513,7 +521,7 @@ export async function generateMusicWithFAL(options: {
  */
 export async function checkFALMusicStatus(requestId: string): Promise<MusicGenerationStatus> {
   try {
-    const response = await fetch(`/api/fal/minimax-music/${requestId}`);
+    const response = await fetch(`/api/fal/minimax-music/${encodeURIComponent(requestId)}`, { credentials: 'include' });
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -542,6 +550,8 @@ export async function checkFALMusicStatus(requestId: string): Promise<MusicGener
       id: requestId,
       status,
       audioUrl: data.audioUrl,
+      provider: data.provider,
+      lyrics: data.lyrics,
       message: getStatusMessage(status)
     };
   } catch (error) {
@@ -564,6 +574,7 @@ export async function generateMusicWithStableAudio(options: {
     
     const response = await fetch('/api/fal/stable-audio', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -593,7 +604,7 @@ export async function generateMusicWithStableAudio(options: {
  */
 export async function checkStableAudioStatus(requestId: string): Promise<MusicGenerationStatus> {
   try {
-    const response = await fetch(`/api/fal/stable-audio/${requestId}`);
+    const response = await fetch(`/api/fal/stable-audio/${encodeURIComponent(requestId)}`, { credentials: 'include' });
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -622,6 +633,7 @@ export async function checkStableAudioStatus(requestId: string): Promise<MusicGe
       id: requestId,
       status,
       audioUrl: data.audioUrl,
+      provider: data.provider,
       message: getStatusMessage(status)
     };
   } catch (error) {
@@ -674,6 +686,7 @@ export async function generateMusicWithLyria3(options: {
 
     const response = await fetch('/api/music/lyria/generate', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(options),
     });
@@ -696,7 +709,7 @@ export async function generateMusicWithLyria3(options: {
  */
 export async function checkLyria3Status(requestId: string): Promise<MusicGenerationStatus> {
   try {
-    const response = await fetch(`/api/music/lyria/status/${requestId}`);
+    const response = await fetch(`/api/music/lyria/status/${encodeURIComponent(requestId)}`, { credentials: 'include' });
 
     if (!response.ok) {
       // Job not found (server restarted or job expired after 1 hour)
@@ -721,6 +734,7 @@ export async function checkLyria3Status(requestId: string): Promise<MusicGenerat
       id: requestId,
       status,
       audioUrl: data.audioUrl,
+      provider: data.provider,
       message: data.error || getStatusMessage(status),
     };
   } catch (error) {

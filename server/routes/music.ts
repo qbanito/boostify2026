@@ -1,8 +1,8 @@
-/**
- * Rutas para la generación de música con IA
+﻿/**
+ * Rutas para la generaciÃ³n de mÃºsica con IA
  * 
- * Estas rutas manejan la generación asíncrona de música,
- * el seguimiento del estado de generación y la gestión
+ * Estas rutas manejan la generaciÃ³n asÃ­ncrona de mÃºsica,
+ * el seguimiento del estado de generaciÃ³n y la gestiÃ³n
  * del historial de generaciones.
  */
 
@@ -17,14 +17,30 @@ import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateMusicWithLyria3, type Lyria3CompositionParams } from '../services/lyria3-service';
+import { generateMusicWithLyria3, isLyriaConfigured, type Lyria3CompositionParams } from '../services/lyria3-service';
 import { buildMusicTags, buildAudioMasterpieceRules, type ArtistContext } from '../utils/masterpiece-rules';
+import { db as firebaseDb, storage as firebaseStorage } from '../firebase';
 
 const router = Router();
 
+router.get('/providers', authenticate, (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const googleConfigured = isLyriaConfigured();
+  const lyriaReady = googleConfigured && Boolean(firebaseStorage) && Boolean(firebaseDb);
+  const falKeyConfigured = Boolean(process.env.FAL_KEY || process.env.FAL_API_KEY);
+  const falConfigured = falKeyConfigured && Boolean(firebaseDb);
+  const notConfigured = (name: string) => `${name} API credentials are not configured`;
+  res.json({ success: true, models: {
+    'music-lyria3': { available: lyriaReady, provider: 'Google Lyria 3.5', modelId: 'lyria-3.5', reason: !googleConfigured ? 'Google API key is missing' : !firebaseStorage ? 'Firebase Storage is required to persist generated audio' : !firebaseDb ? 'Firebase Firestore is required to save generation status' : undefined },
+    'music-lyria-clip': { available: lyriaReady, provider: 'Google Lyria Clip', modelId: 'lyria-3-clip-preview', reason: !googleConfigured ? 'Google API key is missing' : !firebaseStorage ? 'Firebase Storage is required to persist generated audio' : !firebaseDb ? 'Firebase Firestore is required to save generation status' : undefined },
+    'music-fal': { available: falConfigured, provider: 'MiniMax Music 3', modelId: 'minimax/music-3', reason: !falKeyConfigured ? notConfigured('FAL') : !firebaseDb ? 'Firebase Firestore is required to track generation status' : undefined },
+    'music-stable': { available: falConfigured, provider: 'Stable Audio 2.5', modelId: 'fal-ai/stable-audio-25/text-to-audio', reason: !falKeyConfigured ? notConfigured('FAL') : !firebaseDb ? 'Firebase Firestore is required to track generation status' : undefined },
+  } });
+});
+
 // Configurar middleware para manejo de archivos
 router.use(fileUpload({
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB límite máximo
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB lÃ­mite mÃ¡ximo
   useTempFiles: true,
   tempFileDir: path.join(os.tmpdir(), 'music-uploads')
 }));
@@ -35,14 +51,14 @@ const MODEL_MAPPING: Record<string, string> = {
   'music-u': 'udio-v1-music'
 };
 
-// Estado en memoria para seguimiento de generaciones (en producción usaríamos una base de datos)
+// Estado en memoria para seguimiento de generaciones (en producciÃ³n usarÃ­amos una base de datos)
 const musicGenerations: Record<string, any> = {};
 
-// El endpoint de prueba se ha movido a server/routes.ts para evitar problemas con el middleware de autenticación
+// El endpoint de prueba se ha movido a server/routes.ts para evitar problemas con el middleware de autenticaciÃ³n
 
 /**
- * Endpoint para iniciar una generación de música
- * Requiere autenticación
+ * Endpoint para iniciar una generaciÃ³n de mÃºsica
+ * Requiere autenticaciÃ³n
  */
 router.post('/generate', authenticate, async (req: Request, res: Response) => {
   try {
@@ -73,21 +89,21 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // Validar el modelo - incluir music-lyria3
     const validModels = ['music-lyria3', ...Object.keys(MODEL_MAPPING)];
     if (!validModels.includes(model)) {
-      return res.status(400).json({ error: 'Modelo no válido' });
+      return res.status(400).json({ error: 'Modelo no vÃ¡lido' });
     }
 
-    // Crear un ID único para esta generación
+    // Crear un ID Ãºnico para esta generaciÃ³n
     const taskId = uuidv4();
     const userId = req.user?.uid || 'anonymous';
 
-    // Verificar que el usuario tiene permisos para generar música
-    // En producción, aquí podríamos verificar límites o suscripciones
+    // Verificar que el usuario tiene permisos para generar mÃºsica
+    // En producciÃ³n, aquÃ­ podrÃ­amos verificar lÃ­mites o suscripciones
 
-    // Registro de la generación en nuestra base de datos o cache
+    // Registro de la generaciÃ³n en nuestra base de datos o cache
     musicGenerations[taskId] = {
       id: taskId,
       userId,
-      title: title || `Generación ${new Date().toLocaleString()}`,
+      title: title || `GeneraciÃ³n ${new Date().toLocaleString()}`,
       prompt,
       model,
       status: 'pending',
@@ -114,7 +130,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // LYRIA 3 - Direct generation via Gemini API
     // ============================================================
     if (model === 'music-lyria3') {
-      log(`🎵 Lyria 3 generation initiated: ${taskId}`, 'music-api');
+      log(`ðŸŽµ Lyria 3 generation initiated: ${taskId}`, 'music-api');
       musicGenerations[taskId].status = 'processing';
       musicGenerations[taskId].progress = 20;
 
@@ -151,22 +167,22 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
             musicGenerations[taskId].lyrics = result.lyrics;
             musicGenerations[taskId].provider = result.provider;
             musicGenerations[taskId].format = result.format;
-            log(`✅ Lyria 3 generation completed: ${taskId}`, 'music-api');
+            log(`âœ… Lyria 3 generation completed: ${taskId}`, 'music-api');
           } else {
             musicGenerations[taskId].status = 'failed';
             musicGenerations[taskId].error = result.error || 'Generation failed';
-            log(`❌ Lyria 3 generation failed: ${result.error}`, 'music-api');
+            log(`âŒ Lyria 3 generation failed: ${result.error}`, 'music-api');
           }
         } catch (error: any) {
           musicGenerations[taskId].status = 'failed';
           musicGenerations[taskId].error = error.message || 'Unknown error';
-          log(`❌ Lyria 3 generation error: ${error.message}`, 'music-api');
+          log(`âŒ Lyria 3 generation error: ${error.message}`, 'music-api');
         }
       })();
 
       return res.status(202).json({
         taskId,
-        message: 'Generación de música con Lyria 3 iniciada con éxito'
+        message: 'GeneraciÃ³n de mÃºsica con Lyria 3 iniciada con Ã©xito'
       });
     }
 
@@ -174,7 +190,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // PIAPI (Suno/Udio) - Standard generation path
     // ============================================================
 
-    // Determinar el tipo de tarea adecuado según las opciones
+    // Determinar el tipo de tarea adecuado segÃºn las opciones
     let taskType = 'generate_music';
     if (generateLyrics) {
       taskType = 'generate_lyrics';
@@ -211,7 +227,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       }
     };
 
-    // Añadir opciones específicas según el tipo de tarea
+    // AÃ±adir opciones especÃ­ficas segÃºn el tipo de tarea
     if (makeInstrumental) {
       requestData.input.make_instrumental = true;
     }
@@ -245,7 +261,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     }
     
     if (model === 'music-u' && !uploadAudio && !continueClipId) {
-      // Opciones específicas para Udio
+      // Opciones especÃ­ficas para Udio
       requestData.input.lyrics_type = makeInstrumental ? 'instrumental' : (customLyrics ? 'user' : 'generate');
       
       if (customLyrics) {
@@ -265,50 +281,54 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       // Actualizar el registro con el ID de tarea de PiAPI
       if (response.data && response.data.task_id) {
         musicGenerations[taskId].piapiTaskId = response.data.task_id;
-        log(`Generación de música enviada a PiAPI: ${response.data.task_id}`, 'music-api');
+        log(`GeneraciÃ³n de mÃºsica enviada a PiAPI: ${response.data.task_id}`, 'music-api');
       } else {
-        // Falló la solicitud a PiAPI, usar la simulación como fallback
-        log(`Error al enviar a PiAPI, usando simulación como fallback: ${taskId}`, 'music-api');
+        // FallÃ³ la solicitud a PiAPI, usar la simulaciÃ³n como fallback
+        log(`Error al enviar a PiAPI, usando simulaciÃ³n como fallback: ${taskId}`, 'music-api');
         simulateGeneration(taskId);
       }
     } catch (error) {
-      // Error al comunicarse con PiAPI, usar la simulación como fallback
+      // Error al comunicarse con PiAPI, usar la simulaciÃ³n como fallback
       console.error('Error al comunicarse con PiAPI:', error);
-      log(`Error de comunicación con PiAPI, usando simulación como fallback: ${taskId}`, 'music-api');
+      log(`Error de comunicaciÃ³n con PiAPI, usando simulaciÃ³n como fallback: ${taskId}`, 'music-api');
       simulateGeneration(taskId);
     }
 
     // Responder al cliente con el ID de la tarea
     res.status(202).json({ 
       taskId, 
-      message: 'Generación de música iniciada con éxito' 
+      message: 'GeneraciÃ³n de mÃºsica iniciada con Ã©xito'
     });
 
-    // Log para depuración
-    log(`Nueva generación de música iniciada: ${taskId}`, 'music-api');
+    // Log para depuraciÃ³n
+    log(`Nueva generaciÃ³n de mÃºsica iniciada: ${taskId}`, 'music-api');
   } catch (error) {
-    console.error('Error al iniciar generación de música:', error);
-    res.status(500).json({ error: 'Error interno al iniciar la generación de música' });
+    console.error('Error al iniciar generaciÃ³n de mÃºsica:', error);
+    res.status(500).json({ error: 'Error interno al iniciar la generaciÃ³n de mÃºsica' });
   }
 });
 
 /**
- * Endpoint para verificar el estado de una generación
- * No requiere autenticación para permitir polling desde el cliente
+ * Endpoint para verificar el estado de una generaciÃ³n
+ * No requiere autenticaciÃ³n para permitir polling desde el cliente
  */
-router.get('/status', async (req: Request, res: Response) => {
+router.get('/status', authenticate, async (req: Request, res: Response) => {
   try {
     const { taskId } = req.query;
 
     if (!taskId || typeof taskId !== 'string') {
-      return res.status(400).json({ error: 'Se requiere un ID de tarea válido' });
+      return res.status(400).json({ error: 'Se requiere un ID de tarea vÃ¡lido' });
     }
 
-    // Buscar la generación en nuestro cache/db
+    // Buscar la generaciÃ³n en nuestro cache/db
     const generation = musicGenerations[taskId];
+    if (!generation) return res.status(404).json({ error: 'Generation not found' });
+    if (String(generation.userId) !== String(req.user?.uid || req.user?.id)) {
+      return res.status(403).json({ error: 'This generation belongs to another account' });
+    }
     
     if (!generation) {
-      return res.status(404).json({ error: 'Generación no encontrada' });
+      return res.status(404).json({ error: 'GeneraciÃ³n no encontrada' });
     }
 
     // Si tenemos un ID de tarea de PiAPI, verificar el estado real en la API
@@ -323,30 +343,30 @@ router.get('/status', async (req: Request, res: Response) => {
         });
 
         if (response.data) {
-          // Actualizar el estado según la respuesta de PiAPI
+          // Actualizar el estado segÃºn la respuesta de PiAPI
           const piApiStatus = response.data.status?.toLowerCase();
           
           if (piApiStatus === 'completed' && response.data.output?.audio_url) {
-            // Si la generación está completa y tenemos una URL de audio
+            // Si la generaciÃ³n estÃ¡ completa y tenemos una URL de audio
             generation.status = 'completed';
             generation.progress = 100;
             generation.audioUrl = response.data.output.audio_url;
             
-            log(`Generación de música completada en PiAPI: ${taskId}`, 'music-api');
+            log(`GeneraciÃ³n de mÃºsica completada en PiAPI: ${taskId}`, 'music-api');
           } else if (piApiStatus === 'failed') {
-            // Si la generación falló
+            // Si la generaciÃ³n fallÃ³
             generation.status = 'failed';
             generation.progress = 100;
             generation.error = response.data.error || 'Error desconocido en PiAPI';
             
-            log(`Error en generación de música en PiAPI: ${taskId} - ${generation.error}`, 'music-api');
+            log(`Error en generaciÃ³n de mÃºsica en PiAPI: ${taskId} - ${generation.error}`, 'music-api');
           } else if (piApiStatus === 'processing' || piApiStatus === 'pending') {
-            // Si la generación está en proceso, actualizar el progreso
+            // Si la generaciÃ³n estÃ¡ en proceso, actualizar el progreso
             generation.status = piApiStatus;
             
-            // PiAPI no siempre proporciona un porcentaje exacto, así que lo estimamos
+            // PiAPI no siempre proporciona un porcentaje exacto, asÃ­ que lo estimamos
             if (piApiStatus === 'processing') {
-              // Si está procesando, asumimos al menos 5% de progreso
+              // Si estÃ¡ procesando, asumimos al menos 5% de progreso
               generation.progress = Math.max(5, generation.progress);
               
               // Incrementamos un poco el progreso cada vez que consultamos
@@ -362,7 +382,7 @@ router.get('/status', async (req: Request, res: Response) => {
       }
     }
 
-    // Devolver el estado actual (ya sea de la API o de nuestra simulación)
+    // Devolver el estado actual (ya sea de la API o de nuestra simulaciÃ³n)
     res.json({
       id: generation.id,
       status: generation.status,
@@ -372,14 +392,14 @@ router.get('/status', async (req: Request, res: Response) => {
       message: getStatusMessage(generation.status)
     });
   } catch (error) {
-    console.error('Error al verificar estado de generación:', error);
-    res.status(500).json({ error: 'Error al verificar el estado de la generación' });
+    console.error('Error al verificar estado de generaciÃ³n:', error);
+    res.status(500).json({ error: 'Error al verificar el estado de la generaciÃ³n' });
   }
 });
 
 /**
  * Endpoint para obtener el historial de generaciones
- * Requiere autenticación
+ * Requiere autenticaciÃ³n
  */
 router.get('/recent', authenticate, async (req: Request, res: Response) => {
   try {
@@ -389,12 +409,12 @@ router.get('/recent', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'No autorizado' });
     }
 
-    // En una implementación real, consultaríamos la base de datos
+    // En una implementaciÃ³n real, consultarÃ­amos la base de datos
     // Por ahora, solo filtraremos las generaciones en memoria por usuario
     const userGenerations = Object.values(musicGenerations)
       .filter((gen: any) => gen.userId === userId)
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 20) // Últimas 20 generaciones
+      .slice(0, 20) // Ãšltimas 20 generaciones
       .map((gen: any) => ({
         id: gen.id,
         taskId: gen.id,
@@ -414,66 +434,44 @@ router.get('/recent', authenticate, async (req: Request, res: Response) => {
 });
 
 /**
- * Obtener un mensaje de estado basado en el código de estado
+ * Obtener un mensaje de estado basado en el cÃ³digo de estado
  */
 function getStatusMessage(status: string): string {
   switch (status) {
     case 'pending':
       return 'Esperando en cola';
     case 'processing':
-      return 'Generando música';
+      return 'Generando mÃºsica';
     case 'completed':
-      return 'Generación completada';
+      return 'GeneraciÃ³n completada';
     case 'failed':
-      return 'Error en la generación';
+      return 'Error en la generaciÃ³n';
     default:
       return 'Estado desconocido';
   }
 }
 
 /**
- * Función para simular el proceso de generación de música
- * En producción, esta sería una llamada real a un API externa
+ * FunciÃ³n para simular el proceso de generaciÃ³n de mÃºsica
+ * En producciÃ³n, esta serÃ­a una llamada real a un API externa
  */
 function simulateGeneration(taskId: string): void {
   const generation = musicGenerations[taskId];
   if (!generation) return;
-
-  // Cambiar el estado a procesando
-  generation.status = 'processing';
-
-  // Simular el progreso
-  let progress = 0;
-  const progressInterval = setInterval(() => {
-    progress += Math.floor(Math.random() * 5) + 1;
-    
-    if (progress >= 100) {
-      progress = 100;
-      clearInterval(progressInterval);
-      
-      // Marcar como completado
-      generation.status = 'completed';
-      generation.progress = 100;
-      
-      // Asignar una URL de audio simulada
-      generation.audioUrl = `https://example.com/audio/${taskId}.mp3`;
-      
-      log(`Generación de música completada: ${taskId}`, 'music-api');
-    } else {
-      generation.progress = progress;
-    }
-  }, 1000); // Actualizar cada segundo
+  generation.status = 'failed';
+  generation.progress = 100;
+  generation.error = 'The music provider did not return a real generation. Check the provider connection and try again.';
 }
 
 /**
  * Endpoint para subir un archivo de audio y procesarlo con PiAPI
- * Requiere autenticación
+ * Requiere autenticaciÃ³n
  */
 router.post('/upload', authenticate, async (req: Request & { files?: any }, res: Response) => {
   try {
-    // Verificar si se recibió un archivo
+    // Verificar si se recibiÃ³ un archivo
     if (!req.files || !req.files.audio) {
-      return res.status(400).json({ error: 'No se recibió ningún archivo de audio' });
+      return res.status(400).json({ error: 'No se recibiÃ³ ningÃºn archivo de audio' });
     }
 
     const { 
@@ -491,18 +489,18 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
 
     // Validar el modelo
     if (!MODEL_MAPPING[model]) {
-      return res.status(400).json({ error: 'Modelo no válido' });
+      return res.status(400).json({ error: 'Modelo no vÃ¡lido' });
     }
 
     // Obtener el archivo subido
     const audioFile = req.files.audio;
     const filePath = audioFile.tempFilePath;
     
-    // Crear un ID único para esta generación
+    // Crear un ID Ãºnico para esta generaciÃ³n
     const taskId = uuidv4();
     const userId = req.user?.uid || 'anonymous';
 
-    // Registrar la generación en nuestro sistema
+    // Registrar la generaciÃ³n en nuestro sistema
     musicGenerations[taskId] = {
       id: taskId,
       userId,
@@ -524,7 +522,7 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
       // Preparar el FormData para el upload de archivos
       const formData = new FormData();
       
-      // Añadir el archivo al FormData
+      // AÃ±adir el archivo al FormData
       formData.append('file', fs.createReadStream(filePath), {
         filename: path.basename(filePath),
         contentType: audioFile.mimetype
@@ -539,7 +537,7 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
       });
 
       if (!uploadResponse.data || !uploadResponse.data.url) {
-        throw new Error('No se recibió URL de archivo después de la subida');
+        throw new Error('No se recibiÃ³ URL de archivo despuÃ©s de la subida');
       }
 
       // Ahora usamos la URL del archivo subido para crear la tarea de procesamiento
@@ -556,7 +554,7 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
         }
       };
 
-      // Añadir opciones específicas
+      // AÃ±adir opciones especÃ­ficas
       if (makeInstrumental) {
         requestData.input.make_instrumental = true;
       }
@@ -584,13 +582,13 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
         
         log(`Audio subido y procesamiento iniciado en PiAPI: ${response.data.task_id}`, 'music-api');
       } else {
-        // Falló la solicitud a PiAPI, usar la simulación como fallback
-        log(`Error al procesar audio en PiAPI, usando simulación como fallback: ${taskId}`, 'music-api');
+        // FallÃ³ la solicitud a PiAPI, usar la simulaciÃ³n como fallback
+        log(`Error al procesar audio en PiAPI, usando simulaciÃ³n como fallback: ${taskId}`, 'music-api');
         simulateGeneration(taskId);
       }
     } catch (apiError) {
       console.error('Error al comunicarse con PiAPI para audio:', apiError);
-      log(`Error de comunicación con PiAPI para audio, usando simulación como fallback: ${taskId}`, 'music-api');
+      log(`Error de comunicaciÃ³n con PiAPI para audio, usando simulaciÃ³n como fallback: ${taskId}`, 'music-api');
       simulateGeneration(taskId);
     } finally {
       // Limpiar el archivo temporal
@@ -604,7 +602,7 @@ router.post('/upload', authenticate, async (req: Request & { files?: any }, res:
     // Responder al cliente con el ID de la tarea
     res.status(202).json({ 
       taskId, 
-      message: 'Procesamiento de audio iniciado con éxito' 
+      message: 'Procesamiento de audio iniciado con Ã©xito'
     });
 
   } catch (error) {

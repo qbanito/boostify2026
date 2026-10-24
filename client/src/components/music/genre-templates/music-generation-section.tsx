@@ -36,6 +36,8 @@ interface MusicGenerationSectionProps {
   setMusicTitle: (title: string) => void;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
+  modelAvailability?: Record<string, { available: boolean; provider?: string }>;
+  isLoadingModels?: boolean;
   showAdvancedParams: boolean;
   setShowAdvancedParams: (show: boolean) => void;
   advancedModeType: 'standard' | 'continuation' | 'lyrics' | 'upload';
@@ -62,6 +64,8 @@ export function MusicGenerationSection({
   setMusicTitle,
   selectedModel,
   setSelectedModel,
+  modelAvailability,
+  isLoadingModels,
   showAdvancedParams,
   setShowAdvancedParams,
   advancedModeType,
@@ -162,6 +166,8 @@ export function MusicGenerationSection({
         <ModelSelectorCards
           selectedModel={selectedModel}
           onModelSelect={setSelectedModel}
+          availability={modelAvailability}
+          loading={isLoadingModels}
         />
         
         {/* Advanced parameters toggle */}
@@ -213,7 +219,7 @@ export function MusicGenerationSection({
               <div className="text-center space-y-2">
                 <p className="font-medium">Generating your music...</p>
                 <p className="text-sm text-muted-foreground">
-                  {selectedModel === 'music-lyria3' ? 'Lyria 3 Pro — generating full song (~60 seconds)' :
+                  {selectedModel === 'music-lyria-clip' ? 'Lyria Clip — generating a 30-second preview' : selectedModel === 'music-lyria3' ? 'Lyria 3.5 — generating a full song' :
                    selectedModel === 'music-fal' ? 'This will take ~10 seconds' : 
                    selectedModel === 'music-stable' ? 'This will take ~30 seconds' :
                    'This may take up to 2 minutes'}
@@ -231,7 +237,7 @@ export function MusicGenerationSection({
             <Button 
               onClick={handleGenerateMusic} 
               className="w-full py-7 text-lg font-semibold group bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all duration-300"
-              disabled={!musicPrompt.trim()}
+              disabled={!musicPrompt.trim() || isLoadingModels || modelAvailability?.[selectedModel]?.available !== true}
               data-testid="button-generate-music"
             >
               <Sparkles className="h-6 w-6 mr-2 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300" />

@@ -27,6 +27,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createRequire } from 'module';
+import { authenticate } from '../middleware/auth';
 
 const execFileAsync = promisify(execFile);
 const nodeRequire = createRequire(import.meta.url);
@@ -82,12 +83,29 @@ async function uploadBufferToStorage(buf: Buffer, mimeType: string, ext: string)
   return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(fileName)}?alt=media`;
 }
 
+async function loadAudioSource(audioUrl: string, ownerId: string): Promise<Buffer> {
+  const privateRecording = audioUrl.match(/^\/api\/mini-studio\/recordings\/([^/]+)\/([^/]+)\/([^/?#]+)$/);
+  if (privateRecording) {
+    if (decodeURIComponent(privateRecording[1]) !== ownerId) throw new Error('You do not have access to this recording.');
+    const bucket = getBucket();
+    if (!bucket) throw new Error('Audio storage is not configured.');
+    const objectPath = `recordings/${ownerId}/${decodeURIComponent(privateRecording[2])}/${decodeURIComponent(privateRecording[3])}`;
+    const [bytes] = await bucket.file(objectPath).download();
+    return Buffer.from(bytes);
+  }
+  const parsed = new URL(audioUrl);
+  if (parsed.protocol !== 'https:') throw new Error('Audio source must use HTTPS.');
+  const response = await fetch(parsed);
+  if (!response.ok) throw new Error(`Cannot fetch audio: ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
 });
 
-router.post('/upload', upload.single('audio'), async (req: Request, res: Response) => {
+router.post('/upload', authenticate, upload.single('audio'), async (req: Request, res: Response) => {
   try {
     const f = (req as any).file as { buffer: Buffer; mimetype?: string; originalname?: string } | undefined;
     if (!f?.buffer?.length) return res.status(400).json({ error: 'No audio file provided' });
@@ -119,18 +137,18 @@ async function runLoudnorm(ffmpegPath: string, args: string[]): Promise<{ json: 
   return { json: m ? JSON.parse(m[0]) : null };
 }
 
-router.post('/master', async (req: Request, res: Response) => {
+router.post('/master', authenticate, async (req: Request, res: Response) => {
   const tmpFiles: string[] = [];
   try {
     const { audioUrl, preset = 'streaming' } = req.body;
     if (!audioUrl) return res.status(400).json({ error: 'audioUrl is required' });
+    const ownerId = String(req.user?.uid || req.user?.id || '');
+    if (!ownerId) return res.status(401).json({ error: 'Authentication required' });
     const p = MASTERING_PRESETS[preset] || MASTERING_PRESETS.streaming;
 
     console.log(`[mastering] Master (${preset}: ${p.i} LUFS): ${String(audioUrl).slice(0, 100)}`);
 
-    const dl = await fetch(audioUrl);
-    if (!dl.ok) throw new Error(`Cannot fetch audio: ${dl.status}`);
-    const srcBuf = Buffer.from(await dl.arrayBuffer());
+    const srcBuf = await loadAudioSource(String(audioUrl), ownerId);
     const srcPath = path.join(os.tmpdir(), `master-src-${Date.now()}`);
     const outPath = path.join(os.tmpdir(), `master-out-${Date.now()}.mp3`);
     tmpFiles.push(srcPath, outPath);
@@ -190,7 +208,7 @@ router.post('/master', async (req: Request, res: Response) => {
 // ─── POST /api/mastering/separate-stems ──────────────────────────────────
 // fal-ai/demucs (verified schema). Output = TOP-LEVEL File per stem
 // (vocals/drums/bass/other + guitar/piano for the 6s model).
-router.post('/separate-stems', async (req: Request, res: Response) => {
+router.post('/separate-stems', authenticate, async (req: Request, res: Response) => {
   try {
     const { audioUrl, model = 'htdemucs_6s' } = req.body;
     if (!audioUrl) return res.status(400).json({ error: 'audioUrl is required' });
@@ -237,7 +255,7 @@ router.post('/separate-stems', async (req: Request, res: Response) => {
 // Uses fal-ai/wizper (Whisper Large v3) to transcribe audio with timestamps.
 // Body: { audioUrl: string, language?: string, task?: "transcribe" | "translate" }
 // Returns: { text, chunks: [{ text, timestamp: [start, end] }] }
-router.post('/transcribe', async (req: Request, res: Response) => {
+router.post('/transcribe', authenticate, async (req: Request, res: Response) => {
   try {
     const { audioUrl, language, task = 'transcribe' } = req.body;
     if (!audioUrl) return res.status(400).json({ error: 'audioUrl is required' });
@@ -266,7 +284,7 @@ router.post('/transcribe', async (req: Request, res: Response) => {
 // ─── POST /api/mastering/generate-beat ──────────────────────────────────────
 // Primary: fal-ai/stable-audio-25/text-to-audio (≤190s, steps 4-8, output
 // { audio: File }). Fallback: legacy fal-ai/stable-audio.
-router.post('/generate-beat', async (req: Request, res: Response) => {
+router.post('/generate-beat', authenticate, async (req: Request, res: Response) => {
   try {
     const { prompt, seconds = 30 } = req.body;
     if (!prompt)  return res.status(400).json({ error: 'prompt is required' });
@@ -310,7 +328,7 @@ router.post('/generate-beat', async (req: Request, res: Response) => {
 // ─── POST /api/mastering/clone-voice ─────────────────────────────────────────
 // fal-ai/f5-tts (verified schema): gen_text ≤5000 chars, model_type REQUIRED
 // (F5-TTS | E2-TTS), remove_silence default true. Output: { audio_url: File }.
-router.post('/clone-voice', async (req: Request, res: Response) => {
+router.post('/clone-voice', authenticate, async (req: Request, res: Response) => {
   try {
     const { refAudioUrl, refText = '', genText, modelType = 'F5-TTS' } = req.body;
     if (!refAudioUrl) return res.status(400).json({ error: 'refAudioUrl is required' });
