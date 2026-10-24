@@ -2,6 +2,10 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { isAuthenticated } from '../middleware/clerk-auth';
+import { getUserId } from '../middleware/clerk-auth';
+import { db } from '../db';
+import { legacyCatalogResearch } from '../../db/schema';
+import { desc, eq, sql } from 'drizzle-orm';
 import { matchSongAcrossPlatforms, type CrossPlatformResult, type PlatformMatch } from '../services/cross-platform-matching';
 
 const router = Router();
@@ -14,6 +18,28 @@ const briefPdfPath = path.resolve(process.cwd(), 'public/assets/Boostify_Catalog
 // Persistent file cache — survives server restarts; images are uploaded to Firebase so URLs never expire
 const VISUALS_CACHE_PATH = path.resolve(process.cwd(), 'public/assets/catalog-resurrection-visuals.json');
 let visualsGenerationInProgress = false;
+let researchTableReady: Promise<void> | null = null;
+
+async function ensureResearchTable() {
+  if (!researchTableReady) {
+    researchTableReady = (async () => {
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS legacy_catalog_research (
+        id SERIAL PRIMARY KEY,
+        clerk_user_id VARCHAR(255) NOT NULL,
+        kind VARCHAR(32) NOT NULL,
+        query JSONB,
+        analysis JSONB,
+        artifact JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS legacy_catalog_research_user_created_idx ON legacy_catalog_research (clerk_user_id, created_at DESC)`);
+    })().catch((error) => {
+      researchTableReady = null;
+      throw error;
+    });
+  }
+  await researchTableReady;
+}
 
 function readPersistedVisuals(): { background: any; visuals: any[] } | null {
   try {
@@ -352,9 +378,11 @@ function buildAnalysis(matchResult: CrossPlatformResult | null, query: { title: 
     metrics: {
       resurrectionScore: topScore,
       rightsReadiness: 0,
-      syncDemand: hasMatches ? Math.min(98, 68 + platformsMatched.length * 7) : 0,
-      archiveCompleteness: hasMatches ? Math.min(95, 58 + tracks.length * 9) : 0,
-      projectedAnnualValue: hasMatches ? 118000 + topScore * 1900 : 0,
+      // External discovery data does not include rights verification, catalog
+      // completeness, or reported revenue. Keep those unscored until connected.
+      syncDemand: 0,
+      archiveCompleteness: 0,
+      projectedAnnualValue: 0,
       clearanceDays: 0,
     },
     rightsStack: hasMatches ? [
@@ -363,18 +391,8 @@ function buildAnalysis(matchResult: CrossPlatformResult | null, query: { title: 
       { label: 'Estate contact', status: 'not researched', confidence: 0 },
       { label: 'Sync clearance', status: 'not cleared', confidence: 0 },
     ] : [],
-    opportunities: hasMatches ? [
-      { channel: 'Film and television sync', value: 'Research opportunity', priority: 'Explore', fit: 70 },
-      { channel: 'Brand and nostalgia campaigns', value: 'Research opportunity', priority: 'Explore', fit: 66 },
-      { channel: 'Collector vinyl release', value: 'Research opportunity', priority: 'Explore', fit: 58 },
-      { channel: 'Editorial streaming', value: 'Research opportunity', priority: 'Explore', fit: 54 },
-    ] : [],
-    timeline: hasMatches ? [
-      { phase: 'Discover', days: 3, status: 'active' },
-      { phase: 'Clear rights', days: 21, status: 'queued' },
-      { phase: 'Package proof', days: 7, status: 'queued' },
-      { phase: 'Pitch revival', days: 14, status: 'queued' },
-    ] : [],
+    opportunities: [],
+    timeline: [],
     visuals: archiveVisuals,
     matchResult,
   };
@@ -503,7 +521,7 @@ function buildBriefHtml(analysis: ReturnType<typeof buildAnalysis>) {
       <section>
         <h2>Commercial Thesis</h2>
         <p>${htmlEscape(leadTrack.syncFit)}. The workflow packages streaming evidence, rights readiness, buyer angles, and revival economics into a deal-ready archive packet.</p>
-        <div class="row"><span>Modeled opportunity (illustrative)</span><span class="value">$${Number(analysis.metrics.projectedAnnualValue).toLocaleString('en-US')}</span></div>
+        <p>Revenue data is not connected, so this brief does not estimate catalog value.</p>
         <div class="row"><span>Clearance timing</span><span class="value">Not estimated — rights research required</span></div>
       </section>
     </div>
@@ -537,6 +555,23 @@ router.get('/bootstrap', async (_req: Request, res: Response) => {
   res.json({ success: true, data: buildAnalysis(null, query) });
 });
 
+// Every user's searches and generated working documents are stored in the
+// shared PostgreSQL database and can only be read by their owner.
+router.get('/history', async (req: Request, res: Response) => {
+  try {
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Authentication required' });
+    await ensureResearchTable();
+    const records = await db.select().from(legacyCatalogResearch)
+      .where(eq(legacyCatalogResearch.clerkUserId, clerkUserId))
+      .orderBy(desc(legacyCatalogResearch.createdAt)).limit(50);
+    return res.json({ success: true, records });
+  } catch (error) {
+    console.error('[LegacyCatalogResurrection] history read failed:', error);
+    return res.status(503).json({ error: 'Saved catalog research is temporarily unavailable.' });
+  }
+});
+
 router.post('/search', async (req: Request, res: Response) => {
   const title = String(req.body?.title || '').trim().slice(0, 180);
   const artistName = String(req.body?.artistName || '').trim().slice(0, 180);
@@ -545,8 +580,23 @@ router.post('/search', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Enter a title and artist, or search directly by ISRC.' });
   }
   const query = { title, artistName, isrc };
-  const matchResult = await safeMatch(query);
-  res.json({ success: true, data: buildAnalysis(matchResult, query) });
+  try {
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Authentication required' });
+    await ensureResearchTable();
+    const matchResult = await safeMatch(query);
+    if (!matchResult) {
+      return res.status(502).json({ error: 'Catalog search providers are unavailable. No result was saved.' });
+    }
+    const data = buildAnalysis(matchResult, query);
+    const [saved] = await db.insert(legacyCatalogResearch).values({
+      clerkUserId, kind: 'search', query, analysis: data,
+    }).returning({ id: legacyCatalogResearch.id, createdAt: legacyCatalogResearch.createdAt });
+    return res.json({ success: true, data, researchId: saved.id, savedAt: saved.createdAt });
+  } catch (error) {
+    console.error('[LegacyCatalogResurrection] search persistence failed:', error);
+    return res.status(503).json({ error: 'Search completed but could not be saved. Please retry.' });
+  }
 });
 
 // GET /visuals — returns cached AI visuals or { pending: true } while generating
@@ -587,14 +637,29 @@ router.post('/generate-visuals', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/action', (req: Request, res: Response) => {
+router.post('/action', async (req: Request, res: Response) => {
   const action = String(req.body?.action || '').trim();
   const track = req.body?.track;
   const allowedActions = new Set(['sync-pitch', 'estate-outreach', 'package-offer', 'archive-reference', 'ai-memo', 'preview']);
   if (!allowedActions.has(action)) return res.status(400).json({ error: 'Unsupported catalog action.' });
   if (!track?.title || !track?.artistName) return res.status(400).json({ error: 'Select a matched recording before generating an artifact.' });
-  const artifact = buildCommandArtifact(action, track, req.body?.analysis);
-  res.json({ success: true, artifact });
+  try {
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) return res.status(401).json({ error: 'Authentication required' });
+    await ensureResearchTable();
+    const artifact = buildCommandArtifact(action, track, req.body?.analysis);
+    const [saved] = await db.insert(legacyCatalogResearch).values({
+      clerkUserId,
+      kind: 'artifact',
+      query: { title: String(track.title).slice(0, 180), artistName: String(track.artistName).slice(0, 180) },
+      analysis: req.body?.analysis || null,
+      artifact,
+    }).returning({ id: legacyCatalogResearch.id, createdAt: legacyCatalogResearch.createdAt });
+    return res.json({ success: true, artifact: { ...artifact, recordId: saved.id, createdAt: saved.createdAt } });
+  } catch (error) {
+    console.error('[LegacyCatalogResurrection] action persistence failed:', error);
+    return res.status(503).json({ error: 'The document could not be saved. Please retry.' });
+  }
 });
 
 router.get('/brief.html', async (req: Request, res: Response) => {

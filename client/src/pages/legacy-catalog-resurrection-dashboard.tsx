@@ -123,7 +123,10 @@ type LegacyActionArtifact = {
   createdAt: string;
   sections: Array<{ label: string; value: string }>;
   nextSteps: string[];
+  recordId?: number;
 };
+
+type SavedResearch = { id: number; kind: string; query: QueryPayload | null; analysis: LegacyAnalysis | null; artifact: LegacyActionArtifact | null; createdAt: string };
 
 type Props = {
   onHome?: () => void;
@@ -132,7 +135,7 @@ type Props = {
   analysis?: LegacyAnalysis;
   query?: QueryPayload;
   setQuery?: (q: QueryPayload) => void;
-  onSearch?: () => void;
+  onSearch?: (query?: QueryPayload) => void;
   searchLoading?: boolean;
   onRunAction?: (action: string, track?: LegacyTrack) => void;
   actionLoading?: boolean;
@@ -145,6 +148,10 @@ type Props = {
   onGenerateVisuals?: () => void;
   generateVisualsLoading?: boolean;
   searchError?: string | null;
+  savedResearch?: SavedResearch[];
+  historyLoading?: boolean;
+  historyError?: boolean;
+  onRestoreResearch?: (record: SavedResearch) => void;
 };
 
 export type { Props as CatalogResurrectionDashboardProps };
@@ -154,11 +161,9 @@ const navItems: Array<{ label: string; icon: any; sectionId?: string; active?: b
   { label: "Dashboard", icon: LayoutGrid, sectionId: "hero", active: true },
   { label: "Catalog Intake", icon: ListMusic, sectionId: "catalog" },
   { label: "Resurrection Engine", icon: Wand2, sectionId: "score" },
-  { label: "Digital Artists", icon: Users2, sectionId: "artist" },
-  { label: "Content Pipeline", icon: Video, sectionId: "pipeline" },
   { label: "Sync & Licensing", icon: BadgeDollarSign, sectionId: "rights" },
-  { label: "Campaigns", icon: Megaphone, sectionId: "agents" },
-  { label: "Revenue", icon: DollarSign, sectionId: "revenue" },
+  { label: "Saved Research", icon: Archive, sectionId: "saved-research" },
+  { label: "Tracks", icon: ListMusic, sectionId: "songs" },
   { label: "Settings", icon: SettingsIcon, sectionId: "settings" },
 ];
 
@@ -346,6 +351,10 @@ export default function CatalogResurrectionDashboard({
   onGenerateVisuals,
   generateVisualsLoading,
   searchError,
+  savedResearch = [],
+  historyLoading = false,
+  historyError = false,
+  onRestoreResearch,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -357,7 +366,6 @@ export default function CatalogResurrectionDashboard({
   const [lang, setLangState] = useState<Lang>(langProp ?? "en");
   const setLang = (l: Lang) => { setLangState(l); setLangProp?.(l); };
   const [revenueRange, setRevenueRange] = useState<"6m" | "12m">("12m");
-  const [notifOpen, setNotifOpen] = useState(false);
   const [activeNavSection, setActiveNavSection] = useState("hero");
 
   useEffect(() => {
@@ -424,19 +432,8 @@ export default function CatalogResurrectionDashboard({
 
   // Rights derived from analysis.rightsStack
   const rights = useMemo(() => {
-    if (!analysis?.rightsStack?.length) {
-      return [
-        { label: "Master Recording", status: "REVIEW" as const, on: false },
-        { label: "Publishing Split", status: "REVIEW" as const, on: false },
-        { label: "Estate Outreach", status: "REVIEW" as const, on: false },
-        { label: "Sync Clearance", status: "REVIEW" as const, on: false },
-      ];
-    }
-    return analysis.rightsStack.map(r => ({
-      label: r.label,
-      status: (r.confidence >= 80 ? "CLEARED" : r.confidence >= 50 ? "CONDITIONAL" : "REVIEW") as "CLEARED" | "CONDITIONAL" | "REVIEW",
-      on: r.confidence >= 50,
-    }));
+    if (!analysis?.rightsStack?.length) return [];
+    return analysis.rightsStack.map(r => ({ label: r.label, status: r.status.toUpperCase(), on: false }));
   }, [analysis?.rightsStack]);
 
   // Pipeline derived from analysis.timeline
@@ -530,7 +527,7 @@ export default function CatalogResurrectionDashboard({
   const submitSearch = (e: FormEvent) => {
     e.preventDefault();
     if (setQuery) setQuery(internalQuery);
-    onSearch?.();
+    onSearch?.(internalQuery);
     setSearchOpen(false);
   };
 
@@ -589,13 +586,9 @@ export default function CatalogResurrectionDashboard({
       {!collapsed && (
         <div className="m-3 rounded-xl border border-white/5 bg-gradient-to-br from-orange-500/10 to-amber-500/5 p-3">
           <div className="text-[10px] font-black uppercase tracking-wider text-orange-300">Catalogs Under Resurrection</div>
-          <div className="mt-2 flex items-end justify-between gap-2">
-            <div className="text-3xl font-black text-white">{totalTracks}</div>
-            {totalTracks > 0 && <div className="h-8 w-20"><MiniSpark data={sidebarSparkline} color="#f97316" /></div>}
-          </div>
+          <div className="mt-2 text-3xl font-black text-white">{totalTracks}</div>
           <div className="mt-3 space-y-2">
-            <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Total Matches</span><span className="font-black text-white">{matchCount || tracks.length}</span></div>
-            <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Modeled opportunity</span><span className="font-black text-emerald-300">{fmtMoney(projectedAnnual)}</span></div>
+            <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Live matches</span><span className="font-black text-white">{matchCount}</span></div>
             <div className="h-px w-full bg-white/5" />
             <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Resurrection Score</span><span className="font-black text-orange-300">{score}</span></div>
           </div>
@@ -683,28 +676,6 @@ export default function CatalogResurrectionDashboard({
           </div>
 
           <div className="flex items-center gap-2 lg:gap-3">
-            <div className="relative">
-              <button onClick={() => setNotifOpen(o => !o)} className="relative hidden rounded-lg border border-white/10 bg-white/[0.03] p-2 text-zinc-400 hover:text-white sm:block" aria-label="Notifications">
-                <Bell className="h-4 w-4" />
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-orange-400" />
-              </button>
-              {notifOpen && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#0c1116] p-3 shadow-2xl">
-                  <div className="mb-2 flex items-center justify-between gap-2 text-[10px] font-black uppercase text-zinc-400">
-                    <span>Notifications</span>
-                    <button onClick={() => setNotifOpen(false)} className="text-zinc-500 hover:text-white"><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                  {[{ t: "New catalog match found", d: `${canonicalArtist} matched on 2 platforms`, dot: "bg-emerald-400" },
-                    { t: "Rights review required", d: "Publishing split needs verification", dot: "bg-orange-400" },
-                    { t: "Sync pitch ready", d: "Packet built for music supervisor outreach", dot: "bg-cyan-400" }].map(n => (
-                    <div key={n.t} className="flex items-start gap-2 rounded-lg border border-white/5 bg-black/20 p-2 text-xs">
-                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.dot}`} />
-                      <div><div className="font-bold text-white">{n.t}</div><div className="text-[10px] text-zinc-500">{n.d}</div></div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
             <LanguageToggle lang={lang} setLang={setLang} />
             <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-xs font-black text-black">B</div>
@@ -747,6 +718,20 @@ export default function CatalogResurrectionDashboard({
         )}
 
         <main className="space-y-4 p-3 sm:p-4 lg:p-6">
+          <Panel title="Saved catalog research" id="saved-research">
+            {historyError ? <div role="alert" className="px-4 py-5 text-xs text-red-300">Saved catalog research is unavailable. Refresh the page to reconnect to your account database.</div> : historyLoading ? <div className="flex items-center gap-2 px-4 py-5 text-xs text-zinc-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading saved research…</div> : savedResearch.length ? <div className="divide-y divide-white/5">
+              {savedResearch.slice(0, 8).map(record => {
+                const recordQuery = record.query || record.analysis?.query;
+                const label = recordQuery ? `${recordQuery.artistName || "Unknown artist"} · ${recordQuery.title || recordQuery.isrc || "ISRC search"}` : record.artifact?.title || "Saved document";
+                return <button key={record.id} onClick={() => onRestoreResearch?.(record)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.04]">
+                  <span className={`rounded px-2 py-1 text-[9px] font-black uppercase ${record.kind === "search" ? "bg-cyan-500/10 text-cyan-300" : "bg-orange-500/10 text-orange-300"}`}>{record.kind === "search" ? "Search" : "Document"}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-zinc-200">{label}</span>
+                  <time className="shrink-0 text-[10px] text-zinc-500">{new Date(record.createdAt).toLocaleDateString()}</time>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                </button>;
+              })}
+            </div> : <div className="px-4 py-5 text-xs text-zinc-500">No saved searches or documents yet. Search a recording to save its results to your account.</div>}
+          </Panel>
           {/* HERO */}
           <section id="hero" className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-[#0f1520] via-[#10161d] to-[#0c1116] p-5 sm:p-6">
             <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
@@ -777,11 +762,10 @@ export default function CatalogResurrectionDashboard({
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center sm:gap-6">
+              <div className="grid grid-cols-2 gap-3 text-center sm:gap-6">
                 {[
                   { v: String(totalTracks), l: "Tracks Found", icon: Activity },
                   { v: String(matchCount || 0), l: "Live Matches", icon: Music2 },
-                  { v: fmtMoney(projectedAnnual), l: "Modeled Opportunity", icon: DollarSign },
                 ].map((s) => (
                   <div key={s.l} className="space-y-1">
                     <s.icon className="mx-auto h-4 w-4 text-orange-400" />
@@ -875,10 +859,10 @@ export default function CatalogResurrectionDashboard({
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge s={r.status} />
-                        <Toggle on={r.on} />
                       </div>
                     </div>
                   ))}
+                  {rights.length === 0 && <p className="rounded-lg border border-white/5 bg-black/20 px-3 py-4 text-xs text-zinc-500">No matched recording yet. Rights status is never inferred from streaming matches.</p>}
                   <button
                     onClick={() => onRunAction?.("estate-outreach", selectedTrack)}
                     disabled={!selectedTrack}
@@ -890,135 +874,8 @@ export default function CatalogResurrectionDashboard({
                 </div>
               </Panel>
 
-              <Panel title="Digital Artist Version" id="artist">
-                <div className="grid gap-3 p-3 sm:p-4 sm:grid-cols-[110px_1fr]">
-                  <div className="relative">
-                    <img src={heroAvatar} alt="Digital Artist" className="h-32 w-full rounded-lg object-cover" />
-                    <span className="absolute left-2 top-2 rounded bg-black/70 px-2 py-0.5 text-[9px] font-black uppercase text-orange-300">v1.0</span>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-black text-white">{canonicalArtist}</div>
-                    <div className="text-[10px] font-black uppercase text-zinc-500">Digital Legacy Artist</div>
-                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
-                      <KV k="Era" v={selectedTrack?.era || "Vintage"} />
-                      <KV k="Status" v={selectedTrack?.confidence || "Review"} />
-                      <KV k="Sources" v={String(analysis?.source?.platformsMatched?.length || 0)} />
-                      <KV k="Score" v={String(score)} />
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-white/5 p-3">
-                  <button
-                    onClick={() => onRunAction?.("ai-memo", selectedTrack)}
-                    disabled={!selectedTrack}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] py-2 text-[11px] font-black uppercase text-zinc-200 hover:border-orange-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {pendingAction === "ai-memo" && actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
-                    Generate Catalog Memo <ArrowRight className="h-3 w-3" />
-                  </button>
-                </div>
-              </Panel>
             </div>
           </section>
-
-          {/* ROW 2 */}
-          <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1.2fr_1fr]">
-            <Panel
-              id="pipeline"
-              title="Content Pipeline"
-              right={<button onClick={() => scrollTo("songs")} className="hidden items-center gap-1 text-[10px] font-black uppercase text-orange-300 sm:flex">View All Tracks <ArrowRight className="h-3 w-3" /></button>}
-            >
-              <div className="grid grid-cols-3 gap-3 p-3 sm:p-4">
-                {pipeline.length === 0 && <div className="col-span-3 py-8 text-center text-xs text-zinc-500">A catalog match is needed before a revival workflow can be mapped.</div>}
-                {pipeline.map((p) => (
-                  <div key={p.n} className="relative flex flex-col items-center text-center">
-                    <div className="relative mb-2 flex h-12 w-12 items-center justify-center rounded-full border-2 border-orange-500/30 bg-black/40 sm:h-14 sm:w-14">
-                      <p.icon className="h-4 w-4 text-orange-300 sm:h-5 sm:w-5" />
-                      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-black">{p.n}</span>
-                    </div>
-                    <div className="text-[10px] font-black leading-tight text-white">{p.label}</div>
-                    <div className="mt-1"><StatusBadge s={p.status} /></div>
-                    <div className="mt-1 text-[9px] text-zinc-500">{p.date}</div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel
-              id="revenue"
-              title="Revenue / Monetization"
-              right={
-                <button onClick={() => setRevenueRange(r => r === "12m" ? "6m" : "12m")} className="hidden items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-black text-zinc-400 hover:border-orange-500/40 hover:text-white sm:flex">
-                  Last {revenueRange === "12m" ? "12 Months" : "6 Months"} <ChevronDown className="h-3 w-3" />
-                </button>
-              }
-            >
-              <div className="px-3 pt-3 sm:px-4">
-                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
-                  <div>
-                    <div className="text-[10px] font-black uppercase text-zinc-500">Modeled Opportunity</div>
-                    <div className="text-2xl font-black text-white sm:text-3xl">{fmtMoney(projectedAnnual)}</div>
-                    <div className="mt-1 text-[10px] text-zinc-500">Illustrative estimate from catalog match signals, not reported revenue.</div>
-                  </div>
-                  {projectedAnnual > 0 && <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1 text-[10px] sm:w-auto sm:grid-cols-1">
-                    <Legend dot="#22d3ee" label="Streaming" value={fmtMoney(projectedAnnual * 0.48)} />
-                    <Legend dot="#a855f7" label="Sync" value={fmtMoney(projectedAnnual * 0.24)} />
-                    <Legend dot="#22c55e" label="Merch" value={fmtMoney(projectedAnnual * 0.14)} />
-                    <Legend dot="#eab308" label="Collectibles" value={fmtMoney(projectedAnnual * 0.08)} />
-                    <Legend dot="#ec4899" label="Fan Membership" value={fmtMoney(projectedAnnual * 0.06)} />
-                  </div>}
-                </div>
-              </div>
-              <div className="h-52 p-3 sm:p-4">
-                {!projectedAnnual ? <div className="grid h-full place-items-center text-xs text-zinc-500">Run a catalog search to build a modeled opportunity view.</div> :
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={revenueRange === "6m" ? revenueChart.slice(-6) : revenueChart} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}K`} />
-                    <Tooltip contentStyle={{ background: "#0b0f14", border: "1px solid rgba(255,255,255,.12)", borderRadius: 6, color: "#fff", fontSize: 11 }} />
-                    <Line type="monotone" dataKey="streaming" stroke="#22d3ee" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="sync" stroke="#a855f7" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="merch" stroke="#22c55e" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="collectibles" stroke="#eab308" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="fans" stroke="#ec4899" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>}
-              </div>
-            </Panel>
-
-            <Panel id="agents" title="Catalog Action Studio" right={<button disabled={!selectedTrack} onClick={() => onRunAction?.("sync-pitch", selectedTrack)} className="hidden items-center gap-1 text-[10px] font-black uppercase text-orange-300 disabled:opacity-40 sm:flex">Build Pitch Draft <ArrowRight className="h-3 w-3" /></button>}>
-              <div className="grid grid-cols-2 gap-3 p-3 sm:p-4">
-                {agents.map((a) => {
-                  const action = a.action;
-                  const isRunning = pendingAction === action && actionLoading;
-                  return (
-                    <button
-                      key={a.label}
-                      onClick={() => onRunAction?.(action, selectedTrack)}
-                      disabled={!selectedTrack}
-                      className="rounded-xl border border-white/5 bg-black/25 p-3 text-left transition hover:border-orange-500/30 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition sm:h-9 sm:w-9 ${isRunning ? "bg-orange-500/30 shadow-[0_0_12px_rgba(249,115,22,0.3)]" : "bg-orange-500/15"}`}>
-                          {isRunning ? <Loader2 className="h-4 w-4 animate-spin text-orange-300" /> : <a.icon className="h-4 w-4 text-orange-300" />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-black text-white">{a.label}</div>
-                          <div className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-300">
-                            <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? "bg-orange-400 animate-pulse" : "bg-emerald-400"}`} />
-                            {isRunning ? "Preparing draft…" : selectedTrack ? "Ready to generate" : "Search for a track"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2 line-clamp-2 text-[10px] leading-4 text-zinc-500">{a.desc}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Panel>
-          </section>
-
           {/* ROW 3 */}
           <section className="grid gap-4 xl:grid-cols-[1fr_280px]">
             <Panel id="songs" title={`Revived Songs (${tracks.length})`}>
@@ -1119,42 +976,6 @@ export default function CatalogResurrectionDashboard({
               )}
             </Panel>
           </section>
-
-          {visualPack && visualPack.length > 0 && (
-            <section>
-              <Panel
-                title="Catalog Visuals"
-                right={
-                  <div className="flex items-center gap-2">
-                    {visualsPending && (
-                      <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-400">
-                        <Loader2 className="h-3 w-3 animate-spin" /> Generating visuals…
-                      </span>
-                    )}
-                  </div>
-                }
-              >
-                <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 md:grid-cols-3 xl:grid-cols-4">
-                  {visualPack.filter((v, i, arr) => arr.findIndex(x => x.imageUrl === v.imageUrl) === i).map(v => (
-                    <button
-                      key={v.id}
-                      onClick={() => window.open(v.imageUrl, "_blank", "noopener,noreferrer")}
-                      className="group overflow-hidden rounded-lg border border-white/10 bg-black/25 text-left hover:border-orange-500/50"
-                    >
-                      <div className="relative">
-                        <img src={v.imageUrl} alt={v.title} className="h-36 w-full object-cover transition group-hover:scale-105 sm:h-40" loading="lazy" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 transition group-hover:opacity-100" />
-                      </div>
-                      <div className="p-3">
-                        <div className="truncate text-xs font-black text-white">{v.title}</div>
-                        <div className="mt-1 line-clamp-2 text-[10px] text-zinc-500">{v.prompt}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </Panel>
-            </section>
-          )}
         </main>
       </div>
     </div>

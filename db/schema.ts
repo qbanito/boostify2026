@@ -124,6 +124,18 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+// Private catalog research and generated working documents for the
+// Legacy Catalog Resurrection module. Clerk IDs keep records owner scoped.
+export const legacyCatalogResearch = pgTable("legacy_catalog_research", {
+  id: serial("id").primaryKey(),
+  clerkUserId: varchar("clerk_user_id", { length: 255 }).notNull(),
+  kind: varchar("kind", { length: 32 }).notNull(),
+  query: jsonb("query"),
+  analysis: jsonb("analysis"),
+  artifact: jsonb("artifact"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [index("legacy_catalog_research_user_created_idx").on(table.clerkUserId, table.createdAt)]);
+
 export const artistMedia = pgTable("artist_media", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),

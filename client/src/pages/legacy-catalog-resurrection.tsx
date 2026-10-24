@@ -1,5 +1,5 @@
 import { ComponentType, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ArrowRight,
@@ -1447,6 +1447,7 @@ function DashboardView({ lang, setLang, analysis, query, setQuery, onSearch, sea
 }
 
 export default function LegacyCatalogResurrectionPage() {
+  const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [lang, setLang] = useState<Lang>("en");
@@ -1492,6 +1493,13 @@ export default function LegacyCatalogResurrectionPage() {
     },
   });
 
+  const historyQuery = useQuery({
+    queryKey: ["legacy-catalog-resurrection-history"],
+    queryFn: async () => apiRequest("/api/legacy-catalog-resurrection/history") as Promise<{ success: boolean; records: Array<{ id: number; kind: string; query: QueryPayload | null; analysis: LegacyAnalysis | null; artifact: LegacyActionArtifact | null; createdAt: string }> }>,
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
   useEffect(() => {
     if (!visualsQuery.data) return;
     if (visualsQuery.data.pending) {
@@ -1526,12 +1534,13 @@ export default function LegacyCatalogResurrectionPage() {
     onSuccess: response => {
       setSearchError(null);
       setAnalysis(response.data);
+      queryClient.invalidateQueries({ queryKey: ["legacy-catalog-resurrection-history"] });
     },
-    onError: (err: any) => {
+    onError: (err: any, payload) => {
       setAnalysis({
         ...fallbackAnalysis,
-        query,
-        catalog: { ...fallbackAnalysis.catalog, canonicalTitle: query.title, canonicalArtist: query.artistName, canonicalIsrc: query.isrc || null },
+        query: payload,
+        catalog: { ...fallbackAnalysis.catalog, canonicalTitle: payload.title, canonicalArtist: payload.artistName, canonicalIsrc: payload.isrc || null },
       });
       setSearchError(err?.message || "Search failed. Please try again.");
     },
@@ -1542,18 +1551,21 @@ export default function LegacyCatalogResurrectionPage() {
     onSuccess: response => {
       setActionArtifact(response.artifact);
       setSearchError(null);
+      queryClient.invalidateQueries({ queryKey: ["legacy-catalog-resurrection-history"] });
     },
     onError: (err: any) => setSearchError(err?.message || "Could not prepare this draft. Try again."),
     onSettled: () => setPendingAction(null),
   });
 
-  const runSearch = () => {
-    if (!query.isrc?.trim() && (!query.title.trim() || !query.artistName.trim())) {
+  const runSearch = (submittedQuery: QueryPayload = query) => {
+    const normalizedQuery = { ...submittedQuery, title: submittedQuery.title.trim(), artistName: submittedQuery.artistName.trim(), isrc: submittedQuery.isrc?.trim() || undefined };
+    if (!normalizedQuery.isrc && (!normalizedQuery.title || !normalizedQuery.artistName)) {
       setSearchError("Enter both a track title and artist, or search directly by ISRC.");
       return;
     }
+    setQuery(normalizedQuery);
     setSearchError(null);
-    searchMutation.mutate(query);
+    searchMutation.mutate(normalizedQuery);
     setView("engine");
   };
 
@@ -1620,6 +1632,14 @@ export default function LegacyCatalogResurrectionPage() {
       lang={lang}
       setLang={setLang}
       searchError={searchError}
+      savedResearch={historyQuery.data?.records || []}
+      historyLoading={historyQuery.isLoading}
+      historyError={historyQuery.isError}
+      onRestoreResearch={(record) => {
+        if (record.analysis) setAnalysis(record.analysis);
+        if (record.query) setQuery(record.query);
+        if (record.artifact) setActionArtifact(record.artifact);
+      }}
     />
   );
 }
