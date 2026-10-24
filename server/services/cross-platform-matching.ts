@@ -63,9 +63,9 @@ export interface CrossPlatformResult {
 // ─── Confidence Helpers ──────────────────────────────────────────────────────
 
 /**
- * Compare a candidate (title + artist) against the known canonical values.
- * Returns 'exact' when both strings match after normalisation; degrades
- * to 'high' / 'medium' when there is a partial match.
+ * Compare candidate metadata against the canonical values. Only a confirmed
+ * matching ISRC earns 'exact'; title and artist similarity is reported as
+ * high, medium, or low because it cannot distinguish alternate recordings.
  */
 function scoreConfidence(
   candidateTitle: string,
@@ -289,40 +289,34 @@ async function matchAppleMusic(params: MatchParams): Promise<PlatformMatch | nul
 
   if (!best) return null;
 
-  // ISRC cross-reference: iTunes Search doesn't return ISRC, but Deezer's
-  // public endpoint does. If we have a Deezer match for the same query and
-  // its title+artist align with ours, surface that ISRC and promote confidence.
+  // iTunes Search doesn't return ISRC. Cross-reference the selected Apple
+  // result through Deezer and only call it exact when the returned ISRC equals
+  // the canonical ISRC we are checking against.
   let crossIsrc: string | undefined;
   let isrcMatched = false;
-  if (params.isrc) {
-    crossIsrc = params.isrc;
-    isrcMatched = true; // user supplied an ISRC and we trust the title/artist match
-  } else {
-    try {
-      const dzQ = `${best.trackName} ${best.artistName}`;
-      const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(dzQ)}&limit=1`, {
-        signal: AbortSignal.timeout(6000),
-      });
-      if (dzRes.ok) {
-        const dz = await dzRes.json() as { data?: Array<{ id: number; title: string; artist: { name: string }; isrc?: string }> };
-        const dzTrack = dz.data?.[0];
-        if (dzTrack && norm(dzTrack.title) === norm(best.trackName) && (
-          norm(dzTrack.artist.name).includes(norm(best.artistName)) ||
-          norm(best.artistName).includes(norm(dzTrack.artist.name))
-        )) {
-          // Pull full track payload to get ISRC field reliably
-          const fullRes = await fetch(`https://api.deezer.com/track/${dzTrack.id}`, { signal: AbortSignal.timeout(6000) });
-          if (fullRes.ok) {
-            const full = await fullRes.json() as { isrc?: string };
-            if (full.isrc) {
-              crossIsrc = full.isrc;
-              isrcMatched = true;
-            }
+  try {
+    const dzQ = `${best.trackName} ${best.artistName}`;
+    const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(dzQ)}&limit=1`, {
+      signal: AbortSignal.timeout(6000),
+    });
+    if (dzRes.ok) {
+      const dz = await dzRes.json() as { data?: Array<{ id: number; title: string; artist: { name: string }; isrc?: string }> };
+      const dzTrack = dz.data?.[0];
+      if (dzTrack && norm(dzTrack.title) === norm(best.trackName) && (
+        norm(dzTrack.artist.name).includes(norm(best.artistName)) ||
+        norm(best.artistName).includes(norm(dzTrack.artist.name))
+      )) {
+        const fullRes = await fetch(`https://api.deezer.com/track/${dzTrack.id}`, { signal: AbortSignal.timeout(6000) });
+        if (fullRes.ok) {
+          const full = await fullRes.json() as { isrc?: string };
+          if (full.isrc) {
+            crossIsrc = full.isrc;
+            isrcMatched = Boolean(params.isrc && full.isrc.toUpperCase() === params.isrc.toUpperCase());
           }
         }
       }
-    } catch { /* ignore — ISRC cross-ref is best-effort */ }
-  }
+    }
+  } catch { /* ISRC cross-reference is best-effort */ }
 
   const confidence = scoreConfidence(best.trackName, best.artistName, refTitle, refArtist, isrcMatched);
 
@@ -345,7 +339,7 @@ async function matchAppleMusic(params: MatchParams): Promise<PlatformMatch | nul
     confidence,
     confidenceNote: isrcMatched
       ? `ISRC cross-referenced via Deezer · storefront ${bestStore}`
-      : `Matched by title/artist on storefront ${bestStore} (no ISRC)`,
+      : `Matched by title/artist on storefront ${bestStore}; ISRC unconfirmed`,
   };
 }
 
@@ -430,7 +424,10 @@ async function matchDeezer(params: MatchParams): Promise<PlatformMatch | null> {
       });
       if (res.ok) {
         const raw = await res.json() as DeezerTrack & { error?: unknown };
-        if (!raw.error) { track = raw; isrcMatched = true; }
+        if (!raw.error) {
+          track = raw;
+          isrcMatched = Boolean(raw.isrc && raw.isrc.toUpperCase() === params.isrc.toUpperCase());
+        }
       }
     } catch { /* fall through */ }
   }
@@ -633,8 +630,14 @@ export async function matchSongAcrossPlatforms(params: {
     refArtist: canonical.artist || params.artistName,
   };
 
-  const platformsChecked: PlatformName[] = ['spotify', 'apple_music', 'deezer', 'musicbrainz'];
+  const platformsChecked: PlatformName[] = ['apple_music', 'deezer', 'musicbrainz'];
   const platformsSkipped: PlatformName[] = [];
+
+  if (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET) {
+    platformsChecked.push('spotify');
+  } else {
+    platformsSkipped.push('spotify');
+  }
 
   if (process.env.YOUTUBE_API_KEY) {
     platformsChecked.push('youtube');
