@@ -48,6 +48,8 @@ import {
   YAxis,
 } from "recharts";
 import { apiRequest } from "../lib/queryClient";
+import { useAuth } from "../hooks/use-auth";
+import { useLocation } from "wouter";
 import CatalogResurrectionDashboard from "./legacy-catalog-resurrection-dashboard";
 
 type Lang = "en" | "es";
@@ -148,13 +150,13 @@ const defaultBackgroundVisual: LegacyVisual = {
 };
 
 const fallbackAnalysis: LegacyAnalysis = {
-  query: { title: "My Girl", artistName: "The Temptations" },
+  query: { title: "", artistName: "" },
   source: {
     spotifyConfigured: false,
     appleMusicPublicSearch: true,
     deezerPublicSearch: true,
     musicBrainzRegistry: true,
-    platformsMatched: ["apple_music", "deezer"],
+    platformsMatched: [],
     platformsChecked: ["spotify", "apple_music", "deezer", "musicbrainz"],
     platformsSkipped: [],
   },
@@ -162,81 +164,23 @@ const fallbackAnalysis: LegacyAnalysis = {
     name: "Boostify Catalog Resurrection Engine",
     archiveReference: "Boostify archive metadata discovery workflow",
     referenceUrl: "/api/legacy-catalog-resurrection/brief.html",
-    canonicalTitle: "My Girl",
-    canonicalArtist: "The Temptations",
+    canonicalTitle: "",
+    canonicalArtist: "",
     canonicalIsrc: null,
     matchCount: 0,
-    revivedTracks: [
-      {
-        id: "demo-a1",
-        title: "My Girl",
-        artistName: "The Temptations",
-        era: "1960s soul",
-        releaseDate: "1964-12-21",
-        archiveId: "BCE-TEMPT-MYGIRL",
-        rightsStatus: "Needs master + publishing verification",
-        revivalScore: 94,
-        syncFit: "Family film, luxury nostalgia campaign, sports documentary",
-        imageUrl: archiveImage,
-        platform: "Demo archive",
-        confidence: "sample",
-      },
-      {
-        id: "demo-b2",
-        title: "Basement Tape No. 7",
-        artistName: "Unattributed house band",
-        era: "1970s funk vault",
-        releaseDate: "1973-05-14",
-        archiveId: "VAULT-FUNK-073",
-        rightsStatus: "Estate outreach required",
-        revivalScore: 87,
-        syncFit: "Streetwear drop, car launch, limited vinyl pressing",
-        imageUrl: tapeImage,
-        platform: "Demo archive",
-        confidence: "sample",
-      },
-      {
-        id: "demo-c3",
-        title: "Midnight Side B",
-        artistName: "Legacy vocal group",
-        era: "1980s quiet storm",
-        releaseDate: "1982-10-02",
-        archiveId: "CAT-RNB-182",
-        rightsStatus: "Cleared for research pitch",
-        revivalScore: 81,
-        syncFit: "Streaming playlist revival, boutique hotel licensing",
-        imageUrl: vinylImage,
-        platform: "Demo archive",
-        confidence: "sample",
-      },
-    ],
+    revivedTracks: [],
   },
   metrics: {
-    resurrectionScore: 94,
-    rightsReadiness: 78,
-    syncDemand: 91,
-    archiveCompleteness: 84,
-    projectedAnnualValue: 296600,
-    clearanceDays: 26,
+    resurrectionScore: 0,
+    rightsReadiness: 0,
+    syncDemand: 0,
+    archiveCompleteness: 0,
+    projectedAnnualValue: 0,
+    clearanceDays: 0,
   },
-  rightsStack: [
-    { label: "Master owner", status: "verify", confidence: 74 },
-    { label: "Publishing split", status: "review", confidence: 68 },
-    { label: "Estate contact", status: "outreach", confidence: 61 },
-    { label: "Sync clearance", status: "ready", confidence: 82 },
-  ],
-  opportunities: [
-    { channel: "Film and television sync", value: "$42K-$180K", priority: "High", fit: 91 },
-    { channel: "Luxury nostalgia campaign", value: "$65K-$240K", priority: "High", fit: 88 },
-    { channel: "Collector vinyl drop", value: "$18K-$95K", priority: "Medium", fit: 76 },
-    { channel: "Editorial streaming revival", value: "$8K-$36K", priority: "Medium", fit: 72 },
-  ],
-  timeline: [
-    { phase: "Discover", days: 3, status: "active" },
-    { phase: "Clear rights", days: 21, status: "queued" },
-    { phase: "Package proof", days: 7, status: "queued" },
-    { phase: "Pitch revival", days: 14, status: "queued" },
-  ],
+  rightsStack: [],
+  opportunities: [],
+  timeline: [],
   visuals: [
     {
       id: "vault-console",
@@ -321,8 +265,8 @@ const copy = {
     rights: "Rights readiness",
     demand: "Sync demand",
     completeness: "Archive completeness",
-    projected: "Projected annual value",
-    clearance: "Clearance days",
+    projected: "Illustrative modeled opportunity",
+    clearance: "Clearance timing",
     revivedSongs: "Revived song candidates",
     rightsStack: "Rights stack",
     opportunities: "Commercial opportunities",
@@ -341,7 +285,7 @@ const copy = {
     priority: "Priority",
     days: "days",
     sourceLive: "API connected",
-    sourceFallback: "Demo fallback",
+    sourceFallback: "Awaiting search",
     generateBackground: "Generate Background",
     recordings: "Recordings",
     photos: "Photos",
@@ -376,8 +320,8 @@ const copy = {
     rights: "Derechos listos",
     demand: "Demanda sync",
     completeness: "Archivo completo",
-    projected: "Valor anual proyectado",
-    clearance: "Dias de clearance",
+    projected: "Oportunidad estimada ilustrativa",
+    clearance: "Tiempo de clearance",
     revivedSongs: "Canciones candidatas",
     rightsStack: "Mapa de derechos",
     opportunities: "Oportunidades comerciales",
@@ -396,7 +340,7 @@ const copy = {
     priority: "Prioridad",
     days: "dias",
     sourceLive: "API conectada",
-    sourceFallback: "Demo fallback",
+    sourceFallback: "Esperando búsqueda",
     generateBackground: "Generar Fondo",
     recordings: "Grabaciones",
     photos: "Fotos",
@@ -563,7 +507,7 @@ function BriefHtml({ analysis, compact = false }: { analysis: LegacyAnalysis; co
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">{analysis.catalog.archiveReference}</p>
         </div>
         <div className="rounded-md border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-right">
-          <div className="text-[9px] font-black uppercase text-orange-200">Projected annual value</div>
+          <div className="text-[9px] font-black uppercase text-orange-200">Illustrative modeled opportunity</div>
           <div className="text-xl font-black text-white">{money(analysis.metrics.projectedAnnualValue)}</div>
         </div>
       </div>
@@ -640,17 +584,17 @@ function HomeView({ lang, setLang, analysis, query, setQuery, onSearch, onOpenEn
 
   const features = [
     { icon: FolderSearch, title: en ? "AI Archive Discovery" : "Descubrimiento IA de Archivo", desc: en ? "Cross-platform search across Spotify, Apple Music, Deezer, and MusicBrainz to surface dormant recordings from any era." : "Búsqueda multi-plataforma para encontrar grabaciones dormidas de cualquier era.", color: "text-orange-400", badge: en ? "4 Platforms" : "4 Plataformas" },
-    { icon: ShieldCheck, title: en ? "Rights Intelligence Stack" : "Mapa de Derechos", desc: en ? "Automated master ownership, publishing splits, estate contacts, and sync clearance scoring for every catalog item." : "Propiedad de masters, splits de publishing y scoring de clearance automáticos.", color: "text-emerald-400", badge: en ? "Automated" : "Automático" },
-    { icon: Radio, title: en ? "Sync Demand Scoring" : "Score de Demanda Sync", desc: en ? "Real-time sync fit scoring across film, TV, ads, editorial playlists, and luxury brand campaigns." : "Score de fit sync en tiempo real para film, TV, ads y campañas de marca.", color: "text-cyan-400", badge: en ? "Real-time" : "Tiempo Real" },
+    { icon: ShieldCheck, title: en ? "Rights Review Workflow" : "Flujo de Revisión de Derechos", desc: en ? "Identify the master, publishing, estate, and sync clearances that still need independent verification." : "Identifica verificaciones pendientes de master, publishing, estate y sync.", color: "text-emerald-400", badge: en ? "Research support" : "Apoyo de investigación" },
+    { icon: Radio, title: en ? "Catalog Fit Scoring" : "Score de Compatibilidad", desc: en ? "Boostify scoring model compares catalog metadata with film, TV, brand, and editorial use cases. It is a research signal, not measured buyer demand." : "El modelo de Boostify compara metadata con usos de cine, TV, marcas y editorial; es una señal de investigación, no demanda medida.", color: "text-cyan-400", badge: en ? "Modeled signal" : "Señal estimada" },
     { icon: Wand2, title: en ? "Visual Pack Generator" : "Generador de Visuales", desc: en ? "AI-generated visual identity packs — album art, pitch decks, and promo assets — ready in seconds for any catalog." : "Packs visuales generados por IA: arte, pitch decks y assets de promo listos en segundos.", color: "text-fuchsia-400", badge: "OpenAI" },
     { icon: BadgeDollarSign, title: en ? "Deal Package Builder" : "Constructor de Deals", desc: en ? "One-click pitch packets, estate outreach letters, sync licenses, and commercial opportunity briefs for buyers." : "Paquetes de pitch, cartas de estate y briefs de oportunidades con un clic.", color: "text-amber-400", badge: en ? "Deal-Ready" : "Listo para Deal" },
-    { icon: BarChart3, title: en ? "Projected Value Analytics" : "Analytics de Valor", desc: en ? "Annual revenue projections across streaming, sync, vinyl, merch, and fan revenue streams with clearance timelines." : "Proyecciones de ingresos anuales con timelines de clearance.", color: "text-sky-400", badge: en ? "Projections" : "Proyecciones" },
+    { icon: BarChart3, title: en ? "Illustrative Opportunity Model" : "Modelo Ilustrativo de Oportunidad", desc: en ? "An internal scenario model based on catalog signals; it is not a revenue forecast or guarantee." : "Un modelo interno basado en señales del catálogo; no es pronóstico ni garantía de ingresos.", color: "text-sky-400", badge: en ? "Scenario only" : "Solo escenario" },
   ];
 
   const steps = [
     { n: "01", icon: FolderSearch, title: en ? "Scan the Catalog" : "Escanear el Catálogo", desc: en ? "Enter a track title, artist name, or ISRC. The engine searches 4+ platforms and the MusicBrainz registry simultaneously." : "Ingresa título, artista o ISRC. El motor busca en 4+ plataformas y MusicBrainz simultáneamente." },
     { n: "02", icon: ShieldCheck, title: en ? "Analyze Rights & Demand" : "Analizar Derechos y Demanda", desc: en ? "Get a full rights stack analysis, sync demand score, archive completeness, and commercial fit across buyer channels." : "Obtén análisis completo de derechos, score sync, completeness del archivo y fit comercial." },
-    { n: "03", icon: BadgeDollarSign, title: en ? "Package & Pitch" : "Empaquetar y Pitchear", desc: en ? "Generate AI-powered pitch packets, visual packs, estate outreach letters, and deal-ready briefs for music supervisors." : "Genera paquetes de pitch con IA, packs visuales, cartas de estate y briefs listos para negociar." },
+    { n: "03", icon: BadgeDollarSign, title: en ? "Package & Pitch" : "Empaquetar y Pitchear", desc: en ? "Prepare track-specific pitch and rights outreach drafts, plus an HTML brief for review. Nothing is sent automatically." : "Prepara borradores de pitch y revisión de derechos, más un brief HTML. No se envía nada automáticamente." },
   ];
 
   return (
@@ -813,7 +757,7 @@ function HomeView({ lang, setLang, analysis, query, setQuery, onSearch, onOpenEn
                       {en ? "Live Analysis Preview" : "Vista Previa en Vivo"}
                     </div>
                     <span className={`rounded px-2 py-0.5 text-[9px] font-black uppercase ${analysis.catalog.matchCount > 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-500/15 text-zinc-400"}`}>
-                      {analysis.catalog.matchCount > 0 ? "Live" : "Demo"}
+                      {analysis.catalog.matchCount > 0 ? "Live" : "No matches yet"}
                     </span>
                   </div>
 
@@ -848,7 +792,7 @@ function HomeView({ lang, setLang, analysis, query, setQuery, onSearch, onOpenEn
 
                   <div className="flex items-center justify-between px-4 py-3 text-xs">
                     <span className="text-zinc-500">{en ? "Clearance timeline" : "Tiempo de clearance"}</span>
-                    <span className="font-black text-white">{analysis.metrics.clearanceDays} {en ? "days avg" : "días prom"}</span>
+                    <span className="font-black text-white">{analysis.metrics.clearanceDays ? `${analysis.metrics.clearanceDays} ${en ? "days (estimate)" : "días (estimado)"}` : en ? "Requires rights research" : "Requiere investigar derechos"}</span>
                   </div>
 
                   <div className="px-4 pb-4">
@@ -1503,6 +1447,8 @@ function DashboardView({ lang, setLang, analysis, query, setQuery, onSearch, sea
 }
 
 export default function LegacyCatalogResurrectionPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [lang, setLang] = useState<Lang>("en");
   const [view, setView] = useState<"home" | "engine">("home");
   const [query, setQuery] = useState<QueryPayload>(fallbackAnalysis.query);
@@ -1516,6 +1462,7 @@ export default function LegacyCatalogResurrectionPage() {
   const bootstrapQuery = useQuery({
     queryKey: ["legacy-catalog-resurrection-bootstrap"],
     queryFn: async () => apiRequest("/api/legacy-catalog-resurrection/bootstrap") as Promise<{ success: boolean; data: LegacyAnalysis }>,
+    enabled: isAuthenticated,
     retry: false,
   });
 
@@ -1535,6 +1482,7 @@ export default function LegacyCatalogResurrectionPage() {
       success: boolean; visuals?: LegacyVisual[]; background?: LegacyVisual;
       fallback?: boolean; pending?: boolean; cached?: boolean;
     }>,
+    enabled: isAuthenticated,
     retry: false,
     staleTime: Infinity,
     refetchInterval: (query) => {
@@ -1561,32 +1509,80 @@ export default function LegacyCatalogResurrectionPage() {
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (bootstrapQuery.isError) setSearchError("Catalog services are temporarily unavailable. Try again in a moment.");
+  }, [bootstrapQuery.isError]);
+
   const searchMutation = useMutation({
     mutationFn: async (payload: QueryPayload) => apiRequest("/api/legacy-catalog-resurrection/search", { method: "POST", data: payload }) as Promise<{ success: boolean; data: LegacyAnalysis }>,
+    onMutate: payload => {
+      setActionArtifact(null);
+      setAnalysis({
+        ...fallbackAnalysis,
+        query: payload,
+        catalog: { ...fallbackAnalysis.catalog, canonicalTitle: payload.title, canonicalArtist: payload.artistName, canonicalIsrc: payload.isrc || null },
+      });
+    },
     onSuccess: response => {
       setSearchError(null);
       setAnalysis(response.data);
     },
     onError: (err: any) => {
+      setAnalysis({
+        ...fallbackAnalysis,
+        query,
+        catalog: { ...fallbackAnalysis.catalog, canonicalTitle: query.title, canonicalArtist: query.artistName, canonicalIsrc: query.isrc || null },
+      });
       setSearchError(err?.message || "Search failed. Please try again.");
     },
   });
 
   const actionMutation = useMutation({
     mutationFn: async ({ action, track }: { action: string; track?: LegacyTrack }) => apiRequest("/api/legacy-catalog-resurrection/action", { method: "POST", data: { action, track, analysis } }) as Promise<{ success: boolean; artifact: LegacyActionArtifact }>,
-    onSuccess: response => setActionArtifact(response.artifact),
+    onSuccess: response => {
+      setActionArtifact(response.artifact);
+      setSearchError(null);
+    },
+    onError: (err: any) => setSearchError(err?.message || "Could not prepare this draft. Try again."),
     onSettled: () => setPendingAction(null),
   });
 
   const runSearch = () => {
+    if (!query.isrc?.trim() && (!query.title.trim() || !query.artistName.trim())) {
+      setSearchError("Enter both a track title and artist, or search directly by ISRC.");
+      return;
+    }
+    setSearchError(null);
     searchMutation.mutate(query);
     setView("engine");
   };
 
   const runAction = (action: string, track?: LegacyTrack) => {
+    if (!track) return;
     setPendingAction(action);
     actionMutation.mutate({ action, track });
   };
+
+  if (authLoading) {
+    return <div className="grid min-h-screen place-items-center bg-[#07090c] text-sm text-zinc-400"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Checking your secure session…</div>;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#07090c] px-5 text-zinc-100">
+        <section className="w-full max-w-md rounded-2xl border border-white/10 bg-[#10151b] p-8 text-center shadow-2xl">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-xl border border-orange-500/30 bg-orange-500/10"><LockKeyhole className="h-6 w-6 text-orange-300" /></div>
+          <p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-orange-300">Boostify Catalog Lab</p>
+          <h1 className="mt-2 text-2xl font-black">Sign in to continue</h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-400">Your catalog searches, rights research, and generated briefs are available to signed-in Boostify members.</p>
+          <button onClick={() => setLocation(`/login?redirect_url=${encodeURIComponent("/legacy-catalog-resurrection")}`)} className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 text-sm font-black text-black transition hover:bg-orange-400">
+            <LockKeyhole className="h-4 w-4" /> Sign in securely <ArrowRight className="h-4 w-4" />
+          </button>
+          <button onClick={() => setLocation("/")} className="mt-3 text-xs font-bold text-zinc-500 hover:text-white">Back to Boostify</button>
+        </section>
+      </main>
+    );
+  }
 
   if (view === "home") {
     return (
@@ -1623,6 +1619,7 @@ export default function LegacyCatalogResurrectionPage() {
       visualsPending={visualsPending}
       lang={lang}
       setLang={setLang}
+      searchError={searchError}
     />
   );
 }

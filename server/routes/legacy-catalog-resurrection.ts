@@ -157,7 +157,7 @@ function buildTrackFromMatch(match: PlatformMatch, index: number) {
     era: decadeLabel(match.releaseDate),
     releaseDate: match.releaseDate || 'Unknown release date',
     archiveId: buildArchiveId(match.title, match.artistName),
-    rightsStatus: index === 0 ? 'Priority clearance packet ready' : 'Platform match needs rights review',
+    rightsStatus: 'Platform metadata matched; ownership and clearance remain unverified',
     revivalScore,
     syncFit: index === 0 ? 'Premium brand campaign, film trailer, collector vinyl' : 'Streaming revival, editorial playlist, social campaign',
     imageUrl: match.imageUrl || fallbackTracks[index % fallbackTracks.length].imageUrl,
@@ -260,20 +260,20 @@ function buildCommandArtifact(action: string, track: any, analysis: any) {
   const actionMap: Record<string, { title: string; status: string; summary: string; cta: string }> = {
     'sync-pitch': {
       title: 'Sync Pitch Packet',
-      status: 'Ready for music supervisor outreach',
-      summary: `${selectedTrack.title} by ${selectedTrack.artistName} is packaged for film, television, sports documentary, and luxury nostalgia campaigns with a revival score of ${selectedTrack.revivalScore || metrics.resurrectionScore || 90}.`,
-      cta: 'Send to sync buyer shortlist',
+      status: 'Pitch draft prepared — not sent',
+      summary: `${selectedTrack.title} by ${selectedTrack.artistName} has a draft pitch outline for film, television, sports documentary, and nostalgia campaign research. No buyer has been contacted.`,
+      cta: 'Open track brief',
     },
     'estate-outreach': {
       title: 'Estate Outreach Memo',
-      status: 'Rights contact sequence prepared',
-      summary: `Prepared an estate-friendly outreach memo for ${selectedTrack.artistName}, including provenance questions, split verification, master owner review, and revival upside framing.`,
-      cta: 'Open rights outreach queue',
+      status: 'Rights outreach draft prepared — not sent',
+      summary: `Prepared a review checklist for ${selectedTrack.artistName}, including provenance questions, split verification, and master owner research. No rights holder has been contacted.`,
+      cta: 'Open track brief',
     },
     'package-offer': {
       title: 'Catalog Revival Offer',
       status: 'Offer terms drafted',
-      summary: `Drafted a revival offer around ${selectedTrack.title}, projected annual value ${metrics.projectedAnnualValue ? `$${Number(metrics.projectedAnnualValue).toLocaleString('en-US')}` : '$294,700'}, and clearance window ${metrics.clearanceDays || 31} days.`,
+      summary: `Drafted a preliminary revival offer outline for ${selectedTrack.title}. Any opportunity estimate is modeled from catalog signals and requires rights and commercial review.`,
       cta: 'Prepare deal memo',
     },
     'archive-reference': {
@@ -284,9 +284,9 @@ function buildCommandArtifact(action: string, track: any, analysis: any) {
     },
     'ai-memo': {
       title: 'AI Catalog Memo',
-      status: 'Executive memo generated',
-      summary: `${selectedTrack.title} has strong catalog resurrection potential because platform matches, nostalgic era fit, and rights-readiness signals point toward sync, vinyl, and editorial playlist monetization.`,
-      cta: 'Attach memo to brief',
+      status: 'Catalog memo draft prepared',
+      summary: `Prepared a structured memo for ${selectedTrack.title} using matched platform metadata and Boostify catalog scoring. Rights and market assumptions still need independent verification.`,
+      cta: 'Open track brief',
     },
     preview: {
       title: 'Preview Routing',
@@ -318,9 +318,10 @@ function buildCommandArtifact(action: string, track: any, analysis: any) {
 function buildAnalysis(matchResult: CrossPlatformResult | null, query: { title: string; artistName: string; isrc?: string }) {
   const tracks = matchResult?.matches?.length
     ? matchResult.matches.map(buildTrackFromMatch)
-    : fallbackTracks.map(track => ({ ...track, platform: 'Demo archive', confidence: 'sample' }));
-  const topScore = Math.max(...tracks.map(track => Number(track.revivalScore || 0)), 78);
-  const platformsMatched = matchResult?.platformsMatched || ['apple_music', 'deezer'];
+    : [];
+  const hasMatches = tracks.length > 0;
+  const topScore = hasMatches ? Math.max(...tracks.map(track => Number(track.revivalScore || 0))) : 0;
+  const platformsMatched = matchResult?.platformsMatched || [];
 
   return {
     query,
@@ -345,30 +346,30 @@ function buildAnalysis(matchResult: CrossPlatformResult | null, query: { title: 
     },
     metrics: {
       resurrectionScore: topScore,
-      rightsReadiness: Math.min(96, 62 + platformsMatched.length * 8),
-      syncDemand: Math.min(98, 68 + platformsMatched.length * 7),
-      archiveCompleteness: Math.min(95, 58 + tracks.length * 9),
-      projectedAnnualValue: 118000 + topScore * 1900,
-      clearanceDays: Math.max(14, 46 - platformsMatched.length * 5),
+      rightsReadiness: 0,
+      syncDemand: hasMatches ? Math.min(98, 68 + platformsMatched.length * 7) : 0,
+      archiveCompleteness: hasMatches ? Math.min(95, 58 + tracks.length * 9) : 0,
+      projectedAnnualValue: hasMatches ? 118000 + topScore * 1900 : 0,
+      clearanceDays: 0,
     },
-    rightsStack: [
-      { label: 'Master owner', status: 'verify', confidence: 74 },
-      { label: 'Publishing split', status: 'review', confidence: 68 },
-      { label: 'Estate contact', status: 'outreach', confidence: 61 },
-      { label: 'Sync clearance', status: 'ready', confidence: 82 },
-    ],
-    opportunities: [
-      { channel: 'Film and television sync', value: '$42K-$180K', priority: 'High', fit: 91 },
-      { channel: 'Luxury nostalgia campaign', value: '$65K-$240K', priority: 'High', fit: 88 },
-      { channel: 'Collector vinyl drop', value: '$18K-$95K', priority: 'Medium', fit: 76 },
-      { channel: 'Editorial streaming revival', value: '$8K-$36K', priority: 'Medium', fit: 72 },
-    ],
-    timeline: [
+    rightsStack: hasMatches ? [
+      { label: 'Master owner', status: 'unverified', confidence: 0 },
+      { label: 'Publishing split', status: 'unverified', confidence: 0 },
+      { label: 'Estate contact', status: 'not researched', confidence: 0 },
+      { label: 'Sync clearance', status: 'not cleared', confidence: 0 },
+    ] : [],
+    opportunities: hasMatches ? [
+      { channel: 'Film and television sync', value: 'Research opportunity', priority: 'Explore', fit: 70 },
+      { channel: 'Brand and nostalgia campaigns', value: 'Research opportunity', priority: 'Explore', fit: 66 },
+      { channel: 'Collector vinyl release', value: 'Research opportunity', priority: 'Explore', fit: 58 },
+      { channel: 'Editorial streaming', value: 'Research opportunity', priority: 'Explore', fit: 54 },
+    ] : [],
+    timeline: hasMatches ? [
       { phase: 'Discover', days: 3, status: 'active' },
       { phase: 'Clear rights', days: 21, status: 'queued' },
       { phase: 'Package proof', days: 7, status: 'queued' },
       { phase: 'Pitch revival', days: 14, status: 'queued' },
-    ],
+    ] : [],
     visuals: archiveVisuals,
     matchResult,
   };
@@ -385,7 +386,7 @@ function buildBriefPdf(): Buffer {
     ['F1', 11, 'Find old catalog signals, rights gaps, streaming demand, and revival offers.'],
     ['F1', 11, 'Inspired by museum catalog workflows for archive browsing and metadata review.'],
     ['F1', 11, 'Connected sources: Spotify when configured, Apple Music public search, Deezer, MusicBrainz.'],
-    ['F1', 11, 'Core outputs: rights packet, sync pitch, revival score, archive visuals, and deal memo.'],
+    ['F1', 11, 'Core outputs: catalog-match research, scoring, archive visuals, and draft outreach materials. Rights status requires independent verification.'],
     ['F1', 11, 'Commercial use case: labels, estates, publishers, artists, brands, and sync teams.'],
     ['F1', 11, 'Route: /legacy-catalog-resurrection'],
     ['F1', 11, 'Contact: info@boostifymusic.com'],
@@ -428,9 +429,11 @@ function htmlEscape(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function buildBriefHtml() {
-  const analysis = buildAnalysis(null, { title: 'My Girl', artistName: 'The Temptations' });
-  const leadTrack = analysis.catalog.revivedTracks[0];
+function buildBriefHtml(analysis: ReturnType<typeof buildAnalysis>) {
+  const leadTrack = analysis.catalog.revivedTracks[0] || {
+    archiveId: 'Pending live catalog match',
+    syncFit: 'No matched recording is available yet. Run a catalog search to create a track-specific brief.',
+  };
   const metricCards = [
     ['Resurrection score', analysis.metrics.resurrectionScore],
     ['Rights readiness', analysis.metrics.rightsReadiness],
@@ -495,8 +498,8 @@ function buildBriefHtml() {
       <section>
         <h2>Commercial Thesis</h2>
         <p>${htmlEscape(leadTrack.syncFit)}. The workflow packages streaming evidence, rights readiness, buyer angles, and revival economics into a deal-ready archive packet.</p>
-        <div class="row"><span>Projected annual value</span><span class="value">$${Number(analysis.metrics.projectedAnnualValue).toLocaleString('en-US')}</span></div>
-        <div class="row"><span>Clearance window</span><span class="value">${analysis.metrics.clearanceDays} days</span></div>
+        <div class="row"><span>Modeled opportunity (illustrative)</span><span class="value">$${Number(analysis.metrics.projectedAnnualValue).toLocaleString('en-US')}</span></div>
+        <div class="row"><span>Clearance timing</span><span class="value">Not estimated — rights research required</span></div>
       </section>
     </div>
 
@@ -525,15 +528,17 @@ async function safeMatch(query: { title: string; artistName: string; isrc?: stri
 }
 
 router.get('/bootstrap', async (_req: Request, res: Response) => {
-  const query = { title: 'My Girl', artistName: 'The Temptations' };
-  const matchResult = await safeMatch(query);
-  res.json({ success: true, data: buildAnalysis(matchResult, query) });
+  const query = { title: '', artistName: '' };
+  res.json({ success: true, data: buildAnalysis(null, query) });
 });
 
 router.post('/search', async (req: Request, res: Response) => {
-  const title = String(req.body?.title || '').trim() || 'My Girl';
-  const artistName = String(req.body?.artistName || '').trim() || 'The Temptations';
-  const isrc = String(req.body?.isrc || '').trim() || undefined;
+  const title = String(req.body?.title || '').trim().slice(0, 180);
+  const artistName = String(req.body?.artistName || '').trim().slice(0, 180);
+  const isrc = String(req.body?.isrc || '').trim().slice(0, 24) || undefined;
+  if (!isrc && (!title || !artistName)) {
+    return res.status(400).json({ error: 'Enter a title and artist, or search directly by ISRC.' });
+  }
   const query = { title, artistName, isrc };
   const matchResult = await safeMatch(query);
   res.json({ success: true, data: buildAnalysis(matchResult, query) });
@@ -578,15 +583,27 @@ router.post('/generate-visuals', async (req: Request, res: Response) => {
 });
 
 router.post('/action', (req: Request, res: Response) => {
-  const action = String(req.body?.action || 'ai-memo').trim();
-  const artifact = buildCommandArtifact(action, req.body?.track, req.body?.analysis);
+  const action = String(req.body?.action || '').trim();
+  const track = req.body?.track;
+  const allowedActions = new Set(['sync-pitch', 'estate-outreach', 'package-offer', 'archive-reference', 'ai-memo', 'preview']);
+  if (!allowedActions.has(action)) return res.status(400).json({ error: 'Unsupported catalog action.' });
+  if (!track?.title || !track?.artistName) return res.status(400).json({ error: 'Select a matched recording before generating an artifact.' });
+  const artifact = buildCommandArtifact(action, track, req.body?.analysis);
   res.json({ success: true, artifact });
 });
 
-router.get('/brief.html', (_req: Request, res: Response) => {
+router.get('/brief.html', async (req: Request, res: Response) => {
+  const query = {
+    title: String(req.query.title || '').trim().slice(0, 180),
+    artistName: String(req.query.artistName || '').trim().slice(0, 180),
+    isrc: String(req.query.isrc || '').trim().slice(0, 24) || undefined,
+  };
+  const validQuery = query.isrc || (query.title && query.artistName);
+  const matchResult = validQuery ? await safeMatch(query) : null;
+  const analysis = buildAnalysis(matchResult, query);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
-  res.send(buildBriefHtml());
+  res.send(buildBriefHtml(analysis));
 });
 
 router.get('/brief.pdf', (req: Request, res: Response) => {

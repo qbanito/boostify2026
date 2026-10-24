@@ -144,6 +144,7 @@ type Props = {
   setLang?: (l: Lang) => void;
   onGenerateVisuals?: () => void;
   generateVisualsLoading?: boolean;
+  searchError?: string | null;
 };
 
 export type { Props as CatalogResurrectionDashboardProps };
@@ -188,10 +189,10 @@ const revenueChartDefault = [
 ];
 
 const agents = [
-  { label: "Content Agent", desc: "Creating & optimizing content assets", icon: Wand2 },
-  { label: "Remix Agent", desc: "Generating remixes & alternative versions", icon: Disc3 },
-  { label: "Marketing Agent", desc: "Running campaigns & community growth", icon: Megaphone },
-  { label: "Licensing Agent", desc: "Finding sync opportunities & managing deals", icon: BadgeDollarSign },
+  { label: "Catalog Memo", desc: "Create a structured summary from the matched recording.", icon: Wand2, action: "ai-memo" },
+  { label: "Offer Draft", desc: "Prepare a preliminary catalog revival offer outline.", icon: Disc3, action: "package-offer" },
+  { label: "Sync Pitch", desc: "Build a pitch draft with catalog context and use cases.", icon: Megaphone, action: "sync-pitch" },
+  { label: "Rights Outreach", desc: "Prepare a rights verification outreach checklist.", icon: BadgeDollarSign, action: "estate-outreach" },
 ];
 
 const fmtMoney = (n: number) => {
@@ -344,6 +345,7 @@ export default function CatalogResurrectionDashboard({
   setLang: setLangProp,
   onGenerateVisuals,
   generateVisualsLoading,
+  searchError,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -402,7 +404,7 @@ export default function CatalogResurrectionDashboard({
 
   const canonicalTitle = analysis?.catalog?.canonicalTitle || "Catalog Target";
   const canonicalArtist = analysis?.catalog?.canonicalArtist || "Artist";
-  const score = analysis?.metrics?.resurrectionScore ?? 87;
+  const score = analysis?.metrics?.resurrectionScore ?? 0;
   const rightsReadiness = analysis?.metrics?.rightsReadiness ?? 0;
   const syncDemand = analysis?.metrics?.syncDemand ?? 0;
   const archiveCompleteness = analysis?.metrics?.archiveCompleteness ?? 0;
@@ -416,7 +418,7 @@ export default function CatalogResurrectionDashboard({
     { label: "Viral Potential", value: Math.min(100, Math.round((syncDemand + score) / 2)), icon: Zap, color: "#f97316" },
     { label: "Remix Potential", value: Math.min(100, Math.round((score + 10) * 0.95)), icon: Disc3, color: "#a855f7" },
     { label: "Nostalgia Value", value: Math.min(100, Math.round(archiveCompleteness * 0.9 + 10)), icon: Sparkles, color: "#eab308" },
-    { label: "Sync Potential", value: syncDemand || 75, icon: BadgeDollarSign, color: "#22d3ee" },
+    { label: "Sync Potential", value: syncDemand, icon: BadgeDollarSign, color: "#22d3ee" },
     { label: "Merch Potential", value: Math.min(100, Math.round((rightsReadiness + score) / 2 - 5)), icon: Shirt, color: "#ec4899" },
   ], [score, syncDemand, archiveCompleteness, rightsReadiness]);
 
@@ -439,7 +441,7 @@ export default function CatalogResurrectionDashboard({
 
   // Pipeline derived from analysis.timeline
   const pipeline = useMemo(() => {
-    if (!analysis?.timeline?.length) return pipelineDefault;
+    if (!analysis?.timeline?.length) return [];
     const icons = [Disc3, Headphones, Video, Scissors, Shirt, Target];
     return analysis.timeline.slice(0, 6).map((t, i) => ({
       n: i + 1,
@@ -454,7 +456,8 @@ export default function CatalogResurrectionDashboard({
 
   // Revenue chart — scale to projectedAnnual when available
   const revenueChart = useMemo(() => {
-    const annual = projectedAnnual || 1_280_000;
+    if (!projectedAnnual) return [];
+    const annual = projectedAnnual;
     const monthlyBase = annual / 12 / 1000;
     const factor = monthlyBase / 90;
     return revenueChartDefault.map(row => ({
@@ -467,13 +470,20 @@ export default function CatalogResurrectionDashboard({
     }));
   }, [projectedAnnual]);
 
+  const buildBriefUrl = (track?: LegacyTrack) => {
+    if (!track) return "/api/legacy-catalog-resurrection/brief.html";
+    const params = new URLSearchParams({ title: track.title, artistName: track.artistName });
+    if (track.isrc) params.set("isrc", track.isrc);
+    return `/api/legacy-catalog-resurrection/brief.html?${params.toString()}`;
+  };
+
   // Quick actions wired to real handlers
   const quickActions: Array<{ label: string; icon: any; onClick: () => void }> = [
     { label: "New Catalog Intake", icon: Plus, onClick: () => { setSearchOpen(true); setMobileNavOpen(false); } },
     { label: "Run Catalog Analysis", icon: Activity, onClick: () => { onSearch?.(); } },
     { label: "Build Sync Pitch", icon: Target, onClick: () => onRunAction?.("sync-pitch", selectedTrack) },
     { label: "Package Offer", icon: BadgeDollarSign, onClick: () => onRunAction?.("package-offer", selectedTrack) },
-    { label: "Open HTML Brief", icon: FileText, onClick: () => window.open("/api/legacy-catalog-resurrection/brief.html", "_blank", "noopener,noreferrer") },
+    { label: "Open HTML Brief", icon: FileText, onClick: () => window.open(buildBriefUrl(selectedTrack), "_blank", "noopener,noreferrer") },
   ];
 
   // Play/pause global mini-player
@@ -580,12 +590,12 @@ export default function CatalogResurrectionDashboard({
         <div className="m-3 rounded-xl border border-white/5 bg-gradient-to-br from-orange-500/10 to-amber-500/5 p-3">
           <div className="text-[10px] font-black uppercase tracking-wider text-orange-300">Catalogs Under Resurrection</div>
           <div className="mt-2 flex items-end justify-between gap-2">
-            <div className="text-3xl font-black text-white">{totalTracks || 23}</div>
-            <div className="h-8 w-20"><MiniSpark data={sidebarSparkline} color="#f97316" /></div>
+            <div className="text-3xl font-black text-white">{totalTracks}</div>
+            {totalTracks > 0 && <div className="h-8 w-20"><MiniSpark data={sidebarSparkline} color="#f97316" /></div>}
           </div>
           <div className="mt-3 space-y-2">
             <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Total Matches</span><span className="font-black text-white">{matchCount || tracks.length}</span></div>
-            <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Potential Revenue</span><span className="font-black text-emerald-300">{fmtMoney(projectedAnnual || 12_400_000)}</span></div>
+            <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Modeled opportunity</span><span className="font-black text-emerald-300">{fmtMoney(projectedAnnual)}</span></div>
             <div className="h-px w-full bg-white/5" />
             <div className="flex items-center justify-between text-[11px]"><span className="text-zinc-500">Resurrection Score</span><span className="font-black text-orange-300">{score}</span></div>
           </div>
@@ -754,10 +764,11 @@ export default function CatalogResurrectionDashboard({
               <div className="text-center lg:text-left">
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[10px] font-black uppercase text-orange-300">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" />
-                  {matchCount > 0 ? `Live · ${matchCount} matches` : "Demo Mode · Sample Data"}
+                  {matchCount > 0 ? `Live · ${matchCount} matches` : "Connected · Ready to search"}
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl lg:text-4xl">Catalog Resurrection Engine</h1>
-                <p className="mt-1.5 text-xs text-zinc-400 sm:text-sm">AI-powered resurrection of dormant catalogs.</p>
+                <p className="mt-1.5 text-xs text-zinc-400 sm:text-sm">Boostify catalog matching, scoring, and rights research workflow.</p>
+                {searchError && <div role="alert" className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs text-red-200">{searchError}</div>}
                 <p className="text-xs font-bold text-zinc-300 sm:text-sm">Reimagine. Reconnect. Reignite Revenue.</p>
                 {analysis && (
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
@@ -768,9 +779,9 @@ export default function CatalogResurrectionDashboard({
 
               <div className="grid grid-cols-3 gap-3 text-center sm:gap-6">
                 {[
-                  { v: String(totalTracks || 23), l: "Tracks Found", icon: Activity },
+                  { v: String(totalTracks), l: "Tracks Found", icon: Activity },
                   { v: String(matchCount || 0), l: "Live Matches", icon: Music2 },
-                  { v: fmtMoney(projectedAnnual || 12_400_000), l: "Revenue Potential", icon: DollarSign },
+                  { v: fmtMoney(projectedAnnual), l: "Modeled Opportunity", icon: DollarSign },
                 ].map((s) => (
                   <div key={s.l} className="space-y-1">
                     <s.icon className="mx-auto h-4 w-4 text-orange-400" />
@@ -870,7 +881,8 @@ export default function CatalogResurrectionDashboard({
                   ))}
                   <button
                     onClick={() => onRunAction?.("estate-outreach", selectedTrack)}
-                    className="mt-2 flex items-center gap-1 text-[11px] font-black text-orange-300 transition hover:text-orange-200"
+                    disabled={!selectedTrack}
+                    className="mt-2 flex items-center gap-1 text-[11px] font-black text-orange-300 transition hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {pendingAction === "estate-outreach" && actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Prepare Estate Outreach <ArrowRight className="h-3 w-3" />
@@ -898,10 +910,11 @@ export default function CatalogResurrectionDashboard({
                 <div className="border-t border-white/5 p-3">
                   <button
                     onClick={() => onRunAction?.("ai-memo", selectedTrack)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] py-2 text-[11px] font-black uppercase text-zinc-200 hover:border-orange-500/40 hover:text-white"
+                    disabled={!selectedTrack}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] py-2 text-[11px] font-black uppercase text-zinc-200 hover:border-orange-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {pendingAction === "ai-memo" && actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
-                    Generate AI Memo <ArrowRight className="h-3 w-3" />
+                    Generate Catalog Memo <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
               </Panel>
@@ -916,6 +929,7 @@ export default function CatalogResurrectionDashboard({
               right={<button onClick={() => scrollTo("songs")} className="hidden items-center gap-1 text-[10px] font-black uppercase text-orange-300 sm:flex">View All Tracks <ArrowRight className="h-3 w-3" /></button>}
             >
               <div className="grid grid-cols-3 gap-3 p-3 sm:p-4">
+                {pipeline.length === 0 && <div className="col-span-3 py-8 text-center text-xs text-zinc-500">A catalog match is needed before a revival workflow can be mapped.</div>}
                 {pipeline.map((p) => (
                   <div key={p.n} className="relative flex flex-col items-center text-center">
                     <div className="relative mb-2 flex h-12 w-12 items-center justify-center rounded-full border-2 border-orange-500/30 bg-black/40 sm:h-14 sm:w-14">
@@ -942,20 +956,21 @@ export default function CatalogResurrectionDashboard({
               <div className="px-3 pt-3 sm:px-4">
                 <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
                   <div>
-                    <div className="text-[10px] font-black uppercase text-zinc-500">Total Revenue</div>
-                    <div className="text-2xl font-black text-white sm:text-3xl">{fmtMoney(projectedAnnual || 1_280_000)}</div>
-                    <div className="mt-1 flex items-center gap-1 text-[11px] font-black text-emerald-300"><TrendingUp className="h-3 w-3" /> 142% vs prior 12 months</div>
+                    <div className="text-[10px] font-black uppercase text-zinc-500">Modeled Opportunity</div>
+                    <div className="text-2xl font-black text-white sm:text-3xl">{fmtMoney(projectedAnnual)}</div>
+                    <div className="mt-1 text-[10px] text-zinc-500">Illustrative estimate from catalog match signals, not reported revenue.</div>
                   </div>
-                  <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1 text-[10px] sm:w-auto sm:grid-cols-1">
-                    <Legend dot="#22d3ee" label="Streaming" value={fmtMoney((projectedAnnual || 1_280_000) * 0.48)} />
-                    <Legend dot="#a855f7" label="Sync" value={fmtMoney((projectedAnnual || 1_280_000) * 0.24)} />
-                    <Legend dot="#22c55e" label="Merch" value={fmtMoney((projectedAnnual || 1_280_000) * 0.14)} />
-                    <Legend dot="#eab308" label="Collectibles" value={fmtMoney((projectedAnnual || 1_280_000) * 0.08)} />
-                    <Legend dot="#ec4899" label="Fan Membership" value={fmtMoney((projectedAnnual || 1_280_000) * 0.06)} />
-                  </div>
+                  {projectedAnnual > 0 && <div className="grid w-full grid-cols-2 gap-x-4 gap-y-1 text-[10px] sm:w-auto sm:grid-cols-1">
+                    <Legend dot="#22d3ee" label="Streaming" value={fmtMoney(projectedAnnual * 0.48)} />
+                    <Legend dot="#a855f7" label="Sync" value={fmtMoney(projectedAnnual * 0.24)} />
+                    <Legend dot="#22c55e" label="Merch" value={fmtMoney(projectedAnnual * 0.14)} />
+                    <Legend dot="#eab308" label="Collectibles" value={fmtMoney(projectedAnnual * 0.08)} />
+                    <Legend dot="#ec4899" label="Fan Membership" value={fmtMoney(projectedAnnual * 0.06)} />
+                  </div>}
                 </div>
               </div>
               <div className="h-52 p-3 sm:p-4">
+                {!projectedAnnual ? <div className="grid h-full place-items-center text-xs text-zinc-500">Run a catalog search to build a modeled opportunity view.</div> :
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={revenueRange === "6m" ? revenueChart.slice(-6) : revenueChart} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
@@ -968,23 +983,21 @@ export default function CatalogResurrectionDashboard({
                     <Line type="monotone" dataKey="collectibles" stroke="#eab308" strokeWidth={2} dot={false} />
                     <Line type="monotone" dataKey="fans" stroke="#ec4899" strokeWidth={2} dot={false} />
                   </LineChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer>}
               </div>
             </Panel>
 
-            <Panel id="agents" title="AI Agent Command Center" right={<button onClick={() => onRunAction?.("sync-pitch", selectedTrack)} className="hidden items-center gap-1 text-[10px] font-black uppercase text-orange-300 sm:flex">Run Pitch <ArrowRight className="h-3 w-3" /></button>}>
+            <Panel id="agents" title="Catalog Action Studio" right={<button disabled={!selectedTrack} onClick={() => onRunAction?.("sync-pitch", selectedTrack)} className="hidden items-center gap-1 text-[10px] font-black uppercase text-orange-300 disabled:opacity-40 sm:flex">Build Pitch Draft <ArrowRight className="h-3 w-3" /></button>}>
               <div className="grid grid-cols-2 gap-3 p-3 sm:p-4">
                 {agents.map((a) => {
-                  const action = a.label === "Content Agent" ? "ai-memo"
-                    : a.label === "Remix Agent" ? "package-offer"
-                    : a.label === "Marketing Agent" ? "sync-pitch"
-                    : "estate-outreach";
+                  const action = a.action;
                   const isRunning = pendingAction === action && actionLoading;
                   return (
                     <button
                       key={a.label}
                       onClick={() => onRunAction?.(action, selectedTrack)}
-                      className="rounded-xl border border-white/5 bg-black/25 p-3 text-left transition hover:border-orange-500/30 hover:bg-orange-500/5"
+                      disabled={!selectedTrack}
+                      className="rounded-xl border border-white/5 bg-black/25 p-3 text-left transition hover:border-orange-500/30 hover:bg-orange-500/5 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <div className="flex items-center gap-2">
                         <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition sm:h-9 sm:w-9 ${isRunning ? "bg-orange-500/30 shadow-[0_0_12px_rgba(249,115,22,0.3)]" : "bg-orange-500/15"}`}>
@@ -994,7 +1007,7 @@ export default function CatalogResurrectionDashboard({
                           <div className="truncate text-xs font-black text-white">{a.label}</div>
                           <div className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-300">
                             <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? "bg-orange-400 animate-pulse" : "bg-emerald-400"}`} />
-                            {isRunning ? "Running..." : "Active"}
+                            {isRunning ? "Preparing draft…" : selectedTrack ? "Ready to generate" : "Search for a track"}
                           </div>
                         </div>
                       </div>
@@ -1100,6 +1113,7 @@ export default function CatalogResurrectionDashboard({
                         ))}
                       </div>
                     )}
+                    {selectedTrack && <button onClick={() => window.open(buildBriefUrl(selectedTrack), "_blank", "noopener,noreferrer")} className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-3 py-2 text-[10px] font-black uppercase text-black hover:bg-orange-400">Open track brief <ArrowUpRight className="h-3.5 w-3.5" /></button>}
                   </div>
                 </div>
               )}

@@ -637,7 +637,7 @@ const Router = () => {
           {getRouteComponent("/sponsor/proposal/:dealId", WrappedSponsorProposalPage, null)}
           {getRouteComponent("/venue-proposal/:dealId", WrappedVenueProposalPage, null)}
           {getRouteComponent("/videoservice", WrappedVideoServicePage, null)}
-          {getRouteComponent("/legacy-catalog-resurrection", LegacyCatalogResurrectionPage, null)}
+          {getRouteComponent("/legacy-catalog-resurrection", LegacyCatalogResurrectionPage, 'free')}
           {getRouteComponent("/demotiguer", DemoTiguerPage, null)}
           {getRouteComponent("/hologram-showcase/:artistId", HologramShowcasePage, null)}
           {getRouteComponent("/motion-capture/:artistId", MotionCaptureStudioPage, null)}
