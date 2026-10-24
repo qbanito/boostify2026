@@ -59,7 +59,7 @@ export interface FanEmailPalette {
 }
 
 // Helper function to send email via Brevo
-async function sendBrevoEmail(to: string, subject: string, htmlContent: string): Promise<EmailResult> {
+async function sendBrevoEmail(to: string, subject: string, htmlContent: string, textContent?: string): Promise<EmailResult> {
   try {
     const response = await fetch(BREVO_API_URL, {
       method: 'POST',
@@ -72,7 +72,8 @@ async function sendBrevoEmail(to: string, subject: string, htmlContent: string):
         sender: { email: FROM_EMAIL, name: FROM_NAME },
         to: [{ email: to }],
         subject,
-        htmlContent
+        htmlContent,
+        ...(textContent ? { textContent } : {})
       })
     });
     
@@ -88,6 +89,16 @@ async function sendBrevoEmail(to: string, subject: string, htmlContent: string):
     console.error('❌ Brevo error:', error);
     return { success: false, error: error.message };
   }
+}
+
+/** Send a purpose-built transactional email with HTML and a plain-text fallback. */
+export async function sendTransactionalEmail(
+  to: string,
+  subject: string,
+  htmlContent: string,
+  textContent?: string
+): Promise<EmailResult> {
+  return sendBrevoEmail(to, subject, htmlContent, textContent);
 }
 
 /**
