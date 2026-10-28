@@ -74,6 +74,17 @@ async function build() {
     console.log('📋 Copying client build to dist...');
     await fs.cp('client/dist', 'dist/client', { recursive: true });
 
+    // Render's standalone static frontend serves dist/client without Express.
+    // Include only the curated studio references at their existing public URLs.
+    console.log('Copying artist studio reference images...');
+    for (const directory of ['podcast-styles', 'world-tour']) {
+      await fs.cp(
+        path.join('public', 'assets', directory),
+        path.join('dist', 'client', 'static-assets', directory),
+        { recursive: true },
+      );
+    }
+
     // Build server with esbuild
     console.log('🔨 Building server with esbuild...');
     const { stdout: serverOutput, stderr: serverError } = await execPromise(
