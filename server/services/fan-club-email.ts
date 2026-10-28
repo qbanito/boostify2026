@@ -20,6 +20,43 @@ const RESEND_FROM_EMAIL = process.env.RESEND_FANCLUB_FROM || process.env.RESEND_
 const BREVO_FROM_EMAIL = process.env.FANCLUB_FROM_EMAIL || process.env.CAMPAIGN_FROM_EMAIL || 'news@boostifymusic.com';
 const REPLY_TO_EMAIL = process.env.CAMPAIGN_REPLY_TO || 'support@boostifymusic.com';
 
+let cachedDeliveryStatus: { checkedAt: number; value: { ready: boolean; providers: string[]; configured: string[] } } | null = null;
+
+async function verifyEmailProvider(url: string, headers: Record<string, string>): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Safe provider health check; verifies credentials without sending a message. */
+export async function getFanEmailDeliveryStatus() {
+  if (cachedDeliveryStatus && Date.now() - cachedDeliveryStatus.checkedAt < 60_000) {
+    return cachedDeliveryStatus.value;
+  }
+  const checks = await Promise.all([
+    RESEND_API_KEY
+      ? verifyEmailProvider('https://api.resend.com/domains', { Authorization: `Bearer ${RESEND_API_KEY}` }).then((ok) => ({ name: 'Resend', ok }))
+      : Promise.resolve({ name: 'Resend', ok: false }),
+    BREVO_API_KEY
+      ? verifyEmailProvider('https://api.brevo.com/v3/account', { 'api-key': BREVO_API_KEY }).then((ok) => ({ name: 'Brevo', ok }))
+      : Promise.resolve({ name: 'Brevo', ok: false }),
+  ]);
+  const value = {
+    ready: checks.some((check) => check.ok),
+    providers: checks.filter((check) => check.ok).map((check) => check.name),
+    configured: checks.filter((check) => (check.name === 'Resend' ? !!RESEND_API_KEY : !!BREVO_API_KEY)).map((check) => check.name),
+  };
+  cachedDeliveryStatus = { checkedAt: Date.now(), value };
+  return value;
+}
+
 export interface FanEmailResult {
   success: boolean;
   provider?: string;

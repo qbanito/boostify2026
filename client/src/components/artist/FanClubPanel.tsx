@@ -81,6 +81,7 @@ export function FanClubPanel({ artistId, artistName, artistSlug, colors, isOwner
   });
   const [formEmail, setFormEmail] = useState('');
   const [formName, setFormName] = useState('');
+  const [emailUpdatesConsent, setEmailUpdatesConsent] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
@@ -124,6 +125,7 @@ export function FanClubPanel({ artistId, artistName, artistSlug, colors, isOwner
         email: formEmail.trim(),
         name: formName.trim() || undefined,
         artistSlug,
+        emailUpdatesConsent,
       });
     },
     onSuccess: (data: any) => {
@@ -131,7 +133,11 @@ export function FanClubPanel({ artistId, artistName, artistSlug, colors, isOwner
         const clean = formEmail.trim().toLowerCase();
         try { localStorage.setItem(storageKey, clean); } catch {}
         setEmail(clean);
-        setToast(data.alreadyMember ? "You're already in the club!" : `Welcome, you're Fan #${data.member?.fanNumber}!`);
+        setToast(data.alreadyMember
+          ? "You're already in the club!"
+          : data.welcomeEmailSent
+            ? `Welcome, you're Fan #${data.member?.fanNumber}! Check your inbox for a note from ${artistName}.`
+            : `Welcome, you're Fan #${data.member?.fanNumber}!`);
         qc.invalidateQueries({ queryKey: ['fan-club-me', artistId] });
         qc.invalidateQueries({ queryKey: ['fan-club-summary', artistId] });
       }
@@ -298,6 +304,15 @@ export function FanClubPanel({ artistId, artistName, artistSlug, colors, isOwner
               className="w-full px-4 py-3 rounded-xl bg-black/40 border text-white text-sm outline-none focus:ring-2"
               style={{ borderColor: border }}
             />
+            <label className="flex items-start gap-2.5 text-xs text-gray-300 leading-relaxed cursor-pointer">
+              <input
+                type="checkbox"
+                checked={emailUpdatesConsent}
+                onChange={(e) => setEmailUpdatesConsent(e.target.checked)}
+                className="mt-0.5 accent-orange-500"
+              />
+              <span>Email me {artistName}'s new music, show dates, and artist updates. I can unsubscribe anytime.</span>
+            </label>
             {error && <p className="text-xs text-red-400">{error}</p>}
             <button
               type="submit"
@@ -591,7 +606,13 @@ function TierBadge({ tier, label, primary, accent }: { tier: string; label: stri
 }
 
 // ─── Owner CRM studio ────────────────────────────────────────────────────────
-interface CrmAudience { contacts: number; subscribedContacts: number; members: number; reachable: number }
+interface CrmAudience {
+  contacts: number;
+  subscribedContacts: number;
+  members: number;
+  reachable: number;
+  emailDelivery?: { ready: boolean; providers: string[]; configured: string[] };
+}
 interface CrmContact { id: number; email: string; name: string | null; source: string; tags: string | null; subscribed: boolean; created_at: string; last_emailed_at: string | null }
 interface CrmCampaign {
   id: number; name: string; subject: string; message: string; audience: string; tag: string | null;
@@ -792,6 +813,16 @@ function FanCrmStudio({ artistId, artistName, primary, accent, border }: {
       {open && (
         <div className="px-4 pb-4 space-y-4">
           <p className="text-xs text-gray-400 -mt-1">Bring your own fan email list and stay in touch with warm, non-aggressive news updates. Every email includes a one-click unsubscribe.</p>
+
+          {a?.emailDelivery && (
+            <div className={`text-xs rounded-lg px-3 py-2 ${a.emailDelivery.ready ? 'text-emerald-300' : 'text-amber-200'}`} style={{ background: a.emailDelivery.ready ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)' }}>
+              {a.emailDelivery.ready
+                ? `Email API verified: ${a.emailDelivery.providers.join(' + ')}. Resend is tried first, with Brevo as fallback.`
+                : a.emailDelivery.configured.length
+                  ? `Email API keys are present, but verification failed for ${a.emailDelivery.configured.join(' + ')}. Check the server credentials before sending.`
+                  : 'Email delivery is not configured. Add RESEND_API_KEY or BREVO_API_KEY to the server environment before sending campaigns.'}
+            </div>
+          )}
 
           {note && (
             <div className={`text-xs rounded-lg px-3 py-2 ${note.ok ? 'text-emerald-300' : 'text-red-300'}`} style={{ background: note.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)' }}>

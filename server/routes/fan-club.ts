@@ -22,7 +22,7 @@ import { eq, and, count, desc, sql } from 'drizzle-orm';
 import { callAI } from '../utils/smart-ai';
 import { generatePersonality } from '../agents/personality-agent';
 import { authenticate } from '../middleware/auth';
-import { sendFanNewsEmail, buildFanNewsEmail } from '../services/fan-club-email';
+import { sendFanNewsEmail, buildFanNewsEmail, getFanEmailDeliveryStatus } from '../services/fan-club-email';
 import { loadBrandProfile } from '../services/artist-brand-profile';
 import crypto from 'crypto';
 import OpenAI from 'openai';
@@ -91,6 +91,81 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
+/** Keep Fan Club joins in the CRM; only explicit email consent enables news. */
+async function syncFanClubLead(artistId: number, email: string, name: string | null, artistSlug: string | null, emailUpdatesConsent: boolean) {
+  const now = new Date();
+  const unsubscribeToken = crypto.randomBytes(24).toString('hex');
+  const metadata = {
+    fanClubMembership: true,
+    emailMarketingConsent: emailUpdatesConsent,
+    ...(emailUpdatesConsent ? { emailMarketingConsentAt: now.toISOString(), unsubscribeToken } : {}),
+  };
+  const base = db.insert(artistFanLeads).values({
+    artistId,
+    email,
+    name,
+    artistSlug,
+    source: 'fan_club',
+    sequenceStep: 2,
+    nextEmailAt: null,
+    isUnsubscribed: !emailUpdatesConsent,
+    metadata,
+  });
+
+  if (emailUpdatesConsent) {
+    await base.onConflictDoUpdate({
+      target: [artistFanLeads.artistId, artistFanLeads.email],
+      set: {
+        name,
+        artistSlug,
+        source: 'fan_club',
+        sequenceStep: 2,
+        nextEmailAt: null,
+        isUnsubscribed: false,
+        unsubscribedAt: null,
+        metadata: sql`COALESCE(${artistFanLeads.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
+      },
+    });
+  } else {
+    // Keep an existing artist-page subscription intact, while correcting old
+    // Fan Club mirror rows that were created before explicit consent existed.
+    await base.onConflictDoUpdate({
+      target: [artistFanLeads.artistId, artistFanLeads.email],
+      set: {
+        name,
+        artistSlug,
+        metadata: sql`COALESCE(${artistFanLeads.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
+        isUnsubscribed: sql`CASE WHEN ${artistFanLeads.source} = 'fan_club' THEN TRUE ELSE ${artistFanLeads.isUnsubscribed} END`,
+        unsubscribedAt: sql`CASE WHEN ${artistFanLeads.source} = 'fan_club' THEN NOW() ELSE ${artistFanLeads.unsubscribedAt} END`,
+        nextEmailAt: sql`CASE WHEN ${artistFanLeads.source} = 'fan_club' THEN NULL ELSE ${artistFanLeads.nextEmailAt} END`,
+      },
+    });
+  }
+
+  return { unsubscribeToken, consented: emailUpdatesConsent };
+}
+
+async function sendFanClubWelcome(artistId: number, email: string, name: string | null, fanNumber: number, unsubscribeToken?: string) {
+  const meta = await getArtistCrmMeta(artistId);
+  const profileUrl = `${CRM_BASE_URL}/artist/${meta.slug}`;
+  const html = buildFanNewsEmail({
+    artistName: meta.name,
+    fanName: name || undefined,
+    headline: `You're Fan #${fanNumber} in ${meta.name}'s Fan Club`,
+    body: `Thanks for joining the Fan Club. You're officially Fan #${fanNumber}.\n\nYou'll get the latest music, show announcements, and behind-the-scenes updates from ${meta.name}.`,
+    imageUrl: meta.imageUrl,
+    ctaUrl: profileUrl,
+    ctaLabel: `Visit ${meta.name}'s profile`,
+    unsubscribeUrl: unsubscribeToken ? `${CRM_BASE_URL}/api/fan-club/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}` : undefined,
+    primaryColor: meta.primary,
+    secondaryColor: meta.secondary,
+    accentColor: meta.accent,
+    profileUrl,
+    genre: meta.genre,
+  });
+  return sendFanNewsEmail(email, `You're Fan #${fanNumber} in ${meta.name}'s Fan Club`, html, meta.name);
+}
+
 // Mask an email for public leaderboards: j***@gmail.com
 function maskEmail(email: string): string {
   const [user, domain] = email.split('@');
@@ -155,6 +230,7 @@ router.post('/:artistId/join', async (req: Request, res: Response) => {
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 80) || null : null;
     const artistSlug = typeof req.body?.artistSlug === 'string' ? req.body.artistSlug : null;
+    const emailUpdatesConsent = req.body?.emailUpdatesConsent === true;
 
     // Already a member? Return existing membership (idempotent join).
     const [existing] = await db
@@ -164,6 +240,17 @@ router.post('/:artistId/join', async (req: Request, res: Response) => {
       .limit(1);
 
     if (existing) {
+      if (emailUpdatesConsent) {
+        const [updated] = await db.update(fanClubMembers)
+          .set({
+            name: name || existing.name,
+            metadata: sql`COALESCE(${fanClubMembers.metadata}, '{}'::jsonb) || ${JSON.stringify({ emailMarketingConsent: true, emailMarketingConsentAt: new Date().toISOString() })}::jsonb`,
+          })
+          .where(eq(fanClubMembers.id, existing.id))
+          .returning();
+        if (updated) Object.assign(existing, updated);
+        await syncFanClubLead(artistId, email, name || existing.name, artistSlug || existing.artistSlug, true);
+      }
       const rank = await getRank(artistId, existing.points);
       return res.json({ success: true, alreadyMember: true, member: publicMember(existing, rank) });
     }
@@ -188,6 +275,7 @@ router.post('/:artistId/join', async (req: Request, res: Response) => {
           tier: tierForPoints(ACTION_POINTS.join).id,
           artistSlug,
           lastActiveAt: new Date(),
+          metadata: { emailMarketingConsent, ...(emailMarketingConsent ? { emailMarketingConsentAt: new Date().toISOString() } : {}) },
         })
         .returning();
     } catch (err: any) {
@@ -212,14 +300,22 @@ router.post('/:artistId/join', async (req: Request, res: Response) => {
       .onConflictDoNothing()
       .catch(() => {});
 
-    // Mirror into the existing fan-leads nurture funnel (best-effort).
-    db.insert(artistFanLeads)
-      .values({ artistId, email, name, artistSlug, source: 'fan_club' })
-      .onConflictDoNothing()
-      .catch(() => {});
+    // Persist the membership in the CRM. Only opted-in fans receive artist news.
+    let welcomeEmailSent = false;
+    try {
+      const subscription = await syncFanClubLead(artistId, email, name, artistSlug, emailUpdatesConsent);
+      if (subscription.consented) {
+        const delivery = await sendFanClubWelcome(artistId, email, name, member!.fanNumber, subscription.unsubscribeToken);
+        welcomeEmailSent = delivery.success;
+        if (!delivery.success) console.warn('[fan-club] opted-in fan welcome email failed:', delivery.error);
+      }
+    } catch (crmError) {
+      // Membership remains available if an email/CRM provider is temporarily down.
+      console.error('[fan-club] CRM sync failed after membership creation:', crmError);
+    }
 
     const rank = await getRank(artistId, member!.points);
-    return res.json({ success: true, alreadyMember: false, member: publicMember(member!, rank) });
+    return res.json({ success: true, alreadyMember: false, welcomeEmailSent, member: publicMember(member!, rank) });
   } catch (error) {
     console.error('[fan-club] join error:', error);
     return res.status(500).json({ message: 'Failed to join fan club' });
@@ -675,11 +771,18 @@ async function resolveCampaignAudience(
     } catch { /* table missing */ }
   }
 
-  // Fan Club members (people who joined on Boostify)
+  // Fan Club members who explicitly opted into artist email updates. Older
+  // Fan Club rows without consent stay in the club but are excluded here.
   if (audience === 'all' || audience === 'members') {
     try {
       const r = await cq(
-        `SELECT email, name FROM fan_club_members WHERE artist_id = $1 AND email IS NOT NULL`,
+        `SELECT m.email, m.name
+           FROM fan_club_members m
+           JOIN artist_fan_leads l ON l.artist_id = m.artist_id AND LOWER(l.email) = LOWER(m.email)
+          WHERE m.artist_id = $1
+            AND m.email IS NOT NULL
+            AND l.is_unsubscribed = FALSE
+            AND (COALESCE(l.source, 'artist_page') <> 'fan_club' OR l.metadata->>'emailMarketingConsent' = 'true')`,
         [artistId],
       );
       for (const row of r.rows) {
@@ -718,6 +821,7 @@ router.get('/:artistId(\\d+)/crm/audience', authenticate, async (req: Request, r
     subscribedContacts: Number(contacts?.subscribed || 0),
     members,
     reachable,
+    emailDelivery: await getFanEmailDeliveryStatus(),
   });
 });
 
@@ -916,6 +1020,10 @@ router.post('/:artistId(\\d+)/crm/campaigns/:campaignId(\\d+)/send', authenticat
   const user = (req as any).user;
   if (!(await isOwnerOrAdmin(user, artistId))) return res.status(403).json({ error: 'Forbidden' });
 
+  if (!(await getFanEmailDeliveryStatus()).ready) {
+    return res.status(503).json({ error: 'Fan Club email delivery is not configured. Set RESEND_API_KEY or BREVO_API_KEY on the server.' });
+  }
+
   const cRes = await cq(
     `SELECT * FROM fan_club_campaigns WHERE id = $1 AND artist_id = $2`,
     [campaignId, artistId],
@@ -932,7 +1040,8 @@ router.post('/:artistId(\\d+)/crm/campaigns/:campaignId(\\d+)/send', authenticat
   const meta = await getArtistCrmMeta(artistId);
   const profileUrl = `${CRM_BASE_URL}/artist/${meta.slug}`;
 
-  // Map contact emails → unsubscribe tokens (only contacts can unsubscribe; members manage via the club)
+  // Every message gets a one-click unsubscribe token, whether the recipient
+  // entered through imported contacts or the Fan Club join form.
   const tokenMap = new Map<string, string>();
   try {
     const tRes = await cq(
@@ -941,6 +1050,34 @@ router.post('/:artistId(\\d+)/crm/campaigns/:campaignId(\\d+)/send', authenticat
     );
     for (const row of tRes.rows) if (row.unsubscribe_token) tokenMap.set(row.email, row.unsubscribe_token);
   } catch { /* ignore */ }
+  try {
+    const fanEmails = recipients.map((recipient) => recipient.email.toLowerCase());
+    const tRes = await cq(
+      `SELECT LOWER(email) AS email, metadata->>'unsubscribeToken' AS unsubscribe_token
+         FROM artist_fan_leads WHERE artist_id = $1 AND LOWER(email) = ANY($2::text[])`,
+      [artistId, fanEmails],
+    );
+    for (const row of tRes.rows) if (row.unsubscribe_token) tokenMap.set(row.email, row.unsubscribe_token);
+  } catch { /* fallback tokens are created below */ }
+  for (const recipient of recipients) {
+    const emailKey = recipient.email.toLowerCase();
+    if (tokenMap.has(emailKey)) continue;
+    const token = crypto.randomBytes(24).toString('hex');
+    const contactUpdate = await cq(
+      `UPDATE fan_club_contacts SET unsubscribe_token = $3
+        WHERE artist_id = $1 AND LOWER(email) = $2 RETURNING email`,
+      [artistId, emailKey, token],
+    ).catch(() => ({ rows: [] as any[] }));
+    if (contactUpdate.rows.length) {
+      tokenMap.set(emailKey, token);
+      continue;
+    }
+    const updated = await db.update(artistFanLeads)
+      .set({ metadata: sql`COALESCE(${artistFanLeads.metadata}, '{}'::jsonb) || ${JSON.stringify({ unsubscribeToken: token })}::jsonb` })
+      .where(and(eq(artistFanLeads.artistId, artistId), sql`LOWER(${artistFanLeads.email}) = ${emailKey}`))
+      .returning({ email: artistFanLeads.email });
+    if (updated.length) tokenMap.set(emailKey, token);
+  }
 
   await cq(`UPDATE fan_club_campaigns SET status = 'sending', updated_at = NOW() WHERE id = $1`, [campaignId]).catch(() => {});
   await cq(`DELETE FROM fan_club_campaign_recipients WHERE campaign_id = $1`, [campaignId]).catch(() => {});
@@ -1006,10 +1143,25 @@ router.get('/unsubscribe', async (req: Request, res: Response) => {
   }
   try {
     const r = await cq(
-      `UPDATE fan_club_contacts SET subscribed = FALSE WHERE unsubscribe_token = $1 RETURNING email`,
+      `UPDATE fan_club_contacts SET subscribed = FALSE WHERE unsubscribe_token = $1 RETURNING artist_id, email`,
       [token],
     );
-    if (r.rows[0]) {
+    const lead = await db.update(artistFanLeads)
+      .set({ isUnsubscribed: true, unsubscribedAt: new Date(), nextEmailAt: null })
+      .where(sql`${artistFanLeads.metadata}->>'unsubscribeToken' = ${token}`)
+      .returning({ artistId: artistFanLeads.artistId, email: artistFanLeads.email });
+    for (const row of r.rows) {
+      await db.update(artistFanLeads)
+        .set({ isUnsubscribed: true, unsubscribedAt: new Date(), nextEmailAt: null })
+        .where(and(eq(artistFanLeads.artistId, Number(row.artist_id)), sql`LOWER(${artistFanLeads.email}) = ${String(row.email).toLowerCase()}`));
+    }
+    for (const row of lead) {
+      await cq(
+        `UPDATE fan_club_contacts SET subscribed = FALSE WHERE artist_id = $1 AND LOWER(email) = $2`,
+        [row.artistId, row.email.toLowerCase()],
+      );
+    }
+    if (r.rows[0] || lead.length) {
       return res.send(html('You\'re unsubscribed', 'You won\'t receive any more fan news emails. We\'re sad to see you go — you can always rejoin from the artist\'s page.'));
     }
     return res.status(404).send(html('Link not found', 'This unsubscribe link is no longer valid.'));
