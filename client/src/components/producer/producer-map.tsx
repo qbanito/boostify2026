@@ -22,6 +22,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import GigCreditsDashboard from "./gig-credits-dashboard";
 import { calculateApplicationCost } from "../../../../shared/gig-credit-pricing";
+import { CARTO_API_KEY, withCartoApiKey } from "../../lib/map-tiles";
 
 // ── Instrument icon SVGs for map markers ──
 const INSTRUMENT_SVGS: Record<string, { svg: string; gradient: string; emoji: string }> = {
@@ -125,7 +126,6 @@ const MAP_STYLES: Record<string, MapStyleDef> = {
   },
 };
 const MAP_STYLE_KEY = "boostify_producer_map_style";
-const CARTO_API_KEY = import.meta.env.CARTO_API_KEY?.trim();
 // Start with a keyless, independent basemap every session. CARTO remains an
 // optional style, never a dependency for opening the map.
 const DEFAULT_MAP_STYLE = "streets";
@@ -136,11 +136,6 @@ const resolveMapStyle = (styleKey: string) => {
   const style = MAP_STYLES[styleKey];
   return style && isStyleAvailable(style) ? styleKey : DEFAULT_MAP_STYLE;
 };
-const withCartoApiKey = (url: string) => {
-  if (!CARTO_API_KEY || !url.includes("basemaps.cartocdn.com")) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(CARTO_API_KEY)}`;
-};
-
 // ── Create Leaflet divIcon per instrument ──
 function makeInstrumentMarker(instrument: string, isRequest: boolean, sizeFactor = 1) {
   const info = getInstrumentIcon(instrument);

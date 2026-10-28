@@ -27,6 +27,14 @@ import {
 import { Link } from "wouter";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import {
+  CARTO_API_KEY,
+  CARTO_ATTRIBUTION,
+  CARTO_DARK_TILE_URL,
+  OPEN_STREET_MAP_ATTRIBUTION,
+  OPEN_STREET_MAP_TILE_URL,
+  withCartoApiKey,
+} from "../../lib/map-tiles";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ArtistService {
@@ -102,6 +110,7 @@ export function LiveMapServices({ artistId, artistName, artistImage, colors, isO
 
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const fullscreenRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -189,16 +198,37 @@ export function LiveMapServices({ artistId, artistName, artistImage, colors, isO
       center: [25, -30],
       zoom: 2,
       zoomControl: true,
-      attributionControl: false,
+      attributionControl: true,
       scrollWheelZoom: false, // avoid page-scroll hijack inside profile; enabled in fullscreen
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd", maxZoom: 19,
-    }).addTo(map);
+
+    // Reuse the same CARTO key as Producer Tools. If no key is configured or
+    // CARTO rejects it, keep the profile map working with keyless OSM tiles.
+    const usingCarto = Boolean(CARTO_API_KEY);
+    const initialTiles = L.tileLayer(
+      usingCarto ? withCartoApiKey(CARTO_DARK_TILE_URL) : OPEN_STREET_MAP_TILE_URL,
+      {
+        attribution: usingCarto ? CARTO_ATTRIBUTION : OPEN_STREET_MAP_ATTRIBUTION,
+        subdomains: usingCarto ? "abcd" : "abc",
+        maxZoom: 19,
+      },
+    );
+    let fallbackApplied = false;
+    initialTiles.on("tileerror", () => {
+      if (!usingCarto || fallbackApplied || !mapRef.current) return;
+      fallbackApplied = true;
+      map.removeLayer(initialTiles);
+      tileLayerRef.current = L.tileLayer(OPEN_STREET_MAP_TILE_URL, {
+        attribution: OPEN_STREET_MAP_ATTRIBUTION,
+        subdomains: "abc",
+        maxZoom: 19,
+      }).addTo(map);
+    });
+    tileLayerRef.current = initialTiles.addTo(map);
     map.getContainer().style.background = "#16181d";
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; markersRef.current = null; };
+    return () => { map.remove(); mapRef.current = null; tileLayerRef.current = null; markersRef.current = null; };
   }, []);
 
   // ─── Markers ────────────────────────────────────────────────────────────
