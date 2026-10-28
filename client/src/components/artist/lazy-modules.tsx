@@ -123,6 +123,12 @@ export const DiscordFanNation = withLazy(
 export const ArtistPromoClipsModule = withLazy("promo-clips", () =>
   import("./promo-clips/ArtistPromoClipsModule"),
 );
+export const ArtistPodcastClipsModule = withLazy("podcast-clips", () =>
+  import("./podcast-clips/PodcastClipsModule"),
+);
+export const ArtistWorldTourModule = withLazy("world-tour", () =>
+  import("./world-tour/WorldTourModule"),
+);
 
 /* ----------------------------- Agents / AAS ---------------------------- */
 export const HermesAgentPanel = withLazy(

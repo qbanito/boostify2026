@@ -861,6 +861,8 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   console.log('🌐 Crypto Community routes registered at /api/crypto-community');
 
   app.use('/api/podcast-studio', podcastStudioRouter); // Live Podcast Studio (sessions, participants, destinations)
+  app.use('/api/podcast-clips', (await import('./routes/podcast-clips')).default); // AI artist podcast clips
+  app.use('/api/world-tour', (await import('./routes/world-tour')).default); // Artist concert storyboards and live-show videos
 
   // Audience Capture Engine — hooks, scoring, profiles, experiments, daily plans
   app.use('/api/audience-capture', audienceCaptureRouter);

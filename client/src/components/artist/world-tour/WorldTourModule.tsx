@@ -1,0 +1,151 @@
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, Check, CircleDollarSign, Globe2, ImagePlus, LoaderCircle, MapPin, Mic2, Music2, Play, Plus, RotateCcw, ShieldCheck, Sparkles, Users, WandSparkles } from 'lucide-react';
+import { useToast } from '../../../hooks/use-toast';
+import { WORLD_TOUR_DESTINATIONS as DESTINATIONS, WORLD_TOUR_SHOTS as SHOTS, WORLD_TOUR_HERO_INDEX as HERO, worldTourShotReference,
+  type TourProject, type TourSong, type TourPublicShow } from '../../../../../shared/world-tour';
+
+type Props = { artistId: number; artistName: string; artistProfileImage?: string; isOwner?: boolean };
+type Quote = { image: number; storyboard: number; remaining: number; video: number; precisionVideo: number };
+type Context = { songs: TourSong[]; faceImages: string[]; quote: Quote; projects: Array<{ id: string; destinationId: string; songTitle: string; readyFrames: number }> };
+const api = '/api/world-tour';
+
+async function json<T>(url: string, body?: unknown, method = 'POST'): Promise<T> {
+  const response = await fetch(url, { method: body === undefined ? 'GET' : method, credentials: 'include',
+    ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
+  const payload = await response.json();
+  if (!response.ok || payload.success === false) throw new Error(payload.error || 'World Tour Studio could not finish this request.');
+  return payload;
+}
+const credits = (value?: number) => value === undefined ? '...' : value.toLocaleString('en-US');
+const pending = (project?: TourProject) => !!project && (project.frames.some((frame) => frame.status === 'QUEUED') || project.renders.some((render) => !['COMPLETED', 'FAILED'].includes(render.status)));
+const field = 'w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-lime-200/50 focus:ring-2 focus:ring-lime-200/10';
+const primary = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#d6fa6e] px-4 py-2.5 text-xs font-bold text-[#171c0f] transition hover:bg-lime-100 disabled:cursor-not-allowed disabled:opacity-35';
+const secondary = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.035] px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
+
+function TourCreator({ artistId, artistName, artistProfileImage }: Props) {
+  const { toast } = useToast(); const queryClient = useQueryClient();
+  const contextKey = `${api}/artists/${artistId}/context`;
+  const { data: context, isLoading, error, refetch } = useQuery<Context>({ queryKey: [contextKey], queryFn: () => json(contextKey), staleTime: 30_000 });
+  const [projectId, setProjectId] = useState(() => { try { return localStorage.getItem(`world-tour:${artistId}`) || ''; } catch { return ''; } });
+  const [destinationId, setDestinationId] = useState(DESTINATIONS[0].id);
+  const [songId, setSongId] = useState(''); const [faceUrl, setFaceUrl] = useState('');
+  const [clipStart, setClipStart] = useState(0); const [look, setLook] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('16:9'); const [search, setSearch] = useState('');
+  const [busy, setBusy] = useState(''); const [selectedFrame, setSelectedFrame] = useState(HERO);
+  const [promptEdits, setPromptEdits] = useState<Record<number, string>>({});
+  const [videoPrompt, setVideoPrompt] = useState(''); const [precisionSync, setPrecisionSync] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null); const uploadRef = useRef<HTMLInputElement>(null);
+  const projectKey = `${api}/projects/${projectId}`;
+  const { data: projectData, error: projectError, refetch: refreshProject } = useQuery<{ project: TourProject }>({
+    queryKey: [projectKey], queryFn: () => json(projectKey), enabled: !!projectId, staleTime: 0,
+    refetchInterval: (query) => pending((query.state.data as { project?: TourProject } | undefined)?.project) ? 5000 : false,
+  });
+  const project = projectData?.project;
+  const activeDestination = DESTINATIONS.find((item) => item.id === (project?.destinationId || destinationId)) || DESTINATIONS[0];
+  const song = context?.songs.find((item) => item.id === songId);
+  const hero = project?.frames[HERO];
+  const currentFrame = project?.frames[selectedFrame];
+  const approved = project?.frames.filter((frame) => frame.approved).length || 0;
+  const currentAnchor = hero?.operationId;
+  const renderBusy = !!project?.renders.some((render) => !['COMPLETED', 'FAILED'].includes(render.status));
+  const remaining = project?.frames.filter((frame) => frame.index !== HERO && (frame.status !== 'READY' || frame.anchorOperationId !== currentAnchor)).map((frame) => frame.index) || [];
+  const filteredDestinations = DESTINATIONS.filter((item) => `${item.city} ${item.country} ${item.venue}`.toLowerCase().includes(search.toLowerCase()));
+
+  useEffect(() => { if (context && !songId) setSongId(context.songs.find((item) => item.isSingle)?.id || context.songs[0]?.id || ''); if (context && !faceUrl) setFaceUrl(context.faceImages[0] || ''); }, [context, songId, faceUrl]);
+  useEffect(() => { try { if (projectId) localStorage.setItem(`world-tour:${artistId}`, projectId); else localStorage.removeItem(`world-tour:${artistId}`); } catch {} setPromptEdits({}); setSelectedFrame(HERO); }, [artistId, projectId]);
+  useEffect(() => { if (project) setVideoPrompt(project.videoPrompt); }, [project?.id, project?.videoPrompt]);
+  useEffect(() => {
+    if (project?.renders[0]?.status === 'COMPLETED') queryClient.invalidateQueries({ queryKey: [`${api}/artists/${artistId}/shows`] });
+  }, [artistId, project?.renders[0]?.id, project?.renders[0]?.status, queryClient]);
+
+  async function act(label: string, action: () => Promise<any>) {
+    if (busy) return;
+    setBusy(label);
+    try {
+      const result = await action();
+      if (result?.project) { setProjectId(result.project.id); queryClient.setQueryData([`${api}/projects/${result.project.id}`], result); }
+      queryClient.invalidateQueries({ queryKey: [contextKey] });
+    } catch (err: any) { toast({ title: 'World Tour Studio', description: err.message || 'Please try again.', variant: 'destructive' }); }
+    finally { setBusy(''); }
+  }
+  const createProject = () => act('planning', () => json(`${api}/projects`, { artistId, destinationId, songId, faceUrl, clipStart, lookDirection: look, aspectRatio }));
+  const generateFrames = (indices: number[]) => act('frames', () => json(`${api}/projects/${projectId}/frames`, { requestKey: crypto.randomUUID(), indices, prompts: promptEdits }));
+  const approve = (indices: number[]) => act('approval', () => json(`${api}/projects/${projectId}/approval`, { indices }, 'PATCH'));
+  const render = () => act('render', () => json(`${api}/projects/${projectId}/render`, { requestKey: crypto.randomUUID(), precisionSync }));
+  const uploadFace = (file?: File) => file && act('upload', async () => {
+    const form = new FormData(); form.append('image', file);
+    const response = await fetch(`${api}/artists/${artistId}/reference`, { method: 'POST', credentials: 'include', body: form });
+    const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not upload the photograph.');
+    setFaceUrl(result.url); await refetch(); return result;
+  });
+
+  return <section aria-label="World Tour Studio" className="relative isolate overflow-hidden rounded-[28px] border border-white/10 bg-[#090c0e] text-white shadow-[0_30px_90px_rgba(0,0,0,.35)]">
+    <div className="pointer-events-none absolute -right-24 -top-32 -z-10 h-96 w-96 rounded-full bg-lime-300/10 blur-[110px]" aria-hidden />
+    <header className="relative overflow-hidden border-b border-white/10 p-5 sm:p-8">
+      <img src={activeDestination.image} alt="" aria-hidden className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-20" />
+      <svg className="pointer-events-none absolute -right-14 top-0 h-full w-2/3 text-lime-100/[0.045]" viewBox="0 0 360 240" fill="none" aria-hidden><circle cx="190" cy="120" r="105" stroke="currentColor" /><ellipse cx="190" cy="120" rx="55" ry="105" stroke="currentColor" /><ellipse cx="190" cy="120" rx="105" ry="40" stroke="currentColor" /><path d="M85 120h210M190 15v210M100 68q90 55 180 0M100 174q90-55 180 0" stroke="currentColor" /><path d="M110 170Q145 25 272 75T215 205" stroke="currentColor" strokeWidth="2" strokeDasharray="4 6" /></svg>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-lime-100/75"><Globe2 className="h-4 w-4" /> Boostify / World Tour Studio</span><span className="rounded-full border border-lime-200/15 bg-lime-200/[0.04] px-3 py-1 text-[10px] text-lime-100/65">20 destinations · 9 frames · 15 seconds</span></div>
+      <h2 className="max-w-xl text-3xl font-semibold leading-[1.05] tracking-[-.045em] sm:text-[42px]">Your music.<br /><span className="text-[#d6fa6e]">A world-sized stage.</span></h2>
+      <p className="mt-4 max-w-lg text-sm leading-6 text-white/50">Build an unforgettable live moment around your song. Lock your look, direct nine camera angles, then bring the concert to life.</p>
+      <div className="mt-5 flex flex-wrap gap-2">{['Your face, your style', 'Original song', 'Crowd + live band'].map((text) => <span key={text} className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] text-white/55">{text}</span>)}</div>
+    </header>
+
+    <div className="space-y-6 p-5 sm:p-8">
+      {isLoading && <p className="flex items-center gap-2 text-sm text-white/50"><LoaderCircle className="h-4 w-4 animate-spin" /> Connecting your artist catalog...</p>}
+      {error && <div role="alert" className="rounded-xl bg-red-300/5 p-4 text-sm text-red-200">{error.message} <button onClick={() => refetch()} className="ml-2 underline">Try again</button></div>}
+      {context && <>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><div className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-white/5">{artistProfileImage ? <img src={artistProfileImage} alt="" className="h-full w-full object-cover" /> : <Mic2 className="h-4 w-4" />}</div><div><p className="text-xs font-semibold">{artistName}</p><p className="text-[10px] text-white/40">{context.songs.length} tracks connected</p></div></div><button className={secondary} type="button" onClick={() => setProjectId('')}><Plus className="h-3.5 w-3.5" /> New show</button></div>
+        {context.projects.length > 0 && <div><label htmlFor={`tour-session-${artistId}`} className="mb-2 block text-[11px] text-white/50">Saved tour boards</label><select id={`tour-session-${artistId}`} value={projectId} onChange={(event) => setProjectId(event.target.value)} className={field}><option value="">Plan a new concert</option>{context.projects.map((item) => <option key={item.id} value={item.id}>{DESTINATIONS.find((place) => place.id === item.destinationId)?.city} / {item.songTitle} / {item.readyFrames}/9 frames</option>)}</select></div>}
+
+        {!projectId && <>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5"><p className="mb-4 text-[10px] font-semibold uppercase tracking-[.22em] text-lime-100/50">01 / The soundtrack & identity</p>
+            <label htmlFor={`tour-song-${artistId}`} className="mb-2 block text-xs text-white/70">Choose your single or a track</label><select id={`tour-song-${artistId}`} value={songId} onChange={(event) => { setSongId(event.target.value); setClipStart(0); }} className={field}><option value="">Choose a song</option>{context.songs.map((item) => <option key={item.id} value={item.id}>{item.isSingle ? '★ Single · ' : ''}{item.title}</option>)}</select>
+            {!context.songs.length && <p className="mt-2 text-xs text-amber-200/80">Upload a song to your artist profile before planning a concert.</p>}
+            {song && <><div className="mt-4 flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs text-white/55">Start at<input type="number" aria-label="Song excerpt start time" min="0" max="7200" step="0.5" value={clipStart} onChange={(event) => setClipStart(Math.max(0, Number(event.target.value) || 0))} className="w-20 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-white" /> seconds</label><span className="text-[10px] text-white/35">15-second excerpt · short tracks loop</span></div><audio ref={audioRef} src={song.audioUrl} controls preload="metadata" aria-label="Preview your song excerpt" onPlay={() => { if (audioRef.current && (audioRef.current.currentTime < clipStart || audioRef.current.currentTime >= clipStart + 15)) audioRef.current.currentTime = clipStart; }} onTimeUpdate={() => { if (audioRef.current && audioRef.current.currentTime >= clipStart + 15) audioRef.current.pause(); }} className="mt-3 h-9 w-full" /></>}
+            <div className="mt-5 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,220px),1fr))' }}><div><label htmlFor={`tour-face-${artistId}`} className="mb-2 block text-xs text-white/70">Artist face reference</label><div className="flex gap-2">{faceUrl && <img src={faceUrl} alt="Selected artist face reference" className="h-11 w-11 rounded-xl object-cover" />}<select id={`tour-face-${artistId}`} value={faceUrl} onChange={(event) => setFaceUrl(event.target.value)} className={field}><option value="">Choose a clear portrait</option>{context.faceImages.map((url, index) => <option key={url} value={url}>Artist reference {index + 1}</option>)}</select></div><input ref={uploadRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => uploadFace(event.target.files?.[0])} /><button type="button" disabled={!!busy} onClick={() => uploadRef.current?.click()} className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-lime-100/75"><ImagePlus className="h-3.5 w-3.5" />{busy === 'upload' ? 'Uploading...' : 'Add a reference photo'}</button></div><div><label htmlFor={`tour-format-${artistId}`} className="mb-2 block text-xs text-white/70">Concert format</label><select id={`tour-format-${artistId}`} value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value)} className={field}><option value="16:9">Cinematic / 16:9</option><option value="9:16">Social / 9:16</option></select></div></div>
+            <label htmlFor={`tour-look-${artistId}`} className="mb-2 mt-4 block text-xs text-white/70">Performance look & mood <span className="text-white/30">(optional)</span></label><textarea id={`tour-look-${artistId}`} maxLength={700} value={look} onChange={(event) => setLook(event.target.value)} placeholder="Keep my signature look. Warm stage lights, an emotional chorus, confident movement..." className={`${field} min-h-24 resize-y`} />
+          </div>
+
+          <div><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[.22em] text-lime-100/50">02 / Choose your world</p><h3 className="mt-1 text-lg font-semibold">Where does the crowd find you?</h3></div><input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search concert destinations" placeholder="Find a city or country" className={`${field} max-w-[210px] text-xs`} /></div><div className="grid max-h-[390px] gap-2.5 overflow-y-auto p-1" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,145px),1fr))' }}>{filteredDestinations.map((item) => <button key={item.id} type="button" aria-label={`Select ${item.city}, ${item.country}`} aria-pressed={destinationId === item.id} onClick={() => setDestinationId(item.id)} className={`relative overflow-hidden rounded-2xl border p-3.5 text-left transition ${destinationId === item.id ? 'border-lime-200/60 bg-lime-200/[0.07]' : 'border-white/[0.08] bg-white/[0.02] hover:border-white/25'}`}><img src={item.image} alt="" aria-hidden loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-60" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/10" /><div className="relative"><div className="mb-3 flex items-center justify-between"><span className="text-[10px] font-bold tracking-[.18em]" style={{ color: item.color }}>{item.code}</span>{destinationId === item.id ? <Check className="h-3.5 w-3.5 text-lime-200" /> : <MapPin className="h-3.5 w-3.5 text-white/20" />}</div><p className="text-sm font-semibold">{item.city}</p><p className="mt-1 text-[10px] text-white/40">{item.country}</p><p className="mt-3 text-[10px] text-white/60">{item.venue}</p></div></button>)}</div>{!filteredDestinations.length && <p className="py-5 text-xs text-white/45">No destinations match that search.</p>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-lime-200/10 bg-lime-200/[0.025] p-4"><div><p className="text-sm font-medium">{activeDestination.city} is calling.</p><p className="mt-1 text-xs text-white/45">Create the prompts first. Planning is free.</p></div><button type="button" disabled={!!busy || !songId || !faceUrl} onClick={createProject} className={primary}>{busy === 'planning' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Create my tour board</button></div>
+        </>}
+
+        {projectId && !project && !projectError && <p className="flex items-center gap-2 text-sm text-white/50"><LoaderCircle className="h-4 w-4 animate-spin" /> Opening your tour board...</p>}
+        {projectError && <div role="alert" className="text-sm text-red-200">{projectError.message}<button className="ml-3 underline" onClick={() => refreshProject()}>Try again</button></div>}
+        {project && <>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div><span className="text-[10px] uppercase tracking-[.18em] text-lime-100/60">{activeDestination.country} / {activeDestination.venue}</span><h3 className="mt-1 text-xl font-semibold">{activeDestination.city}</h3><p className="mt-1 flex items-center gap-1.5 text-xs text-white/45"><Music2 className="h-3 w-3" />{project.song.title} · {project.clipStart}s–{project.clipStart + 15}s · {project.aspectRatio}</p></div><span className="rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-white/50">{approved}/9 approved</span></div>
+          <div><div className="mb-4"><p className="text-[10px] uppercase tracking-[.22em] text-lime-100/50">03 / Your nine-camera story</p><h3 className="mt-1 text-lg font-semibold">Every angle tells the same story.</h3><p className="mt-2 text-xs leading-5 text-white/45">The reference photos demonstrate each camera angle. Generate your artist close-up, approve the look, then create the other eight personalized shots.</p></div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">{project.frames.map((frame, index) => <button key={index} type="button" aria-label={`Review frame ${index + 1}: ${SHOTS[index].name}`} aria-pressed={selectedFrame === index} onClick={() => setSelectedFrame(index)} className={`group relative aspect-[4/3] overflow-hidden rounded-xl border bg-white/[0.025] text-left ${selectedFrame === index ? 'border-lime-200/70 ring-1 ring-lime-200/30' : 'border-white/10'}`}><img src={frame.imageUrl || worldTourShotReference(index)} alt={frame.imageUrl ? `Concert storyboard frame ${index + 1}: ${SHOTS[index].name}` : `Camera reference ${index + 1}: ${SHOTS[index].name}`} className={`h-full w-full object-cover ${frame.imageUrl ? "" : "opacity-70"}`} /><div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/20" /><span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[9px] text-white/70">{String(index + 1).padStart(2, '0')}{index === HERO ? ' / ANCHOR' : ''}{!frame.imageUrl ? ' / REFERENCE' : ''}</span><span className="absolute right-2 top-2">{frame.status === 'QUEUED' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin text-lime-200" /> : frame.approved ? <Check className="h-3.5 w-3.5 text-lime-200" /> : null}</span><div className="absolute bottom-2 left-2 right-2"><p className="truncate text-[10px] font-medium sm:text-xs">{SHOTS[index].name}</p><p className="mt-0.5 hidden text-[9px] text-white/40 sm:block">{SHOTS[index].camera} · {SHOTS[index].start}–{SHOTS[index].end}s</p></div></button>)}</div>
+          </div>
+          {currentFrame && <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 sm:p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-[.2em] text-lime-100/50">Frame {selectedFrame + 1} / {SHOTS[selectedFrame].camera}</p><h4 className="mt-1 text-base font-semibold">{SHOTS[selectedFrame].name}</h4></div>{currentFrame.approved && <span className="flex items-center gap-1 text-[10px] text-lime-200"><ShieldCheck className="h-3.5 w-3.5" /> Approved</span>}</div>
+            {currentFrame.error && <p role="alert" className="mt-3 text-xs leading-5 text-amber-100/75">{currentFrame.error}</p>}
+            {selectedFrame !== HERO && currentFrame.imageUrl && currentFrame.anchorOperationId !== currentAnchor && <p className="mt-3 text-xs text-amber-200/80">The artist anchor changed. Regenerate this frame to match the new look.</p>}
+            <details className="mt-4"><summary className="cursor-pointer text-xs text-white/50">Review or edit the shot prompt</summary><textarea aria-label={`Prompt for frame ${selectedFrame + 1}`} value={promptEdits[selectedFrame] ?? currentFrame.prompt} onChange={(event) => setPromptEdits((old) => ({ ...old, [selectedFrame]: event.target.value }))} maxLength={6000} className={`${field} mt-3 min-h-44 resize-y text-xs leading-5`} /><p className="mt-2 text-[10px] text-white/35">Prompt changes apply when this frame is generated again.</p></details>
+            <div className="mt-4 flex flex-wrap gap-2"><button className={primary} type="button" onClick={() => generateFrames([selectedFrame])} disabled={!!busy || renderBusy || currentFrame.status === 'QUEUED' || (selectedFrame !== HERO && !hero?.approved)}>{currentFrame.status === 'QUEUED' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : currentFrame.imageUrl ? <RotateCcw className="h-3.5 w-3.5" /> : <WandSparkles className="h-3.5 w-3.5" />}{currentFrame.status === 'QUEUED' ? 'Generating...' : `${currentFrame.imageUrl ? 'Regenerate frame' : selectedFrame === HERO ? 'Generate artist anchor' : 'Generate frame'} · ${credits(context.quote.image)} credits`}</button><button className={secondary} type="button" onClick={() => approve([selectedFrame])} disabled={!!busy || currentFrame.status !== 'READY' || currentFrame.approved || (selectedFrame !== HERO && currentFrame.anchorOperationId !== currentAnchor)}><Check className="h-3.5 w-3.5" />Approve this frame</button>{currentFrame.imageUrl && <a className={secondary} href={currentFrame.imageUrl} target="_blank" rel="noreferrer">View full image</a>}</div>
+          </div>}
+          <div className="flex flex-wrap items-center justify-between gap-3"><button className={secondary} type="button" onClick={() => generateFrames(remaining)} disabled={!!busy || !hero?.approved || !remaining.length || pending(project)}><Sparkles className="h-3.5 w-3.5" />Generate {remaining.length || 8} remaining shots · {credits(context.quote.image * (remaining.length || 8))} credits</button><button className={secondary} type="button" onClick={() => approve(project.frames.filter((frame) => frame.status === 'READY' && frame.anchorOperationId === currentAnchor && !frame.approved).map((frame) => frame.index))} disabled={!!busy || !project.frames.some((frame) => frame.status === 'READY' && frame.anchorOperationId === currentAnchor && !frame.approved)}><Check className="h-3.5 w-3.5" />Approve ready frames</button></div>
+          <div className="rounded-2xl border border-lime-200/15 bg-lime-200/[0.03] p-4 sm:p-5"><p className="text-[10px] uppercase tracking-[.22em] text-lime-100/50">04 / Bring the house down</p><h3 className="mt-2 text-lg font-semibold">Make it a live moment.</h3><p className="mt-2 text-xs leading-5 text-white/50">Wan 3.0 follows your nine images and song excerpt. The final mix keeps your original song with subtle concert ambience.</p><label className="mt-4 flex items-start gap-3 rounded-xl border border-white/10 p-3 text-xs"><input type="checkbox" checked={precisionSync} onChange={(event) => setPrecisionSync(event.target.checked)} disabled={renderBusy} className="mt-0.5 accent-lime-200" /><span><span className="font-medium">Precision vocal sync</span><span className="mt-1 block leading-5 text-white/40">Refine the singer's lip movement using the artist face reference. Adds a separate processing stage.</span></span></label>
+            <details className="mt-4"><summary className="cursor-pointer text-xs text-white/50">Concert direction & camera sequence</summary><textarea aria-label="Concert video direction" value={videoPrompt} onChange={(event) => setVideoPrompt(event.target.value)} maxLength={12000} className={`${field} mt-3 min-h-48 resize-y text-xs leading-5`} /><button type="button" className={`${secondary} mt-2`} disabled={!!busy || renderBusy} onClick={() => act('direction', () => json(`${api}/projects/${projectId}/approval`, { indices: [], videoPrompt }, 'PATCH'))}>Save direction</button></details>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><span className="flex items-center gap-2 text-[11px] text-white/50"><CircleDollarSign className="h-4 w-4 text-lime-200/70" />{credits(precisionSync ? context.quote.precisionVideo : context.quote.video)} credits · 15s · 720p</span><button type="button" className={primary} onClick={render} disabled={!!busy || renderBusy || approved !== 9}>{renderBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}{renderBusy ? 'Your show is in production' : 'Generate my concert'}</button></div>{approved !== 9 && <p className="mt-3 text-[10px] text-white/35">Approve all nine frames to unlock the concert render.</p>}
+          </div>
+          {project.renders.map((item) => <div key={item.id} className="rounded-2xl border border-white/10 bg-black/20 p-4" aria-live="polite"><p className="flex items-center gap-2 text-sm font-medium">{item.status === 'COMPLETED' ? <Check className="h-4 w-4 text-lime-200" /> : item.status === 'FAILED' ? <RotateCcw className="h-4 w-4 text-amber-200" /> : <LoaderCircle className="h-4 w-4 animate-spin text-lime-200" />}{item.status === 'COMPLETED' ? 'Your show is ready' : item.status === 'SYNCING' ? 'Refining the vocal performance' : item.status === 'FINALIZING' ? 'Mixing your original song' : item.status === 'FAILED' ? 'This render could not finish' : 'Creating your live concert'}</p>{item.error && <p className="mt-2 text-xs leading-5 text-amber-100/70">{item.error}</p>}{item.videoUrl && <><video controls playsInline src={item.videoUrl} className="mt-4 max-h-[480px] w-full rounded-xl bg-black" /><a href={item.videoUrl} target="_blank" rel="noreferrer" className={`${secondary} mt-3`}>Open concert video</a><p className="mt-3 text-[10px] text-white/40">This completed show is now visible on your artist profile.</p></>}</div>)}
+        </>}
+      </>}
+    </div>
+    <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-5 py-4 text-[10px] text-white/35 sm:px-8"><span className="flex items-center gap-1.5"><Users className="h-3 w-3" />Visitors see finished shows. Your tour boards stay private.</span><span>Images and video are charged separately.</span></footer>
+  </section>;
+}
+
+export default function WorldTourModule(props: Props) {
+  const { artistId, artistName, isOwner = false } = props;
+  const url = `${api}/artists/${artistId}/shows`;
+  const { data } = useQuery<{ shows: TourPublicShow[] }>({ queryKey: [url], enabled: Number.isInteger(artistId) && artistId > 0,
+    queryFn: async () => { const response = await fetch(url, { credentials: 'omit' }); if (!response.ok) throw new Error('Could not load concert shows.'); return response.json(); }, staleTime: 30_000 });
+  const shows = data?.shows || [];
+  if (!isOwner && !shows.length) return null;
+  return <div className="space-y-5">
+    {isOwner && <TourCreator key={artistId} {...props} />}
+    {!!shows.length && <section aria-label="World Tour concerts" className="overflow-hidden rounded-[28px] border border-white/10 bg-[#090c0e] p-5 text-white sm:p-8"><div className="mb-5 flex items-center gap-3"><Globe2 className="h-6 w-6 text-lime-200" /><div><h2 className="text-xl font-semibold">World Tour</h2><p className="mt-1 text-xs text-white/45">Live moments from the world of {artistName}.</p></div></div><div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,260px),1fr))' }}>{shows.map((show) => <article key={show.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]"><video controls playsInline preload="metadata" poster={show.posterUrl} aria-label={show.title} className="max-h-[480px] w-full bg-black"><source src={show.videoUrl} type="video/mp4" />Your browser does not support video playback.</video><div className="p-4"><h3 className="text-sm font-semibold">{show.city}, {show.country}</h3><p className="mt-1 text-xs text-white/45">{show.songTitle} · {show.duration} seconds</p></div></article>)}</div></section>}
+  </div>;
+}

@@ -1,0 +1,204 @@
+{
+  "generatedWith": "OpenAI built-in image generation",
+  "generatedAt": "2026-10-28",
+  "usage": "General visual examples only. Artist-specific concert production requires a separate portrait-anchored nine-frame board and artist approval.",
+  "promptTemplate": "Photorealistic-natural, landscape 16:9 professional live concert reference photograph. Use the scene direction below. Anonymous performer, real physical lighting, natural crowds and anatomy, documentary realism. No text, logos, watermark, collage, animation, illustration or 3D.",
+  "venues": [
+    {
+      "id": "las-vegas",
+      "file": "venues/las-vegas.webp",
+      "city": "Las Vegas",
+      "country": "United States",
+      "scene": "a sold-out indoor arena, wraparound LED walls, amber spotlights, thousands of fans across steep seating tiers"
+    },
+    {
+      "id": "mexico-city",
+      "file": "venues/mexico-city.webp",
+      "city": "Mexico City",
+      "country": "Mexico",
+      "scene": "an immense open-air stadium at night, an extended stage runway, a sea of fans singing the hook"
+    },
+    {
+      "id": "bogota",
+      "file": "venues/bogota.webp",
+      "city": "Bogota",
+      "country": "Colombia",
+      "scene": "a large outdoor music festival with distant Andean hills, cool evening air and deep blue stage beams"
+    },
+    {
+      "id": "rio",
+      "file": "venues/rio.webp",
+      "city": "Rio de Janeiro",
+      "country": "Brazil",
+      "scene": "a huge beachfront concert at blue hour, palm silhouettes, ocean horizon, warm concert lighting"
+    },
+    {
+      "id": "buenos-aires",
+      "file": "venues/buenos-aires.webp",
+      "city": "Buenos Aires",
+      "country": "Argentina",
+      "scene": "an ornate historic concert theatre with gilded balconies, warm tungsten lighting and a standing audience"
+    },
+    {
+      "id": "santiago",
+      "file": "venues/santiago.webp",
+      "city": "Santiago",
+      "country": "Chile",
+      "scene": "a vast stadium with distant mountain silhouettes, cinematic sunset fading into a dramatic light show"
+    },
+    {
+      "id": "lima",
+      "file": "venues/lima.webp",
+      "city": "Lima",
+      "country": "Peru",
+      "scene": "a large public plaza transformed into a professional concert venue, historic facades and cheering fans"
+    },
+    {
+      "id": "madrid",
+      "file": "venues/madrid.webp",
+      "city": "Madrid",
+      "country": "Spain",
+      "scene": "a packed modern arena with a central runway, gold and crimson lights and sweeping crowd views"
+    },
+    {
+      "id": "lisbon",
+      "file": "venues/lisbon.webp",
+      "city": "Lisbon",
+      "country": "Portugal",
+      "scene": "a large waterfront stage at golden hour, river reflections, warm breeze and a joyful crowd"
+    },
+    {
+      "id": "paris",
+      "file": "venues/paris.webp",
+      "city": "Paris",
+      "country": "France",
+      "scene": "an elegant Parisian music theatre with velvet balconies, a live band and atmospheric concert haze"
+    },
+    {
+      "id": "london",
+      "file": "venues/london.webp",
+      "city": "London",
+      "country": "United Kingdom",
+      "scene": "a major indoor arena with premium televised-concert production, white spotlights and a packed floor"
+    },
+    {
+      "id": "berlin",
+      "file": "venues/berlin.webp",
+      "city": "Berlin",
+      "country": "Germany",
+      "scene": "a large industrial open-air festival, steel rigging, graphic light beams and an energetic audience"
+    },
+    {
+      "id": "rome",
+      "file": "venues/rome.webp",
+      "city": "Rome",
+      "country": "Italy",
+      "scene": "a grand Roman public square at night, historic stone buildings and a tasteful modern concert stage"
+    },
+    {
+      "id": "amsterdam",
+      "file": "venues/amsterdam.webp",
+      "city": "Amsterdam",
+      "country": "Netherlands",
+      "scene": "an outdoor urban waterfront festival, canal-city architecture, concert trusses and orange-blue stage lighting"
+    },
+    {
+      "id": "tokyo",
+      "file": "venues/tokyo.webp",
+      "city": "Tokyo",
+      "country": "Japan",
+      "scene": "an enormous indoor dome, immersive LED production, precise magenta-cyan lighting and synchronized audience light sticks"
+    },
+    {
+      "id": "seoul",
+      "file": "venues/seoul.webp",
+      "city": "Seoul",
+      "country": "South Korea",
+      "scene": "a packed stadium, sophisticated moving lights, a sea of audience lights and a large performance runway"
+    },
+    {
+      "id": "mumbai",
+      "file": "venues/mumbai.webp",
+      "city": "Mumbai",
+      "country": "India",
+      "scene": "a large outdoor festival with a vibrant diverse crowd, humid evening atmosphere and rich amber stage lighting"
+    },
+    {
+      "id": "dubai",
+      "file": "venues/dubai.webp",
+      "city": "Dubai",
+      "country": "United Arab Emirates",
+      "scene": "an upscale outdoor concert with a distant illuminated skyline, monumental stage production and a packed audience"
+    },
+    {
+      "id": "cape-town",
+      "file": "venues/cape-town.webp",
+      "city": "Cape Town",
+      "country": "South Africa",
+      "scene": "a major outdoor concert with a broad mountain backdrop, sunset skies and warm live-music atmosphere"
+    },
+    {
+      "id": "sydney",
+      "file": "venues/sydney.webp",
+      "city": "Sydney",
+      "country": "Australia",
+      "scene": "a spectacular harbour-side concert at dusk, water reflections, sailboats in the distance and professional stage lighting"
+    }
+  ],
+  "shots": [
+    {
+      "id": "scale",
+      "file": "shots/scale.webp",
+      "camera": "Drone / 18mm",
+      "scene": "A sweeping elevated establishing photograph of the entire packed venue, stage and thousands of fans. The lead performer is a small figure on stage."
+    },
+    {
+      "id": "entrance",
+      "file": "shots/entrance.webp",
+      "camera": "Jib / 35mm",
+      "scene": "A low-angle full-body photograph of the lead artist stepping confidently onto the runway, microphone in hand, with the live band and audience visible."
+    },
+    {
+      "id": "identity",
+      "file": "shots/identity.webp",
+      "camera": "Artist close-up / 85mm",
+      "scene": "An emotionally expressive close portrait of the lead singer performing into a microphone, face clearly visible, eyes engaged, natural skin texture, perspiration and authentic concert light."
+    },
+    {
+      "id": "motion",
+      "file": "shots/motion.webp",
+      "camera": "Stage left / 50mm",
+      "scene": "A side-stage medium photograph of the singer moving with the beat, expressive singing and believable hands, cables, monitors and lighting rigs."
+    },
+    {
+      "id": "crowd",
+      "file": "shots/crowd.webp",
+      "camera": "Crowd pit / 35mm",
+      "scene": "An eye-level audience photograph of joyful distinct fans singing the chorus together, hands lifted, candid human expressions. None of the fans resemble the lead singer."
+    },
+    {
+      "id": "band",
+      "file": "shots/band.webp",
+      "camera": "Band / 70mm",
+      "scene": "A candid concert photograph of the backing musicians performing live, realistic instrument positions, drummer, bassist and keyboards suited to the music genre."
+    },
+    {
+      "id": "connection",
+      "file": "shots/connection.webp",
+      "camera": "Over the shoulder / 24mm",
+      "scene": "A photograph from behind the singer looking out across the huge cheering crowd, artist silhouette and outfit consistent, physical distance and venue scale believable."
+    },
+    {
+      "id": "emotion",
+      "file": "shots/emotion.webp",
+      "camera": "Audience telephoto / 100mm",
+      "scene": "A candid close audience photograph of an emotional fan singing along, genuine tears of joy and a friend embracing them, distant stage bokeh, no duplicated faces."
+    },
+    {
+      "id": "finale",
+      "file": "shots/finale.webp",
+      "camera": "Hero wide / 28mm",
+      "scene": "A triumphant wide concert photograph of the artist at the front of the stage, band behind, arms and microphone raised, entire audience responding under a spectacular but physically realistic lighting climax."
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 ﻿import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { logger } from "@/lib/logger";
+import { insertWorldTour } from '../../../../shared/world-tour';
 import { FanCaptureModal } from "./FanCaptureModal";
 import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "framer-motion";
 import { Button } from "../ui/button";
@@ -24,7 +25,7 @@ import { ArtistDownloads } from "./artist-downloads";
 import {
   InfluencerModule, TalkToMeModule, AmazonCuratedPicksModule, FashionVirtualStore,
   ArtistCareerSuite, EpkSection, ArtistNewsGenerator, AvatarTalkModule, EarningsChart, PayoutsPanel,
-  MyUniverseModule, SponsorPanel, VenueBookingPanel, ExplicitContentSection, AASEnginePanel,
+  MyUniverseModule, SponsorPanel, VenueBookingPanel, ExplicitContentSection, AASEnginePanel, ArtistPodcastClipsModule, ArtistWorldTourModule,
   AudienceCaptureDashboard, ViralProductGenerator, BrandCollabPanel, ArtistBusinessPlan,
   ArtistBusinessPlanV2, TokenizationPanel, EconomicEngineDashboard, CryptoCommunityDashboard,
   TokenizedMusicView, VinylPreorderModule, VinylEditionModule, VinylRecordsHub, ArtGalleryModule,
@@ -2634,6 +2635,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'hologram':           { label: 'Studio',     color: '#ec4899' },
     'influencer-module':  { label: 'Studio',     color: '#ec4899' },
     'promo-clips':        { label: 'Studio',     color: '#ec4899' },
+    'podcast-clips':      { label: 'Studio',     color: '#ec4899' },
+    'world-tour':         { label: 'Studio',     color: '#d6fa6e' },
     'ads-campaigns':      { label: 'Marketing',  color: '#f43f5e' },
     'gamma-presentations': { label: 'Studio',    color: '#ec4899' },
     'karaoke':            { label: 'Karaoke',    color: '#a855f7' },
@@ -2699,6 +2702,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'deep-brief': { name: 'Deep Brief', icon: FileText, isOwnerOnly: true },
     'emotional-studio': { name: 'Emotional Studio', icon: Heart, isOwnerOnly: true },
     'promo-clips': { name: 'Promo Clips', icon: Clapperboard, isOwnerOnly: true },
+    'podcast-clips': { name: 'Podcast Studio', icon: Mic2, isOwnerOnly: false },
+    'world-tour': { name: 'World Tour Studio', icon: Globe, isOwnerOnly: false },
     'ai-video-studio': { name: 'AI Video Studio', icon: Film, isOwnerOnly: true },
     'ads-campaigns': { name: 'Ads Campaign Manager', icon: Megaphone, isOwnerOnly: true },
     'gamma-presentations': { name: 'Gamma Presentations', icon: Monitor, isOwnerOnly: true },
@@ -2754,7 +2759,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const defaultRightOrder = ['qr-card', 'economic-engine', 'crypto-community', 'physical-cards', 'statistics', 'tokenized-music', 'information', 'social-media', 'spotify', 'premium-tools', 'upcoming-shows', 'concert-hub'];
 
-  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'live-map', 'fashion-image-studio', 'tiktok-live', 'youtube-channel', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
+  const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'live-map', 'fashion-image-studio', 'tiktok-live', 'youtube-channel', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'podcast-clips', 'world-tour', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
   // Broadcast Studio layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
@@ -2854,6 +2859,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'observation-engine': false,
     'deep-brief': false,
     'promo-clips': false,
+    'podcast-clips': false,
+    'world-tour': false,
     'ai-video-studio': false,
     'ads-campaigns': false,
     'gamma-presentations': false,
@@ -2910,6 +2917,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'deep-brief': false,
     'emotional-studio': false,
     'promo-clips': false,
+    'podcast-clips': false,
+    'world-tour': false,
     'ai-video-studio': false,
     'karaoke': false,
     'lyrics-video': false,
@@ -3024,7 +3033,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     const rawOrder = Array.isArray(layout?.order) && layout.order.length > 0
       ? layout.order.filter((id: unknown): id is string => typeof id === 'string')
       : defaultOrder;
-    const order = [...rawOrder, ...defaultOrder.filter(sectionId => !rawOrder.includes(sectionId))];
+    const orderWithTour = insertWorldTour(rawOrder);
+    const order = [...orderWithTour, ...defaultOrder.filter(sectionId => !orderWithTour.includes(sectionId))];
 
     const visibility = layout?.visibility && typeof layout.visibility === 'object' && !Array.isArray(layout.visibility)
       ? { ...defaultVisibility, ...layout.visibility }
@@ -3168,12 +3178,16 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         });
         if (!res.ok) {
           logger.error('Auto-save layout failed: HTTP', res.status, await res.text().catch(() => ''));
+        } else {
+          queryClient.setQueryData(['userProfile', artistId], (current: any) =>
+            current ? { ...current, profileLayout: body } : current,
+          );
         }
       } catch (e) {
         logger.error('Auto-save layout failed:', e);
       }
     }, 800);
-  }, [artistId]);
+  }, [artistId, queryClient]);
 
   const saveCurrentPreset = useCallback(() => {
     const trimmedName = presetName.trim();
@@ -3376,26 +3390,31 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   // Guardar layout en la base de datos
   const saveLayout = async () => {
     try {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      const layout = {
+        order: sectionOrder,
+        visibility: sectionVisibility,
+        expanded: sectionExpanded,
+        rightOrder,
+        rightExpanded,
+        rightVisibility,
+        colorTheme: selectedTheme,
+        fontKey: selectedFont,
+        mobileColumnFirst,
+        customBlocks,
+        sideOverride,
+        presets: layoutPresets,
+      };
       const response = await fetch(`/api/profile/${artistId}/layout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order: sectionOrder,
-          visibility: sectionVisibility,
-          expanded: sectionExpanded,
-          rightOrder,
-          rightExpanded,
-          rightVisibility,
-          colorTheme: selectedTheme,
-          fontKey: selectedFont,
-          mobileColumnFirst,
-          customBlocks,
-          sideOverride,
-          presets: layoutPresets,
-        })
+        body: JSON.stringify(layout)
       });
 
       if (!response.ok) throw new Error('Failed to save layout');
+      queryClient.setQueryData(['userProfile', artistId], (current: any) =>
+        current ? { ...current, profileLayout: layout } : current,
+      );
 
       toast({
         title: '? Layout guardado',
@@ -5242,6 +5261,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
   // Cargar layout desde la base de datos
   useEffect(() => {
+    hasHydratedLayoutRef.current = false;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     let shouldGenerateAutoBlocks = false;
     if (artist?.profileLayout) {
       layoutSourceRef.current = 'db';
@@ -5249,8 +5270,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       const order = artist.profileLayout.order;
       if (Array.isArray(order) && order.length > 0) {
         // Add any new sections that don't exist in saved order
-        const missingSections = defaultOrder.filter(s => !order.includes(s));
-        setSectionOrder([...order, ...missingSections]);
+        const orderWithTour = insertWorldTour(order);
+        const missingSections = defaultOrder.filter(s => !orderWithTour.includes(s));
+        setSectionOrder([...orderWithTour, ...missingSections]);
       } else {
         setSectionOrder(modeConfig.defaultSectionOrder);
       }
@@ -11154,6 +11176,27 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             artistBiography={artist.biography}
                           />
                         );
+                      } else if (sectionId === 'podcast-clips') {
+                        sectionElement = (
+                          <ArtistPodcastClipsModule
+                            artistId={Number(userProfile?.pgId || artist?.pgId || artistId)}
+                            isOwner={!!isOwnProfile}
+                            artistName={userProfile?.artistName || userProfile?.username || artist?.name || 'Artist'}
+                            artistProfileImage={artist?.profileImage || undefined}
+                            artistGenre={artist?.genre || undefined}
+                            artistBiography={artist?.biography || undefined}
+                            songs={songs}
+                          />
+                        );
+                      } else if (sectionId === 'world-tour') {
+                        sectionElement = (
+                          <ArtistWorldTourModule
+                            artistId={Number(userProfile?.pgId || artist?.pgId || artistId)}
+                            artistName={userProfile?.artistName || userProfile?.username || artist?.name || 'Artist'}
+                            artistProfileImage={artist?.profileImage || undefined}
+                            isOwner={!!isOwnProfile}
+                          />
+                        );
                       } else if (sectionId === 'ai-video-studio' && isOwnProfile) {
                         sectionElement = (
                           <div className="relative px-3 py-4 sm:px-5 sm:py-6">
@@ -11535,7 +11578,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
                 // Wrap with section ID for scroll targeting + return-to-CC button
                 const sectionLabel = allSections[sectionId as keyof typeof allSections]?.name || sectionId;
-                sectionElement = (
+                sectionElement = ['podcast-clips', 'world-tour'].includes(sectionId) && !isOwnProfile ? (
+                  <div id={`section-${sectionId}`}>{sectionElement}</div>
+                ) : (
                   <div id={`section-${sectionId}`} className="relative">
                     {/* Universal Fullscreen toggle � top-left, shown on every module */}
                     <button
