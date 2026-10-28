@@ -7,6 +7,7 @@ import https from 'https';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createRequire } from 'module';
+import sharp from 'sharp';
 
 const run = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -66,6 +67,19 @@ export async function saveTourAsset(buffer: Buffer, name: string, contentType: s
   const file = storage.bucket().file(`world-tour/${name}`);
   await file.save(buffer, { public: true, resumable: false, metadata: { contentType, cacheControl: 'public,max-age=31536000,immutable' } });
   return `https://storage.googleapis.com/${storage.bucket().name}/world-tour/${name}`;
+}
+
+/** A fixed 1K contact sheet carries all nine approved frames inside H3 Max's included 4K reference-token allowance. */
+export async function prepareTourStoryboardSheet(projectId: string, urls: string[]): Promise<string> {
+  if (urls.length !== 9 || urls.some((url) => !/^https:\/\//.test(url))) throw new Error('The approved nine-shot board is required.');
+  const cells = await Promise.all(urls.map(async (url) => sharp(await downloadTourMedia(url, 20 * 1024 * 1024))
+    .rotate().resize(300, 300, { fit: 'cover', position: 'attention' }).jpeg({ quality: 88 }).toBuffer()));
+  const layers: sharp.OverlayOptions[] = cells.map((input, index) => ({ input, left: 25 + (index % 3) * 325, top: 25 + Math.floor(index / 3) * 325 }));
+  const labels = cells.map((_cell, index) => ({ input: Buffer.from(`<svg width="300" height="40"><rect width="300" height="40" fill="rgba(0,0,0,.7)"/><text x="14" y="27" fill="white" font-size="20" font-family="Arial">SHOT ${String(index + 1).padStart(2, '0')}</text></svg>`),
+    left: 25 + (index % 3) * 325, top: 25 + Math.floor(index / 3) * 325 + 260 }));
+  const sheet = await sharp({ create: { width: 1000, height: 1000, channels: 3, background: '#080808' } })
+    .composite([...layers, ...labels]).jpeg({ quality: 90 }).toBuffer();
+  return saveTourAsset(sheet, `${projectId}/references/nine-shot-board.jpg`, 'image/jpeg');
 }
 
 type TourMediaIO = { download: typeof downloadTourMedia; save: typeof saveTourAsset };

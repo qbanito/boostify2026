@@ -46,7 +46,7 @@ export const worldTourShotReference = (index: number) => `/static-assets/world-t
 
 export type TourFrame = { index: number; prompt: string; status: 'EMPTY' | 'QUEUED' | 'READY' | 'FAILED'; imageUrl?: string; approved: boolean; operationId?: string; anchorOperationId?: string; error?: string };
 export type TourSong = { id: string; title: string; audioUrl: string; isSingle: boolean; genre?: string; lyrics?: string; description?: string; duration?: string };
-export type TourRender = { id: string; status: 'QUEUED' | 'SYNCING' | 'FINALIZING' | 'COMPLETED' | 'FAILED'; videoUrl?: string; posterUrl?: string; error?: string; precisionSync: boolean; createdAt: string };
+export type TourRender = { id: string; status: 'QUEUED' | 'SYNCING' | 'FINALIZING' | 'COMPLETED' | 'FAILED'; videoUrl?: string; posterUrl?: string; error?: string; precisionSync: boolean; model?: string; createdAt: string };
 export type TourProject = {
   id: string; artistId: number; artistName: string; destinationId: string; song: TourSong;
   faceUrl: string; lookDirection: string; aspectRatio: '16:9' | '9:16'; clipStart: number;

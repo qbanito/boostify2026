@@ -3,15 +3,18 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '../db';
 import { users, songs, musicVideoProjects } from '../../db/schema';
 import { authenticate } from '../middleware/auth';
-import { chargeCreditsFromUsd, addCredits, getUserBalance, getCreditCostFromUsd } from '../services/credit-engine';
+import { addCredits, getUserBalance } from '../services/credit-engine';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import { db as firestore, FieldValue } from '../firebase';
 import { canManagePodcastArtist, toPublicPodcastClip } from '../services/podcast-clip-policy';
+import { randomUUID } from 'crypto';
+import { settleTourCredits } from '../services/world-tour-billing';
+import { PODCAST_MODELS, PODCAST_TTS_MODEL, studioCreditsFromUsd, studioProviderCostUsd, studioModelById } from '../../shared/artist-studio-models';
 
 const router = Router();
-const MODEL = 'alibaba/wan-3.0/reference-to-video';
+const DEFAULT_MODEL = 'wan-3';
 const COLLECTION = 'podcast_clip_jobs';
-const FAL_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY || '';
+const FAL_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY || process.env.FAL_KEY_BACKUP || '';
 const openai = createTrackedOpenAI(
   process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : undefined,
 );
@@ -53,11 +56,13 @@ router.get('/artists/:artistId/clips', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Podcast episodes are temporarily unavailable.' });
   }
 });
-router.get('/estimate', authenticate, async (_req: Request, res: Response) => {
+router.get('/estimate', authenticate, async (req: Request, res: Response) => {
   try {
-    const internalCostUsd = 30 * 0.05;
-    const credits = await getCreditCostFromUsd(internalCostUsd);
-    res.json({ success: true, model: 'Wan 3.0', duration: 30, resolution: '720p', credits });
+    const model = studioModelById(PODCAST_MODELS, req.query.model) || studioModelById(PODCAST_MODELS, DEFAULT_MODEL)!;
+    const chars = Math.max(0, Math.min(1200, Number(req.query.characters) || 0));
+    const providerCostUsd = studioProviderCostUsd(model, 30, chars);
+    const balance = await getUserBalance(String((req as any).user?.email || '').toLowerCase());
+    res.json({ success: true, model: model.id, duration: 30, resolution: '720p', credits: balance.isAdmin ? 0 : studioCreditsFromUsd(providerCostUsd), models: PODCAST_MODELS.map(({ id, name, note }) => ({ id, name, note })) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Could not calculate the credit estimate.' });
   }
@@ -74,7 +79,7 @@ async function getArtistContext(req: Request, artistId: number) {
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(artistId) || artistId <= 0) return null;
   const [artist] = await db.select().from(users).where(eq(users.id, artistId)).limit(1);
   if (!artist) return null;
-  if (!canManagePodcastArtist(user, artist)) return null;
+  if (!canManagePodcastArtist(user, artist as any)) return null;
   const [artistSongs, videoProjects] = await Promise.all([
     db.select({ title: songs.title, genre: songs.genre, mood: songs.mood, lyrics: songs.lyrics, description: songs.description })
       .from(songs).where(eq(songs.userId, artistId)).orderBy(desc(songs.createdAt)).limit(8),
@@ -121,62 +126,67 @@ router.post('/script', authenticate, async (req: Request, res: Response) => {
 });
 
 router.post('/generate', authenticate, async (req: Request, res: Response) => {
+  const chargeId = randomUUID();
   let chargedCredits = 0;
   const userEmail = String((req as any).user?.email || '').trim().toLowerCase();
   try {
     const artistId = Number(req.body?.artistId);
     const context = await getArtistContext(req, artistId);
     if (!context) return res.status(403).json({ success: false, error: 'You can only create clips for an artist profile you manage.' });
-    if (!FAL_KEY) return res.status(503).json({ success: false, error: 'La conexión con Fal no está configurada en el servidor.' });
-    if (!userEmail) return res.status(401).json({ success: false, error: 'No se pudo verificar el correo de tu cuenta.' });
+    const falKey = FAL_KEY || process.env.FAL_KEY_BACKUP || '';
+    if (!falKey) return res.status(503).json({ success: false, error: 'Fal is not configured on the server.' });
+    if (!userEmail) return res.status(401).json({ success: false, error: 'Your account email could not be verified.' });
     const script = typeof req.body?.script === 'string' ? req.body.script.trim().slice(0, 1200) : '';
     const styleId = String(req.body?.styleId || 'studio');
     const topic = typeof req.body?.topic === 'string' ? req.body.topic.slice(0, 500) : '';
-    const language = ['es', 'en', 'pt'].includes(req.body?.language) ? req.body.language : 'es';
+    const language = ['es', 'en', 'pt'].includes(req.body?.language) ? req.body.language : 'en';
     const stylePrompt = STYLE_PROMPTS[styleId];
-    if (!stylePrompt || script.length < 10) return res.status(400).json({ success: false, error: 'Selecciona un estilo y añade un guion válido.' });
-
+    if (!stylePrompt || script.length < 10) return res.status(400).json({ success: false, error: 'Choose a style and add a valid script.' });
+    const model = studioModelById(PODCAST_MODELS, req.body?.modelId || DEFAULT_MODEL);
+    if (!model) return res.status(400).json({ success: false, error: 'Choose a supported video model.' });
     const duration = 30;
-    const resolution = '720p';
-    const internalCostUsd = duration * 0.05; // Current Fal rate for this endpoint; refresh if pricing changes.
-    const cost = await getCreditCostFromUsd(internalCostUsd);
+    const providerCostUsd = studioProviderCostUsd(model, duration, script.length);
+    const requiredCredits = studioCreditsFromUsd(providerCostUsd);
     const balance = await getUserBalance(userEmail);
-    if (!balance.isAdmin && balance.credits < cost) {
-      return res.status(402).json({ success: false, error: `Necesitas ${cost} créditos para este clip; tu saldo actual es ${balance.credits}.`, requiredCredits: cost, remainingCredits: balance.credits });
-    }
-
+    if (!balance.isAdmin && balance.credits < requiredCredits) return res.status(402).json({ success: false, error: 'This clip needs ' + requiredCredits + ' credits; your balance is ' + balance.credits + '.', requiredCredits, remainingCredits: balance.credits });
     const artist = context.artist;
     const refs = [artist.profileImage, artist.coverImage].filter((url): url is string => typeof url === 'string' && url.startsWith('https://')).slice(0, 2);
-    const songsSummary = context.songs.map((song) => `${song.title}${song.genre ? ` (${song.genre})` : ''}${song.mood ? `, ${song.mood}` : ''}`).join('; ');
-    const prompt = `Create a 30-second vertical artist podcast clip. Visual direction: ${stylePrompt}. The artist shown in the reference image is the subject; preserve their recognizable appearance and do not change identity. Natural direct-to-camera podcast delivery, expressive but believable face and gestures, clean editorial composition, crisp readable frame, no visible text or logos. Artist: ${artist.artistName || artist.username || 'musician'}. Music identity: ${(artist.genres || []).join(', ') || artist.genre || 'use the provided artist profile'}${songsSummary ? `. Music catalog: ${songsSummary}` : ''}. Topic: ${topic || 'artist story and music'} . Spoken script / dialogue in ${language}: “${script}”. Maintain one coherent visual setup for the whole clip.`;
-    const charge = await chargeCreditsFromUsd(userEmail, internalCostUsd, `Podcast Clip — ${artist.artistName || artist.username || 'Artist'} · Wan 3.0 · 30s 720p`);
-    if (!charge.success) return res.status(402).json({ success: false, error: charge.error || 'Saldo insuficiente.', requiredCredits: charge.creditsCharged, remainingCredits: charge.remainingBalance });
-    chargedCredits = charge.creditsCharged;
-    const falResponse = await fetch(`https://queue.fal.run/${MODEL}`, {
-      method: 'POST', headers: { Authorization: `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, duration, resolution, aspect_ratio: '9:16', audio: true, reference_image_urls: refs, enable_prompt_expansion: true, enable_thinking: false, enable_safety_checker: true }),
+    if (model.requiresSpeech && !refs[0]) return res.status(400).json({ success: false, error: 'Add an artist portrait to use this lip-sync model.' });
+    const songsSummary = context.songs.map((song) => song.title + (song.genre ? ' (' + song.genre + ')' : '') + (song.mood ? ', ' + song.mood : '')).join('; ');
+    const prompt = 'Create a realistic 30-second vertical artist podcast clip. Visual direction: ' + stylePrompt + '. Preserve the artist identity in the reference portrait. Natural direct-to-camera delivery, expressive believable face and gestures, clean editorial composition, no visible text or logos. Artist: ' + (artist.artistName || artist.username || 'musician') + '. Music identity: ' + ((artist.genres || []).join(', ') || artist.genre || 'use the artist profile') + (songsSummary ? '. Music catalog: ' + songsSummary : '') + '. Topic: ' + (topic || 'artist story and music') + '. Say this script in ' + language + ': “' + script + '”. Maintain one coherent visual setup.';
+    const charge = await settleTourCredits(userEmail, chargeId, providerCostUsd, false, 'Podcast Studio');
+    chargedCredits = charge.credits;
+    if (!balance.isAdmin && !chargedCredits) return res.status(402).json({ success: false, error: 'Your credit balance could not cover this clip.', requiredCredits, remainingCredits: balance.credits });
+    const videoInput: any = model.requiresSpeech
+      ? model.id === 'minimax-lipsync' ? { image_url: refs[0], audio_url: '', resolution: '768P', enable_safety_checker: true }
+        : model.id === 'sync-lipsync-v3' ? { image_url: refs[0], audio_url: '', enable_safety_checker: true }
+          : model.id === 'veed-fabric' ? { image_url: refs[0], audio_url: '', resolution: '720p' }
+            : { image_url: refs[0], audio_url: '' }
+      : { prompt, duration, resolution: '720p', aspect_ratio: '9:16', audio: true, reference_image_urls: refs, enable_prompt_expansion: true, enable_thinking: false, enable_safety_checker: true };
+    const endpoint = model.requiresSpeech ? PODCAST_TTS_MODEL : model.endpoint;
+    const stageInput = model.requiresSpeech ? { text: script, language_code: language, apply_text_normalization: 'auto' } : videoInput;
+    const falResponse = await fetch('https://queue.fal.run/' + endpoint, {
+      method: 'POST', headers: { Authorization: 'Key ' + falKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(stageInput), signal: AbortSignal.timeout(45_000),
     });
     const falData = await falResponse.json().catch(() => ({}));
-    if (!falResponse.ok || !falData.request_id) throw new Error(falData.detail || falData.error || 'Fal no pudo iniciar la generación.');
-
-    const requestId = String(falData.request_id);
+    if (!falResponse.ok || !falData.request_id || !/^https:\/\/queue\.fal\.run\//.test(falData.status_url || '') || !/^https:\/\/queue\.fal\.run\//.test(falData.response_url || '')) throw new Error('Fal could not start this stage (HTTP ' + falResponse.status + ').');
+    const requestId = chargeId;
     await firestore.collection(COLLECTION).doc(requestId).set({
-      requestId, ownerId: ownerId(req), userEmail, artistId, model: MODEL,
-      title: topic.trim().slice(0, 120) || `${artist.artistName || artist.username || 'Artist'} - Podcast episode`,
-      styleId, posterUrl: refs[0] || null,
-      estimatedCredits: chargedCredits, estimatedCostUsd: internalCostUsd,
-      statusUrl: falData.status_url || `https://queue.fal.run/${MODEL}/requests/${requestId}/status`,
-      responseUrl: falData.response_url || `https://queue.fal.run/${MODEL}/requests/${requestId}`,
-      status: 'IN_QUEUE', refunded: false, createdAt: FieldValue.serverTimestamp(),
+      requestId, providerRequestId: String(falData.request_id), ownerId: ownerId(req), userEmail, artistId,
+      model: model.endpoint, modelId: model.id, title: topic.trim().slice(0, 120) || (artist.artistName || artist.username || 'Artist') + ' - Podcast episode',
+      styleId, posterUrl: refs[0] || null, estimatedCredits: chargedCredits, estimatedCostUsd: providerCostUsd,
+      videoInput, stage: model.requiresSpeech ? 'SPEECH' : 'VIDEO', statusUrl: falData.status_url, responseUrl: falData.response_url,
+      status: 'IN_QUEUE', refunded: false, billingId: chargeId, createdAt: FieldValue.serverTimestamp(),
     });
-    res.json({ success: true, job: { requestId, status: 'IN_QUEUE', estimatedCredits: chargedCredits, remainingCredits: charge.remainingBalance } });
+    res.json({ success: true, job: { requestId, status: 'IN_QUEUE', estimatedCredits: chargedCredits, remainingCredits: charge.remaining } });
   } catch (error: any) {
     if (chargedCredits > 0 && userEmail) {
-      try { await addCredits(userEmail, chargedCredits, 'refund', 'Refund — Podcast Clip generation could not start'); }
+      try { await settleTourCredits(userEmail, chargeId, 0, true, 'Podcast Studio'); }
       catch (refundError: any) { console.error('[podcast-clips] Credit refund failed:', refundError?.message || refundError); }
     }
     console.error('[podcast-clips] Generation submit error:', error?.message || error);
-    res.status(500).json({ success: false, error: error?.message || 'No se pudo iniciar la generación.' });
+    res.status(500).json({ success: false, error: error?.message || 'Could not start podcast generation.' });
   }
 });
 
@@ -187,12 +197,25 @@ router.get('/jobs/:requestId', authenticate, async (req: Request, res: Response)
     if (!snapshot.exists) return res.status(404).json({ success: false, error: 'No se encontró este clip.' });
     const job = snapshot.data() as any;
     if (job.ownerId !== ownerId(req)) return res.status(403).json({ success: false, error: 'No tienes acceso a este clip.' });
-    const statusResponse = await fetch(job.statusUrl, { headers: { Authorization: `Key ${FAL_KEY}` } });
+    if (['COMPLETED', 'FAILED'].includes(job.status)) return res.json({ success: true, job: { requestId: job.requestId, status: job.status, videoUrl: job.videoUrl, estimatedCredits: job.estimatedCredits, error: job.error } });
+    const falKey = FAL_KEY || process.env.FAL_KEY_BACKUP || '';
+    const statusResponse = await fetch(job.statusUrl, { headers: { Authorization: `Key ${falKey}` } });
     const statusData = await statusResponse.json().catch(() => ({}));
     if (!statusResponse.ok) return res.status(statusResponse.status).json({ success: false, error: statusData.detail || 'No se pudo consultar Fal.' });
     if (statusData.status === 'COMPLETED') {
-      const resultResponse = await fetch(job.responseUrl, { headers: { Authorization: `Key ${FAL_KEY}` } });
+      const resultResponse = await fetch(job.responseUrl, { headers: { Authorization: `Key ${falKey}` } });
       const resultData = await resultResponse.json().catch(() => ({}));
+      if (job.stage === 'SPEECH') {
+        const audioUrl = resultData.audio?.url || resultData.output?.audio?.url;
+        if (!resultResponse.ok || !/^https:\/\//.test(audioUrl || '')) throw new Error('Fal did not return usable narration audio.');
+        const videoInput = { ...job.videoInput, audio_url: audioUrl };
+        const videoResponse = await fetch(`https://queue.fal.run/${job.model}`, { method: 'POST',
+          headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(videoInput), signal: AbortSignal.timeout(45_000) });
+        const videoData = await videoResponse.json().catch(() => ({}));
+        if (!videoResponse.ok || !videoData.request_id || !/^https:\/\/queue\.fal\.run\//.test(videoData.status_url || '') || !/^https:\/\/queue\.fal\.run\//.test(videoData.response_url || '')) throw new Error('Fal could not start the lip-sync video stage.');
+        await ref.set({ stage: 'VIDEO', providerRequestId: String(videoData.request_id), statusUrl: videoData.status_url, responseUrl: videoData.response_url, status: 'IN_QUEUE' }, { merge: true });
+        return res.json({ success: true, job: { requestId: job.requestId, status: 'IN_QUEUE', estimatedCredits: job.estimatedCredits } });
+      }
       const videoUrl = resultData.video?.url || resultData.output?.video?.url;
       if (!resultResponse.ok || !videoUrl) {
         let refunded = false;
@@ -203,7 +226,7 @@ router.get('/jobs/:requestId', authenticate, async (req: Request, res: Response)
           refunded = true;
         });
         if (refunded && Number(job.estimatedCredits) > 0) {
-          await addCredits(job.userEmail, Number(job.estimatedCredits), 'refund', 'Refund - Podcast Clip result unavailable');
+          if (job.billingId) await settleTourCredits(job.userEmail, job.billingId, 0, true, 'Podcast Studio'); else await addCredits(job.userEmail, Number(job.estimatedCredits), 'refund', 'Refund - Podcast Clip result unavailable');
         }
         return res.json({ success: true, job: { requestId: job.requestId, status: 'FAILED', error: 'Fal finished without returning a playable video. Credits have been refunded.' } });
       }
@@ -219,7 +242,7 @@ router.get('/jobs/:requestId', authenticate, async (req: Request, res: Response)
         refunded = true;
       });
       if (refunded && Number(job.estimatedCredits) > 0) {
-        await addCredits(job.userEmail, Number(job.estimatedCredits), 'refund', 'Refund — failed Podcast Clip generation');
+        if (job.billingId) await settleTourCredits(job.userEmail, job.billingId, 0, true, 'Podcast Studio'); else await addCredits(job.userEmail, Number(job.estimatedCredits), 'refund', 'Refund - failed Podcast Clip generation');
       }
       return res.json({ success: true, job: { requestId: job.requestId, status: 'FAILED', error: 'La generación falló; los créditos fueron devueltos.' } });
     }

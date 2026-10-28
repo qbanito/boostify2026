@@ -38,9 +38,23 @@ export function tourBoardError(project: TourProject): string | null {
   return null;
 }
 
-export function tourVideoInput(project: TourProject) {
+export function tourVideoInput(project: TourProject, modelId = 'wan-3', storyboardUrl?: string) {
   const error = tourBoardError(project);
   if (error) throw new Error(error);
+  const destination = WORLD_TOUR_DESTINATIONS.find((item) => item.id === project.destinationId)!;
+  const sequence = WORLD_TOUR_SHOTS.map((shot) => `${shot.start}-${shot.end}s: ${shot.direction}`).join('\n');
+  if (modelId === 'minimax-h3') {
+    if (!storyboardUrl) throw new Error('The nine-shot storyboard must be prepared before this model can render.');
+    return { prompt: `Create a 15-second photoreal live concert of ${project.artistName} performing ${project.song.title} in ${destination.city}, ${destination.country}, at ${destination.setting}. Image 1 is the close-up artist identity and wardrobe reference. Image 2 is a labeled 3x3 contact sheet of the nine approved chronological storyboard frames, top-left to bottom-right. Use each panel as a guide for its corresponding camera angle, but render a coherent full-frame live concert video with cuts, never a visible collage. Preserve the artist's exact face, hairstyle and complexion; show the band and emotionally engaged fans singing. ${project.lookDirection}\n${sequence}\nReal concert cinematography, natural skin texture, believable instruments and lighting, no animation, CGI, 3D, captions or watermarks.`,
+    duration: 15, resolution: '768P', aspect_ratio: project.aspectRatio, prompt_expansion_mode: 'balanced', enable_safety_checker: true,
+      reference_image_urls: [project.frames[2].imageUrl!, storyboardUrl] };
+  }
+  if (modelId.startsWith('kling-o3-')) {
+    const refs = [0, 2, 4, 8].map((index) => project.frames[index].imageUrl!);
+    return { prompt: `Create a 15-second photoreal live concert of ${project.artistName} performing ${project.song.title} in ${destination.city}, ${destination.country}. Reference Image 1 is the venue wide shot, Image 2 is the artist face and wardrobe anchor, Image 3 shows singing fans, and Image 4 is the finale. Keep the artist identity and outfit consistent. Show emotional fans singing and the live band. ${project.lookDirection}\nNine-shot camera sequence:\n${sequence}\nReal concert cinematography, no animation, CGI, 3D, captions or watermarks.`,
+      duration: '15', resolution: '720p', aspect_ratio: project.aspectRatio, shot_type: 'intelligent', generate_audio: false,
+      image_urls: refs, enable_safety_checker: true };
+  }
   return { prompt: project.videoPrompt, duration: 15, resolution: '720p', aspect_ratio: project.aspectRatio, audio: true,
     reference_image_urls: [project.faceUrl, ...project.frames.map((frame) => frame.imageUrl!)],
     enable_prompt_expansion: true, enable_thinking: true, enable_safety_checker: true };

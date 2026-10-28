@@ -6,6 +6,7 @@ import {
   Mic2, Music2, Play, RotateCcw, Sparkles, WandSparkles,
 } from "lucide-react";
 import { useToast } from "../../../hooks/use-toast";
+import { PODCAST_MODELS, studioProviderCostUsd, studioCreditsFromUsd } from "../../../../../shared/artist-studio-models";
 
 type PodcastStyle = {
   id: string;
@@ -126,11 +127,14 @@ function PodcastClipCreator({
   const [idea, setIdea] = useState("");
   const [language, setLanguage] = useState("en");
   const [script, setScript] = useState("");
+  const [modelId, setModelId] = useState("wan-3");
   const [busy, setBusy] = useState<"script" | "video" | "">("");
   const [job, setJob] = useState<ClipJob | null>(null);
   const selectedStyle = useMemo(() => STYLES.find((style) => style.id === styleId) || STYLES[0], [styleId]);
+  const selectedModel = PODCAST_MODELS.find((model) => model.id === modelId) || PODCAST_MODELS[0];
+  const estimatedCredits = studioCreditsFromUsd(studioProviderCostUsd(selectedModel, 30, script.length));
   const { data: estimate } = useQuery<{ credits: number }>({
-    queryKey: ["/api/podcast-clips/estimate"],
+    queryKey: ["/api/podcast-clips/estimate?model=" + modelId + "&characters=" + script.length],
     staleTime: 60_000,
   });
 
@@ -181,7 +185,7 @@ function PodcastClipCreator({
     setJob(null);
     try {
       const payload = await postJson<{ job: ClipJob }>("/api/podcast-clips/generate", {
-        artistId, styleId, topic: idea, language, script, duration: 30, resolution: "720p",
+        artistId, styleId, topic: idea, language, script, duration: 30, resolution: "720p", modelId,
       });
       setJob(payload.job);
       toast({ title: "Your clip is in the studio", description: "Credits are charged for this generation and returned if it fails." });
@@ -274,9 +278,14 @@ function PodcastClipCreator({
           </div>
 
           <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
-            <div className="mb-4 flex items-start justify-between gap-3"><div><div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">03 / Script & render</div><h3 className="text-base font-semibold">Make the story yours</h3></div><div className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/15 bg-violet-200/[0.06] px-2.5 py-1.5 text-[10px] font-medium text-violet-100/80"><Clapperboard className="h-3 w-3" />WAN 3.0</div></div>
+            <div className="mb-4 flex items-start justify-between gap-3"><div><div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">03 / Script & render</div><h3 className="text-base font-semibold">Make the story yours</h3></div><div className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/15 bg-violet-200/[0.06] px-2.5 py-1.5 text-[10px] font-medium text-violet-100/80"><Clapperboard className="h-3 w-3" />{selectedModel.name}</div></div>
             <label className="sr-only" htmlFor="podcast-clip-script">Podcast clip script</label>
             <textarea id="podcast-clip-script" value={script} onChange={(event) => setScript(event.target.value)} maxLength={1200} placeholder="Your 30-second script will appear here. Build a concept or write your own…" className="min-h-36 w-full resize-y rounded-xl border border-white/[0.09] bg-black/30 px-3.5 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/25 focus:border-fuchsia-200/40 focus:ring-2 focus:ring-fuchsia-300/10" />
+            <label htmlFor="podcast-clip-model" className="mb-2 mt-3 block text-xs font-medium text-white/60">Video model</label>
+            <select id="podcast-clip-model" value={modelId} onChange={(event) => setModelId(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.09] bg-[#111116] px-3 text-xs text-white/80 outline-none focus:border-fuchsia-200/40">
+              {PODCAST_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name} — {model.note}</option>)}
+            </select>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-white/45"><CircleDollarSign className="h-3.5 w-3.5 text-amber-200/80" />{(estimate?.credits ?? estimatedCredits).toLocaleString("en-US")} credits · 30s · 3× provider cost</div>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-[11px] text-white/45"><CircleDollarSign className="h-3.5 w-3.5 text-amber-200/80" />Estimated {estimate?.credits?.toLocaleString("en-US") ?? "—"} credits · 30s · 720p</div>
               <button type="button" onClick={generateClip} disabled={!!busy || !script.trim()} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-white px-4 text-xs font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40">

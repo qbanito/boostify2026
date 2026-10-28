@@ -28,7 +28,7 @@ export async function runTourStage(op: any, runtime: TourRuntime): Promise<void>
       await runtime.save(op);
       if (op.kind === 'render') {
         op.audioUrl ||= await runtime.prepareAudio(op);
-        op.input.reference_audio_urls = [op.audioUrl];
+        if (!op.modelId || ['wan-3', 'wan-prime'].includes(op.modelId)) op.input.reference_audio_urls = [op.audioUrl];
         await runtime.save(op);
       }
       op.submitAttemptedAt = now(); await runtime.save(op);

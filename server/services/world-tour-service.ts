@@ -5,14 +5,15 @@ import { db } from '../db';
 import { users, songs } from '../../db/schema';
 import { db as firestore } from '../firebase';
 import { canManagePodcastArtist as canManageArtist } from './podcast-clip-policy';
-import { getCreditCostFromUsd, getUserBalance } from './credit-engine';
+import { getUserBalance } from './credit-engine';
 import { settleTourCredits } from './world-tour-billing';
-import { downloadTourMedia, prepareTourAudio, finishTourVideo, saveTourAsset } from './world-tour-media';
+import { downloadTourMedia, prepareTourAudio, finishTourVideo, saveTourAsset, prepareTourStoryboardSheet } from './world-tour-media';
 import { createTourFrames, createTourVideoPrompt, tourIdentity, tourBoardError, tourVideoInput } from './world-tour-prompts';
 import { ensureTourStore, loadTourProject, listTourProjects, saveNewTourProject, mutateTourProject,
   leaseTourOperation, updateTourOperation, releaseTourOperation, pendingTourOperations, tourReferences, existingTourOperations } from './world-tour-store';
 import { WORLD_TOUR_COST_USD as COST, WORLD_TOUR_IMAGE_MODEL, WORLD_TOUR_VIDEO_MODEL, WORLD_TOUR_SYNC_MODEL,
   WORLD_TOUR_HERO_INDEX as HERO, WORLD_TOUR_DESTINATIONS, type TourProject, type TourSong } from '../../shared/world-tour';
+import { WORLD_TOUR_MODELS, studioCreditsFromUsd, worldTourProviderCostUsd, studioModelById } from '../../shared/artist-studio-models';
 
 const falKey = () => process.env.FAL_KEY || process.env.FAL_AI_KEY || process.env.FAL_API_KEY || '';
 const operationFalKey = (op: any) => op.keySlot === 'backup' ? process.env.FAL_KEY_BACKUP || falKey() : falKey();
@@ -60,11 +61,13 @@ export async function artistTourSongs(artist: any): Promise<TourSong[]> {
 
 export async function tourQuote(email: string) {
   const admin = (await getUserBalance(email)).isAdmin;
-  const price = async (usd: number) => admin ? 0 : getCreditCostFromUsd(usd);
-  const [image, video, precisionVideo] = await Promise.all([
-    price(COST.image), price(COST.video), price(COST.video + COST.sync),
-  ]);
-  return { image, storyboard: image * 9, remaining: image * 8, video, precisionVideo, duration: 15, imageModel: WORLD_TOUR_IMAGE_MODEL, videoModel: WORLD_TOUR_VIDEO_MODEL };
+  const price = (usd: number) => admin ? 0 : studioCreditsFromUsd(usd);
+  const image = price(COST.image);
+  const videoModels = WORLD_TOUR_MODELS.map((model) => ({ id: model.id, name: model.name, note: model.note,
+    credits: price(worldTourProviderCostUsd(model, 15)), providerCostUsd: worldTourProviderCostUsd(model, 15) }));
+  return { image, storyboard: image * 9, remaining: image * 8, video: videoModels[0].credits,
+    precisionVideo: price(worldTourProviderCostUsd(WORLD_TOUR_MODELS[0], 15) + COST.sync), duration: 15, imageModel: WORLD_TOUR_IMAGE_MODEL,
+    videoModel: WORLD_TOUR_VIDEO_MODEL, videoModels };
 }
 
 export async function tourContext(actor: any, artistId: number) {
@@ -111,7 +114,7 @@ async function budget(actor: any, usd: number, expectedCredits?: number) {
   if (!(falKey() || process.env.FAL_KEY_BACKUP)) throw new TourError('Concert generation is not configured on the server.', 503);
   if (!actor.email) throw new TourError('Your account email could not be verified.', 401);
   const balance = await getUserBalance(String(actor.email).toLowerCase());
-  const credits = expectedCredits ?? await getCreditCostFromUsd(usd);
+  const credits = expectedCredits ?? studioCreditsFromUsd(usd);
   if (!balance.isAdmin && balance.credits < credits) throw new TourError(`This generation needs ${credits} credits. Your balance is ${balance.credits}.`, 402);
 }
 
@@ -124,7 +127,7 @@ export async function queueTourFrames(actor: any, projectId: string, input: any)
   const existing = await existingTourOperations(indices.map((index) => `${projectId}-${key}-${index}`));
   const newCount = indices.length - existing.length;
   if (!newCount) return loadTourProject(projectId);
-  await budget(actor, COST.image * newCount, (await getCreditCostFromUsd(COST.image)) * newCount);
+  await budget(actor, COST.image * newCount, studioCreditsFromUsd(COST.image) * newCount);
   const created = await mutateTourProject(projectId, async (project, tx) => {
     const ids: string[] = [];
     if (project.renders.some((render) => !['COMPLETED', 'FAILED'].includes(render.status))) throw new TourError('Wait for the concert render before changing its storyboard.', 409);
@@ -167,22 +170,27 @@ export async function approveTourFrames(actor: any, projectId: string, indices: 
 }
 
 export async function queueTourRender(actor: any, projectId: string, input: any) {
-  await requireTourProject(actor, projectId);
+  const project = await requireTourProject(actor, projectId);
   const key = requestKey(input.requestKey); const precisionSync = input.precisionSync === true;
-  const costUsd = COST.video + (precisionSync ? COST.sync : 0);
+  const selectedModel = studioModelById(WORLD_TOUR_MODELS, input.videoModelId || 'wan-3');
+  if (!selectedModel) throw new TourError('Choose an available concert video model.');
+  const costUsd = worldTourProviderCostUsd(selectedModel, 15) + (precisionSync ? COST.sync : 0);
   const id = `${projectId}-${key}-render`;
   if ((await existingTourOperations([id])).length) return loadTourProject(projectId);
   await budget(actor, costUsd);
+  const storyboardUrl = selectedModel.id === 'minimax-h3'
+    ? await prepareTourStoryboardSheet(project.id, project.frames.map((frame) => frame.imageUrl!)) : undefined;
   await mutateTourProject(projectId, async (project, tx) => {
     if ((await tx.query('SELECT id FROM world_tour_operations WHERE id=$1', [id])).rows.length) return;
     const boardError = tourBoardError(project);
     if (boardError) throw new TourError(boardError);
     if (project.renders.some((render) => !['COMPLETED', 'FAILED'].includes(render.status))) throw new TourError('A concert render is already running.', 409);
+    const renderInput = tourVideoInput(project, selectedModel.id, storyboardUrl);
     const op = { id, projectId, kind: 'render', email: String(actor.email).toLowerCase(), costUsd, precisionSync,
-      status: 'PREPARING', phase: 'WAN', model: WORLD_TOUR_VIDEO_MODEL, createdAt: Date.now(),
+      status: 'PREPARING', phase: 'WAN', model: selectedModel.endpoint, modelId: selectedModel.id, createdAt: Date.now(),
       faceUrl: project.faceUrl, audioSource: project.song.audioUrl, clipStart: project.clipStart,
-      input: tourVideoInput(project) };
-    project.renders.unshift({ id, status: 'QUEUED', precisionSync, posterUrl: project.frames[HERO].imageUrl, createdAt: new Date().toISOString() });
+      input: renderInput, generationInput: renderInput };
+    project.renders.unshift({ id, status: 'QUEUED', precisionSync, model: selectedModel.id, posterUrl: project.frames[HERO].imageUrl, createdAt: new Date().toISOString() });
     await tx.query('INSERT INTO world_tour_operations(id,project_id,data) VALUES($1,$2,$3::jsonb)', [id, projectId, JSON.stringify(op)]);
   });
   void processTourOperation(id);
