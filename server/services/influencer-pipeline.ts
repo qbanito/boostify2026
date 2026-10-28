@@ -14,6 +14,7 @@ import { generateInfluencerScript, saveScriptAsDraft } from './influencer-script
 import { generateInfluencerSpeech } from './influencer-voice-service';
 import { generateAvatarVideo } from './influencer-avatar-service';
 import { generateVideoFromImage } from './fal-service';
+import { chargeCreditsFromUsd } from './credit-engine';
 
 export interface PipelineResult {
   success: boolean;
@@ -22,6 +23,8 @@ export interface PipelineResult {
   status?: string;
   error?: string;
   steps?: PipelineStepResult[];
+  providerCostUsd?: number;
+  creditsCharged?: number;
 }
 
 interface PipelineStepResult {
@@ -44,6 +47,7 @@ export async function runInfluencerPipeline(
     language?: string;
     customPrompt?: string;
     existingContentId?: number;
+    userEmail?: string;
   } = {}
 ): Promise<PipelineResult> {
   const steps: PipelineStepResult[] = [];
@@ -59,9 +63,36 @@ export async function runInfluencerPipeline(
       // Resume from existing content
       const [existing] = await db.select().from(influencerContent).where(eq(influencerContent.id, contentId)).limit(1);
       if (!existing) return { success: false, error: 'Content not found' };
-      scriptText = existing.scriptText;
-      title = existing.title;
-      steps.push({ step: 'script', success: true, durationMs: 0, output: 'Using existing script' });
+      if (existing.scriptText === '__PENDING_SCRIPT__') {
+        await updateStatus(contentId, 'draft', 'Generating script...');
+        const scriptStart = Date.now();
+        const scriptResult = await generateInfluencerScript(userId, {
+          topic: options.topic,
+          contentType: options.contentType,
+          targetDurationSec: options.targetDurationSec,
+          language: options.language,
+          customPrompt: options.customPrompt,
+        });
+        if (!scriptResult.success || !scriptResult.script) {
+          await updateStatus(contentId, 'failed', undefined, `Script generation failed: ${scriptResult.error}`);
+          return { success: false, contentId, error: `Script generation failed: ${scriptResult.error}` };
+        }
+        scriptText = scriptResult.script;
+        title = scriptResult.title || 'Untitled';
+        await db.update(influencerContent).set({
+          title,
+          scriptText,
+          topic: scriptResult.topic || options.topic || 'trending',
+          contentType: (options.contentType || 'entertainment') as any,
+          targetDurationSec: options.targetDurationSec || 60,
+          updatedAt: new Date(),
+        }).where(eq(influencerContent.id, contentId));
+        steps.push({ step: 'script', success: true, durationMs: Date.now() - scriptStart, output: title });
+      } else {
+        scriptText = existing.scriptText;
+        title = existing.title;
+        steps.push({ step: 'script', success: true, durationMs: 0, output: 'Using existing script' });
+      }
     } else {
       await updateStatus(contentId, 'draft', 'Generating script...');
       
@@ -171,18 +202,35 @@ export async function runInfluencerPipeline(
     // The final video is the avatar video (main) + b-roll can be composited in the timeline editor
     const finalVideoUrl = avatarResult?.videoUrl || voiceResult.audioUrl;
 
+    const videoDuration = avatarResult.durationSec || voiceResult.durationSec || options.targetDurationSec || 60;
+    const avatarProviderCost = avatarResult.success
+      ? videoDuration * (avatarResult.costUsdPerSecond || 0.05)
+      : 0;
+    const brollProviderCost = brollUrls.length > 0 ? 0.20 : 0;
+    const totalCost = estimatePipelineCost(steps, avatarProviderCost, brollProviderCost);
+    let creditsCharged: number | undefined;
+
+    if (options.userEmail) {
+      const charge = await chargeCreditsFromUsd(options.userEmail, totalCost, `AI Influencer video (${Math.round(videoDuration)}s)`, {
+        markup: 3,
+        metadata: { provider: 'fal', model: avatarResult.modelPath || 'heygen-fallback', module: 'ai-influencer-studio' },
+      });
+      if (!charge.success) {
+        await updateStatus(contentId!, 'failed', undefined, charge.error || 'Insufficient credits');
+        return { success: false, contentId, error: charge.error || 'Insufficient credits', steps };
+      }
+      creditsCharged = charge.creditsCharged;
+      logger.info(`[Pipeline] Charged ${charge.creditsCharged} credits at 3x provider cost`);
+    }
+
     await db.update(influencerContent)
       .set({
         finalVideoUrl,
+        generationCostUsd: totalCost.toString(),
         status: 'ready',
         pipelineStep: 'complete',
         updatedAt: new Date(),
       })
-      .where(eq(influencerContent.id, contentId!));
-
-    const totalCost = estimatePipelineCost(steps);
-    await db.update(influencerContent)
-      .set({ generationCostUsd: totalCost.toString() })
       .where(eq(influencerContent.id, contentId!));
 
     logger.info(`[Pipeline] Content ${contentId} pipeline complete. Cost: $${totalCost}`);
@@ -193,6 +241,8 @@ export async function runInfluencerPipeline(
       finalVideoUrl,
       status: 'ready',
       steps,
+      providerCostUsd: totalCost,
+      creditsCharged,
     };
   } catch (error: any) {
     logger.error(`[Pipeline] Fatal error: ${error.message}`);
@@ -241,15 +291,15 @@ async function updateStatus(contentId: number | undefined, status: string, step?
     .where(eq(influencerContent.id, contentId));
 }
 
-function estimatePipelineCost(steps: PipelineStepResult[]): number {
+function estimatePipelineCost(steps: PipelineStepResult[], avatarProviderCost: number, brollProviderCost: number): number {
   let cost = 0;
   for (const step of steps) {
     if (!step.success) continue;
     switch (step.step) {
-      case 'script': cost += 0.01; break;   // GPT-4o-mini
+      case 'script': if (step.output !== 'Using existing script') cost += 0.01; break;
       case 'voice': cost += 0.03; break;    // TTS
-      case 'avatar': cost += 0.50; break;   // HeyGen
-      case 'broll': cost += 0.28; break;    // Kling
+      case 'avatar': cost += avatarProviderCost; break;
+      case 'broll': cost += brollProviderCost; break;
     }
   }
   return Math.round(cost * 100) / 100;

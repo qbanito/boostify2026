@@ -491,6 +491,8 @@ export interface FalVideoResult {
   fps?: number;
   numFrames?: number;
   error?: string;
+  modelPath?: string;
+  costUsdPerSecond?: number;
   provider?: 'fal-grok-image-to-video' | 'fal-grok-edit-video' | 'fal-wan-image-to-video';
 }
 
@@ -1235,6 +1237,7 @@ export async function generateImageWithNanoBanana(
     aspectRatio?: NanoBananaAspectRatio;
     numImages?: number;
     outputFormat?: 'jpeg' | 'png' | 'webp';
+    fallback?: boolean;
   } = {}
 ): Promise<FalImageResult> {
   try {
@@ -1293,7 +1296,7 @@ export async function generateImageWithNanoBanana(
           success: true,
           imageUrl: permanentUrl,
           imageBase64: downloaded.base64,
-          provider: 'fal-flux-2-pro'
+          provider: 'fal-ai/nano-banana-2'
         };
       }
     }
@@ -1301,6 +1304,8 @@ export async function generateImageWithNanoBanana(
     throw new Error('No se recibió imagen en la respuesta');
   } catch (error: any) {
     logger.error('[FAL] Error generando imagen con Flux 2 Pro:', error.response?.data || error.message);
+
+    if (options.fallback === false) return { success: false, error: error.response?.data?.detail || error.message };
 
     // 🤖 FALLBACK PRINCIPAL: OpenAI GPT Image 1 (modelo de imágenes de OpenAI).
     // Requisito del producto: si FAL falla, SIEMPRE usar el modelo de imágenes de OpenAI.
@@ -1507,6 +1512,7 @@ export async function editImageWithNanoBanana(
     numImages?: number;
     outputFormat?: 'jpeg' | 'png' | 'webp';
     strength?: number; // 0.0 = keep original, 1.0 = fully new (default: ~0.85)
+    fallback?: boolean;
   } = {}
 ): Promise<FalImageResult> {
   try {
@@ -1569,7 +1575,7 @@ export async function editImageWithNanoBanana(
           success: true,
           imageUrl: permanentUrl,
           imageBase64: downloaded.base64,
-          provider: 'fal-flux-2-pro'
+          provider: 'fal-ai/nano-banana-2/edit'
         };
       }
     }
@@ -1577,6 +1583,7 @@ export async function editImageWithNanoBanana(
     throw new Error('No se recibió imagen editada en la respuesta');
   } catch (error: any) {
     logger.error('[FAL] Error editando imagen con Flux 2 Pro:', error.response?.data || error.message);
+    if (options.fallback === false) return { success: false, error: error.response?.data?.detail || error.message };
     
     // 🎭 CONSISTENCY FIX: Retry with single reference before falling back without any reference
     const imageUrlsArray = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
@@ -4379,6 +4386,94 @@ async function pollFalQueueResult(
     }
   }
   throw new Error('FAL job timeout');
+}
+
+/** H3 Max talking-head generation. Flashtalk is handled by the caller as the lower-cost fallback. */
+export async function generateH3MaxInfluencerVideo(imageUrl: string, audioUrl: string): Promise<FalVideoResult> {
+  if (!FAL_API_KEY) return { success: false, error: 'FAL_API_KEY not configured' };
+  try {
+    const falImageUrl = await uploadUrlToFalStorage(imageUrl, 'influencer-avatar.jpg');
+    const falAudioUrl = await uploadUrlToFalStorage(audioUrl, 'influencer-voice.mp3');
+    const endpoint = 'minimax/h3-max/lip-sync/image-to-video';
+    const queued = await axios.post(`${FAL_QUEUE_URL}/${endpoint}`, {
+      image_url: falImageUrl,
+      audio_url: falAudioUrl,
+      resolution: '768P',
+      enable_transcription: true,
+      enable_safety_checker: true,
+    }, { headers: { Authorization: `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 30000 });
+    const result = await pollFalQueueResult(queued.data.status_url, queued.data.response_url, { maxAttempts: 240, intervalMs: 2500, tag: 'FAL:H3MaxInfluencer' });
+    const url = result.video?.url;
+    if (!url) throw new Error('H3 Max did not return a video URL');
+    return { success: true, videoUrl: await persistVideoToStorage(url, 'influencer-videos'), duration: result.duration, provider: 'fal-wan-image-to-video', modelPath: endpoint, costUsdPerSecond: 0.05 };
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || error.response?.data?.error || error.message;
+    logger.warn(`[InfluencerVideo] H3 Max failed: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+/** Fast, audio-driven Fal fallback for H3 Max. */
+export async function generateFlashTalkInfluencerVideo(imageUrl: string, audioUrl: string): Promise<FalVideoResult> {
+  if (!FAL_API_KEY) return { success: false, error: 'FAL_API_KEY not configured' };
+  try {
+    const falImageUrl = await uploadUrlToFalStorage(imageUrl, 'influencer-avatar.jpg');
+    const falAudioUrl = await uploadUrlToFalStorage(audioUrl, 'influencer-voice.mp3');
+    const endpoint = 'fal-ai/flashtalk';
+    const queued = await axios.post(`${FAL_QUEUE_URL}/${endpoint}`, {
+      image_url: falImageUrl,
+      audio_url: falAudioUrl,
+    }, { headers: { Authorization: `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 30000 });
+    const result = await pollFalQueueResult(queued.data.status_url, queued.data.response_url, { maxAttempts: 240, intervalMs: 2500, tag: 'FAL:FlashTalkInfluencer' });
+    const url = result.video?.url;
+    if (!url) throw new Error('Flashtalk did not return a video URL');
+    return { success: true, videoUrl: await persistVideoToStorage(url, 'influencer-videos'), duration: result.duration, provider: 'fal-wan-image-to-video', modelPath: endpoint, costUsdPerSecond: 0.02 };
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || error.response?.data?.error || error.message;
+    logger.warn(`[InfluencerVideo] Flashtalk failed: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+/** WAN 3.0 reference video. Prime falls back to standard WAN 3.0; standard falls back to Prime. */
+export async function generateWan30InfluencerVideo(
+  referenceImageUrls: string[],
+  prompt: string,
+  options: { duration?: number; aspectRatio?: string; resolution?: '480p' | '720p' | '1080p'; model?: 'wan-3.0' | 'wan-3.0-prime' } = {}
+): Promise<FalVideoResult> {
+  if (!FAL_API_KEY) return { success: false, error: 'FAL_API_KEY not configured' };
+  if (!referenceImageUrls.length) return { success: false, error: 'At least one reference image is required' };
+  const preferred = options.model === 'wan-3.0-prime'
+    ? 'alibaba/wan-3.0-prime/reference-to-video'
+    : 'alibaba/wan-3.0/reference-to-video';
+  const fallback = preferred.includes('-prime')
+    ? 'alibaba/wan-3.0/reference-to-video'
+    : 'alibaba/wan-3.0-prime/reference-to-video';
+  let lastError = 'WAN generation failed';
+
+  for (const endpoint of [preferred, fallback]) {
+    try {
+      const images = await Promise.all(referenceImageUrls.slice(0, 10).map((url, index) => uploadUrlToFalStorage(url, `influencer-wan-ref-${index + 1}.jpg`)));
+      const queued = await axios.post(`${FAL_QUEUE_URL}/${endpoint}`, {
+        prompt,
+        reference_image_urls: images,
+        duration: Math.min(30, Math.max(2, Math.round(options.duration || 10))),
+        aspect_ratio: options.aspectRatio || '9:16',
+        resolution: options.resolution || '720p',
+        audio: true,
+        enable_prompt_expansion: true,
+        enable_safety_checker: true,
+      }, { headers: { Authorization: `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 30000 });
+      const result = await pollFalQueueResult(queued.data.status_url, queued.data.response_url, { maxAttempts: 240, intervalMs: 2500, tag: `FAL:${endpoint}` });
+      const url = result.video?.url;
+      if (!url) throw new Error('WAN did not return a video URL');
+      return { success: true, videoUrl: await persistVideoToStorage(url, 'influencer-videos'), duration: result.duration, provider: 'fal-wan-image-to-video', modelPath: endpoint, costUsdPerSecond: 0.05 };
+    } catch (error: any) {
+      lastError = error.response?.data?.detail || error.response?.data?.error || error.message;
+      logger.warn(`[InfluencerVideo] ${endpoint} failed; trying WAN fallback: ${lastError}`);
+    }
+  }
+  return { success: false, error: lastError };
 }
 
 // Helper interno: persiste video remoto en Firebase Storage

@@ -1,9 +1,9 @@
 ﻿/**
- * Influencer Module — ElevenLabs voice cloning, HeyGen avatar, content pipeline & scheduling
+ * Influencer Module — AI voice, Fal talking avatar, content pipeline & scheduling
  * Reads masterJson to enrich content topics, voice name, and avatar hints.
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../../lib/queryClient";
 import { useAuth } from "../../hooks/use-auth";
@@ -244,13 +244,15 @@ export function InfluencerModule({ userId, artistName, isOwner, colors, isExpand
             />
           )}
 
-          {/* Viral Studio Tab — Happy Horse + GPT-Image-2 */}
+          {/* Viral Studio Tab — WAN video generation */}
           {activeTab === 'viral' && isOwner && (
             <ViralStudioPanel
               userId={userId}
               userEmail={userEmail}
               colors={colors}
               artistName={artistName}
+              artistImageUrl={avatarProfile?.sourceImageUrl}
+              artistStyle={[masterJson?.musical_dna?.primary_genre, masterJson?.visual_dna?.aesthetic, masterJson?.persona?.archetype_name].filter(Boolean).join('; ')}
               queryClient={queryClient}
             />
           )}
@@ -417,7 +419,7 @@ function VideoPreviewSection({ content, colors, isOwner, artistName }: {
                     9:16 Vertical Format
                   </div>
                   <div className="text-[10px] px-3 py-1 rounded-full bg-white/5 text-gray-400">
-                    ~$0.82/video
+                    H3 Max · credit quote shown before generation
                   </div>
                 </div>
               )}
@@ -586,6 +588,16 @@ function GeneratePanel({ userId, colors, hasSetup, queryClient, artistName, mast
   const [topic, setTopic] = useState('');
   const [contentType, setContentType] = useState('entertainment');
   const [duration, setDuration] = useState(60);
+  const [costEstimate, setCostEstimate] = useState<any>(null);
+
+  useEffect(() => {
+    if (!hasSetup) return;
+    let active = true;
+    apiRequest({ url: '/api/influencer/content/estimate-cost', method: 'POST', data: { userId, targetDurationSec: duration } })
+      .then((quote: any) => { if (active) setCostEstimate(quote); })
+      .catch(() => { if (active) setCostEstimate(null); });
+    return () => { active = false; };
+  }, [userId, duration, hasSetup]);
 
   // Build smart topic suggestions from masterJson DNA (no extra API call needed)
   const smartTopics: string[] = masterJson ? [
@@ -744,9 +756,15 @@ function GeneratePanel({ userId, colors, hasSetup, queryClient, artistName, mast
       </button>
 
       {/* Cost estimate */}
-      <p className="text-[10px] text-gray-600 text-center">
-        Estimated cost: ~$0.82 per video (script + voice + avatar + rendering)
-      </p>
+      <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center">
+        <div className="text-[10px] uppercase tracking-wider text-gray-500">H3 Max · FlashTalk fallback · 3× provider cost</div>
+        {costEstimate ? (
+          <div className="mt-1 text-xs text-white">
+            Up to <span className="font-bold" style={{ color: colors.hexAccent }}>{costEstimate.estimatedCredits} credits · ${costEstimate.customerPriceUsd.toFixed(2)}</span>
+            <span className="text-gray-500"> · actual charge follows successful stages</span>
+          </div>
+        ) : <div className="mt-1 text-[10px] text-gray-500">Quote unavailable</div>}
+      </div>
 
       {/* Live pipeline progress — updates automatically while rendering */}
       {inProgressItem && (
@@ -1195,7 +1213,7 @@ function SetupPanel({ userId, colors, voiceProfile, avatarProfile, queryClient, 
           <div className="flex-1">
             <div className="text-sm font-semibold text-white">AI Avatar</div>
             <div className="text-[10px] text-gray-500">
-              {avatarProfile ? 'HeyGen avatar ready' : 'Create a talking avatar from your photo'}
+              {avatarProfile ? 'Artist portrait ready' : 'Create a talking avatar from your photo'}
             </div>
           </div>
           {avatarProfile && <CheckCircle2 className="h-4 w-4 text-green-400" />}
@@ -1213,7 +1231,7 @@ function SetupPanel({ userId, colors, voiceProfile, avatarProfile, queryClient, 
               )}
               <div>
                 <div className="text-xs text-white">Style: {avatarProfile.avatarStyle || 'casual'}</div>
-                <div className="text-[10px] text-gray-500">HeyGen talking photo avatar</div>
+                <div className="text-[10px] text-gray-500">Face reference for H3 Max · FlashTalk fallback</div>
               </div>
             </div>
             <button
@@ -1527,7 +1545,7 @@ function SchedulePanel({ userId, colors, config, queryClient }: {
 }
 
 // =============================================================
-// 🔥 VIRAL STUDIO PANEL — Happy Horse + GPT-Image-2 + Cost Estimator
+// Viral Studio — Wan 3.0 / Wan 3.0 Prime + Nano Banana 2
 // =============================================================
 //
 // Workflow:
@@ -1549,11 +1567,13 @@ const VIRAL_TARGETS: Array<{ id: ViralTarget; label: string; icon: any; tagline:
   { id: 'merch',   label: 'Product / Merch',  icon: ShoppingBag, tagline: 'Reference-to-video product spot' },
 ];
 
-function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }: {
+function ViralStudioPanel({ userId, userEmail, colors, artistName, artistImageUrl, artistStyle, queryClient }: {
   userId: number;
   userEmail?: string;
   colors: any;
   artistName: string;
+  artistImageUrl?: string;
+  artistStyle?: string;
   queryClient: any;
 }) {
   const [target, setTarget] = useState<ViralTarget>('service');
@@ -1561,9 +1581,10 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
   const [duration, setDuration] = useState<5 | 10 | 15>(10);
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
+  const [videoModel, setVideoModel] = useState<'wan-3.0' | 'wan-3.0-prime'>('wan-3.0');
   const [useImageEdit, setUseImageEdit] = useState(false);
   const [editPrompt, setEditPrompt] = useState('');
-  const [referenceUrls, setReferenceUrls] = useState<string[]>([]);
+  const [referenceUrls, setReferenceUrls] = useState<string[]>(artistImageUrl ? [artistImageUrl] : []);
   const [refInput, setRefInput] = useState('');
   const [estimate, setEstimate] = useState<any>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -1572,6 +1593,10 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
   const [error, setError] = useState<string | null>(null);
 
   const usingReference = referenceUrls.length > 0;
+
+  useEffect(() => {
+    if (artistImageUrl) setReferenceUrls(current => current.length ? current : [artistImageUrl]);
+  }, [artistImageUrl]);
 
   // -- Build "steps" array for cost estimation based on current selections --
   const steps = (() => {
@@ -1589,7 +1614,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
       const res = await apiRequest({
         url: '/api/influencer/viral/estimate-cost',
         method: 'POST',
-        data: { steps, duration, userEmail: userEmail || undefined },
+        data: { steps, duration, model: videoModel, userEmail: userEmail || undefined },
       });
       setEstimate(res);
     } catch (e: any) {
@@ -1597,16 +1622,16 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
     } finally {
       setEstimateLoading(false);
     }
-  }, [JSON.stringify(steps), duration, userEmail]);
+  }, [JSON.stringify(steps), duration, videoModel, userEmail]);
 
   // Re-estimate whenever inputs change
-  useEffectIfChanged([steps.join(','), duration], () => { void refreshEstimate(); });
+  useEffectIfChanged([steps.join(','), duration, videoModel], () => { void refreshEstimate(); });
 
   function addReferenceUrl() {
     const url = refInput.trim();
     if (!url) return;
     if (referenceUrls.length >= 4) {
-      setError('Máximo 4 imágenes de referencia.');
+      setError('Add up to 4 reference images.');
       return;
     }
     setReferenceUrls(prev => [...prev, url]);
@@ -1620,7 +1645,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
 
   async function handleGenerate() {
     if (!prompt.trim()) {
-      setError('Describe el contenido viral que quieres generar.');
+      setError('Describe the video concept you want to create.');
       return;
     }
     setError(null);
@@ -1636,9 +1661,11 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           prompt,
           target,
           artistName,
+          artistStyle,
           duration,
           aspectRatio,
           resolution,
+          model: videoModel,
           useImageEdit,
           editPrompt: editPrompt || undefined,
           referenceImageUrls: usingReference ? referenceUrls : undefined,
@@ -1676,8 +1703,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           <div className="flex-1">
             <div className="text-sm font-bold text-white">Viral Content Studio</div>
             <div className="text-[11px] text-gray-400 mt-0.5">
-              Pipeline IA: imagen viral → edición opcional GPT-Image-2 → video 5-15s con Happy Horse.
-              Coste mostrado antes de generar.
+              Create short, artist-led visuals with Wan 3.0. Start from the artist portrait or your references, or generate a key image with Nano Banana 2. The quote shows the 3× price before generation.
             </div>
           </div>
         </div>
@@ -1686,7 +1712,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
       {/* Promotion target selector */}
       <div>
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2">
-          ¿Qué quieres promocionar?
+          PROMOTION GOAL
         </div>
         <div className="grid grid-cols-2 gap-2">
           {VIRAL_TARGETS.map(t => {
@@ -1716,7 +1742,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
       {/* Prompt */}
       <div>
         <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2">
-          Describe el contenido viral
+          CREATIVE DIRECTION
         </div>
         <textarea
           value={prompt}
@@ -1724,12 +1750,12 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           rows={3}
           placeholder={
             target === 'service'
-              ? `Ej: ${artistName || 'una persona común'} se transforma en una superestrella IA en segundos, neon glass aesthetic, momento "wow"`
+              ? `Example: ${artistName || 'the artist'} goes from a quiet backstage moment to a sold-out show, bold neon lighting, authentic artist identity`
               : target === 'song'
-              ? 'Ej: visual de hype para mi nuevo single, beat drop, color saturation, vertical, audio-reactive'
+              ? 'Example: a visual teaser for my new single, a dramatic beat drop, saturated colors, vertical framing'
               : target === 'video'
-              ? 'Ej: teaser cinematográfico de mi nuevo music video, gancho visual primer segundo, cyberpunk'
-              : 'Ej: producto giro 360, fondo limpio, luz premium, satisfying motion'
+              ? 'Example: a cinematic teaser for my new music video, a strong first-second hook, futuristic city at night'
+              : 'Example: a premium 360-degree product reveal, clean background, dramatic studio lighting'
           }
           className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/30 resize-none"
         />
@@ -1739,7 +1765,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
       <div>
         <div className="flex items-center justify-between mb-2">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-            Imágenes de referencia <span className="text-gray-600 normal-case">(opcional · activa Reference-to-Video)</span>
+            REFERENCE IMAGES <span className="text-gray-600 normal-case">(artist portrait is preloaded when available)</span>
           </div>
           <span className="text-[10px] text-gray-500">{referenceUrls.length}/4</span>
         </div>
@@ -1748,7 +1774,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
             type="url"
             value={refInput}
             onChange={e => setRefInput(e.target.value)}
-            placeholder="https://… (URL pública de imagen)"
+            placeholder="https://… (public image URL)"
             className="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addReferenceUrl(); } }}
           />
@@ -1778,7 +1804,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
         )}
       </div>
 
-      {/* Image edit toggle (GPT-Image-2) */}
+      {/* Optional image refinement */}
       <div className="rounded-xl p-3 border border-white/10 bg-black/30">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -1788,24 +1814,35 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
             className="accent-white"
           />
           <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
-          <span className="text-xs text-white font-semibold">Refinar imagen con GPT-Image-2 (premium)</span>
-          <span className="text-[10px] text-gray-500">+coste</span>
+          <span className="text-xs text-white font-semibold">Refine image with Nano Banana 2</span>
+          <span className="text-[10px] text-gray-500">additional credits</span>
         </label>
         {useImageEdit && (
           <input
             type="text"
             value={editPrompt}
             onChange={e => setEditPrompt(e.target.value)}
-            placeholder="Instrucciones de edición (vacío = usa el prompt principal)"
+            placeholder="Refinement instructions (leave blank to reuse your main prompt)"
             className="mt-2 w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-xs text-white placeholder-gray-600 focus:outline-none"
           />
         )}
       </div>
 
-      {/* Duration / aspect / resolution */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Wan model / duration / aspect / resolution */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Duración</div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Video model</div>
+          <select
+            value={videoModel}
+            onChange={e => setVideoModel(e.target.value as any)}
+            className="w-full py-1.5 rounded-lg text-[11px] bg-black/40 border border-white/10 text-white"
+          >
+            <option value="wan-3.0">Wan 3.0 · balanced</option>
+            <option value="wan-3.0-prime">Wan 3.0 Prime · faster</option>
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Duration</div>
           <div className="flex gap-1">
             {[5, 10, 15].map(d => (
               <button
@@ -1822,7 +1859,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Formato</div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Aspect ratio</div>
           <select
             value={aspectRatio}
             onChange={e => setAspectRatio(e.target.value as any)}
@@ -1834,7 +1871,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           </select>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Resolución</div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Resolution</div>
           <select
             value={resolution}
             onChange={e => setResolution(e.target.value as any)}
@@ -1858,13 +1895,13 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4" style={{ color: accent }} />
-            <span className="text-xs font-bold text-white">Estimación de coste</span>
+            <span className="text-xs font-bold text-white">Credit quote · 3× provider cost</span>
           </div>
           <button
             onClick={() => void refreshEstimate()}
             className="text-[10px] text-gray-500 hover:text-white"
           >
-            {estimateLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Recalcular'}
+            {estimateLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Refresh quote'}
           </button>
         </div>
         {estimate ? (
@@ -1883,10 +1920,10 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
               <span className="text-xs font-bold text-white">Total</span>
               <div className="text-right">
                 <div className="text-sm font-bold" style={{ color: accent }}>
-                  {estimate.totalCredits} créditos
+                  {estimate.totalCredits} credits
                 </div>
                 <div className="text-[10px] text-gray-500 font-mono">
-                  ≈ ${estimate.totalUserPriceUsd?.toFixed(2)} · coste API ${estimate.totalUsd?.toFixed(2)}
+                  Customer price ${estimate.totalUserPriceUsd?.toFixed(2)} · provider cost ${estimate.totalUsd?.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -1898,16 +1935,16 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
                   color: estimate.canAfford === false ? '#f87171' : '#4ade80',
                 }}
               >
-                <span>Tu saldo: {estimate.userBalance} créditos</span>
+                <span>Your balance: {estimate.userBalance} credits</span>
                 <span className="font-semibold">
-                  {estimate.canAfford === false ? 'Saldo insuficiente' : 'Saldo suficiente ✓'}
+                  {estimate.canAfford === false ? 'Not enough credits' : 'Credits available ✓'}
                 </span>
               </div>
             )}
           </>
         ) : (
           <div className="text-[11px] text-gray-500">
-            {estimateLoading ? 'Calculando…' : 'Configura los parámetros para ver el coste.'}
+            {estimateLoading ? 'Calculating…' : 'Choose your settings to see the quote.'}
           </div>
         )}
       </div>
@@ -1934,12 +1971,12 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
         {running ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Generando contenido viral…
+            Creating your video…
           </>
         ) : (
           <>
             <Zap className="h-4 w-4" />
-            Generar Viral · {targetMeta.label}
+            Generate · {targetMeta.label}
           </>
         )}
       </button>
@@ -1958,7 +1995,7 @@ function ViralStudioPanel({ userId, userEmail, colors, artistName, queryClient }
           />
           <div className="p-3 space-y-1">
             <div className="text-[11px] text-gray-400">
-              Duración: {result.duration}s · Coste: ${result.totalCostUsd?.toFixed(3)} · Tiempo: {(result.elapsedMs / 1000).toFixed(1)}s
+            {result.model || videoModel} · {result.duration}s · Customer price ${result.customerPriceUsd?.toFixed(2)} · {(result.elapsedMs / 1000).toFixed(1)}s
             </div>
             <div className="flex gap-2 mt-2">
               <a

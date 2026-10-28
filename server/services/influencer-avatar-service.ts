@@ -13,6 +13,7 @@ import { logger } from '../utils/logger';
 import { db } from '../../db';
 import { influencerAvatarProfiles } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import { generateH3MaxInfluencerVideo, generateFlashTalkInfluencerVideo } from './fal-service';
 
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY || process.env.VITE_HEYGEN_API_KEY || '';
 const HEYGEN_BASE_URL = 'https://api.heygen.com';
@@ -38,6 +39,8 @@ export interface AvatarVideoResult {
   videoUrl?: string;
   durationSec?: number;
   thumbnailUrl?: string;
+  modelPath?: string;
+  costUsdPerSecond?: number;
   error?: string;
 }
 
@@ -116,41 +119,21 @@ export async function generateAvatarVideo(
 
     logger.info(`[InfluencerAvatar] Generating video for user ${userId}, avatar ${avatarProfile.heygenAvatarId}`);
 
-    // Create video with HeyGen
-    const response = await axios.post(
-      `${HEYGEN_BASE_URL}/v2/video/generate`,
-      {
-        video_inputs: [{
-          character: {
-            type: 'talking_photo',
-            talking_photo_id: avatarProfile.heygenAvatarId,
-          },
-          voice: {
-            type: 'audio',
-            audio_url: voiceAudioUrl,
-          },
-          background: options.background ? {
-            type: 'image',
-            value: options.background,
-          } : undefined,
-        }],
-        dimension: options.aspectRatio === '9:16'
-          ? { width: 1080, height: 1920 }
-          : options.aspectRatio === '1:1'
-            ? { width: 1080, height: 1080 }
-            : { width: 1920, height: 1080 },
-      },
-      { headers: getHeygenHeaders(), timeout: 30000 }
-    );
+    // Use the artist's original portrait as the canonical face reference. H3 Max
+    // follows the generated voice audio; Flashtalk is the lower-cost Fal fallback.
+    if (avatarProfile.sourceImageUrl && (process.env.FAL_API_KEY || process.env.FAL_KEY || process.env.FAL_AI_KEY)) {
+      const h3Result = await generateH3MaxInfluencerVideo(avatarProfile.sourceImageUrl, voiceAudioUrl);
+      if (h3Result.success && h3Result.videoUrl) {
+        return { success: true, videoUrl: h3Result.videoUrl, durationSec: h3Result.duration, modelPath: h3Result.modelPath, costUsdPerSecond: h3Result.costUsdPerSecond };
+      }
 
-    const videoId = response.data?.data?.video_id;
-    if (!videoId) {
-      return { success: false, error: 'No video_id from HeyGen' };
+      const flashTalkResult = await generateFlashTalkInfluencerVideo(avatarProfile.sourceImageUrl, voiceAudioUrl);
+      if (flashTalkResult.success && flashTalkResult.videoUrl) {
+        return { success: true, videoUrl: flashTalkResult.videoUrl, durationSec: flashTalkResult.duration, modelPath: flashTalkResult.modelPath, costUsdPerSecond: flashTalkResult.costUsdPerSecond };
+      }
+      return { success: false, error: `Fal H3 Max and Flashtalk failed: ${flashTalkResult.error || h3Result.error}` };
     }
-
-    // Poll for completion
-    const videoResult = await pollHeygenVideo(videoId);
-    return videoResult;
+    return { success: false, error: 'Fal API key and a valid artist portrait are required for talking video generation.' };
   } catch (error: any) {
     logger.error(`[InfluencerAvatar] Video gen error: ${error.message}`);
     return { success: false, error: error.message };

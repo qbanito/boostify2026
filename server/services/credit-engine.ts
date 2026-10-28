@@ -148,6 +148,18 @@ export async function getCreditCostFromUsd(internalCostUsd: number): Promise<num
   return Math.ceil(internalCostUsd * markup * CREDITS_PER_DOLLAR);
 }
 
+/** Module-specific pricing for studios whose customer markup is fixed by product policy. */
+export function getCreditCostFromUsdAtMarkup(internalCostUsd: number, markup: number): number {
+  if (!Number.isFinite(internalCostUsd) || internalCostUsd < 0 || !Number.isFinite(markup) || markup < 0) return 0;
+  return Math.ceil(internalCostUsd * markup * CREDITS_PER_DOLLAR);
+}
+
+export async function canAffordUsdAtMarkup(userEmail: string, internalCostUsd: number, markup: number) {
+  const { credits, isAdmin } = await getUserBalance(userEmail);
+  const requiredCredits = isAdmin ? 0 : getCreditCostFromUsdAtMarkup(internalCostUsd, markup);
+  return { allowed: isAdmin || credits >= requiredCredits, currentBalance: credits, requiredCredits, isAdmin };
+}
+
 // ============================================
 // BALANCE OPERATIONS
 // ============================================
@@ -337,13 +349,16 @@ export async function chargeCreditsFromUsd(
   options: {
     projectId?: number;
     metadata?: Record<string, any>;
+    markup?: number;
   } = {}
 ): Promise<ChargeResult> {
   if (userEmail === ADMIN_EMAIL) {
     return { success: true, creditsCharged: 0, remainingBalance: 999999 };
   }
 
-  const creditsToCharge = await getCreditCostFromUsd(internalCostUsd);
+  const creditsToCharge = options.markup === undefined
+    ? await getCreditCostFromUsd(internalCostUsd)
+    : getCreditCostFromUsdAtMarkup(internalCostUsd, options.markup);
 
   if (creditsToCharge <= 0) {
     return { success: true, creditsCharged: 0, remainingBalance: 0 };

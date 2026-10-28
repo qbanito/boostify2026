@@ -30,11 +30,10 @@ import { generateInfluencerScript, suggestTopics } from '../services/influencer-
 import { runInfluencerPipeline, getPipelineStatus } from '../services/influencer-pipeline';
 import {
   generateImageWithNanoBanana,
-  editImageWithGPTImage2,
-  generateVideoWithHappyHorse,
-  generateVideoFromReferenceWithHappyHorse,
+  editImageWithNanoBanana,
+  generateWan30InfluencerVideo,
 } from '../services/fal-service';
-import { chargeCreditsFromUsd, canAffordUsd, getUserBalance } from '../services/credit-engine';
+import { chargeCreditsFromUsd, canAffordUsdAtMarkup, getCreditCostFromUsdAtMarkup, getUserBalance } from '../services/credit-engine';
 
 const router = Router();
 
@@ -558,32 +557,82 @@ router.post('/content/generate-script', authenticate, async (req: Request, res: 
   }
 });
 
+/** POST /content/estimate-cost — maximum quote before running the H3 Max pipeline. */
+router.post('/content/estimate-cost', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { userId, targetDurationSec = 60 } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to view a quote.' });
+    const duration = Math.max(15, Math.min(180, Number(targetDurationSec) || 60));
+    const providerCostUsd = 0.04 + (0.05 * duration) + 0.20;
+    const credits = getCreditCostFromUsdAtMarkup(providerCostUsd, INFLUENCER_MARKUP);
+    const balance = await getUserBalance(userEmail);
+    res.json({
+      success: true,
+      duration,
+      providerCostUsd: Number(providerCostUsd.toFixed(2)),
+      estimatedCredits: credits,
+      customerPriceUsd: Number((credits / 100).toFixed(2)),
+      markupMultiplier: INFLUENCER_MARKUP,
+      userBalance: balance.credits,
+      canAfford: balance.isAdmin || balance.credits >= credits,
+      note: 'Maximum quote at H3 Max rates. Final billing uses the successful fallback and completed stages only.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /** POST /content/generate — Run full pipeline (script → voice → avatar → video) */
 router.post('/content/generate', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId, topic, contentType, targetDurationSec, language, customPrompt, existingContentId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
+    const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
+    const duration = Math.max(15, Math.min(180, Number(targetDurationSec) || 60));
+    const contentTypeOptions = ['educational', 'entertainment', 'review', 'trending', 'opinion', 'behind_scenes', 'promo', 'reaction', 'tips'];
+    const normalizedContentType = contentTypeOptions.includes(contentType) ? contentType : 'entertainment';
+    const estimatedProviderUsd = 0.04 + (0.05 * duration) + 0.20; // script + voice allowance, H3 Max, optional 4s visual
+    const afford = await canAffordUsdAtMarkup(userEmail, estimatedProviderUsd, INFLUENCER_MARKUP);
+    if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
 
-    // Run pipeline asynchronously — return immediately with content ID
-    const pipelinePromise = runInfluencerPipeline(Number(userId), {
-      topic, contentType, targetDurationSec, language, customPrompt,
-      existingContentId: existingContentId ? Number(existingContentId) : undefined,
-    });
-
-    // For short content, wait up to 5 seconds for script step
-    const raceResult = await Promise.race([
-      pipelinePromise,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
-    ]);
-
-    if (raceResult && (raceResult as any).success !== undefined) {
-      return res.json(raceResult);
+    let contentId: number;
+    if (existingContentId) {
+      const [existing] = await db.select().from(influencerContent).where(and(
+        eq(influencerContent.id, Number(existingContentId)),
+        eq(influencerContent.userId, Number(userId)),
+      )).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Content not found' });
+      contentId = existing.id;
+    } else {
+      const [draft] = await db.insert(influencerContent).values({
+        userId: Number(userId),
+        title: 'Preparing your video…',
+        scriptText: '__PENDING_SCRIPT__',
+        topic: topic || 'trending',
+        contentType: normalizedContentType as any,
+        targetDurationSec: duration,
+        status: 'draft',
+        pipelineStep: 'Generating script...',
+        platform: 'internal',
+      }).returning();
+      contentId = draft.id;
     }
 
-    // Pipeline still running — return status
-    res.json({
+    // Start asynchronously and return a stable content ID for progress polling.
+    void runInfluencerPipeline(Number(userId), {
+      topic, contentType: normalizedContentType, targetDurationSec: duration, language, customPrompt,
+      existingContentId: contentId,
+      userEmail,
+    }).catch((error: any) => logger.error(`[InfluencerRoutes] Pipeline failed for ${contentId}: ${error.message}`));
+
+    return res.json({
       success: true,
+      contentId,
       status: 'generating',
       message: 'Pipeline started. Poll /content/:id/status for progress.',
     });
@@ -593,8 +642,11 @@ router.post('/content/generate', authenticate, async (req: Request, res: Respons
 });
 
 /** GET /content/:id/status — Get pipeline status */
-router.get('/content/:id/status', async (req: Request, res: Response) => {
+router.get('/content/:id/status', authenticate, async (req: Request, res: Response) => {
   try {
+    const [item] = await db.select().from(influencerContent).where(eq(influencerContent.id, Number(req.params.id))).limit(1);
+    if (!item) return res.status(404).json({ error: 'Content not found' });
+    if (!(await assertOwnsUser(req, res, item.userId))) return;
     const status = await getPipelineStatus(Number(req.params.id));
     if (!status) return res.status(404).json({ error: 'Content not found' });
     res.json(status);
@@ -788,18 +840,19 @@ const VIRAL_PROMOTION_FOOTERS: Record<string, string> = {
   service: 'Promotional content for the BOOSTIFY artist creation platform (boostifymusic.com/create-artist). Aspirational vibe of "becoming an AI-powered artist", futuristic neon-glass aesthetic, transformation moment, vertical 9:16, strong CTA framing.',
 };
 
-function buildViralPrompt(basePrompt: string, target: string, artistName?: string): string {
+function buildViralPrompt(basePrompt: string, target: string, artistName?: string, artistStyle?: string): string {
   const footer = VIRAL_PROMOTION_FOOTERS[target] || VIRAL_PROMOTION_FOOTERS['service'];
   const artistTag = artistName ? `Featuring artist "${artistName}". ` : '';
-  return `${artistTag}${basePrompt}\n\nVIRAL DIRECTIVES: ${footer} Composition optimized for social feeds: bold subject, clean background, high color contrast, eye-catching micro-detail, no on-image text, no watermarks.`.trim();
+  const styleContext = artistStyle?.trim() ? `Artist's sound and visual identity: ${artistStyle.trim().slice(0, 500)}. Preserve this creative direction.` : '';
+  return `${artistTag}${styleContext}\n${basePrompt}\n\nVIRAL DIRECTIVES: ${footer} Composition optimized for social feeds: bold subject, clean background, high color contrast, eye-catching micro-detail, no on-image text, no watermarks. Keep the artist's face, age, skin tone, hairstyle, and likeness consistent with the provided portrait reference.`.trim();
 }
 
-// Coste interno (USD) por operación viral. Se multiplica por el markup global.
+// Live Fal rates (USD) checked 2026-10-28. This studio uses a fixed 3x customer markup.
+const INFLUENCER_MARKUP = 3;
 const VIRAL_COSTS_USD = {
-  image: 0.04,        // nano-banana-2
-  imageEdit: 0.08,    // gpt-image-2/edit (BYOK)
-  videoI2vPerSec: 0.15, // happy-horse i2v
-  videoR2vPerSec: 0.18, // happy-horse r2v
+  image: 0.08,        // fal-ai/nano-banana-2, per image
+  imageEdit: 0.08,    // fal-ai/nano-banana-2/edit, per image
+  videoPerSec: 0.05,  // Alibaba Wan 3.0 and Wan 3.0 Prime
 };
 
 /**
@@ -809,9 +862,10 @@ const VIRAL_COSTS_USD = {
  */
 router.post('/viral/estimate-cost', authenticate, async (req: Request, res: Response) => {
   try {
-    const { steps = [], duration = 10 } = req.body as {
+    const { steps = [], duration = 10, model = 'wan-3.0' } = req.body as {
       steps: Array<'image' | 'imageEdit' | 'i2v' | 'r2v'>;
       duration?: 5 | 10 | 15;
+      model?: string;
     };
     const dur = Math.min(15, Math.max(5, Number(duration) || 10));
 
@@ -821,13 +875,12 @@ router.post('/viral/estimate-cost', authenticate, async (req: Request, res: Resp
     for (const step of steps) {
       let usd = 0;
       let label = step;
-      if (step === 'image') { usd = VIRAL_COSTS_USD.image; label = 'Viral Image (Nano Banana 2)'; }
-      else if (step === 'imageEdit') { usd = VIRAL_COSTS_USD.imageEdit; label = 'Image Edit (GPT-Image-2)'; }
-      else if (step === 'i2v') { usd = VIRAL_COSTS_USD.videoI2vPerSec * dur; label = `Image-to-Video (Happy Horse, ${dur}s)`; }
-      else if (step === 'r2v') { usd = VIRAL_COSTS_USD.videoR2vPerSec * dur; label = `Reference-to-Video (Happy Horse, ${dur}s)`; }
+      if (step === 'image') { usd = VIRAL_COSTS_USD.image; label = 'Image generation (Nano Banana 2)'; }
+      else if (step === 'imageEdit') { usd = VIRAL_COSTS_USD.imageEdit; label = 'Image refinement (Nano Banana 2)'; }
+      else if (step === 'i2v' || step === 'r2v') { usd = VIRAL_COSTS_USD.videoPerSec * dur; label = `Wan ${String(req.body.model || 'wan-3.0').includes('prime') ? '3.0 Prime' : '3.0'} video (${dur}s)`; }
       else continue;
 
-      const credits = await (await import('../services/credit-engine')).getCreditCostFromUsd(usd);
+      const credits = getCreditCostFromUsdAtMarkup(usd, INFLUENCER_MARKUP);
       breakdown.push({ step: label, usd: Number(usd.toFixed(4)), credits });
       totalUsd += usd;
     }
@@ -848,6 +901,7 @@ router.post('/viral/estimate-cost', authenticate, async (req: Request, res: Resp
       totalUsd: Number(totalUsd.toFixed(4)),
       totalCredits,
       totalUserPriceUsd: totalCredits / 100,
+      markupMultiplier: INFLUENCER_MARKUP,
       breakdown,
       userBalance: balance,
       canAfford: balance === null ? null : balance >= totalCredits,
@@ -869,22 +923,24 @@ router.post('/viral/generate-image', authenticate, async (req: Request, res: Res
     if (!userId || !prompt) return res.status(400).json({ error: 'userId & prompt required' });
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
     const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
 
     // Pre-check balance
     if (userEmail) {
-      const afford = await canAffordUsd(userEmail, VIRAL_COSTS_USD.image);
+      const afford = await canAffordUsdAtMarkup(userEmail, VIRAL_COSTS_USD.image, INFLUENCER_MARKUP);
       if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
     }
 
     const finalPrompt = buildViralPrompt(prompt, target, artistName);
-    const result = await generateImageWithNanoBanana(finalPrompt, { aspectRatio: aspectRatio as any });
+    const result = await generateImageWithNanoBanana(finalPrompt, { aspectRatio: aspectRatio as any, fallback: false });
 
     if (!result.success) return res.status(502).json({ error: result.error || 'Image generation failed' });
 
     // Charge credits post-success
     let charged: any = null;
     if (userEmail) {
-      charged = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.image, 'Viral Image (Nano Banana 2)');
+      charged = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.image, 'Influencer image generation (Nano Banana 2)', { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: 'fal-ai/nano-banana-2' } });
+      if (!charged.success) return res.status(402).json({ error: charged.error || 'Insufficient credits', ...charged });
     }
 
     res.json({
@@ -913,20 +969,22 @@ router.post('/viral/edit-image', authenticate, async (req: Request, res: Respons
     }
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
     const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
 
     if (userEmail) {
-      const afford = await canAffordUsd(userEmail, VIRAL_COSTS_USD.imageEdit);
+      const afford = await canAffordUsdAtMarkup(userEmail, VIRAL_COSTS_USD.imageEdit, INFLUENCER_MARKUP);
       if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
     }
 
     const finalPrompt = target ? buildViralPrompt(prompt, target) : prompt;
-    const result = await editImageWithGPTImage2(imageUrls, finalPrompt, { aspectRatio });
+    const result = await editImageWithNanoBanana(imageUrls, finalPrompt, { aspectRatio: aspectRatio as any, fallback: false });
 
     if (!result.success) return res.status(502).json({ error: result.error || 'Image edit failed' });
 
     let charged: any = null;
     if (userEmail) {
-      charged = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.imageEdit, 'Viral Image Edit (GPT-Image-2)');
+      charged = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.imageEdit, 'Influencer image refinement (Nano Banana 2)', { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: 'fal-ai/nano-banana-2/edit' } });
+      if (!charged.success) return res.status(402).json({ error: charged.error || 'Insufficient credits', ...charged });
     }
 
     res.json({ success: true, imageUrl: result.imageUrl, provider: result.provider, finalPrompt, charged });
@@ -943,32 +1001,35 @@ router.post('/viral/edit-image', authenticate, async (req: Request, res: Respons
  */
 router.post('/viral/image-to-video', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, imageUrl, prompt, target = 'service', artistName,
+    const { userId, imageUrl, prompt, target = 'service', artistName, model = 'wan-3.0',
       duration = 10, aspectRatio = '9:16', resolution = '720p' } = req.body;
     if (!userId || !imageUrl || !prompt) return res.status(400).json({ error: 'userId, imageUrl & prompt required' });
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
     const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
-    const usd = VIRAL_COSTS_USD.videoI2vPerSec * dur;
+    const usd = VIRAL_COSTS_USD.videoPerSec * dur;
 
     if (userEmail) {
-      const afford = await canAffordUsd(userEmail, usd);
+      const afford = await canAffordUsdAtMarkup(userEmail, usd, INFLUENCER_MARKUP);
       if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
     }
 
     const finalPrompt = buildViralPrompt(prompt, target, artistName);
-    const result = await generateVideoWithHappyHorse(imageUrl, finalPrompt, {
+    const result = await generateWan30InfluencerVideo([imageUrl], finalPrompt, {
       duration: dur,
       aspectRatio,
       resolution,
+      model: model === 'wan-3.0-prime' ? 'wan-3.0-prime' : 'wan-3.0',
     });
 
     if (!result.success) return res.status(502).json({ error: result.error || 'Video generation failed' });
 
     let charged: any = null;
     if (userEmail) {
-      charged = await chargeCreditsFromUsd(userEmail, usd, `Viral Video I2V (${dur}s)`);
+      charged = await chargeCreditsFromUsd(userEmail, usd, `Influencer Wan video (${dur}s)`, { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: result.modelPath } });
+      if (!charged.success) return res.status(402).json({ error: charged.error || 'Insufficient credits', ...charged });
     }
 
     // Persistir como influencerContent draft
@@ -990,7 +1051,7 @@ router.post('/viral/image-to-video', authenticate, async (req: Request, res: Res
       logger.warn(`[ViralStudio] Could not persist content row: ${e.message}`);
     }
 
-    res.json({ success: true, videoUrl: result.videoUrl, duration: dur, finalPrompt, charged });
+    res.json({ success: true, videoUrl: result.videoUrl, duration: dur, model: result.modelPath, customerPriceUsd: charged ? charged.creditsCharged / 100 : Number((usd * INFLUENCER_MARKUP).toFixed(2)), finalPrompt, charged });
   } catch (error: any) {
     logger.error(`[ViralStudio] image-to-video error: ${error.message}`);
     res.status(500).json({ error: error.message });
@@ -1004,34 +1065,37 @@ router.post('/viral/image-to-video', authenticate, async (req: Request, res: Res
  */
 router.post('/viral/reference-to-video', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, referenceImageUrls, prompt, target = 'merch', artistName,
+    const { userId, referenceImageUrls, prompt, target = 'merch', artistName, model = 'wan-3.0',
       duration = 10, aspectRatio = '9:16', resolution = '720p' } = req.body;
     if (!userId || !prompt || !Array.isArray(referenceImageUrls) || !referenceImageUrls.length) {
       return res.status(400).json({ error: 'userId, prompt & referenceImageUrls[] required' });
     }
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
     const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
-    const usd = VIRAL_COSTS_USD.videoR2vPerSec * dur;
+    const usd = VIRAL_COSTS_USD.videoPerSec * dur;
 
     if (userEmail) {
-      const afford = await canAffordUsd(userEmail, usd);
+      const afford = await canAffordUsdAtMarkup(userEmail, usd, INFLUENCER_MARKUP);
       if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
     }
 
     const finalPrompt = buildViralPrompt(prompt, target, artistName);
-    const result = await generateVideoFromReferenceWithHappyHorse(referenceImageUrls, finalPrompt, {
+    const result = await generateWan30InfluencerVideo(referenceImageUrls, finalPrompt, {
       duration: dur,
       aspectRatio,
       resolution,
+      model: model === 'wan-3.0-prime' ? 'wan-3.0-prime' : 'wan-3.0',
     });
 
     if (!result.success) return res.status(502).json({ error: result.error || 'Reference-to-video failed' });
 
     let charged: any = null;
     if (userEmail) {
-      charged = await chargeCreditsFromUsd(userEmail, usd, `Viral Video R2V (${dur}s)`);
+      charged = await chargeCreditsFromUsd(userEmail, usd, `Influencer Wan video (${dur}s)`, { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: result.modelPath } });
+      if (!charged.success) return res.status(402).json({ error: charged.error || 'Insufficient credits', ...charged });
     }
 
     try {
@@ -1052,7 +1116,7 @@ router.post('/viral/reference-to-video', authenticate, async (req: Request, res:
       logger.warn(`[ViralStudio] Could not persist content row: ${e.message}`);
     }
 
-    res.json({ success: true, videoUrl: result.videoUrl, duration: dur, finalPrompt, charged });
+    res.json({ success: true, videoUrl: result.videoUrl, duration: dur, model: result.modelPath, customerPriceUsd: charged ? charged.creditsCharged / 100 : Number((usd * INFLUENCER_MARKUP).toFixed(2)), finalPrompt, charged });
   } catch (error: any) {
     logger.error(`[ViralStudio] reference-to-video error: ${error.message}`);
     res.status(500).json({ error: error.message });
@@ -1073,7 +1137,7 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
   const startMs = Date.now();
   try {
     const {
-      userId, prompt, target = 'service', artistName,
+      userId, prompt, target = 'service', artistName, artistStyle, model = 'wan-3.0',
       useImageEdit = false, editPrompt,
       referenceImageUrls, duration = 10,
       aspectRatio = '9:16', resolution = '720p',
@@ -1082,6 +1146,7 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
     if (!userId || !prompt) return res.status(400).json({ error: 'userId & prompt required' });
     if (!(await assertOwnsUser(req, res, Number(userId)))) return;
     const userEmail = callerEmail(req);
+    if (!userEmail) return res.status(401).json({ error: 'Sign in with a verified account to generate content.' });
 
     const dur = Math.min(15, Math.max(5, Number(duration) || 10)) as 5 | 10 | 15;
     const usingReference = Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0;
@@ -1090,37 +1155,45 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
     let totalUsd = 0;
     if (!usingReference) totalUsd += VIRAL_COSTS_USD.image;
     if (useImageEdit) totalUsd += VIRAL_COSTS_USD.imageEdit;
-    totalUsd += (usingReference ? VIRAL_COSTS_USD.videoR2vPerSec : VIRAL_COSTS_USD.videoI2vPerSec) * dur;
+    totalUsd += VIRAL_COSTS_USD.videoPerSec * dur;
 
     if (userEmail) {
-      const afford = await canAffordUsd(userEmail, totalUsd);
+      const afford = await canAffordUsdAtMarkup(userEmail, totalUsd, INFLUENCER_MARKUP);
       if (!afford.allowed) return res.status(402).json({ error: 'Insufficient credits', ...afford });
     }
 
-    const finalPrompt = buildViralPrompt(prompt, target, artistName);
+    const finalPrompt = buildViralPrompt(prompt, target, artistName, artistStyle);
     const steps: any[] = [];
     let workingImageUrl: string | undefined;
+    let actualUsd = 0;
+    let actualCredits = 0;
 
     // STEP 1: imagen base (skip si tenemos referencias)
     if (!usingReference) {
-      const img = await generateImageWithNanoBanana(finalPrompt, { aspectRatio: aspectRatio as any });
+      const img = await generateImageWithNanoBanana(finalPrompt, { aspectRatio: aspectRatio as any, fallback: false });
       if (!img.success || !img.imageUrl) {
         return res.status(502).json({ error: `Image generation failed: ${img.error}` });
       }
       workingImageUrl = img.imageUrl;
       steps.push({ step: 'image', imageUrl: img.imageUrl, provider: img.provider });
-      if (userEmail) await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.image, 'Viral Image (Nano Banana 2)');
+      const imageCharge = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.image, 'Influencer image generation (Nano Banana 2)', { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: 'fal-ai/nano-banana-2' } });
+      if (!imageCharge.success) return res.status(402).json({ error: imageCharge.error || 'Insufficient credits', ...imageCharge });
+      actualUsd += VIRAL_COSTS_USD.image;
+      actualCredits += imageCharge.creditsCharged;
     }
 
     // STEP 2: edición opcional con gpt-image-2
     if (useImageEdit) {
       const refsForEdit = usingReference ? referenceImageUrls : (workingImageUrl ? [workingImageUrl] : []);
       if (refsForEdit.length) {
-        const edited = await editImageWithGPTImage2(refsForEdit, editPrompt || finalPrompt, { aspectRatio: '1:1' });
+        const edited = await editImageWithNanoBanana(refsForEdit, editPrompt || finalPrompt, { aspectRatio: '1:1', fallback: false });
         if (edited.success && edited.imageUrl) {
           workingImageUrl = edited.imageUrl;
           steps.push({ step: 'imageEdit', imageUrl: edited.imageUrl, provider: edited.provider });
-          if (userEmail) await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.imageEdit, 'Viral Image Edit (GPT-Image-2)');
+          const editCharge = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.imageEdit, 'Influencer image refinement (Nano Banana 2)', { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: 'fal-ai/nano-banana-2/edit' } });
+          if (!editCharge.success) return res.status(402).json({ error: editCharge.error || 'Insufficient credits', ...editCharge });
+          actualUsd += VIRAL_COSTS_USD.imageEdit;
+          actualCredits += editCharge.creditsCharged;
         } else {
           steps.push({ step: 'imageEdit', skipped: true, reason: edited.error });
         }
@@ -1130,18 +1203,24 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
     // STEP 3: video viral
     let videoResult;
     if (usingReference) {
-      videoResult = await generateVideoFromReferenceWithHappyHorse(referenceImageUrls, finalPrompt, {
-        duration: dur, aspectRatio, resolution,
+      videoResult = await generateWan30InfluencerVideo(referenceImageUrls, finalPrompt, {
+        duration: dur, aspectRatio, resolution, model: model === 'wan-3.0-prime' ? 'wan-3.0-prime' : 'wan-3.0',
       });
       if (videoResult.success && userEmail) {
-        await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.videoR2vPerSec * dur, `Viral Video R2V (${dur}s)`);
+        const videoCharge = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.videoPerSec * dur, `Influencer Wan video (${dur}s)`, { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: videoResult.modelPath } });
+        if (!videoCharge.success) return res.status(402).json({ error: videoCharge.error || 'Insufficient credits', ...videoCharge });
+        actualUsd += VIRAL_COSTS_USD.videoPerSec * dur;
+        actualCredits += videoCharge.creditsCharged;
       }
     } else if (workingImageUrl) {
-      videoResult = await generateVideoWithHappyHorse(workingImageUrl, finalPrompt, {
-        duration: dur, aspectRatio, resolution,
+      videoResult = await generateWan30InfluencerVideo([workingImageUrl], finalPrompt, {
+        duration: dur, aspectRatio, resolution, model: model === 'wan-3.0-prime' ? 'wan-3.0-prime' : 'wan-3.0',
       });
       if (videoResult.success && userEmail) {
-        await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.videoI2vPerSec * dur, `Viral Video I2V (${dur}s)`);
+        const videoCharge = await chargeCreditsFromUsd(userEmail, VIRAL_COSTS_USD.videoPerSec * dur, `Influencer Wan video (${dur}s)`, { markup: INFLUENCER_MARKUP, metadata: { provider: 'fal', model: videoResult.modelPath } });
+        if (!videoCharge.success) return res.status(402).json({ error: videoCharge.error || 'Insufficient credits', ...videoCharge });
+        actualUsd += VIRAL_COSTS_USD.videoPerSec * dur;
+        actualCredits += videoCharge.creditsCharged;
       }
     } else {
       return res.status(500).json({ error: 'No source image available for video generation' });
@@ -1151,7 +1230,7 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
       return res.status(502).json({ error: videoResult.error || 'Video generation failed', steps });
     }
 
-    steps.push({ step: usingReference ? 'r2v' : 'i2v', videoUrl: videoResult.videoUrl, duration: dur });
+    steps.push({ step: usingReference ? 'r2v' : 'i2v', videoUrl: videoResult.videoUrl, duration: dur, model: videoResult.modelPath });
 
     // Persistir como influencerContent
     try {
@@ -1166,7 +1245,7 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
         thumbnailUrl: workingImageUrl || referenceImageUrls?.[0],
         status: 'ready',
         platform: 'all',
-        generationCostUsd: String(totalUsd) as any,
+        generationCostUsd: String(actualUsd) as any,
       } as any);
     } catch (e: any) {
       logger.warn(`[ViralStudio] Could not persist full-pipeline content: ${e.message}`);
@@ -1179,7 +1258,10 @@ router.post('/viral/generate-full', authenticate, async (req: Request, res: Resp
       duration: dur,
       finalPrompt,
       steps,
-      totalCostUsd: Number(totalUsd.toFixed(4)),
+      totalCostUsd: Number(actualUsd.toFixed(4)),
+      totalCredits: actualCredits,
+      customerPriceUsd: Number((actualCredits / 100).toFixed(2)),
+      markupMultiplier: INFLUENCER_MARKUP,
       elapsedMs: Date.now() - startMs,
     });
   } catch (error: any) {
