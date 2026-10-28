@@ -11121,6 +11121,13 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             artistName={userProfile?.artistName || userProfile?.username || artist?.name || 'Artist'}
                             artistGenre={artist?.genre || ''}
                             songsCount={songs?.length || 0}
+                            availableModuleIds={Object.keys(sectionVisibility).filter((id) => sectionVisibility[id])}
+                            onOpenTool={(moduleId) => {
+                              setSectionExpanded((prev) => ({ ...prev, [moduleId]: true }));
+                              window.setTimeout(() => {
+                                document.getElementById(`section-${moduleId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }, 80);
+                            }}
                           />
                         );
                       } else if (sectionId === 'observation-engine' && isOwnProfile) {

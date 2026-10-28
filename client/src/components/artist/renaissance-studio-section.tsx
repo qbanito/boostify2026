@@ -1,46 +1,26 @@
 /**
- * Renaissance Studio Section
- * ─────────────────────────────────────────────────────────────────────────────
- * The Boostify Renaissance Engine hub. Shows the 6 Da Vinci phases with
- * connected modules and progress indicators. Lives as a collapsible artist
- * profile section.
+ * Renaissance Studio: a practical release-to-growth roadmap for an artist.
+ * The selected focus is a planning aid; progress is never inferred from catalog size.
  */
 
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Telescope,
-  Lightbulb,
-  Hammer,
-  Theater,
+  ArrowRight,
   BookOpen,
-  Gem,
+  Check,
   ChevronDown,
-  ChevronUp,
-  Zap,
-  Brain,
-  BookMarked,
-  Target,
-  TrendingUp,
-  Cpu,
-  Handshake,
-  ShoppingBag,
-  Briefcase,
-  Radio,
-  Shield,
+  Compass,
+  Gem,
+  Hammer,
+  Lightbulb,
+  Map,
   Megaphone,
-  Flame,
-  FileText,
-  Coins,
-  Sparkles,
-  Quote,
-  Info,
   Music2,
-  CheckCircle2,
-  MapPin,
+  Telescope,
+  Theater,
+  TrendingUp,
 } from 'lucide-react';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RenaissanceStudioSectionProps {
   isOwnProfile: boolean;
@@ -59,110 +39,83 @@ interface RenaissanceStudioSectionProps {
   artistName?: string;
   artistGenre?: string;
   songsCount?: number;
+  availableModuleIds?: string[];
+  onOpenTool?: (moduleId: string) => void;
 }
 
-interface PhaseModule {
-  label: string;
-  icon: React.ElementType;
-}
-
-interface Phase {
-  id: string;
-  icon: React.ElementType;
-  label: string;
-  color: string;
-  gradient: string;
-  description: string;
-  modules: PhaseModule[];
-}
-
-// ─── Phase definitions ────────────────────────────────────────────────────────
-
-const PHASES: Phase[] = [
+const PHASES = [
   {
     id: 'observe',
+    label: 'Observe',
     icon: Telescope,
-    label: 'OBSERVE',
-    color: '#818cf8',
-    gradient: 'from-indigo-900/30 to-transparent',
-    description: 'Market intelligence before creation. Know before you create.',
-    modules: [
-      { label: 'Signal Pulse', icon: Target },
-      { label: 'Observatory', icon: TrendingUp },
-      { label: 'Superstar Blueprint', icon: Briefcase },
-      { label: 'Observation Engine', icon: Telescope },
-    ],
+    color: '#a5b4fc',
+    description: 'Find the audience, cultural moment, and angle that make this release matter.',
+    outcome: 'A clear audience and positioning brief.',
+    firstMove: 'Compare three artists in your lane. Note what their audience responds to, then choose one distinct angle for your next release.',
+    tools: [{ id: 'observation-engine', label: 'Observation Engine' }, { id: 'analytics', label: 'Observatory' }, { id: 'audience-engine', label: 'Signal Pulse' }],
   },
   {
     id: 'imagine',
+    label: 'Imagine',
     icon: Lightbulb,
-    label: 'IMAGINE',
-    color: '#fbbf24',
-    gradient: 'from-amber-900/30 to-transparent',
-    description: 'Deep creative ideation. Interview your vision before executing it.',
-    modules: [
-      { label: 'The Atelier', icon: Brain },
-      { label: 'The Codex', icon: BookMarked },
-      { label: 'Deep Brief', icon: Lightbulb },
-    ],
+    color: '#fcd34d',
+    description: 'Turn the strongest idea into a recognizable story and creative direction.',
+    outcome: 'A release concept your collaborators can act on.',
+    firstMove: 'Write the one-sentence story behind the song, the feeling fans should leave with, and the visual world that carries it.',
+    tools: [{ id: 'deep-brief', label: 'Deep Brief' }, { id: 'career-suite', label: 'The Atelier' }],
   },
   {
     id: 'build',
+    label: 'Build',
     icon: Hammer,
-    label: 'BUILD',
-    color: '#fb923c',
-    gradient: 'from-orange-900/30 to-transparent',
-    description: 'Forge the complete artistic ecosystem from a single idea.',
-    modules: [
-      { label: 'Genesis Engine', icon: Zap },
-      { label: 'Broadcast Studio', icon: Radio },
-      { label: 'The Gateway', icon: Shield },
-    ],
+    color: '#fdba74',
+    description: 'Shape the song, visuals, and rollout into one cohesive release system.',
+    outcome: 'A usable set of release assets and a rollout sequence.',
+    firstMove: 'Choose one lead visual, prepare short-form moments, and map each asset to a channel and date.',
+    tools: [{ id: 'ai-video-studio', label: 'AI Video Studio' }, { id: 'social-posts', label: 'Social Posts' }, { id: 'promo-clips', label: 'Promo Clips' }],
   },
   {
     id: 'perform',
+    label: 'Perform',
     icon: Theater,
-    label: 'PERFORM',
-    color: '#c084fc',
-    gradient: 'from-purple-900/30 to-transparent',
-    description: 'Show the world what you built. Every channel, every stage.',
-    modules: [
-      { label: 'HoloStage Live', icon: Cpu },
-      { label: 'Press Room', icon: FileText },
-      { label: 'Amplify Network', icon: Megaphone },
-    ],
+    color: '#d8b4fe',
+    description: 'Bring the release to people through live moments, stories, and conversation.',
+    outcome: 'A repeatable way for fans to experience and share the release.',
+    firstMove: 'Pick one live or spoken format that fits the song, then make it easy for fans to join in and pass along.',
+    tools: [{ id: 'world-tour', label: 'World Tour Studio' }, { id: 'podcast-clips', label: 'Podcast Studio' }, { id: 'hologram', label: 'HoloStage Live' }],
   },
   {
     id: 'learn',
+    label: 'Learn',
     icon: BookOpen,
-    label: 'LEARN',
-    color: '#34d399',
-    gradient: 'from-emerald-900/30 to-transparent',
-    description: 'Every release teaches you. Every reaction fuels the next cycle.',
-    modules: [
-      { label: 'Observatory', icon: TrendingUp },
-      { label: 'Creative Ledger', icon: BookMarked },
-      { label: 'Genesis Feedback', icon: Zap },
-    ],
+    color: '#6ee7b7',
+    description: 'Use real audience response to decide what deserves another iteration.',
+    outcome: 'One evidence-based adjustment for the next cycle.',
+    firstMove: 'Review saves, shares, comments, and watch-through together. Keep the strongest signal and change one weak point.',
+    tools: [{ id: 'analytics', label: 'Observatory' }, { id: 'social-hub', label: 'Social Hub' }],
   },
   {
     id: 'monetize',
+    label: 'Monetize',
     icon: Gem,
-    label: 'MONETIZE',
-    color: '#2dd4bf',
-    gradient: 'from-teal-900/30 to-transparent',
-    description: 'Turn art into a living economy. Songs become systems.',
-    modules: [
-      { label: 'Commerce Blueprint', icon: Briefcase },
-      { label: 'The Forge', icon: Handshake },
-      { label: 'Ecosystem Drops', icon: ShoppingBag },
-      { label: 'Token Assets', icon: Coins },
-      { label: 'Inner Circle', icon: Flame },
-    ],
+    color: '#5eead4',
+    description: 'Build sustainable income around the music and the community it creates.',
+    outcome: 'A fan offer that feels connected to the artist, not bolted on.',
+    firstMove: 'Choose one valuable fan experience or product that extends the release, then make its next step simple.',
+    tools: [{ id: 'merchandise', label: 'Merchandise' }, { id: 'earnings', label: 'Earnings' }, { id: 'business-plan', label: 'Commerce Blueprint' }],
   },
-];
+] as const;
 
-// ─── Component ────────────────────────────────────────────────────────────────
+const OWNER_ONLY_TOOL_IDS = new Set([
+  'observation-engine',
+  'analytics',
+  'audience-engine',
+  'deep-brief',
+  'career-suite',
+  'ai-video-studio',
+  'promo-clips',
+  'earnings',
+]);
 
 export function RenaissanceStudioSection({
   isOwnProfile,
@@ -174,353 +127,170 @@ export function RenaissanceStudioSection({
   artistName = 'Artist',
   artistGenre = '',
   songsCount = 0,
+  availableModuleIds = [],
+  onOpenTool,
 }: RenaissanceStudioSectionProps) {
-  const [activePhase, setActivePhase] = useState<string | null>(null);
-  const accent = colors.hexAccent || '#818cf8';
-
-  const displayGenre = artistGenre
-    ? artistGenre.charAt(0).toUpperCase() + artistGenre.slice(1)
+  const [focusId, setFocusId] = useState<string>('observe');
+  const accent = colors.hexAccent || '#a78bfa';
+  const focus = PHASES.find((phase) => phase.id === focusId) ?? PHASES[0];
+  const FocusIcon = focus.icon;
+  const genre = artistGenre.trim()
+    ? artistGenre.trim().replace(/\b\w/g, (letter) => letter.toUpperCase())
     : '';
-
-  // Derive which Renaissance phase the artist is likely in based on their catalog
-  const currentPhaseId = useMemo(() => {
-    if (songsCount === 0) return 'observe';
-    if (songsCount < 3) return 'imagine';
-    if (songsCount < 8) return 'build';
-    if (songsCount < 15) return 'perform';
-    if (songsCount < 25) return 'learn';
-    return 'monetize';
-  }, [songsCount]);
-
-  const currentPhase = PHASES.find((p) => p.id === currentPhaseId);
+  const availableTools = focus.tools.filter((tool) =>
+    availableModuleIds.includes(tool.id) && (isOwnProfile || !OWNER_ONLY_TOOL_IDS.has(tool.id)),
+  );
 
   return (
-    <div
+    <section
       className={cardStyles}
       style={{
         ...cardStyleInline,
         borderColor: `${accent}50`,
-        backgroundImage: `linear-gradient(135deg, ${accent}12 0%, rgba(8,8,14,0.96) 50%, rgba(129,140,248,0.08) 100%)`,
+        backgroundImage: `linear-gradient(135deg, ${accent}12 0%, rgba(8,8,14,0.97) 48%, rgba(129,140,248,0.07) 100%)`,
       }}
+      aria-label="Renaissance Studio"
     >
-      {/* ── Header ── */}
       <button
         type="button"
         onClick={onToggleExpand}
-        className="w-full flex items-center justify-between px-4 py-3 group"
+        className="group flex w-full items-center justify-between px-4 py-3 text-left"
+        aria-expanded={isExpanded}
       >
-        <div className="flex items-center gap-2.5">
-          <motion.span
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg"
-            style={{ background: `${accent}20`, color: accent }}
-            animate={{ rotate: isExpanded ? 15 : 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Sparkles className="h-4 w-4" />
-          </motion.span>
-          <div className="text-left">
-            <span className="text-sm font-bold text-white tracking-wide">Renaissance Studio</span>
-            <p className="text-[10px] text-gray-500 font-normal leading-none mt-0.5">
-              Boostify Renaissance Engine · 6 Phases
-            </p>
-          </div>
-        </div>
+        <span className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: `${accent}20`, color: accent }}>
+            <Compass className="h-[18px] w-[18px]" />
+          </span>
+          <span>
+            <span className="block text-sm font-bold tracking-wide text-white">Renaissance Studio</span>
+            <span className="mt-0.5 block text-[11px] text-white/50">A release-to-growth roadmap for {artistName}</span>
+          </span>
+        </span>
         <motion.span animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown className="h-4 w-4 text-gray-500 group-hover:text-gray-300" />
+          <ChevronDown className="h-4 w-4 text-white/40 transition-colors group-hover:text-white/80" />
         </motion.span>
       </button>
 
-      {/* ── Body ── */}
       <AnimatePresence initial={false}>
         {isExpanded && (
           <motion.div
-            key="renaissance-body"
+            key="renaissance-roadmap"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            transition={{ duration: 0.24, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 space-y-4">
-
-              {/* ── What this module does ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.03 }}
-                className="rounded-xl px-3 py-2.5 space-y-2"
-                style={{ background: `${accent}08`, border: `1px dashed ${accent}25` }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <Info className="h-3 w-3 flex-shrink-0" style={{ color: accent }} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                    What is the Renaissance Studio?
-                  </span>
-                </div>
-                <p className="text-[10px] text-gray-400 leading-relaxed">
-                  The <span className="text-white font-semibold">Renaissance Studio</span> is your
-                  complete artist journey map — powered by the{' '}
-                  <span style={{ color: accent }}>6-phase Boostify Renaissance Engine</span>.
-                  Inspired by Leonardo Da Vinci's creative process, it guides{' '}
-                  <span className="text-white">{artistName}</span> through every stage:
-                  observing the market, imagining the concept, building the project, performing it
-                  to the world, learning from it, and monetizing the full ecosystem.
-                </p>
-                <div className="grid grid-cols-3 gap-1">
-                  {['📡 Observe the market', '💡 Imagine the idea', '🔨 Build the project',
-                    '🎭 Perform & release', '📚 Learn & iterate', '💎 Monetize everything'].map((item) => (
-                    <div key={item} className="flex items-center gap-1">
-                      <span className="text-[9px] text-gray-500 leading-tight">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* ── Artist context strip ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 }}
-                className="rounded-xl p-3"
-                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
-              >
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Your Journey</span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
-                        style={{ background: `${accent}20`, color: accent }}
-                      >
-                        <Sparkles className="h-2.5 w-2.5" /> {artistName}
-                      </span>
-                      {displayGenre && (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
-                          style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}
-                        >
-                          <Music2 className="h-2.5 w-2.5" /> {displayGenre}
-                        </span>
-                      )}
-                      {songsCount > 0 && (
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
-                          style={{ background: 'rgba(156,163,175,0.1)', color: '#9ca3af' }}
-                        >
-                          🎵 {songsCount} song{songsCount === 1 ? '' : 's'}
-                        </span>
-                      )}
-                    </div>
-                    {currentPhase && (
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold"
-                          style={{ background: `${currentPhase.color}20`, color: currentPhase.color, border: `1px solid ${currentPhase.color}30` }}
-                        >
-                          <currentPhase.icon className="h-3 w-3" />
-                          Current phase: {currentPhase.label}
-                        </div>
-                      </div>
-                    )}
-                    <p className="text-[9px] text-gray-600 mt-1">
-                      {songsCount === 0
-                        ? 'Start by uploading your first song to begin your Renaissance journey'
-                        : songsCount < 3
-                        ? 'Keep creating — your creative foundation is forming'
-                        : songsCount < 8
-                        ? 'Solid catalog building. Time to structure your release strategy'
-                        : songsCount < 15
-                        ? 'Strong catalog. Focus on promotion and performance'
-                        : songsCount < 25
-                        ? 'Learning from your releases. Refine your sound and brand'
-                        : 'Mature catalog. Build your full monetization ecosystem'}
+            <div className="space-y-4 px-4 pb-4">
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-black/25 p-4 sm:p-5">
+                <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full blur-3xl" style={{ background: `${accent}17` }} />
+                <div className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                  <div className="max-w-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">A connected artist journey</p>
+                    <h3 className="mt-2 text-xl font-semibold leading-tight text-white sm:text-2xl">
+                      Turn the next release into a bigger moment.
+                    </h3>
+                    <p className="mt-2 max-w-lg text-xs leading-relaxed text-white/60 sm:text-sm">
+                      Move from audience insight to a creative brief, a coordinated rollout, fan connection, learning, and sustainable income.
                     </p>
                   </div>
-                  {/* Phase progress dots */}
-                  <div className="flex flex-col gap-1 flex-shrink-0">
-                    {PHASES.map((p) => (
-                      <div
-                        key={p.id}
-                        className="w-2 h-2 rounded-full"
-                        style={{
-                          background: p.id === currentPhaseId
-                            ? p.color
-                            : PHASES.findIndex((x) => x.id === p.id) < PHASES.findIndex((x) => x.id === currentPhaseId)
-                            ? `${p.color}60`
-                            : 'rgba(255,255,255,0.08)',
-                        }}
-                      />
-                    ))}
+                  <div className="flex flex-wrap gap-2 text-[11px] text-white/55">
+                    {genre && <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1"><Music2 className="h-3 w-3" />{genre}</span>}
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1"><TrendingUp className="h-3 w-3" />{songsCount} {songsCount === 1 ? 'song' : 'songs'} on profile</span>
                   </div>
                 </div>
-              </motion.div>
-
-              {/* ── Manifesto Quote ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="rounded-xl p-4 text-center relative overflow-hidden"
-                style={{
-                  background: `linear-gradient(135deg, ${accent}15 0%, rgba(8,8,14,0.8) 100%)`,
-                  border: `1px solid ${accent}30`,
-                }}
-              >
-                <Quote className="h-4 w-4 mx-auto mb-2 opacity-40" style={{ color: accent }} />
-                <p className="text-sm font-medium text-white/90 leading-relaxed italic">
-                  "{artistName} is not just releasing music.
-                  <br />
-                  <span style={{ color: accent }}>They're building a living artistic system.</span>"
+                <p className="relative mt-4 border-t border-white/[0.08] pt-3 text-[11px] leading-relaxed text-white/45">
+                  {isOwnProfile ? 'Choose the phase that matches your priority today. Your catalog size does not determine your progress.' : 'Explore the six phases behind a connected artist growth cycle.'}
                 </p>
-                <p className="text-[10px] text-gray-600 mt-2 font-mono uppercase tracking-widest">
-                  The Boostify Renaissance Engine
-                </p>
-              </motion.div>
+              </div>
 
-              {/* ── Phase Grid ── */}
-              <div className="grid grid-cols-2 gap-2.5">
-                {PHASES.map((phase, i) => {
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {PHASES.map((phase, index) => {
                   const PhaseIcon = phase.icon;
-                  const isActive = activePhase === phase.id;
-                  const isCurrent = phase.id === currentPhaseId;
-                  const isPast = PHASES.findIndex((p) => p.id === phase.id) < PHASES.findIndex((p) => p.id === currentPhaseId);
+                  const selected = focus.id === phase.id;
                   return (
                     <motion.button
                       key={phase.id}
                       type="button"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 + 0.1 }}
-                      onClick={() => setActivePhase(isActive ? null : phase.id)}
-                      className="relative rounded-xl p-3 text-left transition-all overflow-hidden"
+                      onClick={() => setFocusId(phase.id)}
+                      whileTap={{ scale: 0.985 }}
+                      className="relative min-h-[92px] rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                       style={{
-                        background: isActive ? `${phase.color}20` : isCurrent ? `${phase.color}12` : 'rgba(255,255,255,0.02)',
-                        border: `1px solid ${isActive ? phase.color + '50' : isCurrent ? phase.color + '40' : 'rgba(255,255,255,0.06)'}`,
-                        opacity: isPast && !isActive ? 0.65 : 1,
+                        borderColor: selected ? `${phase.color}75` : 'rgba(255,255,255,0.08)',
+                        background: selected ? `${phase.color}12` : 'rgba(255,255,255,0.02)',
                       }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                      aria-pressed={selected}
                     >
-                      {/* Phase gradient bg */}
-                      <div
-                        className="absolute inset-0 opacity-20 rounded-xl"
-                        style={{
-                          background: `radial-gradient(circle at top left, ${phase.color}30 0%, transparent 70%)`,
-                        }}
-                      />
-
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <PhaseIcon className="h-4 w-4 flex-shrink-0" style={{ color: phase.color }} />
-                          <span
-                            className="text-[10px] font-bold tracking-widest uppercase"
-                            style={{ color: phase.color }}
-                          >
-                            {phase.label}
-                          </span>
-                          {isCurrent && (
-                            <span
-                              className="ml-auto text-[8px] font-black px-1 py-0.5 rounded uppercase tracking-wider flex-shrink-0"
-                              style={{ background: `${phase.color}30`, color: phase.color }}
-                            >
-                              YOU ARE HERE
-                            </span>
-                          )}
-                          {isPast && !isActive && (
-                            <CheckCircle2 className="ml-auto h-3 w-3 flex-shrink-0 opacity-50" style={{ color: phase.color }} />
-                          )}
-                        </div>
-                        <p className="text-[10px] text-gray-400 leading-snug">
-                          {phase.description}
-                        </p>
-
-                        {/* Modules (visible on expand) */}
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.18 }}
-                              className="overflow-hidden mt-2"
-                            >
-                              <div className="flex flex-wrap gap-1">
-                                {phase.modules.map((mod) => {
-                                  const ModIcon = mod.icon;
-                                  return (
-                                    <span
-                                      key={mod.label}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium"
-                                      style={{
-                                        background: `${phase.color}15`,
-                                        color: phase.color,
-                                        border: `1px solid ${phase.color}25`,
-                                      }}
-                                    >
-                                      <ModIcon className="h-2.5 w-2.5" />
-                                      {mod.label}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Expand indicator */}
-                      <motion.div
-                        className="absolute top-2 right-2"
-                        animate={{ rotate: isActive ? 180 : 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <ChevronDown
-                          className="h-3 w-3"
-                          style={{ color: isActive ? phase.color : 'rgba(255,255,255,0.2)' }}
-                        />
-                      </motion.div>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <PhaseIcon className="h-4 w-4" style={{ color: phase.color }} />
+                          <span className="text-xs font-semibold text-white">{phase.label}</span>
+                        </span>
+                        <span className="text-[10px] tabular-nums text-white/30">0{index + 1}</span>
+                      </span>
+                      <span className="mt-2 block text-[10px] leading-snug text-white/50">{phase.description}</span>
                     </motion.button>
                   );
                 })}
               </div>
 
-              {/* ── Da Vinci Principles strip ── */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="rounded-xl px-4 py-3"
-                style={{
-                  background: 'rgba(255,255,255,0.015)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                  Da Vinci Principles Active
-                </p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {[
-                    'Curiosità', 'Dimostrazione', 'Sensazione', 'Sfumato',
-                    'Arte/Scienza', 'Corporalità', 'Connessione',
-                  ].map((principle) => (
-                    <span key={principle} className="text-[10px] text-gray-500 flex items-center gap-1">
-                      <span style={{ color: accent }}>·</span>
-                      {principle}
-                    </span>
-                  ))}
-                </div>
-              </motion.div>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={focus.id}
+                  initial={{ opacity: 0, y: 7 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.16 }}
+                  className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.75fr)] sm:p-5"
+                  style={{ borderColor: `${focus.color}35`, background: `linear-gradient(130deg, ${focus.color}0c, rgba(0,0,0,0.22))` }}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FocusIcon className="h-4 w-4" style={{ color: focus.color }} />
+                      <h4 className="text-sm font-semibold text-white">
+                        {isOwnProfile ? `Your ${focus.label.toLowerCase()} focus` : `${focus.label} phase`}
+                      </h4>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-white/65">{focus.firstMove}</p>
+                    <p className="mt-3 flex items-start gap-2 text-[11px] font-medium text-white/80">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: focus.color }} />
+                      <span><span className="text-white/45">{isOwnProfile ? 'Outcome: ' : 'Intended outcome: '}</span>{focus.outcome}</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3">
+                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
+                      <Map className="h-3.5 w-3.5" /> Related profile tools
+                    </div>
+                    {availableTools.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {availableTools.map((tool) => (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => onOpenTool?.(tool.id)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[10px] font-medium text-white/75 transition-colors hover:border-white/25 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                          >
+                            {tool.label}<ArrowRight className="h-3 w-3" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[11px] leading-relaxed text-white/45">
+                        {isOwnProfile ? 'Activate a related tool in Customize Profile Layout to open it from here.' : 'Related tools appear here when they are included in this profile.'}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
 
-              {/* ── Footer note ── */}
-              <p className="text-center text-[9px] text-gray-600 font-mono">
-                RENAISSANCE ENGINE v1.0 · BOOSTIFY MUSIC
-              </p>
+              <div className="flex items-center justify-between gap-3 px-1 text-[10px] text-white/30">
+                <span className="inline-flex items-center gap-1.5"><Megaphone className="h-3 w-3" /> One connected cycle, shaped by the artist</span>
+                <span className="hidden sm:inline">Select a phase to plan your next move</span>
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </section>
   );
 }
