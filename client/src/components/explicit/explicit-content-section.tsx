@@ -43,7 +43,7 @@ const GUIDE_ITEMS = [
     icon: Wand2,
     color: '#ec4899',
     title: 'AI Studio — Generate Content',
-    body: 'Generate exclusive images and videos using AI models like FLUX Dev, FLUX Schnell, or the uncensored FHDR model. Once generated, click "Publish" to instantly add them to your exclusive content feed.',
+    body: 'Create polished, non-explicit creator images with Nano Banana 2.1, Nano Banana Pro, or GPT Image 2. Add a reference photo to keep the artist’s visual identity consistent, then publish approved generations to your exclusive feed.',
   },
   {
     icon: MessageSquare,
@@ -144,10 +144,13 @@ interface ExplicitSettings {
   chatEnabled?: boolean;
   aiGenerationEnabled?: boolean;
   watermarkEnabled?: boolean;
+  stripeConnectReady?: boolean;
+  stripeConnectAccountId?: string | null;
 }
 
 interface EarningsData {
   activeSubscribers: number;
+  subscriptionRevenue: number;
   purchaseRevenue: number;
   tipRevenue: number;
   totalRevenue: number;
@@ -194,6 +197,21 @@ export function ExplicitContentSection({
     queryKey: ['explicit-settings', artistId],
     queryFn: () => fetchApi(`/settings/${artistId}`),
   });
+  const { data: ownerPayoutStatus } = useQuery<{ connected: boolean; ready: boolean }>({
+    queryKey: ['explicit-connect-status', artistId],
+    queryFn: () => fetchApi('/connect/status'),
+    enabled: isOwnProfile,
+    staleTime: 30_000,
+  });
+  useEffect(() => {
+    if (isOwnProfile && ownerPayoutStatus) {
+      queryClient.setQueryData<ExplicitSettings>(['explicit-settings', artistId], (current) => {
+        const source = current || settings;
+        if (source?.stripeConnectReady === ownerPayoutStatus.ready) return source;
+        return source ? { ...source, stripeConnectReady: ownerPayoutStatus.ready } : current;
+      });
+    }
+  }, [artistId, isOwnProfile, ownerPayoutStatus, queryClient, settings]);
 
   // ─── Subscription check ───
   const { data: subStatus } = useQuery({
@@ -361,7 +379,7 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showUpload, setShowUpload] = useState(false);
-  const [uploadForm, setUploadForm] = useState({ title: '', description: '', mediaUrl: '', type: 'image' as string, isPaywalled: true });
+  const [uploadForm, setUploadForm] = useState({ title: '', description: '', mediaUrl: '', mediaPath: '', type: 'image' as string, isPaywalled: true });
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -391,6 +409,7 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
       setUploadForm(prev => ({
         ...prev,
         mediaUrl: result.mediaUrl,
+        mediaPath: result.mediaPath || '',
         type: detected,
         title: prev.title || file.name.replace(/\.[^.]+$/, ''),
       }));
@@ -407,7 +426,7 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['explicit-content', artistId] });
       setShowUpload(false);
-      setUploadForm({ title: '', description: '', mediaUrl: '', type: 'image', isPaywalled: true });
+      setUploadForm({ title: '', description: '', mediaUrl: '', mediaPath: '', type: 'image', isPaywalled: true });
       toast({ title: 'Content published!' });
     },
     onError: (err: Error) => toast({ title: 'Publish failed', description: err.message, variant: 'destructive' }),
@@ -421,6 +440,13 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
       toast({ title: vars.hard ? 'Content permanently deleted' : 'Content hidden' });
     },
     onError: (err: Error) => toast({ title: 'Delete failed', description: err.message, variant: 'destructive' }),
+  });
+  const purchaseMutation = useMutation({
+    mutationFn: (contentId: number) => fetchApi('/checkout/session', {
+      method: 'POST', body: JSON.stringify({ artistId, kind: 'purchase', contentId }),
+    }),
+    onSuccess: (result: any) => { if (result?.url) window.location.assign(result.url); },
+    onError: (err: Error) => toast({ title: 'Checkout unavailable', description: err.message, variant: 'destructive' }),
   });
 
   const [editItem, setEditItem] = useState<ExplicitContentItem | null>(null);
@@ -515,7 +541,7 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
           <Input
             placeholder="Or paste a Media URL (optional if you picked a file)"
             value={uploadForm.mediaUrl}
-            onChange={e => setUploadForm(prev => ({ ...prev, mediaUrl: e.target.value }))}
+            onChange={e => setUploadForm(prev => ({ ...prev, mediaUrl: e.target.value, mediaPath: '' }))}
           />
           <div className="flex gap-2">
             <select
@@ -588,8 +614,8 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
                     <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1.5" style={{ background: `${colors.hexAccent}30`, border: `1px solid ${colors.hexAccent}50` }}>
                       <Lock className="h-5 w-5" style={{ color: colors.hexAccent }} />
                     </div>
-                    {item.singlePurchasePrice && (
-                      <span className="text-white text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: colors.hexAccent + 'cc' }}>${item.singlePurchasePrice}</span>
+                    {(item.singlePurchasePrice || settings?.singleContentPrice) && (
+                      <span className="text-white text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: colors.hexAccent + 'cc' }}>${item.singlePurchasePrice || settings?.singleContentPrice}</span>
                     )}
                   </div>
                 )}
@@ -643,6 +669,13 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
                   <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {item.viewCount}</span>
                   <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" style={{ color: item.likeCount > 0 ? '#f43f5e' : undefined }} /> {item.likeCount}</span>
                 </div>
+                {item.locked && (item.singlePurchasePrice || settings?.singleContentPrice) && <Button
+                  size="sm"
+                  disabled={purchaseMutation.isPending}
+                  onClick={() => purchaseMutation.mutate(item.id)}
+                  className="mt-2 h-7 w-full text-[11px] text-white"
+                  style={{ backgroundColor: colors.hexAccent }}
+                >{purchaseMutation.isPending ? 'Opening checkout…' : `Unlock for $${item.singlePurchasePrice || settings?.singleContentPrice}`}</Button>}
               </div>
             </motion.div>
           ))}
@@ -743,6 +776,14 @@ function ContentTab({ artistId, isOwnProfile, hasAccess, colors, settings }: {
 function SubscribeCTA({ artistId, settings, colors, artistName }: {
   artistId: string; settings?: ExplicitSettings; colors: { hexAccent: string }; artistName?: string;
 }) {
+  const { toast } = useToast();
+  const checkout = useMutation({
+    mutationFn: (checkoutRequest: { kind: 'subscription' | 'tip'; plan?: 'monthly' | 'yearly'; amount?: number }) => fetchApi('/checkout/session', {
+      method: 'POST', body: JSON.stringify({ artistId, ...checkoutRequest }),
+    }),
+    onSuccess: (result: any) => { if (result?.url) window.location.assign(result.url); },
+    onError: (error: Error) => toast({ title: 'Checkout unavailable', description: error.message, variant: 'destructive' }),
+  });
   return (
     <div className="relative overflow-hidden rounded-2xl p-6 text-center space-y-4 border border-white/10"
       style={{ background: `linear-gradient(145deg, ${colors.hexAccent}12, rgba(0,0,0,0.45))` }}>
@@ -765,19 +806,21 @@ function SubscribeCTA({ artistId, settings, colors, artistName }: {
         </div>
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
           {settings?.monthlyPrice && (
-            <Button className="text-white font-bold" style={{ background: `linear-gradient(135deg, ${colors.hexAccent}, ${colors.hexAccent}bb)` }}>
+            <Button disabled={!settings.stripeConnectReady || checkout.isPending} onClick={() => checkout.mutate({ kind: 'subscription', plan: 'monthly' })} className="text-white font-bold" style={{ background: `linear-gradient(135deg, ${colors.hexAccent}, ${colors.hexAccent}bb)` }}>
               <Zap className="h-4 w-4 mr-1.5" />
               ${settings.monthlyPrice} / month
             </Button>
           )}
           {settings?.yearlyPrice && (
-            <Button variant="outline" style={{ borderColor: colors.hexAccent + '55', color: colors.hexAccent }}>
+            <Button disabled={!settings.stripeConnectReady || checkout.isPending} onClick={() => checkout.mutate({ kind: 'subscription', plan: 'yearly' })} variant="outline" style={{ borderColor: colors.hexAccent + '55', color: colors.hexAccent }}>
               <Star className="h-4 w-4 mr-1.5" />
               ${settings.yearlyPrice} / year
               <span className="ml-1.5 text-[10px] opacity-60">Best value</span>
             </Button>
           )}
         </div>
+        {!settings?.stripeConnectReady && <p className="text-xs text-amber-300">Artist payouts are being set up. Please check back soon.</p>}
+        {settings?.stripeConnectReady && <div className="flex items-center justify-center gap-2 text-xs text-gray-400"><span>Want to show support?</span><button disabled={checkout.isPending} onClick={() => checkout.mutate({ kind: 'tip', amount: 5 })} className="underline" style={{ color: colors.hexAccent }}>Tip $5</button><button disabled={checkout.isPending} onClick={() => checkout.mutate({ kind: 'tip', amount: 10 })} className="underline" style={{ color: colors.hexAccent }}>Tip $10</button></div>}
       </div>
     </div>
   );
@@ -793,12 +836,12 @@ function AiStudioTab({ artistId, colors }: { artistId: string; colors: { hexAcce
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [model, setModel] = useState('replicate/realistic-vision');
+  const [model, setModel] = useState('google/nano-banana-2.1');
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
   const [isUploadingRef, setIsUploadingRef] = useState(false);
   const refFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const needsReference = model === 'replicate/instant-id';
+  const needsReference = true;
 
   const handleRefPick = useCallback(async (file: File) => {
     if (!file) return;
@@ -876,7 +919,7 @@ function AiStudioTab({ artistId, colors }: { artistId: string; colors: { hexAcce
       {/* Generation Form */}
       <div className="space-y-3 p-4 rounded-lg border" style={{ borderColor: colors.hexAccent + '30' }}>
         <Textarea
-          placeholder="Describe what you want to generate... (no restrictions)"
+          placeholder="Describe a polished, non-explicit creator image or scene..."
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
           rows={3}
@@ -893,19 +936,17 @@ function AiStudioTab({ artistId, colors }: { artistId: string; colors: { hexAcce
             value={model}
             onChange={e => setModel(e.target.value)}
           >
-            <option value="replicate/realistic-vision">🔥 Realistic Uncensored — No Restrictions</option>
-            <option value="replicate/instant-id">👤 Artist Likeness — Uses artist photo (Uncensored)</option>
-            <option value="fal-ai/flux/dev">FLUX Dev — High Quality</option>
-            <option value="fal-ai/flux/schnell">FLUX Schnell — Fast</option>
-            <option value="local/fhdr-uncensored">FHDR Uncensored — HuggingFace / Local GPU</option>
+            <option value="google/nano-banana-2.1">Nano Banana 2.1 · Best default</option>
+            <option value="fal-ai/nano-banana-pro">Nano Banana Pro · High detail</option>
+            <option value="openai/gpt-image-2.5/flare/text-to-image">GPT Image 2.5 Flare · Editorial quality</option>
           </select>
         )}
 
-        {/* Reference photo for artist likeness */}
+        {/* Optional artist reference for consistent visual identity */}
         {genType === 'image' && needsReference && (
           <div className="p-3 rounded-lg border space-y-2" style={{ borderColor: colors.hexAccent + '40', background: 'rgba(255,255,255,0.03)' }}>
             <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: colors.hexAccent }}>
-              <Image className="h-3.5 w-3.5" /> Foto de referencia del artista (rostro visible)
+              <Image className="h-3.5 w-3.5" /> Artist reference photo (optional)
             </p>
             <input
               ref={refFileInputRef}
@@ -932,7 +973,7 @@ function AiStudioTab({ artistId, colors }: { artistId: string; colors: { hexAcce
               onChange={e => setReferenceImageUrl(e.target.value)}
               className="text-xs"
             />
-            <p className="text-[10px] text-gray-500">Si lo dejas vacío, se usará la foto de perfil del artista automáticamente.</p>
+            <p className="text-[10px] text-gray-500">The artist profile photo is used when available. Only use a reference image you have permission to use.</p>
           </div>
         )}
 
@@ -1116,14 +1157,16 @@ function EarningsTab({ artistId, colors }: { artistId: string; colors: { hexAcce
   const stats = [
     { label: 'Active Subscribers', value: earnings.activeSubscribers, icon: Users2 },
     { label: 'Total Revenue', value: `$${earnings.totalRevenue.toFixed(2)}`, icon: DollarSign },
+    { label: 'Membership Revenue', value: `$${earnings.subscriptionRevenue.toFixed(2)}`, icon: Crown },
     { label: 'Purchases', value: `$${earnings.purchaseRevenue.toFixed(2)}`, icon: ShoppingBag },
     { label: 'Tips', value: `$${earnings.tipRevenue.toFixed(2)}`, icon: Heart },
     { label: 'Content Items', value: earnings.contentCount, icon: Image },
-    { label: 'AI Costs', value: `$${earnings.aiGenerationCosts.toFixed(2)}`, icon: Wand2 },
+    { label: 'Recorded AI Costs', value: `$${earnings.aiGenerationCosts.toFixed(2)}`, icon: Wand2 },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
       {stats.map((stat, i) => (
         <div
           key={stat.label}
@@ -1141,6 +1184,8 @@ function EarningsTab({ artistId, colors }: { artistId: string; colors: { hexAcce
           </div>
         </div>
       ))}
+      </div>
+      <p className="text-[10px] text-gray-500">AI cost totals include models with a fixed USD rate. Usage based model charges are not estimated.</p>
     </div>
   );
 }
@@ -1196,9 +1241,35 @@ function SettingsTab({ artistId, settings, colors }: {
     },
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
+  const { data: payoutStatus, isLoading: checkingPayouts } = useQuery<{ connected: boolean; ready: boolean }>({
+    queryKey: ['explicit-connect-status', artistId],
+    queryFn: () => fetchApi('/connect/status'),
+    staleTime: 30_000,
+  });
+  const connectMutation = useMutation({
+    mutationFn: () => fetchApi('/connect/onboarding-link', { method: 'POST', body: JSON.stringify({}) }),
+    onSuccess: (result: any) => {
+      if (result?.url) window.location.assign(result.url);
+      else queryClient.invalidateQueries({ queryKey: ['explicit-connect-status', artistId] });
+    },
+    onError: (err: Error) => toast({ title: 'Stripe setup failed', description: err.message, variant: 'destructive' }),
+  });
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border" style={{ borderColor: colors.hexAccent + '35', background: 'rgba(255,255,255,0.025)' }}>
+        <div>
+          <p className="text-sm font-semibold text-white">Artist payouts</p>
+          <p className="text-xs text-gray-400 mt-1">Connect Stripe to receive membership, content, and tip revenue.</p>
+          <p className="text-xs mt-1" style={{ color: payoutStatus?.ready ? '#34d399' : '#fbbf24' }}>
+            {checkingPayouts ? 'Checking Stripe status…' : payoutStatus?.ready ? 'Payouts enabled' : payoutStatus?.connected ? 'Finish Stripe onboarding' : 'Not connected'}
+          </p>
+        </div>
+        {!payoutStatus?.ready && <Button disabled={connectMutation.isPending} onClick={() => connectMutation.mutate()} className="text-white" style={{ backgroundColor: colors.hexAccent }}>
+          {connectMutation.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Connecting…</> : 'Connect Stripe'}
+        </Button>}
+      </div>
+
       {/* Enable toggle */}
       <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer" style={{ borderColor: colors.hexAccent + '30' }}>
         <input

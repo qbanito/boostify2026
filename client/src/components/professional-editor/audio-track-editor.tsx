@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { auth } from '../../firebase';
 import {
   Card,
   CardContent,
@@ -238,7 +239,9 @@ const AudioTrackEditor: React.FC<AudioTrackEditorProps> = ({
       throw new Error("No hay archivo de audio o ID de proyecto");
     }
     
-    const storageRef = ref(storage, `projects/${projectId}/audio/${audioFile.name}_${Date.now()}`);
+    const ownerUid = auth.currentUser?.uid;
+    if (!ownerUid) throw new Error('Sign in to upload audio to this project.');
+    const storageRef = ref(storage, `projects/${ownerUid}/${projectId}/audio/${audioFile.name}_${Date.now()}`);
     const uploadTask = uploadBytesResumable(storageRef, audioFile);
     
     return new Promise((resolve, reject) => {

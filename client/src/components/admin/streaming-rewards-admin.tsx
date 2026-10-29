@@ -91,7 +91,7 @@ export function StreamingRewardsAdmin() {
     return <div className="text-gray-400 p-8">Could not load streaming rewards overview.</div>;
   }
 
-  const { config, rules, epochs, treasuryBtf, btfPriceUsd } = data;
+  const { config, rules, epochs, treasuryBtf } = data;
 
   const numField = (key: string, label: string, value: number, step = '0.1') => (
     <div key={key}>
@@ -167,7 +167,7 @@ export function StreamingRewardsAdmin() {
 
       {/* Economics */}
       <div className="rounded-xl p-4 bg-white/[0.03] border border-white/10">
-        <h3 className="text-sm font-bold text-white mb-3">Economics · 1 BTF ≈ ${btfPriceUsd}</h3>
+        <h3 className="text-sm font-bold text-white mb-3">BTF Reward Rules</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {numField('btfPerStream', 'BTF / stream', config.btfPerStream)}
           {numField('bonusPerListener', 'BTF / listener', config.bonusPerListener)}

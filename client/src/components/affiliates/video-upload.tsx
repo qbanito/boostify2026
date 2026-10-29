@@ -18,6 +18,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Loader2, Upload, Film, AlertCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthToken } from "../../lib/auth";
+import { ensureFirebaseAuth } from "../../lib/firebase-auth";
 import { Alert, AlertDescription } from "../ui/alert";
 
 interface VideoUploadProps {
@@ -41,8 +42,8 @@ export function VideoUpload({ isOpen, onClose }: VideoUploadProps) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Simplemente verificar si hay un usuario actual
-        const user = auth.currentUser;
+        const authenticated = await ensureFirebaseAuth();
+        const user = authenticated ? auth.currentUser : null;
         setIsAuthenticated(!!user);
         
         if (!user) {
@@ -202,7 +203,8 @@ export function VideoUpload({ isOpen, onClose }: VideoUploadProps) {
 
     try {
       // Obtener el usuario actual para metadatos
-      const user = auth.currentUser;
+      const authenticated = await ensureFirebaseAuth();
+      const user = authenticated ? auth.currentUser : null;
       if (!user || !user.uid) {
         throw new Error("Error de autenticación. Por favor, vuelve a iniciar sesión.");
       }
@@ -214,7 +216,7 @@ export function VideoUpload({ isOpen, onClose }: VideoUploadProps) {
       const fileName = `${safeFileName}_${timestamp}.${fileExtension}`;
       
       // Incluir el ID del usuario en la ruta para mejorar la organización
-      const storageRef = ref(storage, `videos/${category}/${fileName}`);
+      const storageRef = ref(storage, `videos/${user.uid}/${fileName}`);
 
       // Iniciar el proceso de carga con metadatos adicionales
       const uploadTask = uploadBytesResumable(storageRef, file, {

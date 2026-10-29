@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCookieConsent } from '../components/privacy/cookie-consent';
 
 // ─── Product catalog (shared with reports-tab.tsx) ─────────────
 export const CONVERSION_PRODUCTS = [
@@ -129,6 +130,7 @@ function saveSnapshot(snapshot: ConversionSnapshot): void {
 // ─── Public hook ───────────────────────────────────────────────
 export interface UseConversionTrackingResult {
   snapshot: ConversionSnapshot;
+  analyticsAllowed: boolean;
   /** Increment one funnel counter for a product. Returns the new value. */
   track: (product: ConversionProductKey, field: ConversionField, delta?: number) => number;
   /** Record revenue (cents) on a product. Also bumps `conversions` by 1. */
@@ -148,18 +150,29 @@ export interface UseConversionTrackingResult {
 }
 
 export function useConversionTracking(): UseConversionTrackingResult {
-  const [snapshot, setSnapshot] = useState<ConversionSnapshot>(() => loadSnapshot());
+  const { hasConsent } = useCookieConsent();
+  const analyticsAllowed = hasConsent('analytics');
+  const [snapshot, setSnapshot] = useState<ConversionSnapshot>(() => buildEmptySnapshot());
+
+  useEffect(() => {
+    if (analyticsAllowed) {
+      setSnapshot(loadSnapshot());
+      return;
+    }
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* Storage may be disabled. */ }
+    setSnapshot(buildEmptySnapshot());
+  }, [analyticsAllowed]);
 
   // Listen for cross-tab updates so the Reports tab stays in sync when
   // sibling tabs (Growth, Community, etc.) track events.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !analyticsAllowed) return;
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setSnapshot(loadSnapshot());
+      if (e.key === STORAGE_KEY && analyticsAllowed) setSnapshot(loadSnapshot());
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [analyticsAllowed]);
 
   // Daily roll-over check (mirrors the pattern from use-instagram-boost-limits).
   useEffect(() => {
@@ -171,6 +184,7 @@ export function useConversionTracking(): UseConversionTrackingResult {
 
   const track = useCallback<UseConversionTrackingResult['track']>(
     (product, field, delta = 1) => {
+      if (!analyticsAllowed) return 0;
       let nextValue = 0;
       setSnapshot(prev => {
         const products = prev.products.map(p => {
@@ -185,11 +199,12 @@ export function useConversionTracking(): UseConversionTrackingResult {
       });
       return nextValue;
     },
-    []
+    [analyticsAllowed]
   );
 
   const trackRevenue = useCallback<UseConversionTrackingResult['trackRevenue']>(
     (product, cents) => {
+      if (!analyticsAllowed) return;
       if (!Number.isFinite(cents) || cents <= 0) return;
       setSnapshot(prev => {
         const products = prev.products.map(p =>
@@ -207,14 +222,17 @@ export function useConversionTracking(): UseConversionTrackingResult {
         return updated;
       });
     },
-    []
+    [analyticsAllowed]
   );
 
   const reset = useCallback(() => {
     const empty = buildEmptySnapshot();
-    saveSnapshot(empty);
+    if (analyticsAllowed) saveSnapshot(empty);
+    else {
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* Storage may be disabled. */ }
+    }
     setSnapshot(empty);
-  }, []);
+  }, [analyticsAllowed]);
 
   const totals = useMemo(() => {
     const t = snapshot.products.reduce(
@@ -235,7 +253,7 @@ export function useConversionTracking(): UseConversionTrackingResult {
     };
   }, [snapshot]);
 
-  return { snapshot, track, trackRevenue, reset, totals };
+  return { snapshot, analyticsAllowed, track, trackRevenue, reset, totals };
 }
 
 export default useConversionTracking;

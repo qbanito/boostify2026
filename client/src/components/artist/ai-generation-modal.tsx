@@ -8,9 +8,7 @@ import {
 } from '../ui/dialog';
 import {
   Sparkles,
-  Music,
   Image,
-  ShoppingBag,
   User,
   Zap,
   Wand2,
@@ -18,9 +16,6 @@ import {
   Loader2,
   Brain,
   Palette,
-  Mic2,
-  Package,
-  Coins
 } from 'lucide-react';
 
 interface GenerationStep {
@@ -68,24 +63,10 @@ const initialSteps: GenerationStep[] = [
     status: 'pending'
   },
   {
-    id: 'music',
-    title: 'Composing Music',
-    subtitle: 'Generating 3 songs with vocals...',
-    icon: Mic2,
-    status: 'pending'
-  },
-  {
-    id: 'merchandise',
-    title: 'Creating Merchandise',
-    subtitle: '6 exclusive products...',
-    icon: Package,
-    status: 'pending'
-  },
-  {
-    id: 'blockchain',
-    title: 'Tokenizing on Blockchain',
-    subtitle: 'Registering on BoostiSwap...',
-    icon: Coins,
+    id: 'save',
+    title: 'Saving Artist Profile',
+    subtitle: 'Finishing your profile and preparing launch tasks...',
+    icon: CheckCircle2,
     status: 'pending'
   }
 ];
@@ -161,10 +142,9 @@ export function AIGenerationModal({ isOpen, isGenerating, onClose, artistName }:
   useEffect(() => {
     if (!isOpen || !isGenerating) return;
 
-    // Approximate times based on real server process:
-    // Total estimated: ~60 seconds (including blockchain registration)
-    // These times are visual estimates, actual close depends on isGenerating
-    const stepDurations = [3000, 4000, 10000, 2000, 18000, 12000, 8000];
+    // Progress is illustrative until the profile API responds. Song creation
+    // and blockchain confirmation are tracked separately in the background.
+    const stepDurations = [5000, 7000, 18000, 10000];
     const timeouts: NodeJS.Timeout[] = [];
     let accumulatedTime = 0;
 
@@ -197,8 +177,7 @@ export function AIGenerationModal({ isOpen, isGenerating, onClose, artistName }:
   useEffect(() => {
     if (!isOpen || !isGenerating || isComplete) return;
     
-    // Estimated total time: ~60 seconds
-    const estimatedTotalTime = 60000;
+    const estimatedTotalTime = 45000;
     
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTimeRef.current;
@@ -409,6 +388,12 @@ export function AIGenerationModal({ isOpen, isGenerating, onClose, artistName }:
               />
             </div>
           </div>
+
+          {isGenerating && (
+            <p className="-mt-3 mb-5 text-center text-xs text-gray-500">
+              Song generation and blockchain registration continue in the background after your artist profile is ready.
+            </p>
+          )}
 
           {/* Lista de pasos */}
           <div className="grid grid-cols-2 gap-3">

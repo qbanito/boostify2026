@@ -124,36 +124,45 @@ export default function TermsPage() {
         </Section>
 
         {/* ⚖️ THE KEY LEGAL CLAUSE */}
-        <Section id="s9" title="9. BTF Utility Token — Not a Security">
+        <Section id="s9" title="9. BTF Token and Digital Asset Terms">
           <Alert>
             <strong>⚠️ IMPORTANT LEGAL NOTICE — PLEASE READ IN FULL</strong>
           </Alert>
 
-          <p><strong className="text-white">9.1 Nature of the BTF Token.</strong> The Boostify Token ("BTF") is a <em>utility token</em> deployed on the Polygon blockchain. BTF is designed exclusively to serve as an in-platform credit and access mechanism for Boostify's digital services. Purchasing or holding BTF does not create, represent, or imply any of the following:</p>
+          <p><strong className="text-white">9.1 Intended Use and Rights.</strong> The Boostify Token ("BTF") is deployed on the Polygon blockchain and is designed to provide in-platform credit and access to Boostify digital services. The intended use and contractual rights of BTF do not include:</p>
           <ul className="list-disc list-inside space-y-1 pl-2 mt-2">
             <li>An equity interest, ownership stake, or share in {COMPANY} or any affiliated entity</li>
             <li>A debt instrument, bond, note, or any obligation of repayment by Boostify</li>
-            <li>A security as defined under the U.S. Securities Act of 1933, the Securities Exchange Act of 1934, or equivalent legislation in any jurisdiction</li>
             <li>A right to dividends, revenue sharing, profit participation, or any financial return</li>
             <li>A right to vote on corporate governance or management decisions</li>
-            <li>A commodity, investment contract, or derivative financial instrument</li>
           </ul>
+          <p className="mt-3">These statements describe the contractual rights intended by Boostify. They are not a legal determination or guarantee of how BTF, any offer, sale, transfer, reward, or transaction will be classified under the laws of any jurisdiction.</p>
 
-          <p className="mt-3"><strong className="text-white">9.2 No Investment Return.</strong> BTF tokens are acquired solely to access platform features. The primary use cases of BTF are: unlocking AI service credits, activating artist access packs, participating in the token lock-up program for service credit multipliers, and accessing exclusive platform features. There is no promise, representation, or expectation that BTF will increase in value or generate any financial return for the holder.</p>
+          <p className="mt-3"><strong className="text-white">9.2 No Promised Investment Return.</strong> BTF is designed for use with Boostify platform features, including service credits and access features. Boostify does not promise that BTF will increase in value, have a market, remain transferable, or generate a financial return. Do not acquire BTF in reliance on a future price, resale market, or expected return.</p>
 
-          <p><strong className="text-white">9.3 Howey Test Analysis.</strong> BTF is not offered as an investment of money in a common enterprise with an expectation of profits derived primarily from the efforts of others. Any potential secondary-market liquidity of BTF arises incidentally from its utility and does not transform it into a security. The Boostify platform does not promote BTF as an investment opportunity.</p>
+          <p><strong className="text-white">9.3 No Legal Classification Guarantee.</strong> Digital-asset treatment depends on the particular asset, transaction, offer, communications, and applicable law, and may change over time. Nothing in these Terms is a legal opinion or assurance that BTF or any related transaction is or is not a security, commodity, or other regulated product. Seek independent legal advice if you need a classification for your circumstances.</p>
 
-          <p><strong className="text-white">9.4 No SEC Registration.</strong> BTF tokens have not been registered with the U.S. Securities and Exchange Commission (SEC), the Financial Industry Regulatory Authority (FINRA), or any equivalent regulatory authority in any jurisdiction. The offering of BTF tokens does not constitute a public offering of securities. Nothing on the Boostify platform constitutes investment advice, financial advice, trading advice, or any other kind of advice.</p>
+          <p><strong className="text-white">9.4 No Offering-Status Representation.</strong> These Terms do not state whether any particular BTF transaction is registered, exempt, or permitted in a given jurisdiction. Nothing on the Boostify platform is legal, tax, investment, financial, or trading advice. Obtain independent professional advice for your circumstances.</p>
 
-          <p><strong className="text-white">9.5 Regulatory Risk.</strong> The legal treatment of digital tokens and blockchain technology varies by jurisdiction and continues to evolve. You are solely responsible for determining whether your acquisition, holding, or use of BTF complies with applicable law in your jurisdiction. Boostify makes no representation that BTF is legal in all jurisdictions and expressly excludes residents of jurisdictions where such activity is prohibited.</p>
+          <p><strong className="text-white">9.5 Regulatory Risk.</strong> The legal treatment of digital tokens and blockchain technology varies by jurisdiction and continues to evolve. You are responsible for determining whether your acquisition, holding, or use of BTF complies with applicable law. Boostify may restrict access where required by law; nothing here represents that BTF use is lawful in every jurisdiction.</p>
 
-          <p><strong className="text-white">9.6 Artist Access Packs.</strong> "Artist Access Packs" and "Music Access Tokens" are digital utility items that grant access to specific artist content, community channels, or platform features. They are not financial instruments, do not represent ownership of any master recordings, publishing rights, or royalty streams, and are not traded on any securities exchange.</p>
+          <p><strong className="text-white">9.6 Artist Access Packs.</strong> "Artist Access Packs" and "Music Access Tokens" provide only the access expressly described at purchase. Unless a separate written agreement says otherwise, they do not grant ownership of master recordings, publishing rights, or royalty streams.</p>
 
-          <p><strong className="text-white">9.7 Token Lock-Up Program.</strong> Participation in Boostify's token lock-up program provides service credit multipliers — that is, a higher rate of platform service credits per BTF locked. This is a platform feature discount mechanism, not a yield-generating investment product. Any credits generated are for use within the Boostify platform only and hold no monetary value outside the platform.</p>
+          <p><strong className="text-white">9.7 Token Lock-Up Program.</strong> Any service-credit multiplier is an in-platform feature benefit and is not a promise of cash yield or a financial return. Credits are usable only as described in the applicable feature terms.</p>
 
           <Alert>
-            By using any BTF-related feature on Boostify, you expressly acknowledge and agree that: (a) BTF is a utility token, not a security or investment product; (b) you are acquiring BTF for platform use, not for investment purposes; (c) you have not relied on any representation by Boostify regarding expected financial returns; and (d) Boostify is not liable for any loss arising from fluctuations in the secondary-market price of BTF.
+            By using BTF features, you acknowledge that you are responsible for understanding the feature terms, wallet risks, and laws that apply to you; Boostify has not promised a token value, resale market, or financial return. These Terms do not waive rights that cannot legally be waived.
           </Alert>
+        </Section>
+
+        <Section id="btf-rewards" title="BTF Rewards Program">
+          <p><strong className="text-white">Program purpose.</strong> Boostify may offer BTF rewards for eligible platform activity, including qualifying streams and selected completed actions. Rewards are promotional program benefits, are separate from artist royalties, sales proceeds, subscription revenue, tips, and USD wallet earnings, and do not give the recipient an ownership, revenue-share, royalty, or governance right.</p>
+          <p><strong className="text-white">Eligibility and review.</strong> Activity must be genuine, attributable to the artist, and recorded by an eligible Boostify source. Stream duration, listener limits, transaction completion, per-period caps, program rules, and available pool limits apply. Self-streaming, bots, fake accounts, purchased engagement, chargebacks, refunded or cancelled orders, duplicate events, or attempts to manipulate the program may be excluded. Provisional amounts may be corrected before approval; approved on-chain transfers cannot be reversed by Boostify.</p>
+          <p><strong className="text-white">No guaranteed amount or cash value.</strong> Participation does not guarantee a reward, a specific BTF amount, a conversion rate, liquidity, exchange access, redemption for cash, or future eligibility. Rules and reward pools may be changed or paused prospectively, subject to applicable law and any non-waivable rights.</p>
+          <p><strong className="text-white">Wallet and blockchain.</strong> You must verify control of a compatible Polygon wallet before claiming. A wallet signature links your address only and does not authorize spending. You are responsible for selecting the correct address, securing your wallet, and checking the destination before a claim. Confirmed blockchain transfers are generally irreversible; Boostify cannot recover tokens sent to an incorrect address or reverse a confirmed transaction. Network congestion, outages, or third-party infrastructure may delay claims.</p>
+          <p><strong className="text-white">Taxes and compliance.</strong> You are responsible for determining and meeting any tax, reporting, sanctions, and other legal obligations associated with receiving, holding, transferring, or disposing of digital assets. Boostify does not provide tax, investment, or legal advice. Program participation may be restricted where required by law.</p>
+          <p><strong className="text-white">No employment relationship.</strong> Rewards do not create employment, agency, partnership, endorsement, or a fiduciary relationship between you and Boostify.</p>
+          <p className="text-xs text-gray-400">Program terms version: 2026-10-29-v1. Acceptance is recorded against your authenticated Boostify account.</p>
         </Section>
 
         <Section id="s10" title="10. Disclaimer of Warranties">

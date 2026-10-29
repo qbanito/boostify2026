@@ -194,6 +194,41 @@ interface EpkSectionProps {
   colors: { hexAccent: string; hexPrimary: string };
 }
 
+function mediaIdentity(value: string): string {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be' || host.endsWith('youtube.com')) {
+      const id = host === 'youtu.be'
+        ? url.pathname.split('/').filter(Boolean)[0]
+        : url.searchParams.get('v') || url.pathname.match(/\/(?:embed|shorts|live)\/([^/?]+)/)?.[1];
+      if (id) return `youtube:${id}`;
+    }
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      const id = url.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
+      if (id) return `vimeo:${id}`;
+    }
+    return `${url.protocol}//${host}${decodeURIComponent(url.pathname).replace(/\/+$/, '')}`;
+  } catch {
+    return value.trim().split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+function isPressImage(value?: string | null): value is string {
+  if (!value) return false;
+  if (value.startsWith('data:image/')) return true;
+  if (value.startsWith('private://') || value.startsWith('gs://')) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  } catch {
+    if (!value.startsWith('/') || value.startsWith('//')) return false;
+  }
+  const clean = value.split(/[?#]/)[0].toLowerCase();
+  if (/\.(mp4|webm|mov|m4v|ogv|avi|mkv|mp3|wav|m4a|ogg|flac)$/.test(clean)) return false;
+  return true;
+}
+
 // ─── Small sub-components ──────────────────────────────────────────
 
 function SectionTitle({ icon: Icon, label, accent }: { icon: any; label: string; accent: string }) {
@@ -344,24 +379,69 @@ export function EpkSection({ artistId, isOwnProfile, colors }: EpkSectionProps) 
     audio.onended = () => setPlayingTrackUrl(null);
   }
 
-  function isYouTube(url: string) { return url.includes('youtube.com') || url.includes('youtu.be'); }
-
   function youtubeEmbedUrl(url: string) {
-    const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-    return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : null;
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+      const id = host === 'youtu.be'
+        ? parsed.pathname.split('/').filter(Boolean)[0]
+        : host.endsWith('youtube.com')
+          ? parsed.searchParams.get('v') || parsed.pathname.match(/\/(?:embed|shorts|live)\/([^/?]+)/)?.[1]
+          : null;
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1` : null;
+    } catch { return null; }
+  }
+
+  function videoEmbedUrl(url: string) {
+    const youtube = youtubeEmbedUrl(url);
+    if (youtube) return youtube;
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+      if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+        const id = parsed.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
+        return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}?autoplay=1` : null;
+      }
+    } catch { /* invalid URL */ }
+    return null;
   }
 
   function thumbnailFromYouTube(url: string) {
-    const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-    return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : null;
+    const embed = youtubeEmbedUrl(url);
+    const id = embed?.split('/').pop()?.split('?')[0];
+    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
   }
 
-  const cover = epk?.coverImage || epk?.profileImage || epk?.pressPhotos?.[0]?.url;
-  const allPhotos = [
-    ...(epk?.pressPhotos || []).map((p) => p.url),
-    ...(epk?.gallery || []),
-  ].filter(Boolean).slice(0, 12);
-  const publishedVideos = (epk?.videos || []).filter((v) => !v.isLoop);
+  const cover = [epk?.coverImage, epk?.profileImage, epk?.pressPhotos?.[0]?.url].find(isPressImage);
+  const displayTracks = (epk?.tracks || []).map((track, index, tracks) => {
+    if (!isPressImage(track.coverArt)) return track;
+    const repeatedCover = tracks.slice(0, index).some((previous) =>
+      isPressImage(previous.coverArt) && mediaIdentity(previous.coverArt) === mediaIdentity(track.coverArt!),
+    );
+    return repeatedCover ? { ...track, coverArt: undefined } : track;
+  });
+  const reservedPhotoKeys = new Set([
+    cover,
+    epk?.profileImage,
+    ...displayTracks.map((track) => track.coverArt),
+  ].filter((url): url is string => isPressImage(url)).map(mediaIdentity));
+  const allPhotos: string[] = [];
+  for (const url of [...(epk?.pressPhotos || []).map((photo) => photo.url), ...(epk?.gallery || [])]) {
+    if (!isPressImage(url)) continue;
+    const key = mediaIdentity(url);
+    if (reservedPhotoKeys.has(key)) continue;
+    reservedPhotoKeys.add(key);
+    allPhotos.push(url);
+    if (allPhotos.length >= 12) break;
+  }
+  const seenVideos = new Set<string>();
+  const publishedVideos = (epk?.videos || []).filter((video) => {
+    if (video.isLoop || !video.url || !/^https?:\/\//i.test(video.url)) return false;
+    const key = mediaIdentity(video.url);
+    if (seenVideos.has(key)) return false;
+    seenVideos.add(key);
+    return true;
+  });
 
   // ─── Loading ────────────────────────────────────────────────────
   if (loading) {
@@ -524,7 +604,7 @@ export function EpkSection({ artistId, isOwnProfile, colors }: EpkSectionProps) 
           <>
             <SectionTitle icon={Music2} label={`${t.music} · ${epk.tracks.length} ${epk.tracks.length !== 1 ? t.tracks : t.track}`} accent={hexAccent} />
             <div className="space-y-2 mb-1">
-              {epk.tracks.map((track, i) => {
+              {displayTracks.map((track, i) => {
                 const isPlaying = playingTrackUrl === track.audioUrl;
                 return (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-xl border transition-all"
@@ -570,11 +650,10 @@ export function EpkSection({ artistId, isOwnProfile, colors }: EpkSectionProps) 
             <SectionTitle icon={VideoIcon} label={`${t.videos} · ${publishedVideos.length}`} accent={hexAccent} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1">
               {publishedVideos.map((video, i) => {
-                const isYT = isYouTube(video.url);
-                const ytThumb = isYT ? thumbnailFromYouTube(video.url) : null;
+                const ytThumb = youtubeEmbedUrl(video.url) ? thumbnailFromYouTube(video.url) : null;
                 const thumb = video.thumbnail || ytThumb || null;
                 const isPlaying = playingVideoUrl === video.url;
-                const embedUrl = isYT ? youtubeEmbedUrl(video.url) : null;
+                const embedUrl = videoEmbedUrl(video.url);
                 return (
                   <div key={i} className="rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
                     <div className="relative cursor-pointer group"
@@ -582,8 +661,9 @@ export function EpkSection({ artistId, isOwnProfile, colors }: EpkSectionProps) 
                       style={{ aspectRatio: '16/9' }}>
                       {isPlaying && embedUrl ? (
                         <iframe src={embedUrl} className="w-full h-full"
-                          allow="autoplay; encrypted-media" allowFullScreen title={video.title} />
-                      ) : isPlaying && !isYT ? (
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          referrerPolicy="strict-origin-when-cross-origin" allowFullScreen title={video.title} />
+                      ) : isPlaying && !embedUrl ? (
                         <video src={video.url} className="w-full h-full object-cover" autoPlay controls />
                       ) : (
                         <>

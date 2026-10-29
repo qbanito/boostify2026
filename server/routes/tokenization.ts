@@ -1,13 +1,86 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { tokenizedSongs, tokenPurchases, artistTokenEarnings, users } from '../db/schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { createPublicClient, decodeEventLog, decodeFunctionData, fallback, formatEther, http, parseEther } from 'viem';
+import { polygon } from 'viem/chains';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import { generateImageWithNanoBanana } from '../services/fal-service';
 import { PRIMARY_MODEL } from '../utils/ai-config';
 
 const router = Router();
+
+const tokenPurchaseAbi = [
+  {
+    inputs: [
+      { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+      { internalType: 'uint256', name: 'amount', type: 'uint256' },
+    ],
+    name: 'buyTokens', outputs: [], stateMutability: 'payable', type: 'function',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'operator', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'from', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'to', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'id', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'value', type: 'uint256' },
+    ],
+    name: 'TransferSingle', type: 'event',
+  },
+] as const;
+
+const polygonClient = createPublicClient({
+  chain: polygon,
+  transport: fallback([
+    http('https://polygon-bor-rpc.publicnode.com', { timeout: 15000, retryCount: 2 }),
+    http('https://1rpc.io/matic', { timeout: 15000, retryCount: 2 }),
+  ]),
+});
+
+async function verifyTokenPurchaseOnchain(input: {
+  transactionHash: `0x${string}`;
+  contractAddress: string;
+  buyerWalletAddress: string;
+  tokenId: number;
+  amountTokens: number;
+}) {
+  const [receipt, transaction] = await Promise.all([
+    polygonClient.getTransactionReceipt({ hash: input.transactionHash }),
+    polygonClient.getTransaction({ hash: input.transactionHash }),
+  ]);
+  if (receipt.status !== 'success') throw new Error('The Polygon purchase transaction did not succeed.');
+  if (transaction.chainId !== polygon.id) throw new Error('Purchase transaction must be confirmed on Polygon.');
+  if (!transaction.to || transaction.to.toLowerCase() !== input.contractAddress.toLowerCase()) {
+    throw new Error('Purchase transaction contract does not match the selected song.');
+  }
+  if (transaction.from.toLowerCase() !== input.buyerWalletAddress.toLowerCase()) {
+    throw new Error('The transaction sender does not match the buyer wallet.');
+  }
+
+  const decoded = decodeFunctionData({ abi: tokenPurchaseAbi, data: transaction.input });
+  if (decoded.functionName !== 'buyTokens') throw new Error('Transaction is not a token purchase.');
+  const [tokenId, amount] = decoded.args;
+  if (tokenId !== BigInt(input.tokenId) || amount !== BigInt(input.amountTokens)) {
+    throw new Error('Transaction token and quantity do not match the purchase record.');
+  }
+  if (transaction.value <= 0n) throw new Error('The purchase transaction has no payment value.');
+
+  const transferConfirmed = receipt.logs.some((log) => {
+    if (log.address.toLowerCase() !== input.contractAddress.toLowerCase()) return false;
+    try {
+      const parsed = decodeEventLog({ abi: tokenPurchaseAbi, data: log.data, topics: log.topics });
+      return parsed.eventName === 'TransferSingle'
+        && parsed.args.to.toLowerCase() === input.buyerWalletAddress.toLowerCase()
+        && parsed.args.id === BigInt(input.tokenId)
+        && parsed.args.value === BigInt(input.amountTokens);
+    } catch { return false; }
+  });
+  if (!transferConfirmed) throw new Error('Polygon receipt does not confirm delivery of the purchased tokens.');
+  return { blockNumber: Number(receipt.blockNumber), pricePaidEth: formatEther(transaction.value) };
+}
 
 const createTokenizedSongSchema = z.object({
   // When tokenizing for an AI artist owned by the logged user, the client
@@ -33,7 +106,7 @@ const recordPurchaseSchema = z.object({
   tokenizedSongId: z.number().int().positive(),
   buyerWalletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
   amountTokens: z.number().int().positive(),
-  pricePaidEth: z.string(),
+  pricePaidEth: z.string().regex(/^\d+(\.\d+)?$/, 'Invalid ETH payment amount'),
   transactionHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid transaction hash"),
   blockNumber: z.number().int().positive().optional(),
 });
@@ -282,43 +355,64 @@ router.post('/purchase/record', async (req, res) => {
       .where(eq(tokenizedSongs.id, validatedData.tokenizedSongId))
       .limit(1);
 
-    if (!song) {
-      return res.status(404).json({ error: 'Tokenized song not found' });
+    if (!song) return res.status(404).json({ error: 'Tokenized song not found' });
+    const onchain = await verifyTokenPurchaseOnchain({
+      transactionHash: validatedData.transactionHash as `0x${string}`,
+      contractAddress: song.contractAddress,
+      buyerWalletAddress: validatedData.buyerWalletAddress,
+      tokenId: song.tokenId,
+      amountTokens: validatedData.amountTokens,
+    });
+    if (parseEther(validatedData.pricePaidEth) !== parseEther(onchain.pricePaidEth)) {
+      return res.status(400).json({ error: 'Submitted ETH amount does not match the confirmed Polygon transaction.' });
     }
 
-    if (!song.isActive) {
-      return res.status(400).json({ error: 'This song is not available for purchase' });
-    }
-
-    if (song.availableSupply < validatedData.amountTokens) {
-      return res.status(400).json({ error: 'Insufficient tokens available' });
-    }
-
-    const pricePaidEth = parseFloat(validatedData.pricePaidEth);
+    const pricePaidEth = Number(onchain.pricePaidEth);
     const artistEarnings = pricePaidEth * (song.royaltyPercentageArtist / 100);
     const platformEarnings = pricePaidEth * (song.royaltyPercentagePlatform / 100);
+    const numericBuyerId = Number((req.user as any)?.id);
+    const buyerUserId = Number.isInteger(numericBuyerId) && numericBuyerId > 0 ? numericBuyerId : null;
+    const purchase = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(tokenPurchases)
+        .where(eq(tokenPurchases.transactionHash, validatedData.transactionHash)).limit(1);
+      if (existing) {
+        if (existing.tokenizedSongId !== song.id || existing.buyerWalletAddress.toLowerCase() !== validatedData.buyerWalletAddress.toLowerCase()) {
+          throw new Error('Transaction hash is already linked to a different purchase.');
+        }
+        return existing;
+      }
 
-    const buyerUserId = req.user?.id || null;
+      const [updatedSong] = await tx.update(tokenizedSongs)
+        .set({ availableSupply: sql`${tokenizedSongs.availableSupply} - ${validatedData.amountTokens}`, updatedAt: new Date() })
+        .where(and(
+          eq(tokenizedSongs.id, song.id),
+          eq(tokenizedSongs.isActive, true),
+          gte(tokenizedSongs.availableSupply, validatedData.amountTokens),
+        ))
+        .returning({ id: tokenizedSongs.id });
+      if (!updatedSong) throw new Error('Song is inactive or has insufficient remaining supply.');
 
-    const [purchase] = await db.insert(tokenPurchases).values({
-      tokenizedSongId: validatedData.tokenizedSongId,
-      buyerWalletAddress: validatedData.buyerWalletAddress,
-      buyerUserId,
-      amountTokens: validatedData.amountTokens,
-      pricePaidEth: validatedData.pricePaidEth,
-      artistEarningsEth: artistEarnings.toString(),
-      platformEarningsEth: platformEarnings.toString(),
-      transactionHash: validatedData.transactionHash,
-      blockNumber: validatedData.blockNumber || null,
-      status: 'pending',
-    }).returning();
-
-    await db.update(tokenizedSongs)
-      .set({ 
-        availableSupply: song.availableSupply - validatedData.amountTokens,
-        updatedAt: new Date()
-      })
-      .where(eq(tokenizedSongs.id, validatedData.tokenizedSongId));
+      const [created] = await tx.insert(tokenPurchases).values({
+        tokenizedSongId: song.id,
+        buyerWalletAddress: validatedData.buyerWalletAddress,
+        buyerUserId,
+        amountTokens: validatedData.amountTokens,
+        pricePaidEth: onchain.pricePaidEth,
+        artistEarningsEth: artistEarnings.toString(),
+        platformEarningsEth: platformEarnings.toString(),
+        transactionHash: validatedData.transactionHash,
+        blockNumber: onchain.blockNumber,
+        status: 'confirmed',
+      }).returning();
+      await tx.insert(artistTokenEarnings).values({
+        artistId: song.artistId,
+        tokenizedSongId: song.id,
+        purchaseId: created.id,
+        amountEth: artistEarnings.toString(),
+        transactionHash: validatedData.transactionHash,
+      });
+      return created;
+    });
 
     res.status(201).json(purchase);
   } catch (error) {
@@ -330,46 +424,8 @@ router.post('/purchase/record', async (req, res) => {
   }
 });
 
-router.put('/purchase/:transactionHash/confirm', async (req, res) => {
-  try {
-    const { transactionHash } = req.params;
-    const { blockNumber } = req.body;
-
-    const [purchase] = await db.select().from(tokenPurchases)
-      .where(eq(tokenPurchases.transactionHash, transactionHash))
-      .limit(1);
-
-    if (!purchase) {
-      return res.status(404).json({ error: 'Purchase not found' });
-    }
-
-    const [updatedPurchase] = await db.update(tokenPurchases)
-      .set({ 
-        status: 'confirmed',
-        blockNumber: blockNumber || purchase.blockNumber
-      })
-      .where(eq(tokenPurchases.transactionHash, transactionHash))
-      .returning();
-
-    const [song] = await db.select().from(tokenizedSongs)
-      .where(eq(tokenizedSongs.id, purchase.tokenizedSongId))
-      .limit(1);
-
-    if (song) {
-      await db.insert(artistTokenEarnings).values({
-        artistId: song.artistId,
-        tokenizedSongId: purchase.tokenizedSongId,
-        purchaseId: purchase.id,
-        amountEth: purchase.artistEarningsEth,
-        transactionHash: purchase.transactionHash,
-      });
-    }
-
-    res.json(updatedPurchase);
-  } catch (error) {
-    console.error('Error confirming purchase:', error);
-    res.status(500).json({ error: 'Failed to confirm purchase' });
-  }
+router.put('/purchase/:transactionHash/confirm', (_req, res) => {
+  return res.status(410).json({ error: 'Client-side confirmation is disabled. Purchases are recorded only after server-side Polygon verification.' });
 });
 
 router.get('/purchases/:artistId', async (req, res) => {

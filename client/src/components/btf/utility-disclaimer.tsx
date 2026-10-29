@@ -15,11 +15,11 @@ interface UtilityDisclaimerProps {
 
 const DISCLAIMERS = {
   short:
-    "BTF is a utility token used only inside Boostify to access digital services. BTF is not an investment product and does not provide royalties, dividends, revenue share, ownership, profit rights, or investment returns.",
+    "BTF is designed for access to Boostify digital services. It does not grant ownership, royalties, dividends, revenue share, or promised returns. This describes intended use, not a legal classification guarantee.",
   long:
-    "BTF and Boostify digital access tokens are designed solely for utility within the Boostify ecosystem. They allow users to access, activate, and consume digital services such as AI music generation, video creation, artwork generation, artist access packs, campaign tools, and other platform services. They do not represent equity, debt, securities, dividends, royalties, revenue share, ownership, investment returns, or profit rights. Users should not purchase BTF or any Boostify digital token with an expectation of financial return.",
+    "BTF and Boostify digital access tokens are designed to provide access to platform features such as AI music generation, video creation, artwork generation, artist access packs, and campaign tools. They do not grant ownership, dividends, royalties, revenue sharing, or any promised financial return. These statements describe the rights intended by Boostify and are not a legal classification guarantee. Treatment can depend on the asset, transaction, offer, and applicable law. Do not acquire BTF in reliance on a future price or return.",
   es:
-    "BTF and Boostify's digital access tokens are designed solely for use within the Boostify ecosystem. They let you access, activate, and consume digital services such as AI music generation, video creation, cover art generation, artist access packages, campaign tools, and other platform services. They do not represent shares, debt, securities, dividends, royalties, revenue sharing, ownership, investment returns, or any right to profit. Users should not purchase BTF or any Boostify digital token with the expectation of financial return.",
+    "BTF y los tokens de acceso de Boostify estan disenados para acceder a funciones de la plataforma, como generacion de musica, video, arte, paquetes de acceso de artistas y herramientas de campana. No otorgan propiedad, dividendos, regalias, participacion en ingresos ni rendimientos prometidos. Esta descripcion expresa el uso previsto y no garantiza una clasificacion legal; el tratamiento depende del activo, la transaccion, la oferta y la ley aplicable. No adquieras BTF confiando en un precio o rendimiento futuro.",
 };
 
 const sizeClasses = {

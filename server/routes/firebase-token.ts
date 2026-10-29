@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/clerk-auth';
 import { auth } from '../firebase';
+import { isAdminEmail } from '../../shared/constants';
 
 const router = Router();
 
@@ -68,7 +69,10 @@ router.get('/api/firebase-token', isAuthenticated, async (req: Request, res: Res
     const customToken = await auth.createCustomToken(firebaseUid, {
       email: user.email,
       username: user.firstName || user.lastName || 'User',
-      replitId: user.id
+      replitId: String(user.id),
+      pgId: user.id,
+      clerkId: String(user.clerkUserId || user.uid || ''),
+      admin: isAdminEmail(user.email),
     });
 
     console.log('✅ [Firebase Token] Token generated successfully for UID:', firebaseUid);

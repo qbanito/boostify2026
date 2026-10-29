@@ -110,7 +110,7 @@ function CheckoutForm({ onPaymentSuccess, userEmail }: { onPaymentSuccess: () =>
         ) : (
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5" />
-            Pay $199 & Continue
+            Buy 19,900 credits &amp; Continue
           </div>
         )}
       </Button>
@@ -149,8 +149,6 @@ export function PaymentGateModal({
     setIsLoading(true);
     try {
       const response = await apiRequest('POST', '/api/credits/create-payment-intent', {
-        email: userEmail,
-        amount: 199,
       });
 
       setClientSecret(response.clientSecret);
@@ -215,6 +213,7 @@ export function PaymentGateModal({
                     <h3 className="text-2xl font-bold">Complete Music Video</h3>
                     <div className="text-right">
                       <p className="text-3xl font-bold text-primary">$199</p>
+                      <p className="mt-1 text-xs text-muted-foreground">19,900 credits added to your Artist Profile balance</p>
                       <p className="text-xs text-muted-foreground">one-time payment</p>
                     </div>
                   </div>
@@ -274,7 +273,7 @@ export function PaymentGateModal({
                       data-testid="button-retry-payment"
                     >
                       <CreditCard className="w-5 h-5 mr-2" />
-                      Continue to Payment - $199
+                      Buy 19,900 Credits - $199
                     </Button>
                   )}
                 </div>

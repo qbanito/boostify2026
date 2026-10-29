@@ -97,11 +97,13 @@ async function run() {
       )
     `);
     await client.query(`
-      INSERT INTO reward_action_rules (action_key, label, btf_amount, max_per_epoch) VALUES
-        ('publish_song',    'Publicar una canción nueva',            100, 5),
-        ('merch_sale',      'Primera venta de merch de la semana',   200, 1),
-        ('credit_purchase', 'Comprar un paquete de créditos',        250, 4),
-        ('follower_growth', 'Cada 10 seguidores nuevos',              50, 4)
+      INSERT INTO reward_action_rules (action_key, label, btf_amount, max_per_epoch, active) VALUES
+        ('publish_song',        'Publicar una canción nueva',           100, 5, TRUE),
+        ('merch_sale',          'Primera venta de merch de la semana',  200, 1, TRUE),
+        ('credit_purchase',     'Comprar un paquete de créditos',         0, 4, FALSE),
+        ('follower_growth',     'Cada 10 seguidores nuevos',             50, 4, TRUE),
+        ('fan_content_purchase','Compra completada de contenido fan',      0, 100, FALSE),
+        ('fan_tip',             'Propina de fan completada',               0, 100, FALSE)
       ON CONFLICT (action_key) DO NOTHING
     `);
 

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useSettingsStore } from "../store/settings-store";
 import type { PresetId } from "./theme-presets";
+import { useCookieConsent } from "../components/privacy/cookie-consent";
 
 interface BehaviorMetrics {
   clickTimestamps: number[];      // last 50 click times
@@ -41,6 +42,10 @@ function storeMetrics(m: BehaviorMetrics) {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(m));
   } catch {}
+}
+
+function emptyMetrics(): BehaviorMetrics {
+  return { clickTimestamps: [], pageChanges: 0, sessionStart: Date.now(), scrollDepths: [] };
 }
 
 /** Analyze metrics and suggest a preset */
@@ -161,11 +166,22 @@ export function analyzeAndSuggest(metrics: BehaviorMetrics): PresetId | null {
  */
 export function useBehaviorTracker() {
   const autoAdapt = useSettingsStore((s) => s.style?.autoAdapt ?? false);
-  const metricsRef = useRef<BehaviorMetrics>(getStoredMetrics());
+  const { hasConsent } = useCookieConsent();
+  const analyticsAllowed = hasConsent("analytics");
+  const metricsRef = useRef<BehaviorMetrics>(emptyMetrics());
+
+  useEffect(() => {
+    if (!analyticsAllowed) {
+      metricsRef.current = emptyMetrics();
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+      return;
+    }
+    metricsRef.current = getStoredMetrics();
+  }, [analyticsAllowed]);
 
   // Track clicks
   useEffect(() => {
-    if (!autoAdapt) return;
+    if (!autoAdapt || !analyticsAllowed) return;
 
     const handler = () => {
       const m = metricsRef.current;
@@ -176,11 +192,11 @@ export function useBehaviorTracker() {
 
     document.addEventListener("click", handler, { passive: true });
     return () => document.removeEventListener("click", handler);
-  }, [autoAdapt]);
+  }, [autoAdapt, analyticsAllowed]);
 
   // Track scroll depth
   useEffect(() => {
-    if (!autoAdapt) return;
+    if (!autoAdapt || !analyticsAllowed) return;
 
     const handler = () => {
       const depth = Math.round(
@@ -206,11 +222,11 @@ export function useBehaviorTracker() {
       window.removeEventListener("scroll", debounced);
       clearTimeout(timeout);
     };
-  }, [autoAdapt]);
+  }, [autoAdapt, analyticsAllowed]);
 
   // Track page navigation (listen for popstate + pushState)
   useEffect(() => {
-    if (!autoAdapt) return;
+    if (!autoAdapt || !analyticsAllowed) return;
 
     const handler = () => {
       const m = metricsRef.current;
@@ -230,13 +246,13 @@ export function useBehaviorTracker() {
       window.removeEventListener("popstate", handler);
       history.pushState = origPush;
     };
-  }, [autoAdapt]);
+  }, [autoAdapt, analyticsAllowed]);
 
   /** Get the current suggested preset (or null if not enough data) */
   const getSuggestion = useCallback((): PresetId | null => {
-    if (!autoAdapt) return null;
+    if (!autoAdapt || !analyticsAllowed) return null;
     return analyzeAndSuggest(metricsRef.current);
-  }, [autoAdapt]);
+  }, [autoAdapt, analyticsAllowed]);
 
   return { getSuggestion };
 }

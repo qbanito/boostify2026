@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useMemo } from 'react';
-import { useAccount, useBalance, useChainId } from 'wagmi';
+import { useAccount, useBalance, useChainId, useSignMessage } from 'wagmi';
 
 interface Web3ContextType {
   isWeb3Ready: boolean;
@@ -9,6 +9,7 @@ interface Web3ContextType {
   balance?: string;
   balanceFormatted?: string;
   symbol?: string;
+  signMessage?: (message: string) => Promise<string>;
 }
 
 const defaultWeb3Context: Web3ContextType = {
@@ -38,6 +39,7 @@ export function Web3ReadyInternalProvider({ children }: { children: ReactNode })
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: balanceData } = useBalance({ address });
+  const { signMessageAsync } = useSignMessage();
 
   const value = useMemo<Web3ContextType>(() => ({
     isWeb3Ready: true,
@@ -47,7 +49,8 @@ export function Web3ReadyInternalProvider({ children }: { children: ReactNode })
     balance: balanceData?.value?.toString(),
     balanceFormatted: balanceData?.formatted,
     symbol: balanceData?.symbol,
-  }), [address, isConnected, chainId, balanceData]);
+    signMessage: async (message: string) => signMessageAsync({ message }),
+  }), [address, isConnected, chainId, balanceData, signMessageAsync]);
 
   return (
     <Web3Context.Provider value={value}>

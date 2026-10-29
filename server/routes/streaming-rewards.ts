@@ -20,6 +20,8 @@
  */
 import { Router, Request, Response } from 'express';
 import { neon } from '@neondatabase/serverless';
+import { randomBytes } from 'node:crypto';
+import { getAddress, verifyMessage } from 'viem';
 import { authenticate } from '../middleware/auth';
 import {
   getRewardConfig,
@@ -30,7 +32,7 @@ import {
   getArtistRewardSummary,
   setArtistRewardWallet,
   getTreasuryBtfBalance,
-  BTF_PRICE_USD,
+  STREAMING_REWARD_TERMS_VERSION,
 } from '../services/streaming-rewards';
 
 const router = Router();
@@ -59,15 +61,116 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/wallet', authenticate, async (req: Request, res: Response) => {
+router.post('/terms/accept', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = Number((req as any).user.id);
-    const address = String(req.body?.address || '').trim();
-    const result = await setArtistRewardWallet(userId, address);
-    res.json({ success: true, ...result });
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(401).json({ success: false, error: 'Valid account required' });
+    if (req.body?.accepted !== true || req.body?.termsVersion !== STREAMING_REWARD_TERMS_VERSION) {
+      return res.status(400).json({ success: false, error: 'Explicit acceptance of the current BTF Rewards terms is required' });
+    }
+    const addressRows = await getSql()`SELECT reward_wallet_address, reward_wallet_verified_at FROM artist_wallet WHERE user_id = ${userId}` as any[];
+    const ipAddress = String(req.ip || '').slice(0, 45);
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 500);
+    await getSql()`
+      INSERT INTO streaming_reward_terms_acceptances (user_id, terms_version, wallet_address, ip_address, user_agent)
+      VALUES (${userId}, ${STREAMING_REWARD_TERMS_VERSION}, ${addressRows[0]?.reward_wallet_verified_at ? addressRows[0]?.reward_wallet_address || null : null}, ${ipAddress}, ${userAgent})
+      ON CONFLICT (user_id, terms_version) DO NOTHING
+    `;
+    res.json({ success: true, termsAccepted: true, termsVersion: STREAMING_REWARD_TERMS_VERSION });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    console.error('[Streaming Rewards] terms acceptance failed:', err?.message || err);
+    res.status(500).json({ success: false, error: 'Could not record acceptance' });
   }
+});
+
+router.post('/wallet/challenge', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = Number((req as any).user.id);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(401).json({ success: false, error: 'Valid account required' });
+    const recentChallenges = await getSql()`
+      SELECT COUNT(*)::int AS count FROM streaming_reward_wallet_challenges
+      WHERE user_id = ${userId} AND created_at > NOW() - INTERVAL '10 minutes'
+    ` as any[];
+    if (Number(recentChallenges[0]?.count || 0) >= 10) {
+      return res.status(429).json({ success: false, error: 'Too many wallet verification attempts. Try again later.' });
+    }
+    const terms = await getSql()`
+      SELECT id FROM streaming_reward_terms_acceptances
+      WHERE user_id = ${userId} AND terms_version = ${STREAMING_REWARD_TERMS_VERSION} LIMIT 1
+    ` as any[];
+    if (!terms.length) return res.status(403).json({ success: false, error: 'Accept the BTF Rewards terms before linking a wallet' });
+
+    let address: string;
+    try { address = getAddress(String(req.body?.address || '').trim()).toLowerCase(); }
+    catch { return res.status(400).json({ success: false, error: 'Connect a valid EVM wallet address' }); }
+    const nonce = randomBytes(24).toString('hex');
+    const message = [
+      'Boostify BTF Rewards wallet verification',
+      `Account: ${userId}`,
+      `Wallet: ${address}`,
+      `Nonce: ${nonce}`,
+      'Purpose: link this wallet to receive BTF reward claims on Polygon.',
+      'This signature does not authorize a token transfer or spend.',
+    ].join('\n');
+    const rows = await getSql()`
+      INSERT INTO streaming_reward_wallet_challenges (user_id, wallet_address, message, expires_at)
+      VALUES (${userId}, ${address}, ${message}, NOW() + INTERVAL '5 minutes')
+      RETURNING id, message, expires_at
+    ` as any[];
+    await getSql()`
+      DELETE FROM streaming_reward_wallet_challenges
+      WHERE user_id = ${userId} AND consumed_at IS NULL AND expires_at < NOW()
+    `;
+    res.json({ success: true, challengeId: Number(rows[0].id), address, message: rows[0].message, expiresAt: rows[0].expires_at });
+  } catch (err: any) {
+    console.error('[Streaming Rewards] wallet challenge failed:', err?.message || err);
+    res.status(500).json({ success: false, error: 'Could not create wallet verification challenge' });
+  }
+});
+
+router.post('/wallet/verify', authenticate, async (req: Request, res: Response) => {
+  try {
+    const userId = Number((req as any).user.id);
+    const challengeId = Number(req.body?.challengeId);
+    const signature = String(req.body?.signature || '');
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(401).json({ success: false, error: 'Valid account required' });
+    if (!Number.isInteger(challengeId) || challengeId <= 0 || signature.length > 2048 || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+      return res.status(400).json({ success: false, error: 'A valid wallet challenge and signature are required' });
+    }
+    const challenges = await getSql()`
+      SELECT id, wallet_address, message FROM streaming_reward_wallet_challenges
+      WHERE id = ${challengeId} AND user_id = ${userId} AND consumed_at IS NULL AND expires_at > NOW()
+      LIMIT 1
+    ` as any[];
+    if (!challenges.length) return res.status(400).json({ success: false, error: 'Wallet challenge expired or already used; request a new one' });
+    const challenge = challenges[0];
+    const valid = await verifyMessage({
+      address: challenge.wallet_address as `0x${string}`,
+      message: String(challenge.message),
+      signature: signature as `0x${string}`,
+    });
+    if (!valid) return res.status(400).json({ success: false, error: 'Wallet signature could not be verified' });
+    const consumed = await getSql()`
+      UPDATE streaming_reward_wallet_challenges SET consumed_at = NOW()
+      WHERE id = ${challengeId} AND user_id = ${userId} AND consumed_at IS NULL AND expires_at > NOW()
+      RETURNING id
+    ` as any[];
+    if (!consumed.length) return res.status(409).json({ success: false, error: 'Wallet challenge has already been used' });
+    const result = await setArtistRewardWallet(userId, String(challenge.wallet_address));
+    await getSql()`
+      UPDATE streaming_reward_terms_acceptances
+      SET wallet_address = ${result.wallet}
+      WHERE user_id = ${userId} AND terms_version = ${STREAMING_REWARD_TERMS_VERSION}
+    `;
+    res.json({ success: true, ...result, verified: true });
+  } catch (err: any) {
+    console.error('[Streaming Rewards] wallet verification failed:', err?.message || err);
+    res.status(500).json({ success: false, error: 'Could not verify wallet ownership' });
+  }
+});
+
+router.post('/wallet', authenticate, (_req: Request, res: Response) => {
+  res.status(410).json({ success: false, error: 'Direct wallet entry is disabled. Verify wallet ownership with a signature.' });
 });
 
 router.post('/claim', authenticate, async (req: Request, res: Response) => {
@@ -103,7 +206,6 @@ router.get('/leaderboard', async (_req: Request, res: Response) => {
     ` as any[];
     res.json({
       success: true,
-      btfPriceUsd: BTF_PRICE_USD,
       leaders: rows.map((r) => ({
         artistId: Number(r.artist_id),
         name: r.artist_name || [r.first_name, r.last_name].filter(Boolean).join(' ') || r.username || 'Boostify Artist',
@@ -115,7 +217,7 @@ router.get('/leaderboard', async (_req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[Streaming Rewards] /leaderboard error:', err.message);
-    res.json({ success: true, leaders: [], btfPriceUsd: BTF_PRICE_USD });
+    res.json({ success: true, leaders: [] });
   }
 });
 
@@ -143,7 +245,6 @@ router.get('/admin/overview', authenticate, async (req: Request, res: Response) 
       config,
       rules,
       treasuryBtf,
-      btfPriceUsd: BTF_PRICE_USD,
       epochs: epochs.map((e) => ({
         id: Number(e.id),
         periodKey: e.period_key,

@@ -204,9 +204,9 @@ export function BTFPaymentModal({
                   className="mt-0.5"
                 />
                 <label htmlFor="utility-ack" className="text-xs text-gray-400 leading-snug cursor-pointer">
-                  I understand that BTF is a utility token used only to access digital services inside Boostify.
-                  BTF is <strong>not</strong> an investment product and does not provide royalties, dividends,
-                  revenue share, ownership, or profit rights.
+                  I understand BTF is designed for access to Boostify digital services and does not grant ownership,
+                  royalties, dividends, revenue share, or promised returns. This describes intended use and is not a
+                  guarantee of legal classification. <a href="/terms#s9" target="_blank" rel="noreferrer" className="text-orange-300 underline">Read the BTF terms</a>.
                 </label>
               </div>
 

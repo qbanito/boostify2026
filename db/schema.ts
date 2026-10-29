@@ -436,6 +436,8 @@ export const artistWallet = pgTable("artist_wallet", {
   payoutAccount: text("payout_account"), // email / IBAN / account ref
   payoutDetails: json("payout_details").$type<Record<string, any>>(),
   totalPaidOut: decimal("total_paid_out", { precision: 10, scale: 2 }).default('0').notNull(), // Total ya retirado
+  rewardWalletAddress: varchar("reward_wallet_address", { length: 42 }),
+  rewardWalletVerifiedAt: timestamp("reward_wallet_verified_at"),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
@@ -1333,7 +1335,12 @@ export const creditTransactions = pgTable("credit_transactions", {
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   relatedProjectId: integer("related_project_id"),
   createdAt: timestamp("created_at").defaultNow().notNull()
-});
+}, (table) => [
+  uniqueIndex("credit_transactions_checkout_session_unique").on(table.stripeCheckoutSessionId)
+    .where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
+  uniqueIndex("credit_transactions_payment_intent_unique").on(table.stripePaymentIntentId)
+    .where(sql`${table.stripePaymentIntentId} IS NOT NULL`),
+]);
 
 export const musicVideoProjects = pgTable("music_video_projects", {
   id: serial("id").primaryKey(),
@@ -6501,6 +6508,8 @@ export const explicitSettings = pgTable("explicit_settings", {
   stripeProductId: text("stripe_product_id"),
   stripeMonthlyPriceId: text("stripe_monthly_price_id"),
   stripeYearlyPriceId: text("stripe_yearly_price_id"),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
+  stripeConnectReady: boolean("stripe_connect_ready").default(false).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -6561,6 +6570,7 @@ export const explicitSubscriptions = pgTable("explicit_subscriptions", {
   
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeCustomerId: text("stripe_customer_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
@@ -6572,11 +6582,27 @@ export const explicitSubscriptions = pgTable("explicit_subscriptions", {
   index("idx_explicit_subs_subscriber").on(table.subscriberId),
   index("idx_explicit_subs_artist").on(table.artistId),
   index("idx_explicit_subs_status").on(table.status),
+  uniqueIndex("uniq_explicit_sub_checkout_session").on(table.stripeCheckoutSessionId).where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
 ]);
 
 export const insertExplicitSubscriptionSchema = createInsertSchema(explicitSubscriptions).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertExplicitSubscription = z.infer<typeof insertExplicitSubscriptionSchema>;
 export type SelectExplicitSubscription = typeof explicitSubscriptions.$inferSelect;
+
+export const explicitSubscriptionPayments = pgTable("explicit_subscription_payments", {
+  id: serial("id").primaryKey(),
+  stripeInvoiceId: text("stripe_invoice_id").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id").notNull(),
+  buyerId: integer("buyer_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  artistId: integer("artist_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("usd").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_explicit_subscription_invoice").on(table.stripeInvoiceId),
+  index("idx_explicit_subscription_payments_artist").on(table.artistId),
+  index("idx_explicit_subscription_payments_buyer").on(table.buyerId),
+]);
 
 // ─── explicitPurchases ────────────────────────────────────────────
 
@@ -6589,6 +6615,7 @@ export const explicitPurchases = pgTable("explicit_purchases", {
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   currency: text("currency").default("usd"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   
   status: text("status", { enum: ["pending", "completed", "refunded", "failed"] }).default("pending").notNull(),
   
@@ -6597,6 +6624,7 @@ export const explicitPurchases = pgTable("explicit_purchases", {
   index("idx_explicit_purchases_buyer").on(table.buyerId),
   index("idx_explicit_purchases_content").on(table.contentId),
   index("idx_explicit_purchases_artist").on(table.artistId),
+  uniqueIndex("uniq_explicit_purchase_checkout_session").on(table.stripeCheckoutSessionId).where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
 ]);
 
 export const insertExplicitPurchaseSchema = createInsertSchema(explicitPurchases).omit({ id: true, createdAt: true });
@@ -6681,6 +6709,7 @@ export const explicitTips = pgTable("explicit_tips", {
   chatMessageId: integer("chat_message_id").references(() => explicitChatMessages.id, { onDelete: "set null" }),
   
   stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   status: text("status", { enum: ["pending", "completed", "refunded", "failed"] }).default("pending").notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -6688,6 +6717,7 @@ export const explicitTips = pgTable("explicit_tips", {
   index("idx_explicit_tips_tipper").on(table.tipperId),
   index("idx_explicit_tips_artist").on(table.artistId),
   index("idx_explicit_tips_status").on(table.status),
+  uniqueIndex("uniq_explicit_tip_checkout_session").on(table.stripeCheckoutSessionId).where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
 ]);
 
 export const insertExplicitTipSchema = createInsertSchema(explicitTips).omit({ id: true, createdAt: true });
@@ -11317,6 +11347,30 @@ export const legalAcknowledgements = pgTable("legal_acknowledgements", {
 
 export type LegalAcknowledgement = typeof legalAcknowledgements.$inferSelect;
 export type InsertLegalAcknowledgement = typeof legalAcknowledgements.$inferInsert;
+
+export const streamingRewardWalletChallenges = pgTable("streaming_reward_wallet_challenges", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+  message: text("message").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_streaming_reward_wallet_challenges_user").on(table.userId),
+]);
+
+export const streamingRewardTermsAcceptances = pgTable("streaming_reward_terms_acceptances", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  termsVersion: text("terms_version").notNull(),
+  walletAddress: varchar("wallet_address", { length: 42 }),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  acceptedAt: timestamp("accepted_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_streaming_reward_terms_user_version").on(table.userId, table.termsVersion),
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ARTIST FAN LEADS — Email capture & nurture sequence per artist

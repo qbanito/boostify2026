@@ -15,6 +15,7 @@ import { Progress } from '../ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useChallengeEngine } from '../../hooks/use-challenge-engine';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 import firebaseApp from '../../lib/firebase';
 
 interface Props {
@@ -100,7 +101,9 @@ export function ChallengeEngineCard({ songId, artistId, songTitle }: Props) {
     setUploadProgress(0);
     try {
       const storage = getStorage(firebaseApp);
-      const fileRef = ref(storage, `challenge-refs/${songId}/${Date.now()}-${file.name}`);
+      const adminUid = getAuth(firebaseApp).currentUser?.uid;
+      if (!adminUid) throw new Error('Sign in as an administrator to upload challenge references.');
+      const fileRef = ref(storage, `challenge-refs/${adminUid}/${songId}/${Date.now()}-${file.name}`);
       const task = uploadBytesResumable(fileRef, file);
       await new Promise<void>((resolve, reject) => {
         task.on(

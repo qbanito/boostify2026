@@ -15,7 +15,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../../firebase';
+import { auth, storage } from '../../firebase';
 
 // Definición de tipos para el editor profesional
 export interface EditorProject {
@@ -438,11 +438,13 @@ export async function shareProject(projectId: string, isPublic: boolean): Promis
  */
 export async function uploadProjectThumbnail(projectId: string, thumbnailDataUrl: string): Promise<string> {
   try {
+    const ownerUid = auth.currentUser?.uid;
+    if (!ownerUid) throw new Error('Sign in to upload a project thumbnail.');
     // Extraer la parte base64 de la data URL
     const base64Data = thumbnailDataUrl.split(',')[1];
     
     // Crear una referencia al almacenamiento
-    const thumbnailRef = ref(storage, `project-thumbnails/${projectId}.jpg`);
+    const thumbnailRef = ref(storage, `project-thumbnails/${ownerUid}/${projectId}.jpg`);
     
     // Subir la imagen
     await uploadString(thumbnailRef, base64Data, 'base64');

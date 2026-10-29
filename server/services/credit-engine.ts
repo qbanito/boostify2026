@@ -500,6 +500,69 @@ export async function addCredits(
   return { success: true, newBalance: updated?.credits || 0 };
 }
 
+/**
+ * Fulfill a paid Stripe credit Checkout exactly once. The unique checkout-session
+ * index is the idempotency boundary shared by webhook delivery and the return
+ * page; balance and ledger updates commit in the same database transaction.
+ */
+export async function fulfillCreditCheckout(input: {
+  userEmail: string;
+  credits: number;
+  packageId: string;
+  sessionId?: string;
+  paymentIntentId?: string;
+  paidUsd: number;
+  tier?: string;
+}): Promise<{ success: true; alreadyProcessed: boolean; credits: number; newBalance: number }> {
+  const { userEmail, credits, packageId, sessionId, paymentIntentId, paidUsd, tier } = input;
+  if (!sessionId && !paymentIntentId) throw new Error('A Stripe payment reference is required for idempotent fulfillment.');
+  const result = await db.transaction(async (tx) => {
+    const [purchase] = await tx.insert(creditTransactions).values({
+      userEmail,
+      amount: credits,
+      type: 'purchase',
+      description: `Purchased ${credits.toLocaleString()} credits (${packageId})`,
+      stripePaymentIntentId: paymentIntentId,
+      stripeCheckoutSessionId: sessionId,
+    }).onConflictDoNothing().returning({ id: creditTransactions.id });
+
+    if (!purchase) {
+      const [current] = await tx.select({ credits: userCredits.credits })
+        .from(userCredits).where(eq(userCredits.userEmail, userEmail)).limit(1);
+      return { alreadyProcessed: true, newBalance: current?.credits ?? 0 };
+    }
+
+    const [balance] = await tx.insert(userCredits).values({ userEmail, credits })
+      .onConflictDoUpdate({
+        target: userCredits.userEmail,
+        set: { credits: sql`${userCredits.credits} + ${credits}`, updatedAt: new Date() },
+      }).returning({ credits: userCredits.credits });
+
+    let newBalance = balance.credits;
+    const tierConfig = tier ? TIER_CREDIT_ALLOCATIONS[tier] : undefined;
+    const bonusCredits = tierConfig ? Math.floor(credits * tierConfig.bonusCreditsOnPurchase / 100) : 0;
+    if (bonusCredits > 0) {
+      const [updated] = await tx.update(userCredits)
+        .set({ credits: sql`${userCredits.credits} + ${bonusCredits}`, updatedAt: new Date() })
+        .where(eq(userCredits.userEmail, userEmail)).returning({ credits: userCredits.credits });
+      newBalance = updated.credits;
+      await tx.insert(creditTransactions).values({
+        userEmail,
+        amount: bonusCredits,
+        type: 'bonus',
+        description: `Tier bonus (${tier}) — ${tierConfig.bonusCreditsOnPurchase}% extra`,
+      });
+    }
+    return { alreadyProcessed: false, newBalance };
+  });
+
+  if (!result.alreadyProcessed && paidUsd > 0) {
+    const markup = await getGlobalMarkup();
+    void reserveFromPurchase(paidUsd, markup, paymentIntentId || sessionId);
+  }
+  return { success: true, alreadyProcessed: result.alreadyProcessed, credits, newBalance: result.newBalance };
+}
+
 // ============================================
 // SUBSCRIPTION MONTHLY CREDIT GRANTS
 // ============================================
@@ -515,6 +578,17 @@ const PLAN_TO_TIER: Record<string, string> = {
   premium: 'enterprise',
   enterprise: 'enterprise',
 };
+
+/** Resolve a purchase bonus tier from the server-side active subscription. */
+export async function getUserCreditTier(userEmail: string): Promise<string> {
+  const [userRow] = await db.select({ id: users.id }).from(users).where(eq(users.email, userEmail)).limit(1);
+  if (!userRow) return 'free';
+  const [sub] = await db.select({ plan: subscriptions.plan })
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, userRow.id), eq(subscriptions.status, 'active')))
+    .orderBy(desc(subscriptions.currentPeriodEnd)).limit(1);
+  return sub ? (PLAN_TO_TIER[sub.plan] || 'free') : 'free';
+}
 
 /**
  * Grant the user's monthly credit allotment for their current billing period,

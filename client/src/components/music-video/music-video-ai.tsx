@@ -29,7 +29,8 @@ import { Progress } from "../ui/progress";
 import * as fal from "@fal-ai/serverless-client";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore";
-import { db } from "../../firebase";
+import { auth, db } from "../../firebase";
+import { ensureFirebaseAuth } from "../../lib/firebase-auth";
 import { useAuth } from "../../hooks/use-auth";
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"; // Para obtener getToken
 import { AnalyticsDashboard } from './analytics-dashboard';
@@ -2076,7 +2077,10 @@ export function MusicVideoAI({
         const storage = getStorage();
         const timestamp = Date.now();
         const sanitizedFileName = audioFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const audioRef = ref(storage, `music-videos/audio/${user?.uid || 'anonymous'}/${timestamp}_${sanitizedFileName}`);
+        if (!(await ensureFirebaseAuth())) throw new Error('Sign in to upload audio for music-video generation.');
+        const ownerUid = auth.currentUser?.uid;
+        if (!ownerUid) throw new Error('Sign in to save generated audio.');
+        const audioRef = ref(storage, `music-videos/audio/${ownerUid}/${timestamp}_${sanitizedFileName}`);
         const snapshot = await uploadBytes(audioRef, audioFile);
         const firebaseAudioUrl = await getDownloadURL(snapshot.ref);
         setAudioUrl(firebaseAudioUrl);
@@ -2093,7 +2097,10 @@ export function MusicVideoAI({
         try {
           const storage = getStorage();
           const timestamp = Date.now();
-          const videoRef = ref(storage, `music-videos/performance/${user?.uid || 'anonymous'}/${timestamp}_performance.webm`);
+          if (!(await ensureFirebaseAuth())) throw new Error('Sign in to upload performance footage.');
+          const ownerUid = auth.currentUser?.uid;
+          if (!ownerUid) throw new Error('Sign in to save performance footage.');
+          const videoRef = ref(storage, `music-videos/performance/${ownerUid}/${timestamp}_performance.webm`);
           const snapshot = await uploadBytes(videoRef, performanceVideoBlob);
           const firebaseVideoUrl = await getDownloadURL(snapshot.ref);
           setPerformanceVideoUrl(firebaseVideoUrl);
@@ -2774,7 +2781,10 @@ export function MusicVideoAI({
           const storage = getStorage();
           const timestamp = Date.now();
           const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-          const audioRef = ref(storage, `music-videos/audio/${user?.uid || 'anonymous'}/${timestamp}_${sanitizedFileName}`);
+          if (!(await ensureFirebaseAuth())) throw new Error('Sign in to upload audio for music-video generation.');
+          const ownerUid = auth.currentUser?.uid;
+          if (!ownerUid) throw new Error('Sign in to save generated audio.');
+          const audioRef = ref(storage, `music-videos/audio/${ownerUid}/${timestamp}_${sanitizedFileName}`);
           
           // Subir archivo
           const snapshot = await uploadBytes(audioRef, file);
@@ -4996,7 +5006,9 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
       const response = await fetch(imageUrl);
       const blob = await response.blob();
 
-      const storageRef = ref(storage, `videos/${Date.now()}_${item.id}.jpg`);
+      const ownerUid = auth.currentUser?.uid;
+      if (!ownerUid) throw new Error('Sign in to save this video thumbnail.');
+      const storageRef = ref(storage, `videos/${ownerUid}/${Date.now()}_${item.id}.jpg`);
       await uploadBytes(storageRef, blob);
       const url = await getDownloadURL(storageRef);
 

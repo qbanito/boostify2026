@@ -67,9 +67,10 @@ export function ReportsTab({ artistId }: ReportsTabProps) {
   // funnel has a baseline denominator (users opening the Reports tab
   // have clearly seen the product roster).
   useEffect(() => {
+    if (!conversionTracker.analyticsAllowed) return;
     PRODUCTS.forEach(p => conversionTracker.track(p.key, "impressions"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [conversionTracker.analyticsAllowed]);
 
   const filteredProducts = useMemo(() => {
     if (convFilter === "all") return conversions.products;
@@ -499,6 +500,13 @@ export function ReportsTab({ artistId }: ReportsTabProps) {
             ))}
           </div>
         </div>
+
+        {!conversionTracker.analyticsAllowed && (
+          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-violet-400/20 bg-violet-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">Conversion analytics are paused until you allow Analytics in your privacy choices.</p>
+            <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new Event("boostify:open-cookie-settings"))}>Privacy choices</Button>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">

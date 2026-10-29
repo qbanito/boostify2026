@@ -138,7 +138,8 @@ import { Link, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery, CACHE_TTL } from "../../hooks/use-cached-query";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, getDoc, updateDoc } from "firebase/firestore";
-import { db, storage } from "../../firebase";
+import { auth, db, storage } from "../../firebase";
+import { ensureFirebaseAuth } from "../../lib/firebase-auth";
 import { ref, uploadBytesResumable, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { useToast } from "../../hooks/use-toast";
 import {
@@ -330,7 +331,9 @@ function SongMetadataModal({
     if (!file) return;
     setIsUploadingCover(true);
     try {
-      const storageRef = ref(storage, `songs/${song.id}/cover-art-${Date.now()}.${file.name.split('.').pop() || 'jpg'}`);
+      const ownerUid = auth.currentUser?.uid;
+      if (!ownerUid) throw new Error('Sign in to upload cover art.');
+      const storageRef = ref(storage, `songs/${ownerUid}/cover-art-${Date.now()}.${file.name.split('.').pop() || 'jpg'}`);
       const snapshot = await uploadBytes(storageRef, file);
       const downloadUrl = await getDownloadURL(snapshot.ref);
       setGeneratedCoverArt(downloadUrl);
@@ -1724,7 +1727,9 @@ function PhysicalCardsWidget({ artist, colors, profileUrl, cardStyles }: { artis
       );
     });
 
-    const storagePath = `artist-cards/${encodeURIComponent(artist.name)}/${Date.now()}.png`;
+    const ownerUid = auth.currentUser?.uid;
+    if (!ownerUid) throw new Error('Sign in to upload artist card artwork.');
+    const storagePath = `artist-cards/${ownerUid}/${encodeURIComponent(artist.name)}/${Date.now()}.png`;
     const storageRef = ref(storage, storagePath);
     const snapshot = await uploadBytes(storageRef, blob);
     return await getDownloadURL(snapshot.ref);
@@ -5676,13 +5681,18 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       toast({ title: 'No files to upload', description: 'Add audio files first.', variant: 'destructive' });
       return;
     }
+    if (!(await ensureFirebaseAuth()) || !auth.currentUser?.uid) {
+      toast({ title: 'Sign in required', description: 'Sign in to upload songs to your artist profile.', variant: 'destructive' });
+      return;
+    }
+    const storageOwnerUid = auth.currentUser.uid;
     setIsUploadingSong(true);
     let okCount = 0;
     for (const item of pending) {
       const title = item.title.trim() || stripAudioExt(item.file.name) || 'Untitled';
       try {
         setBulkSongQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'uploading', progress: 0, error: undefined } : q));
-        const storageRef = ref(storage, `songs/${artistId}/${Date.now()}_${item.file.name}`);
+        const storageRef = ref(storage, `songs/${storageOwnerUid}/${Date.now()}_${item.file.name}`);
         const uploadTask = uploadBytesResumable(storageRef, item.file);
         await new Promise<void>((resolve, reject) => {
           uploadTask.on('state_changed',
@@ -5699,7 +5709,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         // Upload cover art if provided, otherwise fall back to default
         let coverArtUrl = '/assets/freepik__boostify_music_organe_abstract_icon.png';
         if (item.coverArt) {
-          const coverRef = ref(storage, `songs/${artistId}/${Date.now()}_cover_${item.coverArt.name}`);
+          const coverRef = ref(storage, `songs/${storageOwnerUid}/${Date.now()}_cover_${item.coverArt.name}`);
           await uploadBytes(coverRef, item.coverArt);
           coverArtUrl = await getDownloadURL(coverRef);
         }
@@ -5999,11 +6009,15 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     setIsUploadingVideo(true);
     setVideoUploadProgress(0);
     try {
+      if (!(await ensureFirebaseAuth()) || !auth.currentUser?.uid) {
+        throw new Error('Sign in to upload videos to your artist profile.');
+      }
+      const storageOwnerUid = auth.currentUser.uid;
       // Upload optional PDF script first
       let scriptPdfUrl: string | undefined;
       let scriptPdfPath: string | undefined;
       if (videoPdfFile) {
-        scriptPdfPath = `video-scripts/${artistId}/${Date.now()}_${videoPdfFile.name}`;
+        scriptPdfPath = `video-scripts/${storageOwnerUid}/${Date.now()}_${videoPdfFile.name}`;
         const pdfRef = ref(storage, scriptPdfPath);
         await uploadBytes(pdfRef, videoPdfFile);
         scriptPdfUrl = await getDownloadURL(pdfRef);
@@ -6021,7 +6035,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         });
       } else {
         const fileExt = videoFile!.name.split('.').pop()?.toLowerCase() || 'mp4';
-        const storagePath = `videos/${artistId}/${Date.now()}_${videoFile!.name}`;
+        const storagePath = `videos/${storageOwnerUid}/${Date.now()}_${videoFile!.name}`;
         const storageRef = ref(storage, storagePath);
         
         const uploadTask = uploadBytesResumable(storageRef, videoFile!);

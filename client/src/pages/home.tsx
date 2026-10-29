@@ -386,7 +386,7 @@ const featureHighlights: FeatureHighlight[] = [
       "AI Image Creation & Enhancement",
       "Social Media Ready Assets"
     ],
-    image: "/assets/kling_20251109_Image_to_Video__2315_0_1762701277247.mp4"
+    image: "/assets/home-ai-music-video-generator.png"
   },
   {
     title: "Cross-Platform Analytics",
@@ -399,7 +399,7 @@ const featureHighlights: FeatureHighlight[] = [
       "Audience Demographics",
       "Trending Analysis"
     ],
-    image: "/assets/kling_20251109_Image_to_Video_dancing_sl_2309_0 (1)_1762701277248.mp4"
+    image: "/assets/home-cross-platform-analytics.png"
   },
   {
     title: "Smart Music Marketing",
@@ -412,7 +412,7 @@ const featureHighlights: FeatureHighlight[] = [
       "Budget Optimization",
       "Performance Tracking"
     ],
-    image: "/assets/kling_20251109_Image_to_Video_dancing_sl_2356_0_1762701277248.mp4"
+    image: "/assets/home-smart-music-marketing.png"
   }
 ];
 
@@ -697,19 +697,14 @@ export default function HomePage() {
       </Helmet>
       {/* Hero Section - Modern and Eye-catching */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Background video with overlay */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          disablePictureInPicture
-          disableRemotePlayback
+        {/* Background image with overlay */}
+        <img
+          src="/assets/home-smart-music-marketing.png"
+          alt=""
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover"
-        >
-          <source src="/assets/promos/boostify-2025-profile-v2.mp4" type="video/mp4" />
-        </video>
+          loading="lazy"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/70 to-black" />
         
         {/* Creative Animated Background Elements */}
@@ -1222,14 +1217,11 @@ export default function HomePage() {
             className="max-w-7xl mx-auto"
           >
             <div className="relative rounded-3xl overflow-hidden border border-orange-500/20 shadow-2xl shadow-orange-500/10 bg-gradient-to-br from-zinc-900 via-zinc-900 to-orange-950/20">
-              <video 
-                src="/assets/kling_20251109_Image_to_Video__2315_0_1762701277247.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
+              <img
+                src="/assets/home-ai-music-video-generator.png"
+                alt="A singer performing on a cinematic rooftop music-video set"
                 className="w-full h-auto"
+                loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent"></div>
               
@@ -1496,14 +1488,11 @@ export default function HomePage() {
           >
             <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 via-orange-500/30 to-red-500/30 rounded-3xl blur-2xl"></div>
             <div className="relative bg-zinc-800/50 backdrop-blur border border-zinc-700/50 rounded-3xl p-4 overflow-hidden">
-              <video 
-                src="/assets/Standard_Mode_Generated_Video (7).mp4" 
-                autoPlay 
-                loop 
-                muted 
-                playsInline
-                preload="metadata"
+              <img
+                src="/assets/home-boostiswap-live-dex.png"
+                alt="A music studio with a live digital asset trading dashboard"
                 className="w-full h-auto rounded-2xl shadow-2xl"
+                loading="lazy"
               />
               
               {/* Floating stats on video */}
@@ -2518,7 +2507,7 @@ export default function HomePage() {
             disablePictureInPicture
             disableRemotePlayback
             className="w-full h-full object-cover"
-            poster="/assets/education-poster.jpg"
+            poster="/assets/home-create-music-video-preview.png"
           >
             <source src="/assets/hero-video.mp4" type="video/mp4" />
           </video>
@@ -2614,17 +2603,12 @@ export default function HomePage() {
       {/* New AI music video creation section */}
       <section className="py-24 relative overflow-hidden bg-zinc-950">
         <div className="absolute inset-0 z-0 opacity-80">
-          <video 
-            autoPlay 
-            loop 
-            muted 
-            playsInline
-            disablePictureInPicture
-            disableRemotePlayback
+          <img
+            src="/assets/home-create-music-video.png"
+            alt="A singer on a cinematic music video set with production cameras"
             className="w-full h-full object-cover"
-          >
-            <source src="/assets/Standard_Mode_Generated_Video (5).mp4" type="video/mp4" />
-          </video>
+            loading="lazy"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent" />
         </div>
         
@@ -2708,33 +2692,16 @@ export default function HomePage() {
               className="md:w-1/2 aspect-video relative"
             >
               <div className="rounded-xl overflow-hidden border-2 border-purple-500/50 shadow-2xl shadow-purple-500/20">
-                <video 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  className="w-full h-full object-cover"
-                  poster="/assets/video-thumbnail.jpg"
-                >
-                  <source src="/assets/Standard_Mode_Generated_Video (6).mp4" type="video/mp4" />
-                </video>
+                <img
+                  src="/assets/home-create-music-video-preview.png"
+                  alt="A singer performing under cinematic lights during a music video shoot"
+                  className="w-full h-full aspect-video object-cover"
+                  loading="lazy"
+                />
               </div>
               
-              {/* Stylized playback controls as decoration */}
-              <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-2 bg-black/50 backdrop-blur-sm rounded-lg p-3">
-                <div className="w-2/3 h-1 bg-white/20 rounded-full overflow-hidden">
-                  <div className="w-1/2 h-full bg-purple-500 rounded-full"></div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
-                    <div className="w-4 h-4 text-white flex items-center justify-center">⏸️</div>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                    <Volume2 className="w-4 h-4 text-white" />
-                  </div>
-                </div>
+              <div className="absolute bottom-4 left-4 rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-xs font-medium tracking-wide text-white backdrop-blur-sm">
+                AI MUSIC VIDEO PREVIEW
               </div>
             </motion.div>
           </div>
@@ -2767,14 +2734,11 @@ export default function HomePage() {
             className="max-w-4xl mx-auto rounded-xl overflow-hidden shadow-2xl shadow-orange-500/20 border-2 border-orange-500/30"
           >
             <div className="aspect-video relative bg-black">
-              <video 
+              <img
                 className="w-full h-full object-cover"
-                src="/assets/kling_20251109_Image_to_Video_dancing_sl_2309_0 (1)_1762701611874.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
+                src="/assets/home-featured-ai-music-video.png"
+                alt="A singer performing with a live band on a cinematic concert stage"
+                loading="lazy"
               />
             </div>
             

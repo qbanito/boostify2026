@@ -141,28 +141,27 @@ export default function PrivacyPage() {
         </Section>
 
         {/* KEY PRIVACY CLAUSE FOR TOKENS */}
-        <Section id="s5" title="5. BTF Token Data & Non-Security Statement">
+        <Section id="s5" title="5. BTF Token and Rewards Data">
           <Alert>
-            <strong>Data collected in connection with the BTF utility token is used exclusively to operate the platform's credit and access system. It is not used to track investment activity, financial returns, or portfolio performance.</strong>
+            <strong>We use wallet and rewards data to verify wallet ownership, calculate eligible program activity, record legal acceptance, and process BTF reward claims.</strong>
           </Alert>
 
-          <p><strong className="text-white">5.1 Wallet Address Use.</strong> Your connected wallet address is stored solely to: (a) associate your account with on-chain BTF credit balances; (b) process token lock-up registrations; (c) enable wallet-based authentication. We do not use wallet addresses to build financial profiles or share them with financial data aggregators.</p>
+          <p><strong className="text-white">5.1 Wallet Address Use.</strong> If you link a wallet, we store its public address to associate your account with on-chain balances, support eligible wallet features, and send BTF rewards you claim. A wallet signature is used to verify control of the address; Boostify does not receive your private key or seed phrase.</p>
 
-          <p><strong className="text-white">5.2 Terms Acknowledgement Records.</strong> When you acknowledge the BTF utility disclaimer (required before certain token features), we record your userId, wallet address (if connected), acknowledgement timestamp, and your IP address. This record is maintained for regulatory compliance purposes to demonstrate informed consent.</p>
+          <p><strong className="text-white">5.2 Program and Consent Records.</strong> For BTF Rewards, we record your account ID, accepted terms version, acceptance time, IP address, user-agent, linked wallet address, eligible activity totals, reward status, and transaction hash where applicable. Wallet-link challenges expire after a short period and are single-use. We retain these records for program operation, fraud prevention, dispute handling, security, and legal recordkeeping.</p>
 
-          <p><strong className="text-white">5.3 No Financial Data Sale.</strong> We do not sell, rent, or share your wallet address or token activity data with any third party for financial profiling, trading analytics, or marketing purposes. BTF is a utility token (see our <a href="/terms#s9" className="text-orange-400 hover:underline">Terms of Service, Section 9</a>); we do not treat associated data as financial instrument data.</p>
+          <p><strong className="text-white">5.3 Sharing and Public Networks.</strong> We do not sell wallet addresses or reward activity for financial profiling. We share information with service providers needed to operate authentication, databases, analytics, and blockchain connections, and where required by law. Blockchain addresses and confirmed transactions are public by design and may be viewable outside Boostify. See our <a href="/terms#s9" className="text-orange-400 hover:underline">BTF terms</a> and <a href="/terms#btf-rewards" className="text-orange-400 hover:underline">BTF Rewards terms</a>.</p>
         </Section>
 
         <Section id="s6" title="6. Cookies & Tracking Technologies">
-          <p>We use cookies and similar technologies (local storage, session tokens, analytics pixels) to:</p>
+          <p>We use essential cookies and similar first-party storage for account sessions, authentication, security, and features you choose to use. The server session cookie has a maximum age of 24 hours. Optional personalization tools, analytics, and marketing technologies are controlled through the cookie preferences shown on the site.</p>
           <ul className="list-disc list-inside space-y-1 pl-2">
-            <li>Keep you logged in across sessions</li>
-            <li>Remember your preferences and settings</li>
-            <li>Analyze platform usage via anonymized analytics</li>
-            <li>Prevent cross-site request forgery (CSRF)</li>
+            <li>Essential: sign-in, session continuity, security, and core features</li>
+            <li>Optional personalization: tools beyond first-party settings needed for a feature you choose, if enabled</li>
+            <li>Analytics: platform usage measurement, if enabled</li>
+            <li>Marketing and attribution: campaign measurement, if enabled</li>
           </ul>
-          <p>You can control cookie settings through your browser. Disabling certain cookies may affect platform functionality (e.g., staying logged in).</p>
-          <p>We do not use third-party advertising cookies or cross-site behavioral tracking cookies.</p>
+          <p>Optional categories are off until you choose to enable them. Use <a href="/cookies" className="text-orange-400 hover:underline">Cookie preferences</a> to review or change your choice. A Global Privacy Control signal keeps marketing and attribution storage off for that browser.</p>
         </Section>
 
         <Section id="s7" title="7. Data Retention">

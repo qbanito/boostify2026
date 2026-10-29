@@ -1,330 +1,245 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isAuthenticated() {
-      return request.auth != null;
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
-    
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+
+    function sameUser(value) {
+      return signedIn() && value != null && (
+        value == request.auth.uid
+        || value == request.auth.token.get('clerkId', '')
+        || value == request.auth.token.get('replitId', '')
+        || value == request.auth.token.get('pgId', null)
+      );
     }
-    
+
+    function owns(data) {
+      return data is map && (
+        sameUser(data.get('userId', null))
+        || sameUser(data.get('user_id', null))
+        || sameUser(data.get('uid', null))
+        || sameUser(data.get('ownerId', null))
+        || sameUser(data.get('ownerUid', null))
+        || sameUser(data.get('createdBy', null))
+        || sameUser(data.get('created_by', null))
+        || sameUser(data.get('uploadedBy', null))
+        || sameUser(data.get('artistId', null))
+        || sameUser(data.get('artist_id', null))
+        || sameUser(data.get('authorId', null))
+        || sameUser(data.get('senderId', null))
+        || sameUser(data.get('recipientId', null))
+        || (signedIn() && data.get('participants', {}).get(request.auth.uid, false) == true)
+      );
+    }
+
+    function collaborator(data) {
+      return signedIn() && data is map
+        && data.get('collaborators', {}).get(request.auth.uid, false) == true;
+    }
+
+    function serverOnlyPath(path) {
+      return path.matches('^artists/[^/]+/(whatsappSessions|whatsappContacts|whatsappMessages|whatsappCampaigns|aiCommands|whatsappSales|whatsappAuditLog|telegramBots|telegramUsers|telegramMessages|telegramCampaigns|telegramCommunities|telegramAICommands|telegramSales|telegramAuditLog|redditConfig|redditIntel|redditReports|redditAuditLog|discordGuilds|discordConfig|discordChannels|discordRoles|discordMembers|discordCampaigns|discordEvents|discordRewards|discordAICommands|discordModeration|discordAuditLog)/.*$');
+    }
+
+    function keepsOwnership(oldData, newData) {
+      return newData.get('userId', null) == oldData.get('userId', null)
+        && newData.get('user_id', null) == oldData.get('user_id', null)
+        && newData.get('uid', null) == oldData.get('uid', null)
+        && newData.get('ownerId', null) == oldData.get('ownerId', null)
+        && newData.get('ownerUid', null) == oldData.get('ownerUid', null)
+        && newData.get('createdBy', null) == oldData.get('createdBy', null)
+        && newData.get('created_by', null) == oldData.get('created_by', null)
+        && newData.get('artistId', null) == oldData.get('artistId', null)
+        && newData.get('artist_id', null) == oldData.get('artist_id', null);
+    }
+
+    // Public artist-facing content. Only its creator can mutate it.
     match /image_galleries/{galleryId} {
       allow read: if true;
-      allow create, update: if isAuthenticated();
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
-    match /userProfiles/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId);
-    }
-    
-    match /users/{userId} {
-      allow read: if true;
-      allow create: if isAuthenticated();
-      allow update, delete: if isOwner(userId);
-    }
-    
+
     match /artist_profiles/{profileId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
+
     match /shows/{showId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
+
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAuthenticated();
-    }
-    
-    match /artist_music/{songId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.artistId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.artistId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.artistId == request.auth.uid;
-    }
-    
-    match /Video_Director_AI/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /AI_Music_Composer/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /Strategic_Marketing_AI/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /Social_Media_AI/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /Merchandise_Designer_AI/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /Manager_AI/{docId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    match /courses/{courseId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.createdBy;
-    }
-
-    match /users/{userId}/metrics/{metricId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    match /course_progress/{progressId} {
-      allow read: if isAuthenticated() && progressId.matches(request.auth.uid + '_.*');
-      allow create: if isAuthenticated() && progressId.matches(request.auth.uid + '_.*');
-      allow update: if isAuthenticated() && progressId.matches(request.auth.uid + '_.*') &&
-        (
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['completedLessons', 'completedExams', 'currentLesson', 
-                     'lastAccessedAt', 'generatedImages', 'lessonImages',
-                     'timeSpent', 'lastCompletedAt', 'lessonContents',
-                     'examScores']) ||
-          !exists(/databases/$(database)/documents/course_progress/$(progressId))
-        );
-    }
-
-    match /videos/{videoId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
 
     match /songs/{songId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
 
-    match /activities/{activityId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    match /videos/{videoId} {
+      allow read: if true;
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
 
-    match /strategies/{strategyId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    match /artist_music/{songId} {
+      allow read: if owns(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
-    match /investors/{investorId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+    // Account records are private, including profile documents that contain
+    // contact details. Public artist profiles are served by the public API.
+    match /users/{userId} {
+      allow read, write: if sameUser(userId);
     }
-    
-    match /technical_rider/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    match /userProfiles/{userId} {
+      allow read, write: if sameUser(userId);
     }
-    
-    match /requirements/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    match /users/{userId}/metrics/{metricId} {
+      allow read, write: if sameUser(userId);
     }
-    
-    match /budget/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+    match /courses/{courseId} {
+      allow read: if resource.data.isPublished == true || owns(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
-    match /logistics/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+    match /course_progress/{progressId} {
+      allow read: if signedIn() && progressId.matches(request.auth.uid + '_.*');
+      allow create: if signedIn()
+        && progressId.matches(request.auth.uid + '_.*');
+      allow update: if signedIn()
+        && progressId.matches(request.auth.uid + '_.*')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'completedLessons', 'completedExams', 'currentLesson',
+          'lastAccessedAt', 'generatedImages', 'lessonImages',
+          'timeSpent', 'lastCompletedAt', 'lessonContents', 'examScores'
+        ]);
+      allow delete: if signedIn()
+        && progressId.matches(request.auth.uid + '_.*');
     }
-    
-    match /hiring/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-    
-    match /calendar/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-    
-    match /ai_tools/{docId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-    
+
+    // These production resources are collaborative, but membership must
+    // already exist on the stored record; a caller cannot grant themselves access.
     match /production_projects/{projectId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if (owns(resource.data) || collaborator(resource.data))
+        && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /production_phases/{phaseId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || 
-        request.resource.data.collaborators[request.auth.uid] == true
-      );
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if (owns(resource.data) || collaborator(resource.data))
+        && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /production_tasks/{taskId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.assignedTo == request.auth.uid ||
-        request.resource.data.collaborators[request.auth.uid] == true
-      );
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data)
+        || (signedIn() && resource.data.get('assignedTo', '') == request.auth.uid);
+      allow create: if owns(request.resource.data);
+      allow update: if (owns(resource.data) || collaborator(resource.data)
+          || (signedIn() && resource.data.get('assignedTo', '') == request.auth.uid))
+        && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /production_notes/{noteId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /version_control/{versionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.uploadedBy == request.auth.uid ||
-        request.resource.data.collaborators[request.auth.uid] == true
-      );
-      allow delete: if isAuthenticated() && resource.data.uploadedBy == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if (owns(resource.data) || collaborator(resource.data))
+        && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /version_feedback/{feedbackId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
     match /production_files/{fileId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.uploadedBy == request.auth.uid ||
-        request.resource.data.collaborators[request.auth.uid] == true
-      );
-      allow delete: if isAuthenticated() && resource.data.uploadedBy == request.auth.uid;
+      allow read: if owns(resource.data) || collaborator(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if (owns(resource.data) || collaborator(resource.data))
+        && keepsOwnership(resource.data, request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
+
     match /musicVideoProjects/{projectId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        !resource.data.userId || 
-        resource.data.userId == request.auth.uid
-      );
-      allow delete: if isAuthenticated() && (
-        !resource.data.userId || 
-        resource.data.userId == request.auth.uid
-      );
+      allow read: if owns(resource.data);
+      allow create: if owns(request.resource.data);
+      allow update: if owns(resource.data) && owns(request.resource.data);
+      allow delete: if owns(resource.data);
     }
-    
-    // ── WhatsApp Artist Command Center ───────────────────────────────────────
-    // All WhatsApp data lives under artists/{artistId}/whatsapp* subcollections
-    // and is ONLY ever read/written by the Boostify backend via the Admin SDK
-    // (which bypasses these rules). Direct client access is denied so OpenWA
-    // sessions, tokens, contacts and messages can never be touched from the
-    // browser. Routes: /api/whatsapp/*.
-    match /artists/{artistId}/whatsappSessions/{sessionId} { allow read, write: if false; }
-    match /artists/{artistId}/whatsappContacts/{contactId} { allow read, write: if false; }
-    match /artists/{artistId}/whatsappMessages/{messageId} { allow read, write: if false; }
-    match /artists/{artistId}/whatsappCampaigns/{campaignId} { allow read, write: if false; }
-    match /artists/{artistId}/aiCommands/{commandId} { allow read, write: if false; }
-    match /artists/{artistId}/whatsappSales/{saleId} { allow read, write: if false; }
-    match /artists/{artistId}/whatsappAuditLog/{logId} { allow read, write: if false; }
 
-    // ── Telegram Artist Command Center ───────────────────────────────────────
-    // All Telegram data lives under artists/{artistId}/telegram* subcollections
-    // and is ONLY ever read/written by the Boostify backend via the Admin SDK
-    // (which bypasses these rules). Direct client access is denied so bot
-    // tokens, subscribers and messages can never be touched from the browser.
-    // Routes: /api/telegram/*.
-    match /artists/{artistId}/telegramBots/{botId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramUsers/{userId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramMessages/{messageId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramCampaigns/{campaignId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramCommunities/{communityId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramAICommands/{commandId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramSales/{saleId} { allow read, write: if false; }
-    match /artists/{artistId}/telegramAuditLog/{logId} { allow read, write: if false; }
-
-    // Reddit Artist Intelligence Center — READ-ONLY market intelligence written
-    // ONLY by the Boostify backend (Admin SDK). No tokens are stored (app-level
-    // OAuth), but config/intel/reports are denied to direct client access so
-    // strategy data and audit trails stay server-authoritative. Routes: /api/reddit/*.
+    // Backend-only messaging and integration credentials. These explicit
+    // denials are also excluded from the generic owner rule below.
+    match /artists/{artistId}/whatsappSessions/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappContacts/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappMessages/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappCampaigns/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/aiCommands/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappSales/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/whatsappAuditLog/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramBots/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramUsers/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramMessages/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramCampaigns/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramCommunities/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramAICommands/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramSales/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/telegramAuditLog/{docId} { allow read, write: if false; }
     match /artists/{artistId}/redditConfig/{docId} { allow read, write: if false; }
     match /artists/{artistId}/redditIntel/{docId} { allow read, write: if false; }
-    match /artists/{artistId}/redditReports/{reportId} { allow read, write: if false; }
-    match /artists/{artistId}/redditAuditLog/{logId} { allow read, write: if false; }
-
-    // Discord Fan Nation — community hub written ONLY by the Boostify backend
-    // (Admin SDK). Per-artist OAuth tokens are AES-256-GCM encrypted; bot token
-    // is app-level and never stored here. All client access denied so member
-    // data, gating rules and audit trails stay server-authoritative.
-    // Routes: /api/discord/*.
-    match /artists/{artistId}/discordGuilds/{guildId} { allow read, write: if false; }
+    match /artists/{artistId}/redditReports/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/redditAuditLog/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordGuilds/{docId} { allow read, write: if false; }
     match /artists/{artistId}/discordConfig/{docId} { allow read, write: if false; }
-    match /artists/{artistId}/discordChannels/{channelId} { allow read, write: if false; }
-    match /artists/{artistId}/discordRoles/{roleId} { allow read, write: if false; }
-    match /artists/{artistId}/discordMembers/{memberId} { allow read, write: if false; }
-    match /artists/{artistId}/discordCampaigns/{campaignId} { allow read, write: if false; }
-    match /artists/{artistId}/discordEvents/{eventId} { allow read, write: if false; }
-    match /artists/{artistId}/discordRewards/{rewardId} { allow read, write: if false; }
-    match /artists/{artistId}/discordAICommands/{cmdId} { allow read, write: if false; }
-    match /artists/{artistId}/discordModeration/{modId} { allow read, write: if false; }
-    match /artists/{artistId}/discordAuditLog/{logId} { allow read, write: if false; }
-    
+    match /artists/{artistId}/discordChannels/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordRoles/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordMembers/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordCampaigns/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordEvents/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordRewards/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordAICommands/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordModeration/{docId} { allow read, write: if false; }
+    match /artists/{artistId}/discordAuditLog/{docId} { allow read, write: if false; }
+
+    // Other user-owned app data. Public visibility or server-only access must
+    // be explicitly declared above; unknown documents default to deny.
     match /{document=**} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read: if !serverOnlyPath(document) && owns(resource.data);
+      allow create: if !serverOnlyPath(document) && owns(request.resource.data);
+      allow update: if !serverOnlyPath(document)
+        && owns(resource.data)
+        && owns(request.resource.data);
+      allow delete: if !serverOnlyPath(document) && owns(resource.data);
     }
   }
 }
-

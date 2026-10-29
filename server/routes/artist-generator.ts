@@ -1183,58 +1183,14 @@ router.post("/generate-artist", async (req: Request, res: Response) => {
       'look.cover_url': coverImageUrl
     });
 
-    // 🔗 REGISTRAR ARTISTA EN BLOCKCHAIN (BTF-2300 en Polygon)
-    let blockchainResult: { 
-      success: boolean; 
-      artistId?: number; 
-      tokenId?: number; 
-      txHash?: string; 
-      error?: string;
-    } = { success: false, error: 'Blockchain service not available' };
-    
-    if (isBlockchainServiceAvailable()) {
-      console.log('🔗 Registrando artista en blockchain BTF-2300...');
-      blockchainResult = await registerArtistOnChain(
-        undefined, // Usar platform wallet (el artista no tiene wallet aún)
-        artistDataWithImages.name,
-        postgresId
-      );
-      
-      if (blockchainResult.success) {
-        console.log(`✅ Artista registrado en Polygon!`);
-        console.log(`   🆔 On-chain Artist ID: ${blockchainResult.artistId}`);
-        console.log(`   🎫 NFT Token ID: ${blockchainResult.tokenId}`);
-        console.log(`   🔗 Tx Hash: ${blockchainResult.txHash}`);
-        
-        // Guardar datos del blockchain en PostgreSQL
-        await pgDb.update(users)
-          .set({
-            blockchainNetwork: 'polygon',
-            blockchainArtistId: blockchainResult.artistId,
-            blockchainTokenId: blockchainResult.tokenId?.toString(),
-            blockchainTxHash: blockchainResult.txHash,
-            blockchainContract: BTF2300_CONTRACT_ADDRESSES.artistToken,
-            blockchainRegisteredAt: new Date(),
-          })
-          .where(eq(users.id, postgresId));
-          
-        // Actualizar Firestore con datos del blockchain
-        await db.collection('generated_artists').doc(firestoreId).update({
-          blockchain: {
-            network: 'polygon',
-            contract: BTF2300_CONTRACT_ADDRESSES.artistToken,
-            artistId: blockchainResult.artistId,
-            tokenId: blockchainResult.tokenId,
-            txHash: blockchainResult.txHash,
-            registeredAt: new Date().toISOString()
-          }
-        });
-      } else {
-        console.warn(`⚠️ No se pudo registrar en blockchain: ${blockchainResult.error}`);
-      }
-    } else {
-      console.log('ℹ️ Blockchain service no disponible. Configura PLATFORM_PRIVATE_KEY para habilitar.');
-    }
+    // Blockchain confirmation is deliberately detached from artist creation.
+    // Polygon/RPC confirmation can take minutes; never keep the artist wizard
+    // waiting on a chain receipt after its profile and images are already saved.
+    const blockchainAvailable = isBlockchainServiceAvailable();
+    const blockchainPending = blockchainAvailable
+      ? { status: 'pending', network: 'polygon', contract: BTF2300_CONTRACT_ADDRESSES.artistToken }
+      : { status: 'unavailable', network: 'polygon', contract: BTF2300_CONTRACT_ADDRESSES.artistToken };
+    await db.collection('generated_artists').doc(firestoreId).update({ blockchain: blockchainPending });
 
     // Añadir los IDs al objeto de artista
     const completeArtistData = {
@@ -1244,18 +1200,53 @@ router.post("/generate-artist", async (req: Request, res: Response) => {
       profileImage: profileImageUrl,
       coverImage: coverImageUrl,
       masterJson,
-      // Datos del blockchain
-      blockchain: blockchainResult.success ? {
-        network: 'polygon',
-        contract: BTF2300_CONTRACT_ADDRESSES.artistToken,
-        artistId: blockchainResult.artistId,
-        tokenId: blockchainResult.tokenId,
-        txHash: blockchainResult.txHash
-      } : null
+      // Blockchain registration is tracked independently and does not block creation.
+      blockchain: blockchainPending
     };
 
-    // Devolver respuesta con datos completos del artista
+    // Return immediately with the saved artist profile.
     res.status(200).json(completeArtistData);
+
+    if (blockchainAvailable) {
+      void registerArtistOnChain(undefined, artistDataWithImages.name, postgresId)
+        .then(async (result) => {
+          if (!result.success) throw new Error(result.error || 'Blockchain registration failed');
+          const registeredAt = new Date();
+          await pgDb.update(users).set({
+            blockchainNetwork: 'polygon',
+            blockchainArtistId: result.artistId,
+            blockchainTokenId: result.tokenId?.toString(),
+            blockchainTxHash: result.txHash,
+            blockchainContract: BTF2300_CONTRACT_ADDRESSES.artistToken,
+            blockchainRegisteredAt: registeredAt,
+          }).where(eq(users.id, postgresId));
+          await db.collection('generated_artists').doc(firestoreId).update({
+            blockchain: {
+              status: 'confirmed',
+              network: 'polygon',
+              contract: BTF2300_CONTRACT_ADDRESSES.artistToken,
+              artistId: result.artistId,
+              tokenId: result.tokenId,
+              txHash: result.txHash,
+              registeredAt: registeredAt.toISOString(),
+            },
+          });
+          console.log(`✅ [AI Artist] Blockchain registration confirmed for ${artistDataWithImages.name}: ${result.txHash}`);
+        })
+        .catch(async (error) => {
+          const message = error instanceof Error ? error.message : 'Blockchain registration failed';
+          console.error(`❌ [AI Artist] Background blockchain registration failed for ${firestoreId}:`, message);
+          try {
+            await db.collection('generated_artists').doc(firestoreId).update({
+              'blockchain.status': 'failed',
+              'blockchain.error': message.substring(0, 400),
+              'blockchain.lastAttemptAt': new Date().toISOString(),
+            });
+          } catch (updateError) {
+            console.warn('[AI Artist] Could not save blockchain registration failure:', updateError);
+          }
+        });
+    }
   } catch (error) {
     console.error('Error generando artista aleatorio:', error);
     if (!res.headersSent) {
@@ -2019,6 +2010,7 @@ async function generateArtistSocialContent(artistId: number, artistName: string,
 
 type LaunchTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 type LaunchTaskKey =
+  | 'music'
   | 'merchandise'
   | 'news'
   | 'epk'
@@ -2034,6 +2026,7 @@ function buildInitialLaunchTasksState(
 ) {
   const now = new Date().toISOString();
   return {
+    music: { status: 'pending' as LaunchTaskStatus, attempts: 0, lastUpdatedAt: now },
     merchandise: { status: 'pending' as LaunchTaskStatus, attempts: 0, lastUpdatedAt: now },
     news: { status: 'pending' as LaunchTaskStatus, attempts: 0, lastUpdatedAt: now },
     epk: { status: 'pending' as LaunchTaskStatus, attempts: 0, lastUpdatedAt: now },
@@ -2093,6 +2086,8 @@ async function processArtistLaunchBackgroundTasks(params: {
   genre: string;
   biography: string;
   tokenIds: number[];
+  artistGender: 'male' | 'female';
+  artistDNA: { biography?: string; musicGenres?: string[]; moodVibe?: string; lookDescription?: string; influences?: string[] };
   emailAddress?: string;
   userName?: string;
   scheduledSongs?: Array<{ songId: number; title: string; releaseDate: string; isPublished: boolean; lyrics?: string }>;
@@ -2106,7 +2101,6 @@ async function processArtistLaunchBackgroundTasks(params: {
     profileImageUrl,
     genre,
     biography,
-    tokenIds,
     emailAddress,
     userName,
   } = params;
@@ -2117,9 +2111,10 @@ async function processArtistLaunchBackgroundTasks(params: {
   const runTrackedTask = async (
     taskKey: Exclude<LaunchTaskKey, 'crowdfunding' | 'explicit'>,
     taskRunner: () => Promise<unknown>,
+    maxAttempts = MAX_RETRIES,
   ) => {
     let lastError = '';
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       await updateLaunchTaskState(firestoreId, taskKey, 'running', { attempts: attempt });
       try {
         await taskRunner();
@@ -2127,17 +2122,62 @@ async function processArtistLaunchBackgroundTasks(params: {
         return { taskKey, status: 'completed' as const };
       } catch (error) {
         lastError = error instanceof Error ? error.message : 'Unknown task error';
-        console.warn(`⚠️ [Background] ${taskKey} attempt ${attempt}/${MAX_RETRIES} failed: ${lastError}`);
-        if (attempt < MAX_RETRIES) {
+        console.warn(`⚠️ [Background] ${taskKey} attempt ${attempt}/${maxAttempts} failed: ${lastError}`);
+        if (attempt < maxAttempts) {
           const backoffMs = RETRY_BASE_MS * Math.pow(2, attempt - 1);
           await new Promise((r) => setTimeout(r, backoffMs));
         }
       }
     }
-    console.error(`❌ [Background] ${taskKey} failed after ${MAX_RETRIES} attempts: ${lastError}`);
-    await updateLaunchTaskState(firestoreId, taskKey, 'failed', { attempts: MAX_RETRIES, error: lastError });
+    console.error(`❌ [Background] ${taskKey} failed after ${maxAttempts} attempts: ${lastError}`);
+    await updateLaunchTaskState(firestoreId, taskKey, 'failed', { attempts: maxAttempts, error: lastError });
     return { taskKey, status: 'failed' as const, error: lastError };
   };
+
+  const blockchainTaskPromise = isBlockchainServiceAvailable()
+    ? runTrackedTask('blockchain', async () => {
+        const result = await registerArtistOnChain(undefined, artistName, postgresId);
+        if (!result.success) throw new Error(result.error || 'Blockchain registration unsuccessful');
+        await pgDb.update(users).set({
+          blockchainNetwork: 'polygon',
+          blockchainArtistId: result.artistId,
+          blockchainTokenId: result.tokenId?.toString(),
+          blockchainTxHash: result.txHash,
+          blockchainContract: BTF2300_CONTRACT_ADDRESSES.artistRegistry,
+          blockchainRegisteredAt: new Date(),
+        }).where(eq(users.id, postgresId));
+      })
+    : (async () => {
+        await updateLaunchTaskState(firestoreId, 'blockchain', 'skipped', { attempts: 0 });
+        return { taskKey: 'blockchain', status: 'skipped' as const };
+      })();
+
+  let tokenIds = params.tokenIds || [];
+  let scheduledSongs = params.scheduledSongs || [];
+  // Song generation may take several minutes. Run it after returning the artist
+  // profile, and track it separately from the blockchain registration task.
+  const musicTaskResult = await runTrackedTask('music', async () => {
+    const generated = await generateTokenizedSongs(
+      postgresId,
+      artistName,
+      genre,
+      String(postgresId),
+      firestoreId,
+      params.artistGender,
+      params.artistDNA,
+    );
+    tokenIds = generated.tokenIds;
+    scheduledSongs = generated.scheduledSongs;
+    await db.collection('generated_artists').doc(firestoreId).update({
+      'launchPlan.totalSongs': scheduledSongs.length,
+      'launchPlan.status': 'initialized',
+      'launchPlan.songs': scheduledSongs,
+      'launchPlan.nextReleaseAt': scheduledSongs.find((song) => !song.isPublished)?.releaseDate || null,
+      'launchPlan.modules.music': true,
+      'launchPlan.modules.tokenization': true,
+      releaseCalendar: { cadenceDays: 10, songs: scheduledSongs },
+    });
+  }, 1);
 
   const tasks: Array<Promise<{ taskKey: string; status: 'completed' | 'failed' | 'skipped'; error?: string }>> = [
     // NOTE: Merchandise is NOT auto-generated here.
@@ -2145,7 +2185,7 @@ async function processArtistLaunchBackgroundTasks(params: {
     // Products require a completed Superstar Blueprint first — see POST /api/store/ai/generate-design/:userId
     runTrackedTask('news', async () => {
       // 🎵 REGENERATE BIOGRAPHY with song lyrics context for coherence
-      const songContext = (params.scheduledSongs || [])
+      const songContext = scheduledSongs
         .filter(s => s.lyrics)
         .map(s => ({ title: s.title, lyrics: s.lyrics, mood: undefined as string | undefined }));
       
@@ -2172,13 +2212,13 @@ async function processArtistLaunchBackgroundTasks(params: {
 
       // Use event-driven news orchestrator with full calendar
       const { scheduleArtistNewsCalendar } = await import('../services/news-event-orchestrator');
-      const songTitles = (params.scheduledSongs || []).map(s => s.title);
-      const firstRelease = params.scheduledSongs?.[0]?.releaseDate
-        ? new Date(params.scheduledSongs[0].releaseDate)
+      const songTitles = scheduledSongs.map(s => s.title);
+      const firstRelease = scheduledSongs[0]?.releaseDate
+        ? new Date(scheduledSongs[0].releaseDate)
         : new Date();
       // Build lyrics map: { "Song Title": "lyrics text" }
       const songLyricsMap: Record<string, string> = {};
-      for (const s of params.scheduledSongs || []) {
+      for (const s of scheduledSongs) {
         if (s.lyrics) songLyricsMap[s.title] = s.lyrics;
       }
       await scheduleArtistNewsCalendar(
@@ -2218,28 +2258,7 @@ async function processArtistLaunchBackgroundTasks(params: {
     ),
   ];
 
-  if (isBlockchainServiceAvailable()) {
-    tasks.push(
-      runTrackedTask('blockchain', async () => {
-        const result = await registerArtistOnChain(undefined, artistName, postgresId);
-        if (result.success) {
-          await pgDb.update(users).set({
-            blockchainNetwork: 'polygon',
-            blockchainArtistId: result.artistId,
-            blockchainTokenId: result.tokenId?.toString(),
-            blockchainTxHash: result.txHash,
-            blockchainContract: BTF2300_CONTRACT_ADDRESSES.artistRegistry,
-            blockchainRegisteredAt: new Date(),
-          }).where(eq(users.id, postgresId));
-        } else {
-          throw new Error(result.error || 'Blockchain registration unsuccessful');
-        }
-      }),
-    );
-  } else {
-    await updateLaunchTaskState(firestoreId, 'blockchain', 'skipped', { attempts: 0 });
-    tasks.push(Promise.resolve({ taskKey: 'blockchain', status: 'skipped' as const }));
-  }
+  tasks.push(blockchainTaskPromise);
 
   if (emailAddress) {
     tasks.push(
@@ -2262,9 +2281,9 @@ async function processArtistLaunchBackgroundTasks(params: {
   }
 
   const settled = await Promise.allSettled(tasks);
-  let completed = 0;
-  let failed = 0;
-  let skipped = 0;
+  let completed = musicTaskResult.status === 'completed' ? 1 : 0;
+  let failed = musicTaskResult.status === 'failed' ? 1 : 0;
+  let skipped = musicTaskResult.status === 'skipped' ? 1 : 0;
 
   settled.forEach((result) => {
     if (result.status === 'fulfilled') {
@@ -2280,7 +2299,7 @@ async function processArtistLaunchBackgroundTasks(params: {
     backgroundTasksPending: false,
     backgroundTasksCompletedAt: Timestamp.now(),
     backgroundTasksSummary: {
-      total: tasks.length,
+      total: tasks.length + 1,
       completed,
       failed,
       skipped,
@@ -2872,10 +2891,9 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
       'look.cover_url': coverImageUrl
     });
 
-    // 🎵 GENERAR 3 CANCIONES TOKENIZADAS CON AUDIO REAL Y VOCES (FAL AI MiniMax Music V2)
-    const artistGender = artistData.gender || 'male'; // Obtener género del artista
-    console.log(`🎵 Generando canciones tokenizadas con FAL AI MiniMax Music V2 (Voz: ${artistGender})...`);
-    // Build artistDNA from masterJson for fully coherent songs
+    // Build artistDNA now; audio generation runs in the background so the
+    // profile request never waits on long-running music or blockchain RPCs.
+    const artistGender = artistData.gender === 'female' ? 'female' : 'male';
     const initialArtistDNA = {
       biography: masterJson.canonical.biography_long || artistData.biography || '',
       musicGenres: [masterJson.musical_dna?.primary_genre, ...(masterJson.musical_dna?.secondary_genres || [])].filter(Boolean) as string[],
@@ -2883,16 +2901,8 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
       lookDescription: masterJson.visual_dna?.physical_description?.substring(0, 200) || '',
       influences: masterJson.musical_dna?.influences || [],
     };
-    const { tokenIds, scheduledSongs } = await generateTokenizedSongs(
-      postgresId, 
-      artistData.name, 
-      artistData.music_genres?.[0] || 'Pop', 
-      String(postgresId), // Usar postgresId para que el cliente encuentre las canciones por userId
-      firestoreId,
-      artistGender as 'male' | 'female',
-      initialArtistDNA
-    );
-    console.log(`✅ ${tokenIds.length} canciones tokenizadas creadas con voces y letras`);
+    const tokenIds: number[] = [];
+    const scheduledSongs: Array<{ songId: number; title: string; mood: string; tokenId: number; releaseDate: string; isPublished: boolean; lyrics?: string }> = [];
 
     const monetizationBootstrap = await bootstrapArtistMonetizationModules(
       postgresId,
@@ -2903,16 +2913,16 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
     const launchPlan = {
       version: '1.0',
       cadenceDays: 10,
-      totalSongs: scheduledSongs.length,
+      totalSongs: 3,
       createdAt: new Date().toISOString(),
-      status: 'initialized',
+      status: 'generating',
       songs: scheduledSongs,
       nextReleaseAt: scheduledSongs.find((s) => !s.isPublished)?.releaseDate || null,
       modules: {
         crowdfunding: monetizationBootstrap.crowdfundingInitialized,
         explicit: monetizationBootstrap.explicitInitialized,
         tokenization: true,
-        music: true,
+        music: false,
       },
     };
 
@@ -2960,12 +2970,12 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
         provider: 'fal-nano-banana-pro'
       },
       tokenization: {
-        status: 'activated',
+        status: 'generating',
         songsCreated: tokenIds.length,
         tokenIds: tokenIds,
         releaseSchedule: scheduledSongs,
-        audioGenerated: true,
-        provider: 'fal-minimax-music'
+        audioGenerated: false,
+        provider: 'lyria-3-pro-with-fal-fallback'
       },
       backgroundTasks: {
         merchandise: { status: 'generating', products: 6 },
@@ -3001,6 +3011,8 @@ router.post("/generate-artist/secure", isAuthenticated, async (req: Request, res
       genre: bgGenre,
       biography,
       tokenIds,
+      artistGender,
+      artistDNA: initialArtistDNA,
       emailAddress,
       userName,
       scheduledSongs,

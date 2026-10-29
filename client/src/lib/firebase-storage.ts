@@ -43,7 +43,8 @@ export async function uploadAudioFile(file: File, path: string, userId: string):
     const fileName = `${timestamp}_${file.name.replace(/\s+/g, '_')}`;
     
     // Usar un path más simple para evitar problemas de permisos
-    const filePath = `audio_files/${fileName}`;
+    const safeUserId = encodeURIComponent(userId);
+    const filePath = `audio_files/${safeUserId}/${fileName}`;
     
     // Referencia al archivo en Storage
     const storageRef = ref(storage, filePath);

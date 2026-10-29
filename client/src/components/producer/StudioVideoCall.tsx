@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { auth } from "../../firebase";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { 
@@ -502,7 +503,9 @@ export function StudioVideoCall() {
       setUploadProgress(0);
 
       // Create a storage reference
-      const storageRef = ref(storage, `studio-sessions/${sessionId}/audio/${Date.now()}_${file.name}`);
+      const ownerUid = auth.currentUser?.uid;
+      if (!ownerUid) throw new Error('Sign in to upload session audio.');
+      const storageRef = ref(storage, `studio-sessions/${ownerUid}/${sessionId}/audio/${Date.now()}_${file.name}`);
       
       // Upload file
       const uploadTask = uploadBytesResumable(storageRef, file);

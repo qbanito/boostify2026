@@ -28,7 +28,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 const getSql = () => neon(process.env.DATABASE_URL!);
 
 export const BTF_TOKEN_ADDRESS = '0x3DF18dAa074D8744cC620a89CFc8b7c4138CEb05' as `0x${string}`;
-export const BTF_PRICE_USD = 0.001;
+export const STREAMING_REWARD_TERMS_VERSION = '2026-10-29-v1';
 
 const POLYGON_RPCS = [
   'https://polygon-bor-rpc.publicnode.com',
@@ -198,13 +198,14 @@ async function computeActionEvents(epochId: number, startsAt: Date, endsAt: Date
     }
   }
 
-  // 2) merch_sale — first merch sale(s) of the window
+  // 2) merch_sale — only settled sales that generated artist earnings
   const merch = byKey.get('merch_sale');
   if (merch) {
     const rows = await sql`
       SELECT artist_id, COUNT(*)::int AS n
       FROM sales_transactions
       WHERE created_at >= ${startsAt.toISOString()} AND created_at < ${endsAt.toISOString()}
+        AND status = 'completed' AND artist_earning::numeric > 0
       GROUP BY artist_id
     ` as any[];
     for (const r of rows) {
@@ -213,24 +214,37 @@ async function computeActionEvents(epochId: number, startsAt: Date, endsAt: Date
     }
   }
 
-  // 3) credit_purchase — artist bought credit packs (invests in the platform)
-  const cred = byKey.get('credit_purchase');
-  if (cred) {
+  // 3) fan_content_purchase — paid and completed content purchases only
+  const contentPurchase = byKey.get('fan_content_purchase');
+  if (contentPurchase) {
     const rows = await sql`
-      SELECT u.id AS artist_id, COUNT(*)::int AS n
-      FROM credit_transactions ct
-      JOIN users u ON LOWER(u.email) = LOWER(ct.user_email)
-      WHERE ct.type = 'purchase' AND ct.amount > 0
-        AND ct.created_at >= ${startsAt.toISOString()} AND ct.created_at < ${endsAt.toISOString()}
-      GROUP BY u.id
+      SELECT artist_id, COUNT(*)::int AS n
+      FROM explicit_purchases
+      WHERE status = 'completed' AND created_at >= ${startsAt.toISOString()} AND created_at < ${endsAt.toISOString()}
+      GROUP BY artist_id
     ` as any[];
     for (const r of rows) {
-      const qty = Math.min(Number(r.n), cred.maxPerEpoch);
-      if (qty > 0) events.push({ artistId: Number(r.artist_id), actionKey: 'credit_purchase', qty, btf: qty * cred.btfAmount, meta: { purchases: Number(r.n) } });
+      const qty = Math.min(Number(r.n), contentPurchase.maxPerEpoch);
+      if (qty > 0) events.push({ artistId: Number(r.artist_id), actionKey: 'fan_content_purchase', qty, btf: qty * contentPurchase.btfAmount, meta: { completedPurchases: Number(r.n) } });
     }
   }
 
-  // 4) follower_growth — one unit per 10 new followers in the window
+  // 4) fan_tip — completed paid tips only
+  const fanTip = byKey.get('fan_tip');
+  if (fanTip) {
+    const rows = await sql`
+      SELECT artist_id, COUNT(*)::int AS n
+      FROM explicit_tips
+      WHERE status = 'completed' AND created_at >= ${startsAt.toISOString()} AND created_at < ${endsAt.toISOString()}
+      GROUP BY artist_id
+    ` as any[];
+    for (const r of rows) {
+      const qty = Math.min(Number(r.n), fanTip.maxPerEpoch);
+      if (qty > 0) events.push({ artistId: Number(r.artist_id), actionKey: 'fan_tip', qty, btf: qty * fanTip.btfAmount, meta: { completedTips: Number(r.n) } });
+    }
+  }
+
+  // 5) follower_growth — one unit per 10 new followers in the window
   const fol = byKey.get('follower_growth');
   if (fol) {
     const rows = await sql`
@@ -448,12 +462,18 @@ export async function claimRewards(artistId: number): Promise<{
   const sql = getSql();
   const cfg = await getRewardConfig();
   if (!cfg.active) return { claimed: false, totalBtf: 0, message: 'Rewards system is currently disabled' };
+  const terms = await sql`
+    SELECT id FROM streaming_reward_terms_acceptances
+    WHERE user_id = ${artistId} AND terms_version = ${STREAMING_REWARD_TERMS_VERSION}
+    LIMIT 1
+  ` as any[];
+  if (!terms.length) return { claimed: false, totalBtf: 0, message: 'Accept the current BTF Rewards terms before claiming.' };
   if (claimLocks.has(artistId)) return { claimed: false, totalBtf: 0, message: 'A claim is already in progress' };
 
   claimLocks.add(artistId);
   try {
-    const walletRows = await sql`SELECT reward_wallet_address FROM artist_wallet WHERE user_id = ${artistId}` as any[];
-    const wallet = walletRows[0]?.reward_wallet_address as string | undefined;
+    const walletRows = await sql`SELECT reward_wallet_address, reward_wallet_verified_at FROM artist_wallet WHERE user_id = ${artistId}` as any[];
+    const wallet = walletRows[0]?.reward_wallet_verified_at ? walletRows[0]?.reward_wallet_address as string | undefined : undefined;
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       return { claimed: false, totalBtf: 0, message: 'No valid reward wallet registered' };
     }
@@ -470,6 +490,34 @@ export async function claimRewards(artistId: number): Promise<{
 
     if (cfg.dryRun) {
       return { claimed: false, totalBtf, simulated: true, message: `DRY RUN: would transfer ${totalBtf} BTF to ${wallet}` };
+    }
+
+    const treasuryBtf = await getTreasuryBtfBalance();
+    if (treasuryBtf < totalBtf) {
+      return { claimed: false, totalBtf, message: 'The rewards treasury does not currently have enough BTF. Your rewards remain claimable.' };
+    }
+
+    try {
+      const account = getTreasuryAccount();
+      const publicClient = createPublicClient({ chain: polygon, transport: rpcTransport() });
+      const amountWei = parseUnits(totalBtf.toFixed(4), 18);
+      const [nativeBalance, gasPrice, estimatedGas] = await Promise.all([
+        publicClient.getBalance({ address: account.address }),
+        publicClient.getGasPrice(),
+        publicClient.estimateContractGas({
+          account: account.address,
+          address: BTF_TOKEN_ADDRESS,
+          abi: TRANSFER_ABI,
+          functionName: 'transfer',
+          args: [wallet as `0x${string}`, amountWei],
+        }),
+      ]);
+      if (nativeBalance < estimatedGas * gasPrice * 2n) {
+        return { claimed: false, totalBtf, message: 'The rewards treasury needs more Polygon gas funds. Your rewards remain claimable.' };
+      }
+    } catch (err: any) {
+      console.error('[Streaming Rewards] treasury preflight failed:', err?.message || err);
+      return { claimed: false, totalBtf, message: 'Could not verify treasury readiness on Polygon. Your rewards remain claimable.' };
     }
 
     const ids = claimable.map((r) => Number(r.id));
@@ -578,23 +626,41 @@ export async function getArtistRewardSummary(artistId: number) {
     LIMIT 12
   ` as any[];
 
+  const activityEvents = await sql`
+    SELECT ep.period_key, ev.action_key, SUM(ev.qty)::int AS qty,
+           SUM(ev.btf_amount)::numeric AS btf_amount
+    FROM artist_reward_events ev
+    JOIN streaming_reward_epochs ep ON ep.id = ev.epoch_id
+    WHERE ev.artist_id = ${artistId}
+    GROUP BY ep.period_key, ev.action_key
+    ORDER BY ep.period_key DESC, ev.action_key
+  ` as any[];
+
   // Live current-week stats (informational — not yet calculated)
   const cw = currentWeek();
   const live = await aggregateValidStreams(cw.startsAt, cw.endsAt, cfg);
   const mine = live.find((l) => l.artistId === artistId);
 
-  const walletRows = await sql`SELECT reward_wallet_address FROM artist_wallet WHERE user_id = ${artistId}` as any[];
+  const walletRows = await sql`SELECT reward_wallet_address, reward_wallet_verified_at FROM artist_wallet WHERE user_id = ${artistId}` as any[];
+  const termsRows = await sql`
+    SELECT terms_version, accepted_at FROM streaming_reward_terms_acceptances
+    WHERE user_id = ${artistId} AND terms_version = ${STREAMING_REWARD_TERMS_VERSION}
+    LIMIT 1
+  ` as any[];
 
   return {
+    requiredTermsVersion: STREAMING_REWARD_TERMS_VERSION,
     config: {
       active: cfg.active,
       dryRun: cfg.dryRun,
       btfPerStream: cfg.btfPerStream,
       minStreams: cfg.minStreams,
       minClaimBtf: cfg.minClaimBtf,
-      btfPriceUsd: BTF_PRICE_USD,
     },
-    wallet: walletRows[0]?.reward_wallet_address || null,
+    wallet: walletRows[0]?.reward_wallet_verified_at ? walletRows[0]?.reward_wallet_address || null : null,
+    walletVerified: !!walletRows[0]?.reward_wallet_verified_at,
+    termsAccepted: termsRows.length > 0,
+    termsVersion: termsRows[0]?.terms_version || null,
     claimableBtf: Number(totals[0]?.claimable || 0),
     pendingBtf: Number(totals[0]?.pending || 0),
     paidBtf: Number(totals[0]?.paid || 0),
@@ -616,6 +682,9 @@ export async function getArtistRewardSummary(artistId: number) {
       status: h.status,
       txHash: h.tx_hash,
       paidAt: h.paid_at,
+      activity: activityEvents
+        .filter((event) => event.period_key === h.period_key)
+        .map((event) => ({ actionKey: event.action_key, qty: Number(event.qty), btfAmount: Number(event.btf_amount) })),
     })),
   };
 }
@@ -626,7 +695,7 @@ export async function setArtistRewardWallet(artistId: number, address: string) {
   await sql`
     INSERT INTO artist_wallet (user_id, reward_wallet_address)
     VALUES (${artistId}, ${address})
-    ON CONFLICT (user_id) DO UPDATE SET reward_wallet_address = ${address}, updated_at = NOW()
+    ON CONFLICT (user_id) DO UPDATE SET reward_wallet_address = ${address}, reward_wallet_verified_at = NOW(), updated_at = NOW()
   `;
   return { wallet: address };
 }

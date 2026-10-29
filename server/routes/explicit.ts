@@ -1,5 +1,5 @@
 /**
- * Boostify Explicit — API Routes
+ * Boostify Exclusive Content API routes
  * Content CRUD, subscriptions, purchases, tips, AI generation, chat
  */
 import { Router, Request, Response } from 'express';
@@ -11,57 +11,83 @@ import { storage as firebaseStorage } from '../firebase';
 import {
   explicitSettings, explicitContent, explicitSubscriptions,
   explicitPurchases, explicitChatMessages, explicitAiGenerations,
-  explicitTips, users,
+  explicitTips, explicitSubscriptionPayments, users,
 } from '../db/schema';
 import { eq, and, desc, asc, or, sql } from 'drizzle-orm';
 import {
   generateExplicitImage, generateExplicitVideoFromImage,
-  generateExplicitVideoFromText, getModelCost, EXPLICIT_FAL_MODELS,
+  generateExplicitVideoFromText, getModelCost, EXPLICIT_FAL_MODELS, EXPLICIT_IMAGE_MODELS,
 } from '../services/explicit-ai-service';
 import { rateLimitAiGen } from '../middleware/rate-limit';
 
 const router = Router();
 
-// ─── Stripe (payment verification for subscriptions / purchases / tips) ───
+// Stripe payments and creator payouts
 const stripeKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2025-01-27.acacia' as any }) : null;
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-09-30.endive' as any }) : null;
+const APP_BASE_URL = process.env.PRODUCTION_URL || process.env.APP_BASE_URL || process.env.PUBLIC_URL || 'https://boostifymusic.com';
+const configuredPlatformFeePercent = Number(process.env.EXCLUSIVE_CONTENT_PLATFORM_FEE_PERCENT || 0);
+const EXPLICIT_PLATFORM_FEE_PERCENT = Number.isFinite(configuredPlatformFeePercent)
+  ? Math.min(30, Math.max(0, configuredPlatformFeePercent))
+  : 0;
 
-/**
- * Verifies a Stripe subscription id is real and active/trialing.
- * Returns an error string when invalid, null when OK (or when Stripe is not
- * configured — e.g. local dev without keys).
- */
-async function verifyStripeSubscription(stripeSubscriptionId?: string): Promise<string | null> {
-  if (!stripe) return null; // Stripe not configured (dev) — skip hard validation
-  if (!stripeSubscriptionId) return 'stripeSubscriptionId required';
-  try {
-    const sub = await stripe.subscriptions.retrieve(String(stripeSubscriptionId));
-    if (!['active', 'trialing'].includes(sub.status)) {
-      return `Stripe subscription is not active (status: ${sub.status})`;
-    }
-    return null;
-  } catch {
-    return 'Invalid Stripe subscription';
-  }
+async function retrieveConnectAccount(accountId: string): Promise<any> {
+  if (!stripe) throw new Error('Stripe is not configured.');
+  const response = await stripe.rawRequest('GET', `/v2/core/accounts/${encodeURIComponent(accountId)}?include[]=configuration.recipient`);
+  return response.data as any;
 }
 
-/**
- * Verifies a Stripe PaymentIntent succeeded. Returns an error string when
- * invalid, null when OK (or when Stripe is not configured).
- */
-async function verifyStripePayment(stripePaymentIntentId?: string): Promise<string | null> {
-  if (!stripe) return null;
-  if (!stripePaymentIntentId) return 'stripePaymentIntentId required';
-  try {
-    const pi = await stripe.paymentIntents.retrieve(String(stripePaymentIntentId));
-    if (pi.status !== 'succeeded') return `Payment not completed (status: ${pi.status})`;
-    return null;
-  } catch {
-    return 'Invalid Stripe payment';
-  }
+function hasTransferCapability(account: any): boolean {
+  return account?.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers?.status === 'active';
 }
 
-// ─── Lightweight per-user chat rate limiter (30 messages / minute) ───
+async function ensureArtistPayoutAccount(artistId: number): Promise<{ accountId: string; account: any }> {
+  if (!stripe) throw new Error('Stripe is not configured.');
+  const [settings] = await db.select().from(explicitSettings)
+    .where(eq(explicitSettings.artistId, artistId)).limit(1);
+  const [artist] = await db.select({ name: users.artistName, first: users.firstName, email: users.email, country: users.country })
+    .from(users).where(eq(users.id, artistId)).limit(1);
+  if (!artist) throw new Error('Artist account not found.');
+
+  let accountId = settings?.stripeConnectAccountId || null;
+  let account: any;
+  if (!accountId) {
+    const countryName = String(artist.country || 'US').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const countryCode = /^[A-Z]{2}$/.test(countryName)
+      ? countryName
+      : ({
+          'UNITED STATES': 'US', 'UNITED STATES OF AMERICA': 'US', CANADA: 'CA', 'UNITED KINGDOM': 'GB',
+          MEXICO: 'MX', COLOMBIA: 'CO', BRAZIL: 'BR', BRASIL: 'BR', SPAIN: 'ES', ESPANA: 'ES',
+          ARGENTINA: 'AR', CHILE: 'CL', FRANCE: 'FR', GERMANY: 'DE', AUSTRALIA: 'AU', JAPAN: 'JP',
+          'PUERTO RICO': 'PR', ITALY: 'IT', ITALIA: 'IT', NETHERLANDS: 'NL', PORTUGAL: 'PT',
+        } as Record<string, string>)[countryName];
+    if (!countryCode) throw new Error('Add a supported two-letter country code to the artist profile before connecting Stripe.');
+    const created = await stripe.rawRequest('POST', '/v2/core/accounts', {
+      contact_email: artist.email || undefined,
+      display_name: artist.name || artist.first || 'Boostify creator',
+      identity: { country: countryCode, entity_type: 'individual' },
+      dashboard: 'express',
+      defaults: { responsibilities: { fees_collector: 'application', losses_collector: 'application' } },
+      configuration: { recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } } },
+      include: ['configuration.recipient', 'identity', 'requirements', 'defaults'],
+    });
+    account = created.data as any;
+    accountId = account?.id;
+    if (!accountId) throw new Error('Stripe did not return a connected account.');
+    await db.insert(explicitSettings).values({
+      artistId,
+      stripeConnectAccountId: accountId,
+      stripeConnectReady: false,
+    }).onConflictDoUpdate({
+      target: explicitSettings.artistId,
+      set: { stripeConnectAccountId: accountId, stripeConnectReady: false, updatedAt: new Date() },
+    });
+  } else {
+    account = await retrieveConnectAccount(accountId);
+  }
+  return { accountId, account };
+}
+
 const chatRateBuckets = new Map<number, { count: number; resetAt: number }>();
 const CHAT_RATE_LIMIT = 30;
 const CHAT_RATE_WINDOW_MS = 60_000;
@@ -76,7 +102,7 @@ function chatRateLimited(userId: number): boolean {
   return bucket.count > CHAT_RATE_LIMIT;
 }
 
-// ─── Multer for file uploads (memory, 100MB max, image/video/audio only) ───
+// Multer for file uploads (memory, 100MB max, image/video/audio only)
 const explicitUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
@@ -85,6 +111,174 @@ const explicitUpload = multer({
     if (ok) cb(null, true);
     else cb(new Error(`Unsupported file type: ${file.mimetype}`));
   },
+});
+
+// POST /connect/onboarding-link - create or resume an artist's Stripe payout setup.
+router.post('/connect/onboarding-link', async (req: Request, res: Response) => {
+  try {
+    const artistId = await getUserPgId(req);
+    if (!artistId) return res.status(401).json({ error: 'Not authenticated' });
+    const { accountId, account } = await ensureArtistPayoutAccount(artistId);
+    const ready = hasTransferCapability(account);
+    if (ready) {
+      await db.update(explicitSettings).set({ stripeConnectReady: true, updatedAt: new Date() })
+        .where(eq(explicitSettings.artistId, artistId));
+      return res.json({ ready: true });
+    }
+
+    const [artist] = await db.select({ slug: users.slug }).from(users).where(eq(users.id, artistId)).limit(1);
+    const returnUrl = `${APP_BASE_URL}/artist/${encodeURIComponent(artist?.slug || String(artistId))}?exclusive_connect=complete`;
+    const link = await stripe!.rawRequest('POST', '/v2/core/account_links', {
+      account: accountId,
+      use_case: {
+        type: 'account_onboarding',
+        account_onboarding: {
+          configurations: ['recipient'],
+          return_url: returnUrl,
+          refresh_url: `${returnUrl}&refresh=1`,
+          collection_options: { fields: 'eventually_due' },
+        },
+      },
+    });
+    const url = (link.data as any)?.url;
+    if (!url) return res.status(502).json({ error: 'Stripe did not return an onboarding link.' });
+    res.json({ ready: false, url });
+  } catch (error: any) {
+    console.error('[explicit] Stripe Connect onboarding failed:', error);
+    res.status(502).json({ error: error?.message || 'Could not create Stripe onboarding link.' });
+  }
+});
+
+// GET /connect/status - check payout capability in Stripe Accounts v2.
+router.get('/connect/status', async (req: Request, res: Response) => {
+  try {
+    const artistId = await getUserPgId(req);
+    if (!artistId) return res.status(401).json({ error: 'Not authenticated' });
+    const [settings] = await db.select().from(explicitSettings)
+      .where(eq(explicitSettings.artistId, artistId)).limit(1);
+    if (!settings?.stripeConnectAccountId || !stripe) {
+      return res.json({ ready: false, connected: !!settings?.stripeConnectAccountId });
+    }
+    const account = await retrieveConnectAccount(settings.stripeConnectAccountId);
+    const ready = hasTransferCapability(account);
+    await db.update(explicitSettings).set({ stripeConnectReady: ready, updatedAt: new Date() })
+      .where(eq(explicitSettings.artistId, artistId));
+    res.json({ ready, connected: true });
+  } catch (error: any) {
+    res.status(502).json({ error: error?.message || 'Could not read Stripe payout status.' });
+  }
+});
+
+// POST /checkout/session - payment amounts and recipients are selected server-side.
+router.post('/checkout/session', async (req: Request, res: Response) => {
+  try {
+    const buyerId = await getUserPgId(req);
+    if (!buyerId) return res.status(401).json({ error: 'Not authenticated' });
+    if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
+
+    const { artistId: rawArtistId, kind, plan, contentId, amount } = req.body || {};
+    const artistId = await resolveArtistId(rawArtistId);
+    if (!artistId) return res.status(404).json({ error: 'Artist not found.' });
+    if (artistId === buyerId) return res.status(400).json({ error: 'You cannot purchase your own creator content.' });
+
+    const [settings] = await db.select().from(explicitSettings)
+      .where(eq(explicitSettings.artistId, artistId)).limit(1);
+    if (!settings?.enabled) return res.status(409).json({ error: 'This creator is not accepting Exclusive Content payments right now.' });
+
+    const { accountId, account } = await ensureArtistPayoutAccount(artistId);
+    if (!hasTransferCapability(account)) {
+      await db.update(explicitSettings).set({ stripeConnectReady: false, updatedAt: new Date() })
+        .where(eq(explicitSettings.artistId, artistId));
+      return res.status(409).json({ error: 'This creator has not completed Stripe payout onboarding yet.' });
+    }
+    await db.update(explicitSettings).set({ stripeConnectReady: true, updatedAt: new Date() })
+      .where(eq(explicitSettings.artistId, artistId));
+
+    const [artist] = await db.select({ name: users.artistName, slug: users.slug })
+      .from(users).where(eq(users.id, artistId)).limit(1);
+    let unitAmount: number;
+    let productName: string;
+    let mode: 'payment' | 'subscription';
+    const metadata: Record<string, string> = {
+      type: 'exclusive_content',
+      kind: String(kind || ''),
+      buyerId: String(buyerId),
+      artistId: String(artistId),
+    };
+    let linePrice: any;
+    if (kind === 'subscription') {
+      if (plan !== 'monthly' && plan !== 'yearly') return res.status(400).json({ error: 'Select a valid subscription plan.' });
+      const configuredPrice = plan === 'monthly' ? settings?.monthlyPrice : settings?.yearlyPrice;
+      unitAmount = Math.round(Number(configuredPrice) * 100);
+      if (!Number.isInteger(unitAmount) || unitAmount < 500 || unitAmount > 1000000) {
+        return res.status(400).json({ error: 'Creator subscription price must be between $5 and $10,000.' });
+      }
+      productName = `${artist?.name || 'Creator'} - Exclusive ${plan} membership`;
+      mode = 'subscription';
+      metadata.plan = plan;
+      linePrice = {
+        currency: 'usd',
+        product_data: { name: productName },
+        unit_amount: unitAmount,
+        recurring: { interval: plan === 'monthly' ? 'month' : 'year' },
+      };
+    } else if (kind === 'purchase') {
+      const parsedContentId = Number(contentId);
+      if (!Number.isInteger(parsedContentId) || parsedContentId <= 0) return res.status(400).json({ error: 'A valid content item is required.' });
+      const [content] = await db.select().from(explicitContent)
+        .where(and(eq(explicitContent.id, parsedContentId), eq(explicitContent.artistId, artistId), eq(explicitContent.isActive, true))).limit(1);
+      if (!content) return res.status(404).json({ error: 'Content item not found.' });
+      if (!content.isPaywalled) return res.status(400).json({ error: 'This content item is already available for free.' });
+      const configuredPrice = content.singlePurchasePrice || settings?.singleContentPrice;
+      unitAmount = Math.round(Number(configuredPrice) * 100);
+      if (!Number.isInteger(unitAmount) || unitAmount < 50 || unitAmount > 1000000) return res.status(400).json({ error: 'This content item has an invalid purchase price.' });
+      productName = `${artist?.name || 'Creator'} - ${content.title}`;
+      mode = 'payment';
+      metadata.contentId = String(content.id);
+      linePrice = { currency: 'usd', product_data: { name: productName }, unit_amount: unitAmount };
+    } else if (kind === 'tip') {
+      unitAmount = Math.round(Number(amount) * 100);
+      if (!Number.isInteger(unitAmount) || unitAmount < 100 || unitAmount > 1000000) return res.status(400).json({ error: 'Tip amount must be between $1 and $10,000.' });
+      productName = `Tip for ${artist?.name || 'creator'}`;
+      mode = 'payment';
+      metadata.message = String(req.body.message || '').slice(0, 500);
+      linePrice = { currency: 'usd', product_data: { name: productName }, unit_amount: unitAmount };
+    } else {
+      return res.status(400).json({ error: 'Unsupported checkout type.' });
+    }
+
+    const feeAmount = Math.round(unitAmount * EXPLICIT_PLATFORM_FEE_PERCENT / 100);
+    const returnPath = `/artist/${encodeURIComponent(artist?.slug || String(artistId))}`;
+    const integrationSuffix = Array.from({ length: 8 }, () => 'abcdefghijklmnopqrstuvwxyz'[crypto.randomInt(26)]).join('');
+    const sessionParams: any = {
+      mode,
+      line_items: [{ price_data: linePrice, quantity: 1 }],
+      success_url: `${APP_BASE_URL}${returnPath}?exclusive_checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_BASE_URL}${returnPath}?exclusive_checkout=cancelled`,
+      client_reference_id: String(buyerId),
+      metadata,
+      integration_identifier: `boostify-exclusive-${integrationSuffix}`,
+    };
+    if (mode === 'payment') {
+      sessionParams.payment_intent_data = {
+        transfer_data: { destination: accountId },
+        application_fee_amount: feeAmount,
+        metadata,
+      };
+    } else {
+      sessionParams.subscription_data = {
+        transfer_data: { destination: accountId },
+        application_fee_percent: EXPLICIT_PLATFORM_FEE_PERCENT,
+        metadata,
+      };
+    }
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    if (!session.url) return res.status(502).json({ error: 'Stripe did not return a checkout URL.' });
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (error: any) {
+    console.error('[explicit] checkout session creation failed:', error);
+    res.status(502).json({ error: error?.message || 'Could not start checkout.' });
+  }
 });
 
 // ─── Auth helper — resolves Clerk/Firebase string ID to PG integer ───
@@ -116,6 +310,27 @@ async function resolveArtistId(raw: string | number): Promise<number | null> {
   return u?.id || null;
 }
 
+async function resolvePrivateMediaUrl(value?: string | null): Promise<string | null> {
+  if (!value) return null;
+  if (!firebaseStorage) return value.startsWith('private://') ? null : value;
+  const bucket = firebaseStorage.bucket();
+  const bucketPrefix = `https://storage.googleapis.com/${bucket.name}/`;
+  const objectPath = value.startsWith('private://')
+    ? value.slice('private://'.length)
+    : value.startsWith(bucketPrefix)
+      ? decodeURIComponent(value.slice(bucketPrefix.length).split('?')[0])
+      : null;
+  if (!objectPath || !objectPath.startsWith('explicit-content/')) return value;
+  const file = bucket.file(objectPath);
+  if (!value.startsWith('private://')) {
+    try { await file.makePrivate(); } catch (error: any) {
+      console.warn('[explicit] could not make legacy media private:', error?.message || error);
+    }
+  }
+  const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 15 * 60 * 1000 });
+  return signedUrl;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════════════════════════
@@ -129,7 +344,9 @@ router.get('/settings/:artistId', async (req: Request, res: Response) => {
     const [settings] = await db.select().from(explicitSettings)
       .where(eq(explicitSettings.artistId, artistId)).limit(1);
 
-    res.json(settings || { enabled: false, artistId });
+    if (!settings) return res.json({ enabled: false, artistId, stripeConnectReady: false });
+    const { stripeConnectAccountId: _privateAccountId, ...publicSettings } = settings;
+    res.json(publicSettings);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -143,6 +360,14 @@ router.put('/settings', async (req: Request, res: Response) => {
 
     const { monthlyPrice, yearlyPrice, singleContentPrice, welcomeMessage,
       contentCategories, chatEnabled, aiGenerationEnabled, watermarkEnabled, enabled } = req.body;
+
+    const isPriceValid = (value: unknown, minimum: number) => {
+      const price = Number(value);
+      return Number.isFinite(price) && price >= minimum && price <= 10000;
+    };
+    if (!isPriceValid(monthlyPrice, 5) || !isPriceValid(yearlyPrice, 5) || !isPriceValid(singleContentPrice, 0.5)) {
+      return res.status(400).json({ error: 'Monthly/yearly prices must be $5–$10,000 and single-item prices $0.50–$10,000.' });
+    }
 
     const [existing] = await db.select().from(explicitSettings)
       .where(eq(explicitSettings.artistId, userId)).limit(1);
@@ -201,28 +426,10 @@ router.get('/content/:artistId', async (req: Request, res: Response) => {
       ))
       .orderBy(desc(explicitContent.createdAt));
 
-    // If no access, return blurred previews only
-    if (!hasAccess) {
-      const blurred = items.map(item => ({
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        description: item.description,
-        category: item.category,
-        thumbnailUrl: item.blurredPreviewUrl || item.thumbnailUrl,
-        isPaywalled: item.isPaywalled,
-        singlePurchasePrice: item.singlePurchasePrice,
-        viewCount: item.viewCount,
-        likeCount: item.likeCount,
-        createdAt: item.createdAt,
-        locked: true,
-      }));
-      return res.json({ items: blurred, hasAccess: false });
-    }
-
-    // Check individual purchases for non-subscribed users
+    // Check individual purchases separately so bought posts unlock without
+    // granting a subscription to every other item.
     let purchasedIds: number[] = [];
-    if (!isOwner && userId) {
+    if (!isOwner && userId && !hasAccess) {
       const purchases = await db.select({ contentId: explicitPurchases.contentId })
         .from(explicitPurchases)
         .where(and(
@@ -233,20 +440,46 @@ router.get('/content/:artistId', async (req: Request, res: Response) => {
       purchasedIds = purchases.map(p => p.contentId);
     }
 
-    const result = items.map(item => ({
-      ...item,
-      locked: false,
-      purchased: isOwner || purchasedIds.includes(item.id),
+    const result = await Promise.all(items.map(async item => {
+      const purchased = isOwner || purchasedIds.includes(item.id);
+      const locked = item.isPaywalled && !hasAccess && !purchased;
+      if (locked) {
+        const previewUrl = await resolvePrivateMediaUrl(item.blurredPreviewUrl);
+        return {
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          description: item.description,
+          category: item.category,
+          thumbnailUrl: previewUrl,
+          blurredPreviewUrl: previewUrl,
+          isPaywalled: true,
+          singlePurchasePrice: item.singlePurchasePrice,
+          viewCount: item.viewCount,
+          likeCount: item.likeCount,
+          createdAt: item.createdAt,
+          locked: true,
+          purchased: false,
+        };
+      }
+      return {
+        ...item,
+        mediaUrl: await resolvePrivateMediaUrl(item.mediaUrl),
+        thumbnailUrl: await resolvePrivateMediaUrl(item.thumbnailUrl),
+        blurredPreviewUrl: await resolvePrivateMediaUrl(item.blurredPreviewUrl),
+        locked: false,
+        purchased,
+      };
     }));
 
-    res.json({ items: result, hasAccess: true });
+    res.json({ items: result, hasAccess });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // POST /content/upload — Upload a media file to Firebase Storage (owner only)
-// Returns a public URL the client can pass to POST /content as mediaUrl.
+// Returns a short-lived signed preview and a private storage path for publishing.
 router.post('/content/upload', explicitUpload.single('file'), async (req: Request, res: Response) => {
   try {
     const userId = await getUserPgId(req);
@@ -294,7 +527,7 @@ router.post('/content/upload', explicitUpload.single('file'), async (req: Reques
       contentType: mime,
       resumable: false,
       metadata: {
-        cacheControl: 'public, max-age=31536000, immutable',
+        cacheControl: 'private, max-age=900, no-transform',
         metadata: {
           uploadedBy: String(userId),
           originalName: String(file.originalname).slice(0, 200),
@@ -302,14 +535,14 @@ router.post('/content/upload', explicitUpload.single('file'), async (req: Reques
         },
       },
     });
-    await fbFile.makePublic();
-
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURI(objectPath)}`;
+    const [signedUrl] = await fbFile.getSignedUrl({ action: 'read', expires: Date.now() + 15 * 60 * 1000 });
+    const mediaPath = `private://${objectPath}`;
 
     return res.json({
       success: true,
-      mediaUrl: publicUrl,
-      thumbnailUrl: kind === 'image' ? publicUrl : undefined,
+      mediaUrl: signedUrl,
+      mediaPath,
+      thumbnailUrl: kind === 'image' ? signedUrl : undefined,
       kind,
       mime,
       size: file.size,
@@ -327,16 +560,22 @@ router.post('/content', async (req: Request, res: Response) => {
     const userId = await getUserPgId(req);
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-    const { type, title, description, category, mediaUrl, thumbnailUrl,
+    const { type, title, description, category, mediaUrl, mediaPath, thumbnailUrl,
       blurredPreviewUrl, isPaywalled, singlePurchasePrice } = req.body;
 
     if (!type || !title || !mediaUrl) {
       return res.status(400).json({ error: 'type, title, and mediaUrl are required' });
     }
 
+    const privatePath = typeof mediaPath === 'string' && mediaPath.startsWith(`private://explicit-content/${userId}/`)
+      ? mediaPath
+      : mediaUrl;
+    const privateThumbnailPath = privatePath.startsWith('private://') && (thumbnailUrl === mediaUrl || !thumbnailUrl)
+      ? privatePath
+      : thumbnailUrl;
     const [content] = await db.insert(explicitContent).values({
       artistId: userId, type, title, description, category,
-      mediaUrl, thumbnailUrl, blurredPreviewUrl,
+      mediaUrl: privatePath, thumbnailUrl: privateThumbnailPath, blurredPreviewUrl,
       isPaywalled: isPaywalled ?? true, singlePurchasePrice,
     }).returning();
 
@@ -372,8 +611,10 @@ router.delete('/content/:id', async (req: Request, res: Response) => {
         if (firebaseStorage && item.mediaUrl) {
           const bucket = firebaseStorage.bucket();
           const prefix = `https://storage.googleapis.com/${bucket.name}/`;
-          if (item.mediaUrl.startsWith(prefix)) {
-            const objectPath = decodeURI(item.mediaUrl.slice(prefix.length));
+          if (item.mediaUrl.startsWith('private://')) {
+            await bucket.file(item.mediaUrl.slice('private://'.length)).delete({ ignoreNotFound: true });
+          } else if (item.mediaUrl.startsWith(prefix)) {
+            const objectPath = decodeURI(item.mediaUrl.slice(prefix.length).split('?')[0]);
             await bucket.file(objectPath).delete({ ignoreNotFound: true });
           }
         }
@@ -469,140 +710,21 @@ router.get('/subscription/check/:artistId', async (req: Request, res: Response) 
   }
 });
 
-// POST /subscription/create — Create a subscription (after Stripe payment)
-router.post('/subscription/create', async (req: Request, res: Response) => {
-  try {
-    const userId = await getUserPgId(req);
-    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+// Paid access is granted only by signed Stripe Checkout webhooks.
+router.post('/subscription/create', (_req: Request, res: Response) => res.status(410).json({ error: 'Use the secure Stripe Checkout flow.' }));
 
-    const { artistId: rawArtistId, plan, stripeSubscriptionId, stripeCustomerId } = req.body;
-    const artistId = await resolveArtistId(rawArtistId);
-    if (!artistId) return res.status(404).json({ error: 'Artist not found' });
-
-    if (!plan || !['monthly', 'yearly'].includes(plan)) {
-      return res.status(400).json({ error: 'Valid plan required (monthly/yearly)' });
-    }
-
-    // Verify the payment actually happened in Stripe before granting access
-    const stripeError = await verifyStripeSubscription(stripeSubscriptionId);
-    if (stripeError) return res.status(402).json({ error: stripeError });
-
-    // Reject re-use of the same Stripe subscription id (forgery / replay)
-    if (stripeSubscriptionId) {
-      const [dupe] = await db.select({ id: explicitSubscriptions.id }).from(explicitSubscriptions)
-        .where(and(
-          eq(explicitSubscriptions.stripeSubscriptionId, stripeSubscriptionId),
-          eq(explicitSubscriptions.status, 'active'),
-        )).limit(1);
-      if (dupe) return res.status(409).json({ error: 'This Stripe subscription is already registered' });
-    }
-
-    // Deactivate existing subscription if any
-    await db.update(explicitSubscriptions)
-      .set({ status: 'cancelled', updatedAt: new Date() })
-      .where(and(
-        eq(explicitSubscriptions.subscriberId, userId),
-        eq(explicitSubscriptions.artistId, artistId),
-        eq(explicitSubscriptions.status, 'active'),
-      ));
-
-    const now = new Date();
-    const periodEnd = new Date(now);
-    if (plan === 'monthly') periodEnd.setMonth(periodEnd.getMonth() + 1);
-    else periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-
-    const [sub] = await db.insert(explicitSubscriptions).values({
-      subscriberId: userId, artistId, plan, status: 'active',
-      stripeSubscriptionId, stripeCustomerId,
-      currentPeriodStart: now, currentPeriodEnd: periodEnd,
-    }).returning();
-
-    res.json(sub);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════
 // PURCHASES (single content)
 // ═══════════════════════════════════════════════════════════════════
 
-// POST /purchase — Purchase a single piece of content
-router.post('/purchase', async (req: Request, res: Response) => {
-  try {
-    const userId = await getUserPgId(req);
-    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+// Paid access is granted only by signed Stripe Checkout webhooks.
+router.post('/purchase', (_req: Request, res: Response) => res.status(410).json({ error: 'Use the secure Stripe Checkout flow.' }));
 
-    const { contentId, stripePaymentIntentId } = req.body;
-    if (!contentId) return res.status(400).json({ error: 'contentId required' });
-
-    const [content] = await db.select().from(explicitContent)
-      .where(eq(explicitContent.id, contentId)).limit(1);
-    if (!content) return res.status(404).json({ error: 'Content not found' });
-
-    // Block duplicate purchases of the same content
-    const [alreadyOwned] = await db.select({ id: explicitPurchases.id }).from(explicitPurchases)
-      .where(and(
-        eq(explicitPurchases.buyerId, userId),
-        eq(explicitPurchases.contentId, content.id),
-        eq(explicitPurchases.status, 'completed'),
-      )).limit(1);
-    if (alreadyOwned) return res.status(409).json({ error: 'Content already purchased', purchaseId: alreadyOwned.id });
-
-    // Verify the payment actually happened in Stripe
-    const stripeError = await verifyStripePayment(stripePaymentIntentId);
-    if (stripeError) return res.status(402).json({ error: stripeError });
-
-    const [purchase] = await db.insert(explicitPurchases).values({
-      buyerId: userId,
-      contentId: content.id,
-      artistId: content.artistId,
-      amount: content.singlePurchasePrice || '4.99',
-      stripePaymentIntentId,
-      status: 'completed',
-    }).returning();
-
-    res.json(purchase);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════
 // TIPS
 // ═══════════════════════════════════════════════════════════════════
 
-// POST /tip — Send a tip to an artist
-router.post('/tip', async (req: Request, res: Response) => {
-  try {
-    const userId = await getUserPgId(req);
-    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+// Paid access is granted only by signed Stripe Checkout webhooks.
+router.post('/tip', (_req: Request, res: Response) => res.status(410).json({ error: 'Use the secure Stripe Checkout flow.' }));
 
-    const { artistId: rawArtistId, amount, message, contentId, chatMessageId, stripePaymentIntentId } = req.body;
-    const artistId = await resolveArtistId(rawArtistId);
-    if (!artistId) return res.status(404).json({ error: 'Artist not found' });
-
-    if (!amount || parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Valid amount required' });
-    }
-
-    // Verify the tip payment actually happened in Stripe
-    const stripeError = await verifyStripePayment(stripePaymentIntentId);
-    if (stripeError) return res.status(402).json({ error: stripeError });
-
-    const [tip] = await db.insert(explicitTips).values({
-      tipperId: userId, artistId, amount: String(amount), message,
-      contentId: contentId || null, chatMessageId: chatMessageId || null,
-      stripePaymentIntentId, status: 'completed',
-    }).returning();
-
-    res.json(tip);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════
 // CHAT
 // ═══════════════════════════════════════════════════════════════════
 
@@ -729,7 +851,11 @@ router.get('/ai/generations', async (req: Request, res: Response) => {
       .orderBy(desc(explicitAiGenerations.createdAt))
       .limit(50);
 
-    res.json(generations);
+    res.json(await Promise.all(generations.map(async generation => ({
+      ...generation,
+      resultUrl: await resolvePrivateMediaUrl(generation.resultUrl),
+      thumbnailUrl: await resolvePrivateMediaUrl(generation.thumbnailUrl),
+    }))));
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -745,26 +871,28 @@ router.post('/ai/generate-image', rateLimitAiGen, async (req: Request, res: Resp
     let { referenceImageUrl } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
-    const selectedModel = model || EXPLICIT_FAL_MODELS.REALISTIC_UNCENSORED;
+    const selectedModel = model || EXPLICIT_FAL_MODELS.IMAGE_NANO_BANANA_21;
+    if (!(EXPLICIT_IMAGE_MODELS as readonly string[]).includes(selectedModel)) {
+      return res.status(400).json({ error: 'Unsupported image model. Choose one of the available creator studio models.' });
+    }
 
-    // For likeness, auto-fall back to the artist's profile photo if no reference given.
-    if (selectedModel === EXPLICIT_FAL_MODELS.ARTIST_LIKENESS && !referenceImageUrl) {
+    // Use the artist profile photo as an optional likeness reference when no
+    // explicit reference was uploaded.
+    if (!referenceImageUrl) {
       const [artist] = await db.select({ p1: users.profileImageUrl, p2: users.profileImage })
         .from(users).where(eq(users.id, userId)).limit(1);
       referenceImageUrl = artist?.p1 || artist?.p2 || undefined;
-      if (!referenceImageUrl) {
-        return res.status(400).json({ error: 'Artist Likeness necesita una foto de referencia. Sube una foto del artista o configura tu foto de perfil.' });
-      }
     }
 
-    // Create generation record
+    // Create generation record. Keep costs unknown when fal bills in account-specific units.
+    const selectedModelCost = getModelCost(selectedModel, numImages);
     const [gen] = await db.insert(explicitAiGenerations).values({
       artistId: userId, type: 'image', model: selectedModel, prompt,
       negativePrompt, parameters: { imageSize, numImages, guidanceScale, loraUrl, loraScale, referenceImageUrl },
-      costUsd: String(getModelCost(selectedModel)), status: 'processing',
+      costUsd: selectedModelCost === null ? null : String(selectedModelCost), status: 'processing',
     }).returning();
 
-    // Generate (uncensored providers with auto-fallback + Firebase persistence)
+    // Generate with supported fal image models and safe model fallbacks.
     const result = await generateExplicitImage({
       prompt, negativePrompt, model: selectedModel,
       imageSize, numImages, guidanceScale, loraUrl, loraScale,
@@ -774,8 +902,10 @@ router.post('/ai/generate-image', rateLimitAiGen, async (req: Request, res: Resp
     if (result.success && result.images && result.images.length > 0) {
       const [updated] = await db.update(explicitAiGenerations)
         .set({
-          resultUrl: result.images[0].url,
-          thumbnailUrl: result.images[0].url,
+          resultUrl: result.images[0].storagePath || result.images[0].url,
+          thumbnailUrl: result.images[0].storagePath || result.images[0].url,
+          model: result.model || selectedModel,
+          costUsd: getModelCost(result.model || selectedModel, numImages) === null ? null : String(getModelCost(result.model || selectedModel, numImages)),
           status: 'completed',
           completedAt: new Date(),
         })
@@ -792,7 +922,7 @@ router.post('/ai/generate-image', rateLimitAiGen, async (req: Request, res: Resp
       error: result.error || 'Generation failed',
       generationId: gen.id,
       model: selectedModel,
-      hint: 'If using FHDR, the HuggingFace model may be cold-starting (try again in ~60s) or set HUGGINGFACE_TOKEN. Otherwise verify FAL_API_KEY.',
+      hint: 'Check that FAL_KEY is configured and available on the server.',
     });
   } catch (error: any) {
     console.error('[explicit] generate-image error:', error);
@@ -812,10 +942,11 @@ router.post('/ai/generate-video', rateLimitAiGen, async (req: Request, res: Resp
     const isFromImage = !!imageUrl;
     const model = isFromImage ? EXPLICIT_FAL_MODELS.VIDEO_FROM_IMAGE : EXPLICIT_FAL_MODELS.VIDEO_FROM_TEXT;
 
+    const videoCost = getModelCost(model);
     const [gen] = await db.insert(explicitAiGenerations).values({
       artistId: userId, type: 'video', model, prompt, negativePrompt,
       parameters: { imageUrl, numFrames, frameRate },
-      costUsd: String(getModelCost(model)), status: 'processing',
+      costUsd: videoCost === null ? null : String(videoCost), status: 'processing',
     }).returning();
 
     const result = isFromImage
@@ -912,6 +1043,10 @@ router.get('/earnings/:artistId', async (req: Request, res: Response) => {
       .from(explicitTips)
       .where(and(eq(explicitTips.artistId, artistId), eq(explicitTips.status, 'completed')));
 
+    const [subscriptionRevenue] = await db.select({ total: sql<string>`coalesce(sum(amount::numeric), 0)` })
+      .from(explicitSubscriptionPayments)
+      .where(eq(explicitSubscriptionPayments.artistId, artistId));
+
     // Content count
     const [contentCount] = await db.select({ count: sql<number>`count(*)` })
       .from(explicitContent)
@@ -926,12 +1061,156 @@ router.get('/earnings/:artistId', async (req: Request, res: Response) => {
       activeSubscribers: Number(subCount?.count) || 0,
       purchaseRevenue: parseFloat(purchaseRevenue?.total || '0'),
       tipRevenue: parseFloat(tipRevenue?.total || '0'),
-      totalRevenue: parseFloat(purchaseRevenue?.total || '0') + parseFloat(tipRevenue?.total || '0'),
+      subscriptionRevenue: parseFloat(subscriptionRevenue?.total || '0'),
+      totalRevenue: parseFloat(subscriptionRevenue?.total || '0') + parseFloat(purchaseRevenue?.total || '0') + parseFloat(tipRevenue?.total || '0'),
       contentCount: Number(contentCount?.count) || 0,
       aiGenerationCosts: parseFloat(aiCosts?.total || '0'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Stripe is the source of truth: only signed Checkout webhooks grant paid access.
+router.post('/webhook', async (req: Request, res: Response) => {
+  const webhookSecret = process.env.STRIPE_EXPLICIT_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+  const signature = req.headers['stripe-signature'];
+  if (!stripe || !webhookSecret || !signature || !Buffer.isBuffer(req.body)) {
+    return res.status(400).send('Stripe webhook is not configured correctly.');
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+  } catch (error: any) {
+    return res.status(400).send(`Invalid Stripe signature: ${error.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const metadata = session.metadata || {};
+      if (metadata.type !== 'exclusive_content') return res.json({ received: true });
+
+      const buyerId = Number(metadata.buyerId);
+      const artistId = Number(metadata.artistId);
+      if (!Number.isInteger(buyerId) || !Number.isInteger(artistId) || buyerId === artistId) {
+        return res.status(400).send('Checkout metadata is invalid.');
+      }
+      if (session.client_reference_id !== String(buyerId)) return res.status(400).send('Checkout buyer does not match session reference.');
+
+      if (metadata.kind === 'subscription' && session.mode === 'subscription' && session.subscription) {
+        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        if (!['active', 'trialing'].includes(subscription.status)) return res.json({ received: true, pending: true });
+        if (subscription.metadata?.buyerId !== String(buyerId) || subscription.metadata?.artistId !== String(artistId)) {
+          return res.status(400).send('Stripe subscription metadata does not match checkout.');
+        }
+        const plan = metadata.plan === 'yearly' ? 'yearly' : metadata.plan === 'monthly' ? 'monthly' : null;
+        if (!plan) return res.status(400).send('Subscription plan metadata is invalid.');
+        const [existing] = await db.select({ id: explicitSubscriptions.id }).from(explicitSubscriptions)
+          .where(eq(explicitSubscriptions.stripeCheckoutSessionId, session.id)).limit(1);
+        if (!existing) {
+          const periodStart = (subscription as any).current_period_start;
+          const periodEnd = (subscription as any).current_period_end;
+          await db.update(explicitSubscriptions)
+            .set({ status: 'cancelled', updatedAt: new Date() })
+            .where(and(
+              eq(explicitSubscriptions.subscriberId, buyerId),
+              eq(explicitSubscriptions.artistId, artistId),
+              eq(explicitSubscriptions.status, 'active'),
+            ));
+          await db.insert(explicitSubscriptions).values({
+            subscriberId: buyerId,
+            artistId,
+            plan,
+            status: 'active',
+            stripeSubscriptionId: subscription.id,
+            stripeCustomerId: typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id,
+            stripeCheckoutSessionId: session.id,
+            currentPeriodStart: periodStart ? new Date(periodStart * 1000) : new Date(),
+            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : undefined,
+          }).onConflictDoNothing();
+        }
+      } else if ((metadata.kind === 'purchase' || metadata.kind === 'tip') && session.mode === 'payment') {
+        if (session.payment_status !== 'paid') return res.json({ received: true, pending: true });
+        const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+        const total = Number(session.amount_total);
+        if (!paymentIntentId || !Number.isInteger(total) || total <= 0 || session.currency !== 'usd') {
+          return res.status(400).send('Checkout payment details are invalid.');
+        }
+        if (metadata.kind === 'purchase') {
+          const contentId = Number(metadata.contentId);
+          const [content] = await db.select().from(explicitContent)
+            .where(and(eq(explicitContent.id, contentId), eq(explicitContent.artistId, artistId))).limit(1);
+          if (!content) return res.status(400).send('Purchased content does not belong to the artist.');
+          await db.insert(explicitPurchases).values({
+            buyerId, artistId, contentId,
+            amount: (total / 100).toFixed(2),
+            currency: session.currency,
+            stripePaymentIntentId: paymentIntentId,
+            stripeCheckoutSessionId: session.id,
+            status: 'completed',
+          }).onConflictDoNothing();
+        } else {
+          await db.insert(explicitTips).values({
+            tipperId: buyerId, artistId,
+            amount: (total / 100).toFixed(2),
+            currency: session.currency,
+            message: metadata.message || null,
+            stripePaymentIntentId: paymentIntentId,
+            stripeCheckoutSessionId: session.id,
+            status: 'completed',
+          }).onConflictDoNothing();
+        }
+      }
+    }
+
+    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object as Stripe.Subscription;
+      const status = subscription.status === 'active' || subscription.status === 'trialing'
+        ? 'active'
+        : subscription.status === 'past_due' || subscription.status === 'unpaid'
+          ? 'past_due'
+          : 'cancelled';
+      const periodStart = (subscription as any).current_period_start;
+      const periodEnd = (subscription as any).current_period_end;
+      await db.update(explicitSubscriptions).set({
+        status,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodStart: periodStart ? new Date(periodStart * 1000) : undefined,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : undefined,
+        updatedAt: new Date(),
+      }).where(eq(explicitSubscriptions.stripeSubscriptionId, subscription.id));
+    }
+
+    if (event.type === 'invoice.paid') {
+      const invoice: any = event.data.object;
+      const stripeSubscriptionId = typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.parent?.subscription_details?.subscription;
+      if (stripeSubscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(String(stripeSubscriptionId));
+        const buyerId = Number(subscription.metadata?.buyerId);
+        const artistId = Number(subscription.metadata?.artistId);
+        const amountPaid = Number(invoice.amount_paid);
+        if (subscription.metadata?.type === 'exclusive_content' && Number.isInteger(buyerId) && buyerId > 0 && Number.isInteger(artistId) && artistId > 0 && amountPaid > 0 && invoice.currency === 'usd') {
+          await db.insert(explicitSubscriptionPayments).values({
+            stripeInvoiceId: String(invoice.id),
+            stripeSubscriptionId: String(stripeSubscriptionId),
+            buyerId,
+            artistId,
+            amount: (amountPaid / 100).toFixed(2),
+            currency: 'usd',
+          }).onConflictDoNothing();
+        }
+      }
+    }
+
+    return res.json({ received: true });
+  } catch (error: any) {
+    console.error('[explicit] Stripe webhook fulfillment failed:', error);
+    return res.status(500).send('Webhook fulfillment failed.');
   }
 });
 

@@ -7,7 +7,8 @@ import { useToast } from "../../hooks/use-toast";
 import { RefreshCw, Upload, Camera, Sparkles, FileAudio2, X, CheckCircle, AlertCircle, DollarSign } from "lucide-react";
 import { applyPixVerseLipsync, estimateLipsyncCost, type PixVerseLipsyncResult } from "../../lib/api/pixverse-lipsync";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "../../lib/firebase";
+import { auth, storage } from "../../lib/firebase";
+import { ensureFirebaseAuth } from "../../lib/firebase-auth";
 
 /**
  * LipsyncComponent - Real implementation using PixVerse via FAL
@@ -98,13 +99,16 @@ export function LipsyncComponent() {
     setResult(null);
 
     try {
+      if (!(await ensureFirebaseAuth()) || !auth.currentUser?.uid) {
+        throw new Error('Inicia sesión para subir los archivos del lip-sync.');
+      }
       // Paso 1: Subir video a Firebase (10%)
       setProgress(10);
       setStatusMessage("Subiendo video...");
       const timestamp = Date.now();
       const videoUrl = await uploadToFirebase(
         videoFile,
-        `lipsync/videos/${timestamp}_${videoFile.name}`
+        `lipsync/${auth.currentUser.uid}/videos/${timestamp}_${videoFile.name}`
       );
 
       // Paso 2: Subir audio a Firebase (20%)
@@ -112,7 +116,7 @@ export function LipsyncComponent() {
       setStatusMessage("Subiendo audio...");
       const audioUrl = await uploadToFirebase(
         audioFile,
-        `lipsync/audio/${timestamp}_${audioFile.name}`
+        `lipsync/${auth.currentUser.uid}/audio/${timestamp}_${audioFile.name}`
       );
 
       // Paso 3: Procesar con PixVerse (30-90%)

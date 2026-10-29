@@ -258,6 +258,13 @@ export function Footer() {
             <Link href="/cookies" className="hover:text-white transition-colors">
               Cookies
             </Link>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("boostify:open-cookie-settings"))}
+              className="hover:text-white transition-colors"
+            >
+              Privacy choices
+            </button>
             <Link href="/legal" className="hover:text-white transition-colors">
               Legal & DMCA
             </Link>

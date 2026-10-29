@@ -45,6 +45,8 @@ export default function CreditsWidget({
     },
     enabled: !!email,
     staleTime: 30 * 1000,
+    refetchInterval: 20 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const credits: number = balanceQuery.data?.credits ?? 0;

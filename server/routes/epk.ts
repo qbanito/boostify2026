@@ -15,6 +15,8 @@
  */
 
 import express, { Request, Response } from 'express';
+import axios from 'axios';
+import crypto from 'crypto';
 import { authenticate } from '../middleware/auth';
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import { buildSkillsOnlyPrompt } from '../utils/ai-skills-injector';
@@ -24,6 +26,7 @@ import { eq, desc, and } from 'drizzle-orm';
 import { isAdminEmail } from '../../shared/constants';
 import { PRIMARY_MODEL } from '../utils/ai-config';
 import { editImageWithGPTImage1 } from '../services/fal-service';
+import { storage } from '../firebase';
 
 const router = express.Router();
 
@@ -187,6 +190,9 @@ function buildEpkSlug(artistName: string, userId: number): string {
  */
 function isImageUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('data:image/')) return true;
+  if (url.startsWith('private://') || url.startsWith('gs://')) return false;
+  if (!isHttpUrl(url) && (!url.startsWith('/') || url.startsWith('//'))) return false;
   const clean = url.split('?')[0].split('#')[0].toLowerCase();
   // Reject obvious video/audio extensions.
   if (/\.(mp4|webm|mov|m4v|ogv|avi|mkv|mp3|wav|m4a|ogg|flac)$/i.test(clean)) return false;
@@ -195,10 +201,65 @@ function isImageUrl(url: string | null | undefined): boolean {
   // Firebase storage URLs frequently encode the filename in a `/o/<name>` path,
   // so look for a video extension anywhere in the URL too.
   if (/\.(mp4|webm|mov|m4v|ogv|avi|mkv|mp3|wav|m4a|ogg|flac)(%3F|\?|%23|#|$)/i.test(url)) return false;
-  // Permit data URIs and unknown extensions (most CDN URLs don't carry an
-  // extension at all; we assume they're images by default).
-  if (url.startsWith('data:image/')) return true;
+  // Permit data URIs and CDN URLs that omit the filename extension.
   return true;
+}
+
+function assetIdentity(url: string): string {
+  if (url.startsWith('data:')) return url;
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host.toLowerCase()}${decodeURIComponent(parsed.pathname).replace(/\/+$/, '')}`;
+  } catch {
+    return url.trim().split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+function uniqueImageUrls(urls: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  return urls.filter((url): url is string => {
+    if (!isImageUrl(url)) return false;
+    const key = assetIdentity(url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function resolvePublicUrl(value: string | null | undefined, baseUrl: string): string | null {
+  if (!value) return null;
+  if (isHttpUrl(value)) return value;
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  try { return new URL(value, baseUrl).toString(); } catch { return null; }
+}
+
+function getVideoEmbedUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be') {
+      const id = parsed.pathname.split('/').filter(Boolean)[0];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+    }
+    if (host.endsWith('youtube.com')) {
+      const id = parsed.searchParams.get('v') || parsed.pathname.match(/\/(?:embed|shorts|live)\/([^/?]+)/)?.[1];
+      return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : null;
+    }
+    if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      const id = parsed.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${encodeURIComponent(id)}` : null;
+    }
+  } catch { /* non-URL values are handled as direct videos only when safe */ }
+  return null;
 }
 
 /**
@@ -282,6 +343,40 @@ async function generatePressPhotoOpenAI(prompt: string, size: '1024x1024' | '153
   } catch (err: any) {
     console.error('[EPK] OpenAI image generation failed:', err?.message || err);
     return null;
+  }
+}
+
+async function persistPressPhoto(sourceUrl: string, artistId: number): Promise<string> {
+  if (!storage || sourceUrl.startsWith('https://firebasestorage.googleapis.com/')) return sourceUrl;
+  try {
+    let imageBuffer: Buffer;
+    let contentType = 'image/png';
+    if (sourceUrl.startsWith('data:image/')) {
+      const match = sourceUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match) return sourceUrl;
+      contentType = match[1];
+      imageBuffer = Buffer.from(match[2], 'base64');
+    } else {
+      const response = await axios.get(sourceUrl, { responseType: 'arraybuffer', timeout: 60_000 });
+      contentType = String(response.headers['content-type'] || contentType).split(';')[0];
+      if (!contentType.startsWith('image/')) return sourceUrl;
+      imageBuffer = Buffer.from(response.data);
+    }
+    const extension = (contentType.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'png';
+    const objectPath = `epk-press/${artistId}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
+    const downloadToken = crypto.randomUUID();
+    await storage.bucket().file(objectPath).save(imageBuffer, {
+      resumable: false,
+      metadata: {
+        contentType,
+        cacheControl: 'public, max-age=31536000, immutable',
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
+      },
+    });
+    return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(storage.bucket().name)}/o/${encodeURIComponent(objectPath)}?alt=media&token=${downloadToken}`;
+  } catch (error: any) {
+    console.warn('[EPK] Could not persist generated press image:', error?.message || error);
+    return sourceUrl;
   }
 }
 
@@ -502,6 +597,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
 
     // 2) Recycle images from DB
     const dbImages = await loadDbImagesForUser(targetUser.id);
+    const baseUrl = getBaseUrl(req);
 
     // 3) Pick main song / video from songs table (fast + reliable)
     let mainSong: { name: string; url: string } | undefined;
@@ -515,16 +611,24 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
         .limit(6);
       for (const s of topSongs) {
         if (!s.audioUrl || String(s.audioUrl).startsWith('ipfs://')) continue;
+        const coverArt = isImageUrl(s.coverArt) ? s.coverArt : undefined;
         tracks.push({
           title: s.title || 'Untitled',
           audioUrl: s.audioUrl,
-          coverArt: s.coverArt || undefined,
+          coverArt,
           duration: s.duration || undefined,
           genre: s.genre || undefined,
           releaseDate: s.releaseDate ? new Date(s.releaseDate as any).toISOString() : undefined,
           plays: s.plays || 0,
           isFeatured: !!s.isSingle,
         });
+      }
+      const uniqueTrackCovers = new Set<string>();
+      for (const track of tracks) {
+        if (!track.coverArt) continue;
+        const key = assetIdentity(track.coverArt);
+        if (uniqueTrackCovers.has(key)) track.coverArt = undefined;
+        else uniqueTrackCovers.add(key);
       }
       const featured = tracks.find((t) => t.isFeatured) || tracks[0];
       if (featured) mainSong = { name: featured.title, url: featured.audioUrl };
@@ -538,23 +642,29 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       const mediaRows = await db
         .select()
         .from(artistMedia)
-        .where(and(eq(artistMedia.userId, targetUser.id), eq(artistMedia.isPublished, true)))
+        .where(and(eq(artistMedia.userId, targetUser.id), eq(artistMedia.type, 'video'), eq(artistMedia.isPublished, true)))
         .orderBy(desc(artistMedia.createdAt))
-        .limit(4);
+        .limit(8);
+      const seenVideoKeys = new Set<string>();
       for (const m of mediaRows) {
-        if (!m.storagePath) continue;
+        const videoUrl = resolvePublicUrl(m.storagePath, baseUrl);
+        if (!videoUrl) continue;
+        const key = assetIdentity(videoUrl);
+        if (seenVideoKeys.has(key)) continue;
+        seenVideoKeys.add(key);
         videos.push({
           title: m.title || 'Performance',
-          url: m.storagePath,
-          thumbnail: m.thumbnail || undefined,
+          url: videoUrl,
+          thumbnail: isImageUrl(m.thumbnail) ? m.thumbnail || undefined : undefined,
           description: m.description || undefined,
         });
       }
     } catch (e) {
       console.warn('[EPK] Could not fetch artist videos:', (e as any)?.message);
     }
-    if (targetUser.loopVideoUrl && !videos.some((v) => v.url === targetUser.loopVideoUrl)) {
-      videos.unshift({ title: 'Profile Loop', url: targetUser.loopVideoUrl, isLoop: true });
+    const loopVideoUrl = resolvePublicUrl(targetUser.loopVideoUrl, baseUrl);
+    if (loopVideoUrl && !videos.some((v) => assetIdentity(v.url) === assetIdentity(loopVideoUrl))) {
+      videos.push({ title: 'Profile Loop', url: loopVideoUrl, isLoop: true });
     }
 
     // 4) Build press photos cascade: DB first → fill with OpenAI gpt-image-1
@@ -562,9 +672,17 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // pulling as many unique images as the artist already has in the DB before
     // falling back to AI generation for any remaining slots.
     const pressPhotos: EPKPressPhoto[] = [];
-    const dbPool = Array.from(
-      new Set([...dbImages.press, ...dbImages.banners].filter(isImageUrl))
+    const profileImage = uniqueImageUrls([targetUser.profileImage, targetUser.profileImageUrl])[0];
+    const coverImageCandidates = uniqueImageUrls([
+      targetUser.coverImage, ...dbImages.banners, ...dbImages.references, ...dbImages.generated,
+    ]);
+    const coverImage = coverImageCandidates.find((url) => !profileImage || assetIdentity(url) !== assetIdentity(profileImage)) || profileImage;
+    const reservedPhotoKeys = new Set(
+      [profileImage, coverImage, ...tracks.map((track) => track.coverArt)].filter((url): url is string => !!url).map(assetIdentity),
     );
+    const dbPool = uniqueImageUrls([...dbImages.press, ...dbImages.banners])
+      .filter((url) => !reservedPhotoKeys.has(assetIdentity(url)));
+    const usedPhotoKeys = new Set(reservedPhotoKeys);
     const captions = [
       'Hero Portrait',
       'Performance Shot',
@@ -575,22 +693,14 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
 
     // Real photos of THIS artist, used as identity references so the AI keeps
     // the same face/person instead of inventing a different artist.
-    const artistReferenceImages = Array.from(
-      new Set(
-        [
-          targetUser.profileImage,
-          targetUser.profileImageUrl,
-          ...dbImages.references,
-          ...dbImages.generated,
-          targetUser.coverImage,
-          ...dbImages.concepts,
-        ].filter(isImageUrl)
-      )
-    ).slice(0, 4);
+    const artistReferenceImages = uniqueImageUrls([
+      profileImage, ...dbImages.references, ...dbImages.generated, coverImage, ...dbImages.concepts,
+    ]).slice(0, 4);
 
     for (let i = 0; i < captions.length; i++) {
       if (dbPool[i]) {
         pressPhotos.push({ url: dbPool[i], caption: captions[i], source: 'db' });
+        usedPhotoKeys.add(assetIdentity(dbPool[i]));
       } else {
         const visualHint = master?.visual_dna?.aesthetic
           || master?.visual_dna?.image_prompt_base
@@ -630,32 +740,35 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
           aiUrl = await generatePressPhotoOpenAI(promptForSlot, '1536x1024');
         }
 
-        if (aiUrl) {
-          pressPhotos.push({ url: aiUrl, caption: captions[i], source: 'openai' });
-        } else {
-          const fallbackUrl = [targetUser.coverImage, targetUser.profileImage].find(isImageUrl) || '';
-          pressPhotos.push({
-            url: fallbackUrl,
-            caption: captions[i],
-            source: 'fallback',
-          });
+        if (aiUrl && isImageUrl(aiUrl) && !usedPhotoKeys.has(assetIdentity(aiUrl))) {
+          const stableImageUrl = await persistPressPhoto(aiUrl, targetUser.id);
+          if (!usedPhotoKeys.has(assetIdentity(stableImageUrl))) {
+            pressPhotos.push({ url: stableImageUrl, caption: captions[i], source: 'openai' });
+            usedPhotoKeys.add(assetIdentity(stableImageUrl));
+          }
+        } else if (!aiUrl) {
+          const fallbackUrl = uniqueImageUrls([coverImage, profileImage]).find((url) => !usedPhotoKeys.has(assetIdentity(url)));
+          if (fallbackUrl) {
+            pressPhotos.push({ url: fallbackUrl, caption: captions[i], source: 'fallback' });
+            usedPhotoKeys.add(assetIdentity(fallbackUrl));
+          }
         }
       }
     }
 
     // 4b) Build a wider photo gallery (dedupe against pressPhotos URLs)
-    const usedUrls = new Set(pressPhotos.map((p) => p.url));
-    const gallerySource = [
+    const gallerySource = uniqueImageUrls([
       ...dbImages.references,
       ...dbImages.generated,
       ...dbImages.concepts,
       ...dbImages.banners,
-    ].filter(isImageUrl);
+    ]);
     const gallery: string[] = [];
     for (const u of gallerySource) {
-      if (usedUrls.has(u)) continue;
+      const key = assetIdentity(u);
+      if (usedPhotoKeys.has(key)) continue;
       gallery.push(u);
-      usedUrls.add(u);
+      usedPhotoKeys.add(key);
       if (gallery.length >= 12) break;
     }
 
@@ -696,7 +809,6 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     ];
 
     // 6) Compose final EPK doc
-    const baseUrl = getBaseUrl(req);
     const slug = buildEpkSlug(artistName, targetUser.id);
 
     const epkData: EPKData = {
@@ -717,8 +829,8 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       influences: bio.influences,
       notableMoments: bio.notableMoments,
 
-      profileImage: [targetUser.profileImage, targetUser.profileImageUrl].find(isImageUrl) || undefined,
-      coverImage: [targetUser.coverImage, dbImages.banners[0], dbImages.references[0], dbImages.generated[0]].find(isImageUrl) || undefined,
+      profileImage: profileImage || undefined,
+      coverImage: coverImage || undefined,
       referenceImage: dbImages.references[0],
       pressPhotos,
       gallery,
@@ -904,16 +1016,31 @@ function renderEpkHtml(epk: EPKData, slug: string): string {
   const coverCandidate = [epk.coverImage, epk.profileImage, epk.pressPhotos?.[0]?.url].find(isImageUrl) || '';
   const cover = safe(coverCandidate);
   // Deduplicate: track all URLs already shown so nothing repeats
-  const usedUrls = new Set<string>();
-  if (coverCandidate) usedUrls.add(coverCandidate);
-  const photos = (epk.pressPhotos || [])
-    .filter((p) => isImageUrl(p.url) && !usedUrls.has(p.url))
-    .map((p) => { usedUrls.add(p.url); return p; });
-  const gallery = (epk.gallery || [])
-    .filter((url) => isImageUrl(url) && !usedUrls.has(url))
-    .map((url) => { usedUrls.add(url); return url; });
+  const usedImageKeys = new Set<string>();
+  if (coverCandidate) usedImageKeys.add(assetIdentity(coverCandidate));
+  const photos = (epk.pressPhotos || []).filter((photo) => {
+    if (!isImageUrl(photo.url)) return false;
+    const key = assetIdentity(photo.url);
+    if (usedImageKeys.has(key)) return false;
+    usedImageKeys.add(key);
+    return true;
+  });
+  const gallery = (epk.gallery || []).filter((url) => {
+    if (!isImageUrl(url)) return false;
+    const key = assetIdentity(url);
+    if (usedImageKeys.has(key)) return false;
+    usedImageKeys.add(key);
+    return true;
+  });
   const tracks = (epk.tracks || []).filter((t) => t && t.audioUrl);
-  const videos = (epk.videos || []).filter((v) => v && v.url);
+  const videos = (epk.videos || []).filter((v) => v && isHttpUrl(v.url));
+  const renderVideo = (video: EPKVideo, preload: 'metadata' | 'none') => {
+    const embedUrl = getVideoEmbedUrl(video.url);
+    if (embedUrl) {
+      return `<iframe class="video-embed" src="${safe(embedUrl)}" title="${safe(video.title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+    }
+    return `<video controls preload="${preload}" ${video.thumbnail && isImageUrl(video.thumbnail) ? `poster="${safe(video.thumbnail)}"` : ''} ${video.isLoop ? 'loop muted playsinline' : ''} src="${safe(video.url)}"></video>`;
+  };
   const tech = epk.technicalSheet || {};
   const social = epk.socialLinks || {};
   const socialEntries = Object.entries(social).filter(([, v]) => !!v);
@@ -1023,6 +1150,7 @@ function renderEpkHtml(epk: EPKData, slug: string): string {
 
     .video-card{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#000}
     .video-card video{width:100%;display:block;background:#000;max-height:80vh}
+    .video-card .video-embed{width:100%;aspect-ratio:16/9;display:block;border:0;background:#000}
     .video-card .v-meta{padding:14px 18px;display:flex;justify-content:space-between;gap:12px;align-items:center;background:rgba(255,255,255,0.03)}
     .video-card .v-title{font-weight:600;font-size:14px}
     .video-card .v-desc{font-size:12px;color:var(--muted);margin-top:4px}
@@ -1077,6 +1205,7 @@ function renderEpkHtml(epk: EPKData, slug: string): string {
       .links a{color:#111}
       .links a.primary{color:#fff}
       .video-card video{display:none}
+      .video-card .video-embed{display:none}
       a{color:#111;text-decoration:none}
       .bio-prose{color:#111}
       .bio-prose p:first-of-type::first-letter{color:var(--accent)}
@@ -1140,19 +1269,20 @@ function renderEpkHtml(epk: EPKData, slug: string): string {
       <h2>Featured Video</h2>
       <div class="section-sub">Performance · Visual identity</div>
       <div class="video-card">
-        <video controls preload="metadata" ${videos[0].thumbnail && isImageUrl(videos[0].thumbnail) ? `poster="${safe(videos[0].thumbnail!)}"` : ''} ${videos[0].isLoop ? 'loop muted playsinline' : ''} src="${safe(videos[0].url)}"></video>
+        ${renderVideo(videos[0], 'metadata')}
         <div class="v-meta">
           <div>
             <div class="v-title">${safe(videos[0].title)}</div>
             ${videos[0].description ? `<div class="v-desc">${safe(videos[0].description)}</div>` : ''}
           </div>
+          <a class="btn watch-btn" href="${safe(videos[0].url)}" target="_blank" rel="noopener noreferrer">Watch video</a>
           ${videos.length > 1 ? `<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em">+ ${videos.length - 1} more</div>` : ''}
         </div>
       </div>
       ${videos.length > 1 ? `<div class="grid grid-3" style="margin-top:14px">${videos.slice(1, 4).map((v) => `
         <div class="video-card">
-          <video controls preload="none" ${v.thumbnail && isImageUrl(v.thumbnail) ? `poster="${safe(v.thumbnail!)}"` : ''} src="${safe(v.url)}"></video>
-          <div class="v-meta"><div class="v-title">${safe(v.title)}</div></div>
+          ${renderVideo(v, 'none')}
+          <div class="v-meta"><div class="v-title">${safe(v.title)}</div><a class="btn watch-btn" href="${safe(v.url)}" target="_blank" rel="noopener noreferrer">Watch</a></div>
         </div>`).join('')}</div>` : ''}
     </div>
   </section>` : ''}

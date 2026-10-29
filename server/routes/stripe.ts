@@ -16,6 +16,8 @@ import {
 } from '../../shared/constants';
 import { INDIVIDUAL_TOOL_PLANS, PLAN_LIST, PLANS, normalizePlan } from '../../shared/plan-config';
 import { sendNotificationEmail } from '../services/brevo-email-service';
+import { fulfillCreditCheckout } from '../services/credit-engine';
+import { CREDIT_PACKAGES } from '../../shared/credit-pricing';
 
 const router = Router();
 
@@ -849,15 +851,27 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
 
         console.log(`🔔 Checkout completed: session=${session.id}, product=${product}`);
 
-        if (product === 'ig_boost_pro') {
+        if (session.metadata?.type === 'credit_purchase') {
+          await handleCreditCheckout(session);
+        } else if (product === 'ig_boost_pro') {
           await handleIgBoostCheckout(session);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostCheckout(session);
         } else if (product === 'individual_tool') {
           await handleIndividualToolCheckout(session);
-        } else {
-          return next();
         }
+        break;
+      }
+
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.type === 'credit_purchase') await handleCreditCheckout(session);
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        if (paymentIntent.metadata?.type === 'credit_purchase') await handleCreditPaymentIntent(paymentIntent);
         break;
       }
 
@@ -871,8 +885,6 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleIgBoostSubscriptionUpdate(subscription, event.type);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionUpdate(subscription, event.type);
-        } else {
-          return next();
         }
         break;
       }
@@ -885,23 +897,61 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleIgBoostSubscriptionCanceled(subscription);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionCanceled(subscription);
-        } else {
-          return next();
         }
         break;
       }
 
       default:
-        return next();
+        break;
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown webhook handler error';
     console.error(`❌ Webhook handler error for ${event.type}:`, message);
-    // Still return 200 so Stripe doesn't retry endlessly
+    // Credit fulfillment is idempotent, so Stripe should retry transient errors.
+    const failedObject = (event.data as any)?.object;
+    const isCreditFulfillment = failedObject?.metadata?.type === 'credit_purchase';
+    if (isCreditFulfillment) return res.status(500).json({ received: false, retry: true });
   }
 
   res.json({ received: true });
 });
+
+async function handleCreditCheckout(session: Stripe.Checkout.Session): Promise<void> {
+  if (session.payment_status !== 'paid') return;
+  const metadata = session.metadata || {};
+  const pkg = CREDIT_PACKAGES.find((item) => item.id === metadata.packageId);
+  if (!pkg || metadata.credits !== String(pkg.credits) || !metadata.userEmail ||
+      session.currency !== 'usd' || session.mode !== 'payment' ||
+      session.amount_total !== Math.round(pkg.priceUsd * 100)) {
+    throw new Error(`Invalid credit purchase metadata for Stripe session ${session.id}`);
+  }
+  await fulfillCreditCheckout({
+    userEmail: metadata.userEmail.trim().toLowerCase(),
+    credits: pkg.credits,
+    packageId: pkg.id,
+    sessionId: session.id,
+    paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+    paidUsd: session.amount_total / 100,
+  });
+}
+
+async function handleCreditPaymentIntent(paymentIntent: Stripe.PaymentIntent): Promise<void> {
+  const metadata = paymentIntent.metadata || {};
+  const credits = Number(metadata.credits);
+  if (metadata.type !== 'credit_purchase' || !metadata.userEmail || metadata.packageId !== 'music-video-199' ||
+      paymentIntent.currency !== 'usd' || !Number.isSafeInteger(credits) || credits !== 19900 ||
+      paymentIntent.amount !== 19900) {
+    throw new Error(`Invalid credit PaymentIntent metadata for ${paymentIntent.id}`);
+  }
+  await fulfillCreditCheckout({
+    userEmail: metadata.userEmail.trim().toLowerCase(),
+    credits,
+    packageId: metadata.packageId,
+    paymentIntentId: paymentIntent.id,
+    paidUsd: paymentIntent.amount_received / 100,
+    tier: metadata.tier || 'free',
+  });
+}
 
 // ─── Individual Tool (à la carte) Webhook Handler ──────────────
 

@@ -27,6 +27,7 @@ import { BoostifyRadio } from "./components/radio/boostify-radio";
 import { useAuth } from "@clerk/clerk-react";
 import { Web3NotReadyProvider, Web3ReadyInternalProvider } from "./lib/context/web3-context";
 import { MotionConfig } from "framer-motion";
+import { CookieConsentProvider } from "./components/privacy/cookie-consent";
 
 // Web3 Provider wrapper - NO BLOQUEA, carga Web3 de forma lazy
 function Web3Wrapper({ children }: { children: ReactNode }) {
@@ -853,6 +854,7 @@ const App = () => {
 
   return (
     <ErrorBoundary>
+      <CookieConsentProvider>
       {/* Componente invisible para manejar errores de WebSocket */}
       <div className="min-h-screen bg-background text-foreground">
         <ViteHMRErrorHandler />
@@ -882,6 +884,7 @@ const App = () => {
           </QueryClientProvider>
         </ClerkTokenInitializer>
       </div>
+      </CookieConsentProvider>
     </ErrorBoundary>
   );
 };

@@ -7,10 +7,10 @@
  * verifies and settles the purchase.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Sparkles, Zap, ShieldCheck, Loader2 } from 'lucide-react';
+import { X, Check, Sparkles, Zap, ShieldCheck, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,6 +31,14 @@ interface Props {
   primaryColor?: string;
 }
 
+interface CreditOperation {
+  type: string;
+  name: string;
+  category: string;
+  creditCost: number;
+  unit: string;
+}
+
 export default function BuyCreditsModal({
   open,
   onClose,
@@ -43,6 +51,7 @@ export default function BuyCreditsModal({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [showAllRates, setShowAllRates] = useState(false);
 
   const { data: packagesData } = useQuery({
     queryKey: ['credit-packages'],
@@ -54,18 +63,32 @@ export default function BuyCreditsModal({
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: pricingData } = useQuery({
+    queryKey: ['credit-pricing'],
+    queryFn: async () => apiRequest('/api/credits/pricing', { method: 'GET' }) as Promise<{ operations: CreditOperation[] }>,
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const packages = useMemo<CreditPackage[]>(() => {
     if (Array.isArray(packagesData) && packagesData.length) return packagesData;
-    // Fallback so the modal always renders something.
-    return [
-      { id: 'starter', credits: 500, priceUsd: 4.99, popular: false, label: 'Starter' },
-      { id: 'basic', credits: 1200, priceUsd: 9.99, popular: false, label: 'Basic' },
-      { id: 'standard', credits: 3000, priceUsd: 24.99, popular: true, label: 'Standard' },
-      { id: 'pro', credits: 7500, priceUsd: 49.99, popular: false, label: 'Pro' },
-      { id: 'studio', credits: 20000, priceUsd: 99.99, popular: false, label: 'Studio' },
-      { id: 'enterprise', credits: 60000, priceUsd: 249.99, popular: false, label: 'Enterprise' },
-    ];
+    return [];
   }, [packagesData]);
+
+  useEffect(() => {
+    if (!selectedId && packages.length) setSelectedId(packages.find((pkg) => pkg.popular)?.id || packages[0].id);
+  }, [packages, selectedId]);
+
+  const rates = useMemo(() => {
+    const operations = pricingData?.operations || [];
+    const priorities = ['image_generation', 'video_generation', 'audio_generation', 'voice_ai', 'text_ai'];
+    return operations
+      .filter((op) => op.creditCost > 0)
+      .sort((a, b) => priorities.indexOf(a.category) - priorities.indexOf(b.category) || a.name.localeCompare(b.name));
+  }, [pricingData]);
+
+  const imageRate = rates.find((op) => op.category === 'image_generation' && op.unit === 'per_image')?.creditCost;
+  const fiveSecondVideoRate = rates.find((op) => op.category === 'video_generation' && op.unit === 'per_second')?.creditCost;
 
   const selected = packages.find((p) => p.id === selectedId) || null;
 
@@ -88,11 +111,8 @@ export default function BuyCreditsModal({
       const res = await apiRequest('/api/credits/create-checkout-session', {
         method: 'POST',
         data: {
-          email,
           packageId: selected.id,
-          tier,
           successUrl: window.location.href.split('#')[0],
-          cancelUrl: window.location.href.split('#')[0],
         },
       });
       if (res?.url) {
@@ -154,6 +174,11 @@ export default function BuyCreditsModal({
 
             <div className="p-5 space-y-5">
               {/* Packages */}
+              {!packages.length && (
+                <div className="col-span-full flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100/80">
+                  <AlertCircle className="h-4 w-4 shrink-0" /> Credit packages are unavailable right now. Please retry in a moment.
+                </div>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {packages.map((pkg) => {
                   const isSel = pkg.id === selectedId;
@@ -189,10 +214,35 @@ export default function BuyCreditsModal({
                       </div>
                       <div className="text-[11px] text-gray-400">credits</div>
                       <div className="mt-2 text-sm font-bold text-white">${pkg.priceUsd.toFixed(2)}</div>
+                      <div className="mt-2 space-y-0.5 text-[10px] text-gray-500">
+                        {imageRate ? <p>≈ {Math.floor(pkg.credits / imageRate).toLocaleString()} images</p> : null}
+                        {fiveSecondVideoRate ? <p>≈ {Math.floor(pkg.credits / (fiveSecondVideoRate * 5)).toLocaleString()} 5-second clips</p> : null}
+                      </div>
                     </button>
                   );
                 })}
               </div>
+
+              <section className="rounded-xl border border-white/10 bg-white/[0.025] p-4" aria-label="Credit usage rates">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Live credit rates</h3>
+                    <p className="mt-1 text-[11px] text-gray-400">Rates come from the shared server pricing; some specialist studios show a model-specific quote in their generator.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowAllRates((show) => !show)} className="inline-flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white">
+                    {showAllRates ? 'Show key tools' : `See all ${rates.length} rates`} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllRates ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(showAllRates ? rates : rates.slice(0, 6)).map((op) => (
+                    <div key={op.type} className="flex items-center justify-between gap-3 rounded-lg bg-black/25 px-3 py-2">
+                      <span className="truncate text-xs text-gray-300" title={op.name}>{op.name}</span>
+                      <span className="shrink-0 text-xs font-bold text-white">{op.creditCost.toLocaleString()} cr<span className="font-normal text-gray-500"> / {op.unit.replace('per_', '')}</span></span>
+                    </div>
+                  ))}
+                  {!rates.length && <p className="text-xs text-gray-500">Loading current rates…</p>}
+                </div>
+              </section>
 
               {/* Purchase agreement (English) */}
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
@@ -254,7 +304,7 @@ export default function BuyCreditsModal({
                 </div>
                 <button
                   onClick={handleCheckout}
-                  disabled={!selected || !accepted || redirecting}
+                  disabled={!selected || !accepted || redirecting || !packages.length}
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02]"
                   style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`, boxShadow: `0 4px 20px ${accentColor}55` }}
                 >

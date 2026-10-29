@@ -1912,8 +1912,8 @@ function InvestmentCalculator() {
     <div className="space-y-6">
       <div className="rounded-xl border border-amber-500/30 bg-amber-900/10 px-4 py-3 text-xs text-amber-300">
         <strong>Note:</strong> Financial projections shown here are internal business estimates only. They do not represent
-        promised returns to any token holder. BTF is a utility token; it does not provide investment returns, revenue share,
-        or any financial benefit from platform revenue.
+        promised returns to any token holder. BTF is designed for platform access and does not grant a right to investment returns,
+        revenue share, or platform revenue. This describes intended contractual use, not a legal classification guarantee.
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {platformMetrics.map((m, i) => (
@@ -3572,7 +3572,7 @@ financial advisors before investing.
             <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-900/20 px-4 py-4 text-sm text-amber-200">
               <strong className="block mb-1">⚠️ Internal Business Overview — Not a Public Investment Offer</strong>
               This page contains business projections and partnership information for review purposes only.
-              BTF is a utility token used exclusively to access digital services inside Boostify.
+              BTF is designed to access digital services inside Boostify; this describes intended use, not a legal classification guarantee.
               BTF does not represent equity, debt, securities, dividends, royalties, revenue share, ownership, investment returns, or profit rights.
               Any equity or SAFE instruments discussed here are offered only to qualified investors in compliance with applicable securities law and are separate from BTF or artist access tokens.
             </div>

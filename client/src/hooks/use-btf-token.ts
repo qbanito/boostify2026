@@ -41,6 +41,13 @@ const publicClient = createPublicClient({
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 30000;
 
+export function invalidateBTFBalanceCache(address?: string) {
+  cache.clear();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('btf-wallet-balance-refresh', { detail: { address } }));
+  }
+}
+
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key);
   if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.data as T;
@@ -509,6 +516,18 @@ export function useBTFToken() {
       fetchBalance();
       fetchUserDashboard();
     }
+  }, [address, isConnected, fetchBalance, fetchUserDashboard]);
+
+  useEffect(() => {
+    const refreshWalletBalance = (event: Event) => {
+      const refreshAddress = (event as CustomEvent<{ address?: string }>).detail?.address;
+      if (!address || !isConnected || (refreshAddress && refreshAddress.toLowerCase() !== address.toLowerCase())) return;
+      cache.delete(`btf-balance-${address}`);
+      void fetchBalance();
+      void fetchUserDashboard();
+    };
+    window.addEventListener('btf-wallet-balance-refresh', refreshWalletBalance);
+    return () => window.removeEventListener('btf-wallet-balance-refresh', refreshWalletBalance);
   }, [address, isConnected, fetchBalance, fetchUserDashboard]);
 
   // Refresh every 60s

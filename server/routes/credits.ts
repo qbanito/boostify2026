@@ -1,12 +1,14 @@
 import express from 'express';
 import Stripe from 'stripe';
+import { randomBytes } from 'crypto';
 import { db } from '../db';
 import { userCredits, creditTransactions, musicVideoProjects } from '../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import {
   getUserBalance,
   chargeCredits,
-  addCredits,
+  fulfillCreditCheckout,
+  getUserCreditTier,
   getOperationCreditCost,
   canAfford,
   grantMonthlyCreditsIfDue,
@@ -15,28 +17,38 @@ import {
   OPERATION_COSTS,
   CREDIT_PACKAGES,
   TIER_CREDIT_ALLOCATIONS,
-  DEFAULT_MARKUP_MULTIPLIER,
   getFullPricingTable,
   type OperationType,
 } from '../../shared/credit-pricing';
+import { isAuthenticated } from '../middleware/clerk-auth';
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing Stripe secret key');
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-02-24.acacia',
+  apiVersion: '2026-09-30.endive' as any,
 });
 
 const router = express.Router();
 
+// Personal balances and all balance-changing endpoints must use the verified
+// Clerk identity. Never trust an email supplied by the browser for credits.
+router.use('/api/credits', isAuthenticated);
+
+function authenticatedCreditEmail(req: express.Request, res: express.Response): string | null {
+  const email = String((req as any).user?.email || '').trim().toLowerCase();
+  if (!email) {
+    res.status(401).json({ error: 'A verified account email is required.' });
+    return null;
+  }
+  return email;
+}
+
 router.get('/api/credits/balance', async (req, res) => {
   try {
-    const userEmail = req.query.email as string;
-    
-    if (!userEmail) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
+    const userEmail = authenticatedCreditEmail(req, res);
+    if (!userEmail) return;
 
     // Self-healing monthly subscription credit grant (idempotent per billing period).
     let monthlyGrant: { granted: boolean; credits: number; plan: string } | null = null;
@@ -55,59 +67,52 @@ router.get('/api/credits/balance', async (req, res) => {
 
 router.post('/api/credits/create-payment-intent', async (req, res) => {
   try {
-    const { email, amount = 199 } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
+    // Legacy music-video gate: keep it inside the same wallet and ledger.
+    // Amount and grant are fixed server-side so the browser cannot mint credits.
+    const tier = await getUserCreditTier(email);
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100),
+      amount: 19900,
       currency: 'usd',
-      metadata: {
-        userEmail: email,
-        credits: amount.toString(),
-      },
+      receipt_email: email,
+      metadata: { type: 'credit_purchase', userEmail: email, credits: '19900', packageId: 'music-video-199' , tier },
     });
-
-    res.json({ clientSecret: paymentIntent.client_secret });
+    res.json({ clientSecret: paymentIntent.client_secret, credits: 19900, amountUsd: 199 });
   } catch (error: any) {
-    console.error('Error creating payment intent:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error creating credit PaymentIntent:', error);
+    res.status(500).json({ error: 'Could not initialize secure payment.' });
   }
 });
 
 router.post('/api/credits/verify-payment', async (req, res) => {
   try {
-    const { paymentIntentId, email, tier } = req.body;
-
-    if (!paymentIntentId || !email) {
-      return res.status(400).json({ error: 'Payment intent ID and email are required' });
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
+    const { paymentIntentId } = req.body || {};
+    if (typeof paymentIntentId !== 'string' || !paymentIntentId.startsWith('pi_')) {
+      return res.status(400).json({ error: 'Valid paymentIntentId is required.' });
     }
-
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status !== 'succeeded') {
-      return res.status(400).json({ error: 'Payment not successful' });
+    const metadata = paymentIntent.metadata || {};
+    const credits = Number(metadata.credits);
+    if (paymentIntent.status !== 'succeeded' || paymentIntent.currency !== 'usd' ||
+        metadata.type !== 'credit_purchase' || metadata.packageId !== 'music-video-199' ||
+        metadata.userEmail?.toLowerCase() !== email || credits !== 19900 || paymentIntent.amount !== 19900) {
+      return res.status(400).json({ error: 'Payment could not be verified for this account.' });
     }
-
-    const credits = parseInt(paymentIntent.metadata.credits || '0');
-    if (credits <= 0) {
-      return res.status(400).json({ error: 'Invalid credit amount' });
-    }
-
-    const result = await addCredits(
-      email,
+    const result = await fulfillCreditCheckout({
+      userEmail: email,
       credits,
-      'purchase',
-      `Purchased ${credits} credits`,
-      { stripePaymentIntentId: paymentIntentId, tier: tier || 'free' }
-    );
-
-    res.json({ success: true, credits, newBalance: result.newBalance });
+      packageId: metadata.packageId || 'credit-purchase',
+      paymentIntentId,
+      paidUsd: paymentIntent.amount_received / 100,
+      tier: metadata.tier || 'free',
+    });
+    res.json(result);
   } catch (error: any) {
-    console.error('Error verifying payment:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error verifying credit PaymentIntent:', error);
+    res.status(500).json({ error: 'Could not verify payment. Contact support if your charge completed.' });
   }
 });
 
@@ -116,27 +121,42 @@ router.post('/api/credits/verify-payment', async (req, res) => {
 // ============================================
 router.post('/api/credits/create-checkout-session', async (req, res) => {
   try {
-    const { email, packageId, tier, successUrl, cancelUrl } = req.body || {};
-
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
+    const { packageId, successUrl } = req.body || {};
 
     const pkg = CREDIT_PACKAGES.find((p) => p.id === packageId);
     if (!pkg) return res.status(400).json({ error: 'Invalid packageId' });
 
-    const origin =
-      (req.headers.origin as string) ||
-      (req.headers.referer ? new URL(req.headers.referer as string).origin : '') ||
-      process.env.APP_BASE_URL ||
-      'https://boostify.app';
-
-    // Return the user to wherever they launched checkout from, appending the session id.
-    const returnBase = (successUrl || origin).split('#')[0];
+    const configuredBase = process.env.APP_BASE_URL || process.env.PRODUCTION_URL || 'https://boostify.app';
+    const originHeader = req.headers.origin;
+    let safeBase = configuredBase;
+    if (originHeader) {
+      try {
+        const candidate = new URL(originHeader);
+        const configured = new URL(configuredBase);
+        if (candidate.origin === configured.origin || candidate.hostname === 'localhost' || candidate.hostname === '127.0.0.1') {
+          safeBase = candidate.origin;
+        }
+      } catch { /* use the configured canonical app URL */ }
+    }
+    let returnBase = `${safeBase}/artist-profile`;
+    if (typeof successUrl === 'string') {
+      try {
+        const requestedReturn = new URL(successUrl);
+        if (requestedReturn.origin === safeBase && requestedReturn.protocol === new URL(safeBase).protocol) {
+          returnBase = `${requestedReturn.origin}${requestedReturn.pathname}${requestedReturn.search}`;
+        }
+      } catch { /* default to artist profile */ }
+    }
     const successWithSession = `${returnBase}${returnBase.includes('?') ? '&' : '?'}credits_session={CHECKOUT_SESSION_ID}`;
+    const tier = await getUserCreditTier(email);
 
-    const session = await stripe.checkout.sessions.create({
+    const integrationSuffix = Array.from(randomBytes(8), (byte) => String.fromCharCode(97 + (byte % 26))).join('');
+    const checkoutParams = {
       mode: 'payment',
-      payment_method_types: ['card'],
       customer_email: email,
+      client_reference_id: String((req as any).user?.clerkUserId || (req as any).user?.id || ''),
       line_items: [
         {
           quantity: 1,
@@ -156,11 +176,14 @@ router.post('/api/credits/create-checkout-session', async (req, res) => {
         credits: String(pkg.credits),
         packageId: pkg.id,
         priceUsd: String(pkg.priceUsd),
-        tier: tier || 'free',
+        userId: String((req as any).user?.clerkUserId || (req as any).user?.id || ''),
+        tier,
       },
       success_url: successWithSession,
-      cancel_url: cancelUrl || origin,
-    });
+      cancel_url: `${safeBase}/artist-profile?credits_purchase=cancelled`,
+      integration_identifier: `boostify_artist_credits_${integrationSuffix}`,
+    } as Stripe.Checkout.SessionCreateParams & { integration_identifier: string };
+    const session = await stripe.checkout.sessions.create(checkoutParams as any);
 
     res.json({ success: true, url: session.url, sessionId: session.id });
   } catch (error: any) {
@@ -172,6 +195,8 @@ router.post('/api/credits/create-checkout-session', async (req, res) => {
 // Verify a completed Checkout Session and credit the user (idempotent).
 router.post('/api/credits/verify-checkout', async (req, res) => {
   try {
+    const authenticatedEmail = authenticatedCreditEmail(req, res);
+    if (!authenticatedEmail) return;
     const { sessionId } = req.body || {};
     if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
 
@@ -187,46 +212,23 @@ router.post('/api/credits/verify-checkout', async (req, res) => {
     }
 
     const email = md.userEmail;
-    const credits = parseInt(md.credits || '0', 10);
-    const priceUsd = parseFloat(md.priceUsd || '0');
-    if (!email || credits <= 0) {
+    const pkg = CREDIT_PACKAGES.find((item) => item.id === md.packageId);
+    const credits = pkg?.credits || 0;
+    if (!email || email.toLowerCase() !== authenticatedEmail || !pkg || md.credits !== String(pkg.credits) ||
+        session.amount_total !== Math.round(pkg.priceUsd * 100) || session.currency !== 'usd' ||
+        session.mode !== 'payment' || session.payment_status !== 'paid') {
       return res.status(400).json({ error: 'Invalid session metadata' });
     }
-
-    // Idempotency: bail if we already credited this checkout session.
-    const [already] = await db
-      .select()
-      .from(creditTransactions)
-      .where(eq(creditTransactions.stripeCheckoutSessionId, sessionId))
-      .limit(1);
-    if (already) {
-      const bal = await getUserBalance(email);
-      return res.json({ success: true, alreadyProcessed: true, credits, newBalance: bal.credits });
-    }
-
-    const result = await addCredits(
-      email,
+    const result = await fulfillCreditCheckout({
+      userEmail: authenticatedEmail,
       credits,
-      'purchase',
-      `Purchased ${credits.toLocaleString()} credits (${md.packageId})`,
-      {
-        stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-        tier: md.tier || 'free',
-        paidUsd: priceUsd,
-        markup: DEFAULT_MARKUP_MULTIPLIER,
-      }
-    );
-
-    // Tag a marker transaction with the checkout session id for idempotency.
-    await db.insert(creditTransactions).values({
-      userEmail: email,
-      amount: 0,
-      type: 'purchase',
-      description: `Checkout session ${sessionId} settled`,
-      stripeCheckoutSessionId: sessionId,
+      packageId: pkg.id,
+      sessionId,
+      paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+      paidUsd: session.amount_total / 100,
+      tier: md.tier || 'free',
     });
-
-    res.json({ success: true, credits, newBalance: result.newBalance });
+    res.json(result);
   } catch (error: any) {
     console.error('Error verifying checkout:', error);
     res.status(500).json({ error: error.message });
@@ -235,16 +237,18 @@ router.post('/api/credits/verify-checkout', async (req, res) => {
 
 router.post('/api/credits/deduct', async (req, res) => {
   try {
-    const { email, amount, operationType, projectId, description } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
+    const { amount, operationType, projectId, description } = req.body || {};
+    const numericAmount = Number(amount);
+    if (amount !== undefined && (!Number.isInteger(numericAmount) || numericAmount <= 0)) {
+      return res.status(400).json({ error: 'amount must be a positive integer' });
     }
 
     // If operationType is provided, use smart credit engine
     if (operationType && OPERATION_COSTS[operationType as OperationType]) {
       const result = await chargeCredits(email, operationType as OperationType, {
-        quantity: amount || 1,
+        quantity: numericAmount || 1,
         description,
         projectId,
       });
@@ -261,7 +265,7 @@ router.post('/api/credits/deduct', async (req, res) => {
     }
 
     // Legacy: direct amount deduction (backwards compatible)
-    if (!amount) {
+    if (!numericAmount) {
       return res.status(400).json({ error: 'amount or operationType required' });
     }
 
@@ -269,32 +273,23 @@ router.post('/api/credits/deduct', async (req, res) => {
       return res.json({ success: true, remainingCredits: 999999 });
     }
 
-    const [userCredit] = await db
-      .select()
-      .from(userCredits)
-      .where(eq(userCredits.userEmail, email));
-
-    if (!userCredit || userCredit.credits < amount) {
+    const [updated] = await db.update(userCredits)
+      .set({ credits: sql`${userCredits.credits} - ${numericAmount}`, updatedAt: new Date() })
+      .where(sql`${userCredits.userEmail} = ${email} AND ${userCredits.credits} >= ${numericAmount}`)
+      .returning({ credits: userCredits.credits });
+    if (!updated) {
       return res.status(400).json({ error: 'Insufficient credits' });
     }
 
-    await db
-      .update(userCredits)
-      .set({ 
-        credits: userCredit.credits - amount,
-        updatedAt: new Date()
-      })
-      .where(eq(userCredits.userEmail, email));
-
     await db.insert(creditTransactions).values({
       userEmail: email,
-      amount: -amount,
+      amount: -numericAmount,
       type: 'deduction',
-      description: description || `Deducted ${amount} credits`,
+      description: description || `Deducted ${numericAmount} credits`,
       relatedProjectId: projectId,
     });
 
-    res.json({ success: true, remainingCredits: userCredit.credits - amount });
+    res.json({ success: true, remainingCredits: updated.credits });
   } catch (error: any) {
     console.error('Error deducting credits:', error);
     res.status(500).json({ error: error.message });
@@ -303,11 +298,8 @@ router.post('/api/credits/deduct', async (req, res) => {
 
 router.get('/api/credits/transactions', async (req, res) => {
   try {
-    const { email } = req.query;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
 
     const transactions = await db
       .select()
@@ -328,12 +320,13 @@ router.get('/api/credits/transactions', async (req, res) => {
 // ============================================
 router.get('/api/credits/can-afford', async (req, res) => {
   try {
-    const email = req.query.email as string;
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
     const operationType = req.query.operationType as string;
-    const quantity = parseInt(req.query.quantity as string) || 1;
+    const quantity = Number(req.query.quantity || 1);
 
-    if (!email || !operationType) {
-      return res.status(400).json({ error: 'email and operationType are required' });
+    if (!operationType || !Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+      return res.status(400).json({ error: 'operationType and a valid quantity (1–1000) are required' });
     }
 
     if (!OPERATION_COSTS[operationType as OperationType]) {
@@ -354,21 +347,27 @@ router.get('/api/credits/can-afford', async (req, res) => {
 // ============================================
 router.get('/api/credits/operation-cost', async (req, res) => {
   try {
+    const email = authenticatedCreditEmail(req, res);
+    if (!email) return;
     const operationType = req.query.operationType as string;
 
     if (!operationType || !OPERATION_COSTS[operationType as OperationType]) {
       return res.status(400).json({ error: 'Valid operationType is required' });
     }
 
-    const creditCost = await getOperationCreditCost(operationType as OperationType);
+    const quantity = Math.min(1000, Math.max(1, Number(req.query.quantity || 1)));
+    if (!Number.isInteger(quantity)) return res.status(400).json({ error: 'quantity must be a positive integer' });
+    const creditCost = await getOperationCreditCost(operationType as OperationType, quantity);
     const op = OPERATION_COSTS[operationType as OperationType];
 
     res.json({
       operationType,
       name: op.name,
       creditCost,
-      userPriceUsd: (creditCost / 100).toFixed(2),
+      userPriceUsd: Number((creditCost / 100).toFixed(2)),
+      quantity,
       unit: op.unit,
+      balance: (await getUserBalance(email)).credits,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -389,7 +388,15 @@ router.get('/api/credits/pricing', async (_req, res) => {
   try {
     const { getGlobalMarkup } = await import('../services/credit-engine');
     const markup = await getGlobalMarkup();
-    const table = getFullPricingTable(markup);
+    const table = await Promise.all(getFullPricingTable(markup).map(async (operation) => {
+      const creditCost = await getOperationCreditCost(operation.type as OperationType);
+      return {
+        ...operation,
+        // Honor admin overrides so displayed prices equal actual deductions.
+        creditCost,
+        userPriceUsd: Number((creditCost / 100).toFixed(2)),
+      };
+    }));
     
     res.json({
       markup,
