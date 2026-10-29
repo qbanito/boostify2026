@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { apiRequest } from '@/lib/queryClient';
+import { HermesChat } from './hermes-chat';
 import { useToast } from '@/hooks/use-toast';
 import {
   Bot,
@@ -37,7 +38,6 @@ import {
   MessageSquare,
   Shield,
   Cpu,
-  Radio,
   Layers,
   ArrowRight,
   BookMarked,
@@ -86,65 +86,54 @@ const GUIDE_ITEMS = [
   {
     icon: Bot,
     color: '#a855f7',
-    title: '¿Qué es Hermes?',
-    body: 'Hermes es tu agente de IA autónomo personal. Aprende tu historia, tus metas y tu identidad como artista para actuar como tu mánager digital 24/7, sin que tengas que pedirle nada.',
+    title: 'What is Hermes?',
+    body: 'Hermes is your private AI artist manager. Ask it for music, brand, visual, release, and career guidance grounded in your artist profile.',
   },
   {
     icon: Brain,
     color: '#8b5cf6',
-    title: 'Memoria (MEMORY.md)',
-    body: 'Cada vez que Hermes inicia, lee un archivo de memoria con todo tu historial: streams, posts, logros, colaboraciones y evolución de carrera. Cuanto más aprende, mejor actúa.',
+    title: 'Artist context',
+    body: 'Hermes can reference your artist identity, saved profile memory, goals, blueprint, songs, published videos, and music-video projects. It only uses data available in Boostify.',
   },
   {
     icon: Heart,
     color: '#ec4899',
-    title: 'Alma (SOUL.md)',
-    body: 'SOUL.md define la personalidad de Hermes cuando actúa en tu nombre: tu tono de comunicación, tus valores, tu estilo. Así responde como "tú" y no como un bot genérico.',
+    title: 'Your artist voice',
+    body: 'Hermes uses your saved artist identity and creative references to shape ideas. Review generated copy before using it in public.',
   },
   {
     icon: Target,
     color: '#f59e0b',
-    title: 'Objetivos activos',
-    body: 'Hermes genera automáticamente metas a partir de tu Superstar Blueprint y las actualiza según tu progreso. Cada objetivo tiene prioridad y estado para que no pierdas el foco.',
+    title: 'Goals and planning',
+    body: 'Ask Hermes to review your saved goals and blueprint, then suggest practical next steps. It does not update goals automatically.',
   },
   {
     icon: Calendar,
     color: '#10b981',
-    title: 'Skill: Content Calendar',
-    body: 'Genera un plan de contenido de 30 días para redes sociales, adaptado a tu género, audiencia y momentos clave de la industria. Se activa automáticamente cada mes.',
+    title: 'Content calendar',
+    body: 'Request a content calendar tailored to your catalog, artist voice, and release plans. Hermes drafts ideas when you ask; nothing is scheduled automatically.',
   },
   {
     icon: Activity,
     color: '#3b82f6',
-    title: 'Skill: Weekly Check',
-    body: 'Cada lunes a las 9 AM, Hermes analiza tus streams, publicaciones y metas de la semana anterior, genera un reporte de salud y sugiere ajustes para la semana entrante.',
+    title: 'Artist check-in',
+    body: 'Ask Hermes to review the information saved in your profile and identify priorities. It cannot see live streaming or social analytics unless they are stored in Boostify.',
   },
   {
     icon: BarChart3,
     color: '#f97316',
-    title: 'Skill: Competitor Analysis',
-    body: 'Investiga 5 artistas similares a ti, detecta oportunidades que ellos están aprovechando y te presenta un informe con acciones concretas que puedes tomar.',
+    title: 'Positioning ideas',
+    body: 'Hermes can identify differentiators and suggest growth hypotheses from your profile. It does not perform live web research or claim verified competitor data.',
   },
   {
     icon: Shield,
     color: '#06b6d4',
-    title: 'Privacidad y control',
-    body: 'Hermes solo opera cuando tú lo activas. Toda la memoria y el alma son archivos de texto que puedes editar, eliminar o exportar en cualquier momento. Tú tienes el control total.',
+    title: 'Privacy and control',
+    body: 'Only the authenticated owner can use this private chat. Hermes can draft and advise, but it cannot publish content, message fans, or change your account.',
   },
 ];
 
-// ─── Simulated activity feed ───────────────────────────────────────────────────
 
-const ACTIVITY_FEED = [
-  { icon: Brain, color: '#a855f7', text: 'Memory loaded — 847 tokens read' },
-  { icon: Target, color: '#f59e0b', text: 'Goals refreshed — 3 active objectives' },
-  { icon: Calendar, color: '#10b981', text: 'Content calendar generated for May' },
-  { icon: Activity, color: '#3b82f6', text: 'Weekly check completed — streams +12%' },
-  { icon: BarChart3, color: '#f97316', text: 'Competitor analysis queued' },
-  { icon: Sparkles, color: '#ec4899', text: 'Soul.md synced with Blueprint' },
-  { icon: Zap, color: '#eab308', text: 'New skill triggered: promo strategy' },
-  { icon: Bot, color: '#8b5cf6', text: 'Hermes online — awaiting instructions' },
-];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -175,7 +164,7 @@ export function HermesAgentPanel({
 }: HermesAgentPanelProps) {
   const { toast } = useToast();
   const numericId = pgId || parseInt(artistId, 10);
-  const [activeTab, setActiveTab] = useState<'overview' | 'memory' | 'soul' | 'goals' | 'ledger'>('overview');
+  const [activeTab, setActiveTab] = useState<'chat' | 'overview' | 'memory' | 'soul' | 'goals' | 'ledger'>('chat');
   const [showFullMemory, setShowFullMemory] = useState(false);
   const [showFullSoul, setShowFullSoul] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -343,21 +332,6 @@ export function HermesAgentPanel({
     </div>
   );
 
-  // Live activity feed ticker
-  const [feedIndex, setFeedIndex] = useState(0);
-  const [feedVisible, setFeedVisible] = useState(true);
-  useEffect(() => {
-    if (!isExpanded) return;
-    const id = setInterval(() => {
-      setFeedVisible(false);
-      setTimeout(() => {
-        setFeedIndex(i => (i + 1) % ACTIVITY_FEED.length);
-        setFeedVisible(true);
-      }, 350);
-    }, 3200);
-    return () => clearInterval(id);
-  }, [isExpanded]);
-
   // ── Queries ─────────────────────────────────────────────────────────────────
 
   const { data: statusData, isLoading: statusLoading } = useQuery<any>({
@@ -410,7 +384,6 @@ export function HermesAgentPanel({
   });
 
   const isOnline = statusData?.status === 'ok';
-  const feedItem = ACTIVITY_FEED[feedIndex];
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
@@ -449,7 +422,7 @@ export function HermesAgentPanel({
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${accent}20`, color: accent }}>AI</span>
             </p>
             <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              Tu mánager de IA autónomo
+              OpenAI-powered artist manager
             </p>
           </div>
 
@@ -492,42 +465,6 @@ export function HermesAgentPanel({
     return (
       <div className="px-4 pt-4 pb-3 space-y-4">
 
-        {/* ── Live activity ticker ────────────────────────────── */}
-        <motion.div
-          className="rounded-xl px-3 py-2.5 flex items-center gap-2.5 overflow-hidden"
-          style={{ background: 'rgba(0,0,0,0.35)', border: `1px solid ${accentBorder}` }}
-        >
-          <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center" style={{ background: accentBg }}>
-            <Radio className="h-3 w-3 animate-pulse" style={{ color: accent }} />
-          </div>
-          <AnimatePresence mode="wait">
-            {feedVisible && (
-              <motion.div
-                key={feedIndex}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.28 }}
-                className="flex items-center gap-2 min-w-0"
-              >
-                <feedItem.icon className="h-3 w-3 flex-shrink-0" style={{ color: feedItem.color }} />
-                <p className="text-xs text-white/70 truncate">{feedItem.text}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-            {[0, 1, 2].map(i => (
-              <motion.div
-                key={i}
-                animate={{ scaleY: [0.4, 1.2, 0.4] }}
-                transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.18 }}
-                className="w-0.5 h-3 rounded-full"
-                style={{ background: accent, transformOrigin: 'center' }}
-              />
-            ))}
-          </div>
-        </motion.div>
-
         {/* ── Agent identity card ────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
@@ -547,7 +484,7 @@ export function HermesAgentPanel({
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold text-sm">Hermes — Tu Mánager de IA</p>
             <p className="text-xs text-white/50 mt-1 leading-relaxed">
-              Agente autónomo que aprende la historia, metas y marca de <span className="text-white/75 font-medium">{artistName}</span> para actuar como mánager personal 24/7: planifica contenido, analiza competencia y ejecuta reportes semanales.
+              OpenAI-powered artist management for <span className="text-white/75 font-medium">{artistName}</span>, grounded in your identity, catalog, goals, and visual history.
             </p>
             <button
               onClick={() => setShowGuide(true)}
@@ -562,9 +499,9 @@ export function HermesAgentPanel({
         {/* ── Stat cards ────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Memoria', value: 'MEMORY.md', icon: BookOpen, color: '#8b5cf6', tip: 'Historial del artista' },
-            { label: 'Skills', value: '3 activos', icon: Zap, color: accent, tip: 'Habilidades cargadas' },
-            { label: 'Integración', value: 'Active', icon: Activity, color: '#4ade80', tip: 'Estado del sistema' },
+            { label: 'Memory', value: 'MEMORY.md', icon: BookOpen, color: '#8b5cf6', tip: 'Artist history' },
+            { label: 'Workflows', value: '3 available', icon: Zap, color: accent, tip: 'Available on request' },
+            { label: 'Integration', value: statusLoading ? 'Checking…' : isOnline ? 'Connected' : 'Unavailable', icon: Activity, color: isOnline ? '#4ade80' : '#f87171', tip: 'Live OpenAI connection' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -623,13 +560,13 @@ export function HermesAgentPanel({
         {/* ── Pre-built Skills ─────────────────────────────── */}
         <div>
           <p className="text-white/50 text-[11px] font-semibold uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <Layers className="h-3 w-3" /> Skills automáticos
+            <Layers className="h-3 w-3" /> Workflows on request
           </p>
           <div className="space-y-2">
             {[
-              { id: 'weekly_check', label: '📋 Weekly Artist Check', desc: 'Cada lunes 9 AM — reporte de salud: streams, posts y metas de la semana', icon: Activity, color: '#3b82f6' },
-              { id: 'content_calendar', label: '📅 Content Calendar', desc: 'Genera un plan de contenido de 30 días para tus redes sociales', icon: Calendar, color: '#10b981' },
-              { id: 'competitor_analysis', label: '🔍 Competitor Analysis', desc: 'Investiga 5 artistas similares e identifica oportunidades de crecimiento', icon: BarChart3, color: '#f97316' },
+              { id: 'artist_check', label: 'Artist Check-in', desc: 'Review your blueprint, goals, and catalog to identify the next useful actions.', icon: Activity, color: '#3b82f6' },
+              { id: 'content_calendar', label: 'Content Calendar', desc: 'Draft a personalized calendar based on your releases, voice, and visual identity.', icon: Calendar, color: '#10b981' },
+              { id: 'positioning', label: 'Artist Positioning', desc: 'Clarify differentiators and growth hypotheses from your profile context.', icon: BarChart3, color: '#f97316' },
             ].map((skill, i) => (
               <motion.div
                 key={skill.id}
@@ -648,7 +585,7 @@ export function HermesAgentPanel({
                 </div>
                 <span className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold"
                   style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)' }}>
-                  Auto
+                  On request
                 </span>
               </motion.div>
             ))}
@@ -675,7 +612,7 @@ export function HermesAgentPanel({
           style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)' }}>
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-yellow-400" />
           <p className="text-yellow-300/70 text-xs leading-relaxed">
-            Hermes corre en WSL2 en tu servidor. Ejecuta <code className="bg-white/10 px-1 rounded text-yellow-200">hermes/setup-hermes-wsl2.sh</code> para activar el agente autónomo.
+            Hermes chat is powered by the OpenAI Agents SDK. Scheduled background tasks require the separate WSL2 runtime.
           </p>
         </div>
       </div>
@@ -926,7 +863,7 @@ export function HermesAgentPanel({
               {/* Footer */}
               <div className="px-4 sm:px-6 py-4 border-t border-white/8">
                 <p className="text-[10px] text-gray-500 text-center">
-                  Hermes corre en WSL2 · Impulsado por OpenRouter · Memoria persistente entre sesiones
+                  Private artist chat · OpenAI Agents SDK · GPT‑6 Astra
                 </p>
               </div>
             </motion.div>
@@ -952,6 +889,7 @@ export function HermesAgentPanel({
               style={{ borderBottom: `1px solid ${accentBorder}` }}
             >
               {([
+                { id: 'chat', label: 'Chat with Hermes', Icon: MessageSquare },
                 { id: 'overview', label: 'Overview', Icon: Bot },
                 { id: 'memory', label: 'Memoria', Icon: BookOpen },
                 { id: 'soul', label: 'Soul', Icon: Heart },
@@ -979,6 +917,7 @@ export function HermesAgentPanel({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.18 }}
               >
+                {activeTab === 'chat' && <HermesChat artistId={numericId} artistName={artistName} accent={accent} isOwner={isOwnProfile && Number.isFinite(numericId)} />}
                 {activeTab === 'overview' && renderOverview()}
                 {activeTab === 'memory' && renderMemory()}
                 {activeTab === 'soul' && renderSoul()}
@@ -992,7 +931,7 @@ export function HermesAgentPanel({
               className="px-4 py-2.5 flex items-center justify-between"
               style={{ borderTop: `1px solid ${accentBorder}` }}
             >
-              <p className="text-white/25 text-xs">The Codex v1.0 · Boostify AI</p>
+              <p className="text-white/25 text-xs">Hermes · Boostify AI</p>
               <div className="flex items-center gap-1">
                 <motion.div
                   animate={{ rotate: 360 }}
@@ -1000,7 +939,7 @@ export function HermesAgentPanel({
                 >
                   <Sparkles className="h-3 w-3" style={{ color: accent }} />
                 </motion.div>
-                <span className="text-xs" style={{ color: accent }}>OpenRouter</span>
+                <span className="text-xs" style={{ color: accent }}>GPT‑6 Astra</span>
               </div>
             </div>
           </motion.div>

@@ -6,7 +6,12 @@
 
 import { createTrackedOpenAI } from '../utils/tracked-openai';
 import { PRIMARY_MODEL } from '../utils/ai-config';
-import { generateImageWithNanoBanana, editImageWithNanoBanana } from './fal-service';
+import {
+  generateImageWithNanoBanana,
+  editImageWithNanoBanana,
+  generateImageWithGPTImage1,
+  editImageWithGPTImage1,
+} from './fal-service';
 
 const openai = createTrackedOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -540,18 +545,18 @@ Return exactly ${n} products.`;
 // ─── Internal image helper ────────────────────────────────────────────────────
 
 /**
- * Maps aspect ratio to the closest OpenAI DALL-E 3 / gpt-image-1 supported size.
+ * Maps aspect ratio to a supported GPT Image output size.
  */
-const OPENAI_SIZE_MAP: Record<string, '1024x1024' | '1792x1024' | '1024x1792'> = {
+const OPENAI_SIZE_MAP: Record<string, '1024x1024' | '1536x1024' | '1024x1536'> = {
   '1:1':  '1024x1024',
-  '16:9': '1792x1024',
+  '16:9': '1536x1024',
   '4:5':  '1024x1024',
-  '9:16': '1024x1792',
+  '9:16': '1024x1536',
 };
 
 /**
- * Generates a fashion image via FAL (Flux) first.
- * On any failure or empty result, falls back to OpenAI DALL-E 3.
+ * Generates a fashion image via FAL first.
+ * On any failure or empty result, falls back to OpenAI GPT Image 2.5.
  * `referenceImageUrls` may be a single URL or a list; non-image URLs (e.g. .mp4
  * loop banners) are filtered out so the FAL edit endpoint never receives a video.
  */
@@ -575,17 +580,13 @@ async function generateFashionImage(
     console.warn('[fashion-ai] FAL failed, falling back to OpenAI:', falErr?.message || falErr);
   }
 
-  // ── 2. OpenAI DALL-E 3 fallback ───────────────────────────────────────────
+  // ── 2. OpenAI GPT Image 2.5 fallback ─────────────────────────────────────
   try {
     const size = OPENAI_SIZE_MAP[aspectRatio] ?? '1024x1024';
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
-      prompt: prompt.slice(0, 4000),
-      size,
-      quality: 'hd',
-      n: 1,
-    });
-    return response.data?.[0]?.url ?? null;
+    const result = refs.length > 0
+      ? await editImageWithGPTImage1(refs, prompt.slice(0, 32000), { size, quality: 'high', outputFolder: 'fashion-studio' })
+      : await generateImageWithGPTImage1(prompt.slice(0, 32000), { size, quality: 'high' });
+    return result?.success ? result.imageUrl ?? null : null;
   } catch (oaiErr: any) {
     console.error('[fashion-ai] OpenAI image fallback also failed:', oaiErr?.message || oaiErr);
     return null;

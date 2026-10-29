@@ -4,7 +4,7 @@
  * Each tool returns JSON strings with try/catch for safe DB access.
  */
 import { tool } from "@openai/agents";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { db } from "../db";
 import { users, songs, merchandise, subscriptions } from "../../db/schema";
 import { eq, desc, and } from "drizzle-orm";

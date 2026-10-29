@@ -3,7 +3,7 @@ import { Header } from "../components/layout/header";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
-import { Video, Users, Star, Wand2, Bot, CloudCog, Edit, Sparkles, ArrowRight, Monitor, Apple, Download, Play, Zap, Film, Palette, Music, Crown, ChevronRight, Lock, Clapperboard, Layers, Mic2, Check } from "lucide-react";
+import { Video, Users, Star, Wand2, Bot, CloudCog, Edit, Sparkles, ArrowRight, Monitor, Apple, Download, Play, Zap, Film, Palette, Music, Crown, ChevronRight, Lock, Clapperboard, Layers, Mic2, Check, Loader2 } from "lucide-react";
 import { DirectorsList } from "../components/music-video/directors-list";
 import { MusicVideoAI } from "../components/music-video/music-video-ai";
 import { MotionDNASection } from "../components/music-video/motion-dna-section";

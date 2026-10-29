@@ -272,6 +272,7 @@ app.use('/api/art-gallery/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/smart-merch/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/crowdsync-dj/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/live-stage/webhook', express.raw({ type: 'application/json' }));
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 

@@ -376,7 +376,7 @@ function ImageGeneratorView({ artist }: { artist: Artist | undefined }) {
           <h2 className="text-lg font-bold text-white">Image Generator</h2>
           <p className="text-xs text-zinc-400">Editorial styles · keeps your artist's real look</p>
         </div>
-        <Badge className="ml-auto bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/30 text-[10px]">FLUX KONTEXT</Badge>
+        <Badge className="ml-auto bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/30 text-[10px]">FAL + GPT IMAGE 2.5</Badge>
       </div>
 
       {/* Editorial style presets — curated art direction */}
@@ -908,7 +908,7 @@ function LookGeneratorView({ artist }: { artist: Artist | undefined }) {
         </div>
         <div>
           <h2 className="text-lg font-bold text-white">Look Generator</h2>
-          <p className="text-xs text-zinc-400">Vogue / Chanel haute-couture editorial — your artist as a real model (GPT Image 1)</p>
+          <p className="text-xs text-zinc-400">Vogue / Chanel haute-couture editorial — your artist as a real model, with identity-preserving fallbacks</p>
         </div>
         <Badge className="ml-auto bg-emerald-600/20 text-emerald-300 border-emerald-500/30 text-[10px]">4 IMAGES</Badge>
       </div>

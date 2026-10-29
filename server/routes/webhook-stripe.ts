@@ -16,6 +16,7 @@ import { db } from '../db';
 import { explicitSubscriptions, subscriptions, users, notifications, platformRevenue } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { PRICE_ID_TO_PLAN, isAdminEmail } from '../../shared/constants';
+import { LEGACY_TO_PLAN, normalizePlan, type PlanId } from '../../shared/plan-config';
 import { handleAgeStripeEvent } from './artist-growth-engine';
 
 const router = Router();
@@ -105,7 +106,12 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     switch (event.type) {
       case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
+      case 'checkout.session.async_payment_failed':
+        console.warn('Checkout payment failed:', (event.data.object as Stripe.Checkout.Session).id);
         break;
         
       case 'customer.subscription.created':
@@ -272,6 +278,10 @@ async function handleModuleUnlock(session: Stripe.Checkout.Session) {
  */
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('💳 Processing checkout.session.completed:', session.id);
+  if (session.payment_status === 'unpaid') {
+    console.log('Checkout is awaiting asynchronous payment:', session.id);
+    return;
+  }
   const metadata = session.metadata || {};
   const customer = session.customer as string | null;
   const client_reference_id = session.client_reference_id;
@@ -413,6 +423,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
   
   // Flujo normal de suscripción
+  const subscriptionId = typeof session.subscription === 'string'
+    ? session.subscription
+    : session.subscription?.id;
   if (!subscriptionId || !customer) {
     console.log('⚠️ Checkout session without subscription or customer');
     return;
@@ -423,7 +436,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   
   // Determinar el tier del plan
   const priceId = subscription.items.data[0]?.price.id;
-  const planTier = determinePlanTier(priceId);
+  const planTier = determinePlanTier(priceId, subscription.metadata?.planId || metadata.planId);
   
   // Buscar usuario por email o client_reference_id
   const userEmail = session.customer_details?.email;
@@ -444,7 +457,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
   
   // Determinar intervalo (monthly o yearly)
-  const interval = subscription.items.data[0]?.price.recurring?.interval || 'monthly';
+  const interval = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
   
   // Crear o actualizar suscripción en la base de datos
   await db.insert(subscriptions).values({
@@ -463,9 +476,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }).onConflictDoUpdate({
     target: subscriptions.stripeSubscriptionId,
     set: {
+      plan: planTier,
+      stripeCustomerId: customer as string,
       status: subscription.status as any,
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      interval,
+      price: (subscription.items.data[0]?.price.unit_amount || 0) / 100,
+      currency: subscription.currency,
+      isTrial: subscription.status === 'trialing',
       updatedAt: new Date()
     }
   });
@@ -1379,19 +1398,27 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log('🆕 Processing customer.subscription.created:', subscription.id);
   
   const priceId = subscription.items.data[0]?.price.id;
-  const planTier = determinePlanTier(priceId);
+  const planTier = determinePlanTier(priceId, subscription.metadata?.planId);
   const customer = subscription.customer as string;
   
-  // Buscar usuario por Stripe Customer ID
-  const users_result = await db.select().from(users).where(eq(users.stripeCustomerId, customer)).limit(1);
+  // Checkout establishes the customer-to-user mapping in subscriptions.
+  // Stripe can deliver this event before checkout.session.completed, in which
+  // case that later event will create the subscription record.
+  const existingRows = await db.select({ userId: subscriptions.userId })
+    .from(subscriptions)
+    .where(eq(subscriptions.stripeSubscriptionId, subscription.id))
+    .limit(1);
+  const users_result = existingRows[0]
+    ? await db.select().from(users).where(eq(users.id, existingRows[0].userId)).limit(1)
+    : [];
   const user = users_result[0];
   
   if (!user) {
-    console.error('❌ User not found for customer:', customer);
+    console.log('Subscription created before checkout linked customer:', customer);
     return;
   }
   
-  const interval = subscription.items.data[0]?.price.recurring?.interval || 'monthly';
+  const interval = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
   
   await db.insert(subscriptions).values({
     userId: user.id,
@@ -1471,8 +1498,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   }
   
   const priceId = subscription.items.data[0]?.price.id;
-  const planTier = determinePlanTier(priceId);
-  const interval = subscription.items.data[0]?.price.recurring?.interval || 'monthly';
+  const planTier = determinePlanTier(priceId, subscription.metadata?.planId);
+  const interval = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
   
   await db.update(subscriptions)
     .set({
@@ -1718,10 +1745,13 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
  * Determinar tier del plan basado en Price ID
  * Usa constantes centralizadas de shared/constants.ts
  */
-function determinePlanTier(priceId: string): 'free' | 'creator' | 'professional' | 'enterprise' {
-  const plan = PRICE_ID_TO_PLAN[priceId];
-  if (plan === 'creator' || plan === 'professional' || plan === 'enterprise') {
-    return plan;
+function determinePlanTier(priceId: string | undefined, metadataPlan?: string): PlanId {
+  if (metadataPlan && Object.prototype.hasOwnProperty.call(LEGACY_TO_PLAN, metadataPlan.toLowerCase())) {
+    return normalizePlan(metadataPlan);
+  }
+  const legacyPlan = priceId ? PRICE_ID_TO_PLAN[priceId] : undefined;
+  if (legacyPlan && Object.prototype.hasOwnProperty.call(LEGACY_TO_PLAN, legacyPlan.toLowerCase())) {
+    return normalizePlan(legacyPlan);
   }
   return 'free';
 }

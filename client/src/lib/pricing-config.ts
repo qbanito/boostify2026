@@ -5,6 +5,8 @@
  * Actualizado: Noviembre 2025
  */
 
+import { PLANS } from '@shared/plan-config';
+
 export type PlanTier = 'free' | 'artist' | 'creator' | 'professional' | 'enterprise';
 
 export interface PlanConfig {
@@ -72,13 +74,13 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, PlanConfig> = {
     highlight: '🔥 Most Popular',
     popular: true,
     price: {
-      monthly: 19.99,
-      yearly: 201.00,
-      yearlyEquivalentMonthly: 16.75
+      monthly: PLANS.artist.monthlyPrice,
+      yearly: PLANS.artist.yearlyPrice,
+      yearlyEquivalentMonthly: Number((PLANS.artist.yearlyPrice / 12).toFixed(2))
     },
     stripeIds: {
-      monthly: 'price_1TIhw72LyFplWimfqmZYMwUv',
-      yearly: 'price_1TIhw72LyFplWimfcpPISLbE'
+      monthly: PLANS.artist.stripePriceIds.monthly || '',
+      yearly: PLANS.artist.stripePriceIds.yearly || ''
     },
     features: [
       { name: 'Everything in Discover', included: true },
@@ -103,13 +105,13 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, PlanConfig> = {
     description: 'Build your artist presence & fanbase',
     highlight: 'For serious artists',
     price: {
-      monthly: 49.99,
-      yearly: 503.00,
-      yearlyEquivalentMonthly: 41.92
+      monthly: PLANS.creator.monthlyPrice,
+      yearly: PLANS.creator.yearlyPrice,
+      yearlyEquivalentMonthly: Number((PLANS.creator.yearlyPrice / 12).toFixed(2))
     },
     stripeIds: {
-      monthly: 'price_1R0lay2LyFplWimfQxUL6Hn0',
-      yearly: 'price_1SUz302LyFplWimfv5MZCNz4'
+      monthly: PLANS.creator.stripePriceIds.monthly || '',
+      yearly: PLANS.creator.stripePriceIds.yearly || ''
     },
     features: [
       { name: 'Everything in Artist', included: true },
@@ -136,13 +138,13 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, PlanConfig> = {
     description: 'Scale your sound & reach globally',
     highlight: '⚡ Best value',
     price: {
-      monthly: 89.99,
-      yearly: 905.00,
-      yearlyEquivalentMonthly: 75.42
+      monthly: PLANS.professional.monthlyPrice,
+      yearly: PLANS.professional.yearlyPrice,
+      yearlyEquivalentMonthly: Number((PLANS.professional.yearlyPrice / 12).toFixed(2))
     },
     stripeIds: {
-      monthly: 'price_1R0laz2LyFplWimfsBd5ASoa',
-      yearly: 'price_1SUz302LyFplWimfG5YtbUJ3'
+      monthly: PLANS.professional.stripePriceIds.monthly || '',
+      yearly: PLANS.professional.stripePriceIds.yearly || ''
     },
     features: [
       { name: 'Everything in Elevate', included: true },
@@ -169,13 +171,13 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, PlanConfig> = {
     description: 'Conquer the music industry',
     highlight: 'Maximum power',
     price: {
-      monthly: 149.99,
-      yearly: 1511.00,
-      yearlyEquivalentMonthly: 125.92
+      monthly: PLANS.enterprise.monthlyPrice,
+      yearly: PLANS.enterprise.yearlyPrice,
+      yearlyEquivalentMonthly: Number((PLANS.enterprise.yearlyPrice / 12).toFixed(2))
     },
     stripeIds: {
-      monthly: 'price_1R0lb12LyFplWimf7JpMynKA',
-      yearly: 'price_1SUz312LyFplWimfQSQLo349'
+      monthly: PLANS.enterprise.stripePriceIds.monthly || '',
+      yearly: PLANS.enterprise.stripePriceIds.yearly || ''
     },
     features: [
       { name: 'Everything in Amplify', included: true },

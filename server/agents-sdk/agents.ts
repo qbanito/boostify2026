@@ -4,7 +4,7 @@
  * Each specialist has focused instructions, personality, and relevant DB tools.
  */
 import { Agent } from "@openai/agents";
-import { z } from "zod";
+import { z } from "zod/v4";
 import {
   getArtistProfile,
   getArtistSongs,

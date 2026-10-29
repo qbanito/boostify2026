@@ -149,6 +149,7 @@ export function setupAuth(app: Express) {
     // Nota: req.path no incluye '/api' porque eso está en el app.use('/api')
     const publicRoutes = [
       '/stripe-webhook',
+      '/stripe/webhook',
       '/webhook',
       '/chat/completions',    // Ruta de chat para permitir el acceso sin autenticación
       '/task/status',         // Ruta para verificar el estado de tareas asíncronas

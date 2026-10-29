@@ -1,21 +1,20 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
 import Stripe from 'stripe';
 import { authenticate } from '../middleware/auth';
 import { db as drizzleDb } from '../db';
 import { db as firebaseDb } from '../firebase';
-import { bookings, payments } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { bookings, payments, subscriptions as userSubscriptions, users } from '../db/schema';
+import { eq, desc, ilike, or } from 'drizzle-orm';
 import { NotificationTemplates } from '../utils/notifications';
 import { 
   STRIPE_PRICE_IDS, 
-  PRICE_ID_TO_PLAN, 
   PRODUCTION_URL,
   isAdminEmail,
   normalizePlanName,
   IG_BOOST_PRICE_ID_TO_PLAN
 } from '../../shared/constants';
-import { INDIVIDUAL_TOOL_PLANS } from '../../shared/plan-config';
+import { INDIVIDUAL_TOOL_PLANS, PLAN_LIST, PLANS, normalizePlan } from '../../shared/plan-config';
 import { sendNotificationEmail } from '../services/brevo-email-service';
 
 const router = Router();
@@ -309,9 +308,30 @@ const BOOST_STANDALONE_CONFIG: Record<string, { unit_amount: number; interval: '
   'price_ig_boost_pro_annual':         { unit_amount: 14400, interval: 'year',  interval_count: 1, product_name: 'Instagram Boost Pro — Annual',    plan: 'ig_boost_pro', product: 'ig_boost_pro' },
 };
 
+async function findBillingAccount(req: Request) {
+  const fields = { id: users.id, email: users.email };
+  const numericId = Number(req.user?.id);
+  if (Number.isInteger(numericId) && numericId > 0) {
+    const [account] = await drizzleDb.select(fields).from(users).where(eq(users.id, numericId)).limit(1);
+    if (account) return account;
+  }
+  if (req.user?.email) {
+    const [account] = await drizzleDb.select(fields).from(users).where(ilike(users.email, req.user.email)).limit(1);
+    if (account) return account;
+  }
+  const identity = req.user?.uid || (typeof req.user?.id === 'string' ? req.user.id : '');
+  if (identity) {
+    const [account] = await drizzleDb.select(fields).from(users)
+      .where(or(eq(users.clerkId, identity), eq(users.firestoreId, identity)))
+      .limit(1);
+    if (account) return account;
+  }
+  return null;
+}
+
 /**
  * Create a checkout session for a new subscription
- * PUBLIC ENDPOINT - no authentication required
+ * Protected by the global /api authentication middleware.
  */
 router.post('/create-subscription', async (req: Request, res: Response) => {
   try {
@@ -319,7 +339,9 @@ router.post('/create-subscription', async (req: Request, res: Response) => {
     const { priceId, planId, product, interval } = req.body;
     
     // Use the ID that comes, prioritizing priceId (sent from the client)
-    const selectedId = priceId || planId;
+    const selectedId = typeof priceId === 'string' && priceId.trim()
+      ? priceId.trim()
+      : typeof planId === 'string' ? planId.trim() : '';
 
     if (!selectedId) {
       return res.status(400).json({ success: false, message: 'Plan or price not specified' });
@@ -330,7 +352,9 @@ router.post('/create-subscription', async (req: Request, res: Response) => {
     let planKey: string;
 
     // Check if selectedId is a known plan name (e.g. 'artist', 'creator', 'elevate')
-    const planPrices = PLAN_PRICE_IDS[selectedId as keyof typeof PLAN_PRICE_IDS];
+    const planPrices = Object.prototype.hasOwnProperty.call(PLAN_PRICE_IDS, selectedId)
+      ? PLAN_PRICE_IDS[selectedId]
+      : undefined;
     if (planPrices) {
       // It's a plan name — resolve to the correct interval price ID
       const billingInterval = interval === 'yearly' ? 'yearly' : 'monthly';
@@ -394,6 +418,61 @@ router.post('/create-subscription', async (req: Request, res: Response) => {
       });
 
       return res.json({ success: true, url: boostSession.url });
+    }
+
+    // Suite prices previously pointed at IDs from a different Stripe account.
+    // Resolve only known plans here and let Stripe create the recurring price
+    // from our shared, server-side catalog instead of trusting a client amount.
+    const currentPriceMatch = PLAN_LIST.find((plan) =>
+      plan.stripePriceIds.monthly === selectedId || plan.stripePriceIds.yearly === selectedId,
+    );
+    const legacyPriceMatch = Object.entries(PLAN_PRICE_IDS).find(([, prices]) =>
+      prices.monthly === selectedId || prices.yearly === selectedId,
+    );
+    const suitePlan = planPrices
+      ? PLANS[normalizePlan(selectedId)]
+      : currentPriceMatch || (legacyPriceMatch ? PLANS[normalizePlan(legacyPriceMatch[0])] : undefined);
+
+    if (suitePlan && suitePlan.id !== 'free' && (!product || product === 'suite')) {
+      const account = await findBillingAccount(req);
+      if (!account) {
+        return res.status(409).json({ success: false, message: 'Finish creating your Boostify account before subscribing.' });
+      }
+
+      const isYearly = currentPriceMatch?.stripePriceIds.yearly === selectedId
+        || legacyPriceMatch?.[1].yearly === selectedId
+        || (!selectedId.startsWith('price_') && interval === 'yearly');
+      const amount = isYearly ? suitePlan.yearlyPrice : suitePlan.monthlyPrice;
+      const planMetadata = {
+        planId: suitePlan.id,
+        product: 'suite',
+        billingInterval: isYearly ? 'yearly' : 'monthly',
+      };
+      const session = await stripe.checkout.sessions.create({
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: Math.round(amount * 100),
+            recurring: { interval: isYearly ? 'year' : 'month' },
+            product_data: { name: `Boostify ${suitePlan.uiName}`, description: suitePlan.description },
+          },
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        client_reference_id: String(account.id),
+        ...(account.email ? { customer_email: account.email } : {}),
+        success_url: `${BASE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${BASE_URL}/pricing?payment=cancelled`,
+        allow_promotion_codes: true,
+        metadata: planMetadata,
+        subscription_data: { metadata: planMetadata },
+      });
+
+      return res.json({ success: true, url: session.url });
+    }
+
+    if (!product || product === 'suite') {
+      return res.status(400).json({ success: false, message: 'Unknown subscription plan' });
     }
 
     if (!priceToUse || priceToUse.includes('placeholder')) {
@@ -583,12 +662,40 @@ router.post('/create-course-checkout', async (req: Request, res: Response) => {
 /**
  * Get the subscription status of the current user
  */
+async function findCurrentDbSubscription(req: Request) {
+  const account = await findBillingAccount(req);
+  if (!account) return null;
+  const [subscription] = await drizzleDb.select().from(userSubscriptions)
+    .where(eq(userSubscriptions.userId, account.id))
+    .orderBy(desc(userSubscriptions.createdAt))
+    .limit(1);
+  return subscription || null;
+}
+
 router.get('/subscription-status', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.uid;
     
-    if (!userId) {
+    if (!userId && !req.user?.id && !req.user?.email) {
       return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    const currentDbSubscription = await findCurrentDbSubscription(req);
+    if (currentDbSubscription) {
+      return res.json({
+        id: currentDbSubscription.stripeSubscriptionId,
+        plan: currentDbSubscription.plan,
+        currentPlan: currentDbSubscription.plan,
+        status: currentDbSubscription.status,
+        active: currentDbSubscription.status === 'active' || currentDbSubscription.status === 'trialing',
+        cancelAtPeriodEnd: currentDbSubscription.cancelAtPeriodEnd,
+        currentPeriodEnd: currentDbSubscription.currentPeriodEnd?.toISOString() || null,
+        priceId: null,
+      });
+    }
+
+    if (!userId) {
+      return res.json({ id: null, plan: null, currentPlan: 'free', status: null, active: false, cancelAtPeriodEnd: false, currentPeriodEnd: null, priceId: null });
     }
     
     // Get user information from Firestore
@@ -633,7 +740,7 @@ router.get('/subscription-status', authenticate, async (req: Request, res: Respo
     // Get the first active subscription
     const subscription = subscriptions.data[0];
     const priceId = subscription.items.data[0].price.id;
-    const plan = PRICE_ID_TO_PLAN[priceId as keyof typeof PRICE_ID_TO_PLAN] || 'free';
+    const plan = subscription.metadata?.planId || PRICE_ID_TO_PLAN[priceId as keyof typeof PRICE_ID_TO_PLAN] || 'free';
     
     // Return subscription information
     res.json({
@@ -662,8 +769,18 @@ router.post('/cancel-subscription', authenticate, async (req: Request, res: Resp
   try {
     const userId = req.user?.uid;
     
-    if (!userId) {
+    if (!userId && !req.user?.id && !req.user?.email) {
       return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    const currentDbSubscription = await findCurrentDbSubscription(req);
+    if (currentDbSubscription?.stripeSubscriptionId && currentDbSubscription.status === 'active') {
+      await stripe.subscriptions.update(currentDbSubscription.stripeSubscriptionId, { cancel_at_period_end: true });
+      return res.json({ success: true, message: 'Subscription will be canceled at the end of the current period' });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'No active subscription' });
     }
     
     // Get user information from Firestore
@@ -705,7 +822,7 @@ router.post('/cancel-subscription', authenticate, async (req: Request, res: Resp
 });
 
 // Add a new route for handling Stripe webhooks
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response, next: NextFunction) => {
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -738,6 +855,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleSpotifyBoostCheckout(session);
         } else if (product === 'individual_tool') {
           await handleIndividualToolCheckout(session);
+        } else {
+          return next();
         }
         break;
       }
@@ -752,6 +871,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleIgBoostSubscriptionUpdate(subscription, event.type);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionUpdate(subscription, event.type);
+        } else {
+          return next();
         }
         break;
       }
@@ -764,12 +885,14 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
           await handleIgBoostSubscriptionCanceled(subscription);
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionCanceled(subscription);
+        } else {
+          return next();
         }
         break;
       }
 
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        return next();
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown webhook handler error';

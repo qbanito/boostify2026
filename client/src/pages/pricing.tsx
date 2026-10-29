@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import { 
   CheckCircle2, Zap, Music, Video, Users, Crown, Sparkles, 
   ArrowRight, Globe, Headphones, Mic2, BarChart3, Loader2,
@@ -46,8 +47,6 @@ const plans = PLAN_LIST.map(p => ({
   icon: planIcons[p.id],
   highlighted: p.id === 'artist',
   badge: p.id === 'artist' ? '🔥 Most Popular' : p.id === 'professional' ? '⚡ Best Value' : undefined,
-  priceId: p.stripePriceIds.monthly,
-  yearlyPriceId: p.stripePriceIds.yearly,
   savings: p.yearlySavings > 0 ? `Save $${p.yearlySavings}/year` : undefined,
   features: p.features,
 }));
@@ -96,7 +95,7 @@ const faqs = [
 ];
 
 export default function PricingPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
@@ -104,29 +103,49 @@ export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-  const handleSelectPlan = async (plan: typeof plans[0]) => {
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const pending = sessionStorage.getItem('pendingPricingCheckout');
+    if (!pending) return;
+    sessionStorage.removeItem('pendingPricingCheckout');
     try {
-      setProcessingPlanId(plan.id);
+      const { planId, interval } = JSON.parse(pending);
+      const plan = plans.find((item) => item.id === planId);
+      if (plan && (interval === 'monthly' || interval === 'yearly')) {
+        setIsYearly(interval === 'yearly');
+        void handleSelectPlan(plan, interval);
+      }
+    } catch {
+      // Ignore stale checkout intent after sign-in.
+    }
+  }, [authLoading, user]);
 
-      if (!plan.priceId) {
+  const handleSelectPlan = async (plan: typeof plans[0], interval: 'monthly' | 'yearly' = isYearly ? 'yearly' : 'monthly') => {
+    try {
+      if (plan.monthlyPrice === 0) {
         setLocation('/auth');
         return;
       }
+
+      if (authLoading) return;
+      if (!user) {
+        sessionStorage.setItem('pendingPricingCheckout', JSON.stringify({ planId: plan.id, interval }));
+        setLocation('/auth?returnTo=/pricing');
+        return;
+      }
+
+      setProcessingPlanId(plan.id);
 
       toast({
         title: "🚀 Redirecting to checkout",
         description: `Setting up ${plan.name} plan...`
       });
 
-      const priceId = isYearly ? plan.yearlyPriceId : plan.priceId;
-      
-      const response = await fetch('/api/stripe/create-subscription', {
+      const data = await apiRequest({
+        url: '/api/stripe/create-subscription',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId })
+        data: { planId: plan.id, interval, product: 'suite' },
       });
-
-      const data = await response.json();
       if (data.success && data.url) {
         window.location.href = data.url;
       } else {
@@ -135,9 +154,14 @@ export default function PricingPage() {
 
     } catch (error) {
       logger.error('Error selecting plan:', error);
+      if (error instanceof Error && /\b401\b/.test(error.message)) {
+        sessionStorage.setItem('pendingPricingCheckout', JSON.stringify({ planId: plan.id, interval }));
+        setLocation('/auth?returnTo=/pricing');
+        return;
+      }
       toast({
         title: "Error",
-        description: "Could not process your request. Please try again.",
+        description: error instanceof Error ? error.message : "Could not process your request. Please try again.",
         variant: "destructive"
       });
       setProcessingPlanId(null);
@@ -328,7 +352,7 @@ export default function PricingPage() {
                       {/* CTA Button */}
                       <Button 
                         onClick={() => handleSelectPlan(plan)}
-                        disabled={processingPlanId === plan.id || plan.comingSoon}
+                        disabled={authLoading || processingPlanId === plan.id || plan.comingSoon}
                         className={`
                           w-full h-12 font-semibold text-base transition-all duration-300
                           ${plan.highlighted 

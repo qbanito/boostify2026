@@ -24,7 +24,7 @@ import {
 import { eq, and, desc, or } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth';
 import * as fal from '@fal-ai/serverless-client';
-import { generateImageWithNanoBanana } from '../services/fal-service';
+import { generateImageWithNanoBanana, generateImageWithGPTImage1, editImageWithGPTImage1 } from '../services/fal-service';
 import { PRIMARY_MODEL } from '../utils/ai-config';
 
 const router = Router();
@@ -1590,8 +1590,11 @@ router.post('/generate-images', authenticate, async (req: Request, res: Response
       return res.status(400).json({ error: 'prompt or styleKey is required' });
     }
 
-    const FAL_KEY = process.env.FAL_KEY || process.env.FAL_KEY_BACKUP;
-    if (!FAL_KEY) return res.status(500).json({ error: 'FAL_KEY not configured' });
+    const FAL_KEY = process.env.FAL_KEY || process.env.FAL_KEY_BACKUP || process.env.FAL_API_KEY || process.env.FAL_AI_KEY;
+    const OPENAI_READY = Boolean(process.env.OPENAI_API_KEY);
+    if (!FAL_KEY && !OPENAI_READY) {
+      return res.status(503).json({ error: 'Image generation is temporarily unavailable' });
+    }
 
     const count = Math.min(Math.max(numImages || 1, 1), 4);
     const finalSize = imageSize || preset?.imageSize || 'portrait_4_3';
@@ -1603,56 +1606,82 @@ router.post('/generate-images', authenticate, async (req: Request, res: Response
     let imageUrls: string[] = [];
     let modelUsed = '';
 
+    const falGenerate = async (useReference: boolean): Promise<string[]> => {
+      if (!FAL_KEY) return [];
+      const endpoint = useReference ? 'google/nano-banana-2.1/edit' : 'google/nano-banana-2.1';
+      const aspectRatio = finalSize === 'square_hd' ? '1:1'
+        : finalSize === 'landscape_16_9' ? '16:9' : '3:4';
+      const promptText = `${artistName ? `${artistName}, recording artist, ` : ''}${artDirection}, ${COMMERCIAL_SUFFIX}`;
+      try {
+        const response = await fetch(`https://fal.run/${endpoint}`, {
+          method: 'POST',
+          headers: { Authorization: `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: useReference
+              ? `Use the reference photo as the same real person. Preserve their recognizable facial identity, skin tone, age, and defining features. Change only styling, wardrobe, pose, lighting, and setting as requested. ${promptText}`
+              : promptText,
+            ...(useReference ? { image_urls: [referenceImageUrl] } : {}),
+            aspect_ratio: aspectRatio,
+            num_images: count,
+            output_format: 'jpeg',
+            resolution: '2K',
+            safety_tolerance: '2',
+          }),
+          signal: AbortSignal.timeout(180_000),
+        });
+        if (!response.ok) {
+          console.warn(`[fashion] fal ${endpoint} returned ${response.status}`);
+          return [];
+        }
+        const data: any = await response.json();
+        return (data?.images || []).map((image: any) => image?.url).filter(Boolean);
+      } catch (error: any) {
+        console.warn(`[fashion] fal ${endpoint} request failed: ${error?.name || 'request error'}`);
+        return [];
+      }
+    };
+
+    const openAiGenerate = async (useReference: boolean, desiredCount = count): Promise<string[]> => {
+      if (!OPENAI_READY) return [];
+      const promptText = `${artistName ? `${artistName}, recording artist, ` : ''}${artDirection}, ${COMMERCIAL_SUFFIX}`;
+      const size = finalSize === 'square_hd' ? '1024x1024'
+        : finalSize === 'landscape_16_9' ? '1536x1024' : '1024x1536';
+      const generated: string[] = [];
+      for (let index = 0; index < desiredCount; index += 1) {
+        const result = useReference
+          ? await editImageWithGPTImage1(referenceImageUrl!, promptText, { size, quality: 'high', outputFolder: 'fashion-studio' })
+          : await generateImageWithGPTImage1(promptText, { size, quality: 'high' });
+        if (result?.success && result.imageUrl) generated.push(result.imageUrl);
+      }
+      return generated;
+    };
+
+    // Keep the artist reference attached throughout fallback. Never silently
+    // switch an identity-preserving request to text-to-image.
     if (hasReference) {
-      // ── LIKENESS MODE: FLUX Kontext image-to-image keeps the artist's real
-      // face/identity while restyling the whole scene — commercializable look.
-      modelUsed = 'flux-pro/kontext (image-to-image, likeness)';
-      const likenessPrompt = `Transform this person into a high fashion campaign image, KEEPING their exact face, identity, skin tone and features: ${artDirection}, ${COMMERCIAL_SUFFIX}`;
-      const falRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: likenessPrompt,
-          image_url: referenceImageUrl,
-          num_images: count,
-          guidance_scale: 3.5,
-          output_format: 'jpeg',
-          safety_tolerance: '2',
-        }),
-      });
-      if (falRes.ok) {
-        const falData: any = await falRes.json();
-        imageUrls = (falData?.images || []).map((img: any) => img?.url).filter(Boolean);
-      } else {
-        console.warn('[fashion] kontext i2i failed, falling back to t2i:', await falRes.text().catch(() => ''));
+      imageUrls = await falGenerate(true);
+      modelUsed = imageUrls.length ? 'google/nano-banana-2.1/edit' : '';
+      if (imageUrls.length < count) {
+        const fallbackImages = await openAiGenerate(true, count - imageUrls.length);
+        imageUrls.push(...fallbackImages);
+        if (fallbackImages.length) modelUsed = modelUsed
+          ? 'google/nano-banana-2.1/edit + openai/gpt-image-2.5-sunburst-edit'
+          : 'openai/gpt-image-2.5-sunburst-edit (fallback)';
+      }
+    } else {
+      imageUrls = await falGenerate(false);
+      modelUsed = imageUrls.length ? 'google/nano-banana-2.1' : '';
+      if (imageUrls.length < count) {
+        const fallbackImages = await openAiGenerate(false, count - imageUrls.length);
+        imageUrls.push(...fallbackImages);
+        if (fallbackImages.length) modelUsed = modelUsed
+          ? 'google/nano-banana-2.1 + openai/gpt-image-2.5-flare'
+          : 'openai/gpt-image-2.5-flare (fallback)';
       }
     }
 
     if (imageUrls.length === 0) {
-      // ── TEXT-TO-IMAGE MODE (no reference or i2i failed)
-      modelUsed = modelUsed ? `${modelUsed} → flux-pro/kontext t2i fallback` : 'flux-pro/kontext (text-to-image)';
-      const t2iPrompt = `${artistName ? `${artistName}, music artist, ` : ''}${artDirection}, ${COMMERCIAL_SUFFIX}`;
-      const falRes = await fetch('https://fal.run/fal-ai/flux-pro/kontext/text-to-image', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: t2iPrompt,
-          image_size: finalSize,
-          num_images: count,
-          num_inference_steps: 28,
-          guidance_scale: 3.5,
-        }),
-      });
-      if (!falRes.ok) {
-        const errText = await falRes.text();
-        return res.status(502).json({ error: 'FAL API failed', detail: errText });
-      }
-      const falData: any = await falRes.json();
-      imageUrls = (falData?.images || []).map((img: any) => img?.url).filter(Boolean);
-    }
-
-    if (imageUrls.length === 0) {
-      return res.status(502).json({ error: 'No images returned from FAL' });
+      return res.status(502).json({ error: 'Image generation failed with the available providers' });
     }
 
     console.log(`✅ [fashion] ${imageUrls.length} images via ${modelUsed}${preset ? ` · preset=${preset.key}` : ''}`);
@@ -1689,7 +1718,7 @@ router.post('/generate-images', authenticate, async (req: Request, res: Response
     res.json({ success: true, images: imageUrls, count: imageUrls.length, model: modelUsed, preset: preset?.key || null });
   } catch (error: any) {
     console.error('❌ generate-images error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Fashion image generation failed. Please try again.' });
   }
 });
 

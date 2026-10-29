@@ -11,9 +11,12 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/clerk-auth';
 import { exportArtistHermesProfile } from '../services/hermes-memory';
+import { runHermesArtistChat } from '../services/hermes-agent';
+import { rateLimitAiGen } from '../middleware/rate-limit';
 import { db } from '../db';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -44,15 +47,52 @@ router.get('/:id/status', requireAuth, async (req, res) => {
     }
 
     res.json({
-      status: 'ok',
+      status: process.env.OPENAI_API_KEY ? 'ok' : 'degraded',
       agentName: 'Hermes',
-      capabilities: ['memory', 'goals', 'soul', 'blueprint', 'songs', 'content-calendar', 'weekly-check', 'competitor-analysis'],
-      integration: 'active',
+      model: 'gpt-6-astra',
+      provider: 'OpenAI Agents SDK',
+      capabilities: ['artist-context', 'music-catalog', 'blueprint', 'goals', 'visual-history', 'specialist-handoffs'],
+      integration: process.env.OPENAI_API_KEY ? 'active' : 'needs_openai_key',
       artistId,
     });
   } catch (err) {
     console.error('[hermes-proxy] status error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const chatSchema = z.object({
+  message: z.string().trim().min(1).max(5000),
+  conversationHistory: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().max(5000),
+  })).max(20).optional(),
+});
+
+// OpenAI-powered chat; artist data is loaded server-side after the ownership check.
+router.post('/:id/chat', requireAuth, rateLimitAiGen, async (req, res) => {
+  try {
+    const artistId = parseInt(req.params.id, 10);
+    if (isNaN(artistId)) return res.status(400).json({ error: 'Invalid artist id' });
+
+    const userId = (req as any).auth?.userId;
+    if (!(await isArtistOwner(userId, artistId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const parsed = chatSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'Hermes AI is temporarily unavailable.' });
+    }
+
+    const result = await runHermesArtistChat({ artistId, ...parsed.data });
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[hermes-proxy] chat error:', err?.message || 'unknown error');
+    return res.status(502).json({ error: 'Hermes could not complete that reply. Please try again.' });
   }
 });
 

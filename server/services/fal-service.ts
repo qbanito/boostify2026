@@ -911,9 +911,9 @@ export async function generateImageWithFluxKontextPro(
 
 /**
  * ============================================================
- * GENERACIÓN DE IMÁGENES - OpenAI GPT Image 1 (Modelo más avanzado)
+ * GENERACIÓN DE IMÁGENES - OpenAI GPT Image 2.5 Flare
  * ============================================================
- * Modelo: gpt-image-1 — El modelo de generación de imágenes más avanzado de OpenAI.
+ * Modelo: gpt-image-2.5-flare — generación de imágenes de alta calidad.
  * Genera imágenes fotorrealistas de altísima calidad, ideal para retratos de artistas.
  * Usa la API de OpenAI directamente (NO a través de FAL).
  * Requiere OPENAI_API_KEY.
@@ -931,13 +931,13 @@ export async function generateImageWithGPTImage1(
   }
 
   try {
-    logger.log('[OPENAI] 🎨 Generating image with GPT Image 1 (most advanced model)...');
+    logger.log('[OPENAI] 🎨 Generating image with GPT Image 2.5 Flare...');
     logger.log(`[OPENAI] Prompt: ${prompt.substring(0, 150)}...`);
 
     const response = await axios.post(
       'https://api.openai.com/v1/images/generations',
       {
-        model: 'gpt-image-1',
+        model: 'gpt-image-2.5-flare',
         prompt: prompt,
         n: 1,
         size: options.size || '1024x1024',
@@ -952,12 +952,12 @@ export async function generateImageWithGPTImage1(
       }
     );
 
-    // gpt-image-1 returns b64_json by default
+    // GPT Image returns b64_json by default.
     const b64Data = response.data?.data?.[0]?.b64_json;
     const imageUrl = response.data?.data?.[0]?.url;
 
     if (b64Data) {
-      logger.log('[OPENAI] ✅ Image generated with GPT Image 1 (base64)');
+      logger.log('[OPENAI] ✅ Image generated with GPT Image 2.5 (base64)');
       const base64WithPrefix = `data:image/png;base64,${b64Data}`;
       const permanentUrl = await uploadBase64ToStorage(
         b64Data,
@@ -968,10 +968,10 @@ export async function generateImageWithGPTImage1(
         success: true,
         imageUrl: permanentUrl,
         imageBase64: base64WithPrefix,
-        provider: 'gemini-fallback' as any,
+        provider: 'openai-gpt-image-2.5-flare' as any,
       };
     } else if (imageUrl) {
-      logger.log('[OPENAI] ✅ Image generated with GPT Image 1 (url)');
+      logger.log('[OPENAI] ✅ Image generated with GPT Image 2.5 (url)');
       const downloaded = await downloadImageAsBase64(imageUrl);
       if (downloaded) {
         const permanentUrl = await uploadBase64ToStorage(
@@ -983,15 +983,15 @@ export async function generateImageWithGPTImage1(
           success: true,
           imageUrl: permanentUrl,
           imageBase64: downloaded.base64,
-          provider: 'gemini-fallback' as any,
+          provider: 'openai-gpt-image-2.5-flare' as any,
         };
       }
-      return { success: true, imageUrl, provider: 'gemini-fallback' as any };
+      return { success: true, imageUrl, provider: 'openai-gpt-image-2.5-flare' as any };
     }
 
-    throw new Error('No image data in GPT Image 1 response');
+    throw new Error('No image data in GPT Image response');
   } catch (error: any) {
-    logger.error('[OPENAI] ❌ GPT Image 1 generation failed:', error.response?.data || error.message);
+    logger.error('[OPENAI] ❌ GPT Image generation failed:', error.response?.data || error.message);
     return {
       success: false,
       error: error.response?.data?.error?.message || error.message,
@@ -1001,9 +1001,9 @@ export async function generateImageWithGPTImage1(
 
 /**
  * ============================================================
- * EDICIÓN DE IMÁGENES - OpenAI gpt-image-1 (image edit / referencia)
+ * EDICIÓN DE IMÁGENES - OpenAI GPT Image 2.5 Sunburst (image edit / referencia)
  * ============================================================
- * Usa el endpoint /v1/images/edits con gpt-image-1, pasando una o varias
+ * Usa el endpoint /v1/images/edits con GPT Image 2.5 Sunburst, pasando una o varias
  * imágenes de referencia (la foto del artista + logo maestro). Esto mantiene
  * la coherencia visual del producto con la identidad del artista, a diferencia
  * de la generación text-to-image pura. Sube el resultado a Firebase Storage.
@@ -1025,17 +1025,17 @@ export async function editImageWithGPTImage1(
 
   const refs = (Array.isArray(referenceImageUrls) ? referenceImageUrls : [referenceImageUrls])
     .filter((u) => !!u && !u.includes('placeholder'))
-    .slice(0, 4); // gpt-image-1 edit accepts multiple reference images
+    .slice(0, 4); // GPT Image edit accepts multiple reference images
   if (refs.length === 0) {
-    return { success: false, error: 'No reference image for gpt-image-1 edit' };
+    return { success: false, error: 'No reference image for GPT Image edit' };
   }
 
   try {
-    logger.log(`[OPENAI] ✏️ gpt-image-1 EDIT con ${refs.length} referencia(s)...`);
+    logger.log(`[OPENAI] ✏️ GPT Image 2.5 Sunburst EDIT con ${refs.length} referencia(s)...`);
 
     // Build a multipart/form-data request with the reference image(s).
     const form = new FormData();
-    form.append('model', 'gpt-image-1');
+    form.append('model', 'gpt-image-2.5-sunburst');
     form.append('prompt', prompt);
     form.append('size', options.size || '1024x1024');
     form.append('quality', options.quality || 'high');
@@ -1066,27 +1066,27 @@ export async function editImageWithGPTImage1(
     const folder = options.outputFolder || 'merchandise-images';
 
     if (b64Data) {
-      logger.log('[OPENAI] ✅ gpt-image-1 edit OK (base64)');
+      logger.log('[OPENAI] ✅ GPT Image 2.5 edit OK (base64)');
       const permanentUrl = await uploadBase64ToStorage(b64Data, 'image/png', folder);
       return {
         success: true,
         imageUrl: permanentUrl,
         imageBase64: `data:image/png;base64,${b64Data}`,
-        provider: 'openai-gpt-image-1-edit' as any,
+        provider: 'openai-gpt-image-2.5-sunburst-edit' as any,
       };
     }
     if (directUrl) {
       const downloaded = await downloadImageAsBase64(directUrl);
       if (downloaded) {
         const permanentUrl = await uploadBase64ToStorage(downloaded.base64, downloaded.mimeType, folder);
-        return { success: true, imageUrl: permanentUrl, imageBase64: downloaded.base64, provider: 'openai-gpt-image-1-edit' as any };
+        return { success: true, imageUrl: permanentUrl, imageBase64: downloaded.base64, provider: 'openai-gpt-image-2.5-sunburst-edit' as any };
       }
-      return { success: true, imageUrl: directUrl, provider: 'openai-gpt-image-1-edit' as any };
+      return { success: true, imageUrl: directUrl, provider: 'openai-gpt-image-2.5-sunburst-edit' as any };
     }
 
-    throw new Error('No image data in gpt-image-1 edit response');
+    throw new Error('No image data in GPT Image edit response');
   } catch (error: any) {
-    logger.error('[OPENAI] ❌ gpt-image-1 edit failed:', error.response?.data?.error?.message || error.message);
+    logger.error('[OPENAI] ❌ GPT Image edit failed:', error.response?.data?.error?.message || error.message);
     return {
       success: false,
       error: error.response?.data?.error?.message || error.message,
