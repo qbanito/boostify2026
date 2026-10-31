@@ -162,6 +162,7 @@ import financialImagesRouter from './routes/financial-images'; // Financial Enab
 import hologauzeImagesRouter from './routes/hologauze-images'; // Hologauze Live Concert System — AI-generated marketing imagery (cached)
 import notificationsRouter from './routes/notifications'; // Import Notifications router for internal messaging
 import webhookStripeRouter from './routes/webhook-stripe'; // Import Stripe Webhook handler
+import musicCatalogWebhookRouter from './routes/music-catalog-webhook';
 import resendWebhooksRouter from './routes/resend-webhooks'; // Import Resend Email Webhooks handler (legacy)
 import brevoWebhooksRouter from './routes/brevo-webhooks'; // Import Brevo Email Webhooks handler
 import subscriptionApiRouter from './routes/subscription-api'; // Import Subscription API routes (PostgreSQL)
@@ -1948,6 +1949,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   
   // Stripe Webhook (debe estar antes de cualquier middleware de autenticación)
   app.use('/api/stripe', webhookStripeRouter);
+  app.use('/api/music-catalog', musicCatalogWebhookRouter);
   
   // Resend Email Webhooks (legacy - keeping for backward compatibility)
   app.use('/api/webhooks/resend', resendWebhooksRouter);
