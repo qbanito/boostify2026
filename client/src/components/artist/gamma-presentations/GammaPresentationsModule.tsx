@@ -282,7 +282,7 @@ export function GammaPresentationsModule({
               <Presentation className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Gamma Presentations</h3>
+              <h3 className="font-bold text-base text-white">Presentations</h3>
               <p className="text-[11px] text-white/40">AI-powered slide decks from your artist context</p>
             </div>
           </div>

@@ -1,9 +1,9 @@
 ﻿/**
- * Deep Brief Panel
+ * Project Brief Panel
  * ─────────────────────────────────────────────────────────────────────────────
  * Pre-creation interview based on Da Vinci's "deep questions" principle.
  * The artist selects from preset answers (+ optional custom) for 8 questions
- * before starting a new project. Answers feed Career Suite / Genesis Engine.
+ * before starting a new project. Answers feed Career Suite / Music Release Growth.
  */
 
 import { useState, useEffect } from 'react';
@@ -273,7 +273,7 @@ export function DeepBriefPanel({
   };
 
   const handleClear = () => {
-    if (window.confirm('Delete the saved Deep Brief?')) {
+    if (window.confirm('Delete the saved Project Brief?')) {
       setAnswers({});
       setCustomMode({});
       setCustomText({});
@@ -310,7 +310,7 @@ export function DeepBriefPanel({
             <Lightbulb className="h-4 w-4" />
           </span>
           <div className="text-left">
-            <span className="text-sm font-bold text-white">Deep Brief</span>
+            <span className="text-sm font-bold text-white">Project Brief</span>
             <p className="text-[10px] text-gray-500 leading-none mt-0.5">
               8 Da Vinci questions · {filledCount}/{QUESTIONS.length} answered
             </p>
@@ -565,7 +565,7 @@ export function DeepBriefPanel({
               >
                 <Sparkles className="h-3 w-3 flex-shrink-0" style={{ color: accent }} />
                 <p className="text-[9px] text-gray-500 leading-relaxed">
-                  Your answers feed The Atelier and Genesis Engine to create projects
+                  Your answers feed Artist Career Support and Music Release Growth to create projects
                   with real purpose — not random tracks.
                 </p>
               </div>

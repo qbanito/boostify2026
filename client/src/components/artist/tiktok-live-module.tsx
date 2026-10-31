@@ -16,7 +16,7 @@ interface TikTokLiveModuleProps {
 }
 
 /**
- * TikTok Live Hub module — artist profile section wired directly to the
+ * TikTok Live Tools module — artist profile section wired directly to the
  * /tiktok-boost page. Shows connection status, a QR that puts THIS artist's
  * Boostify profile on screen during a TikTok LIVE, and deep-link CTAs into
  * the TikTok Boost Live tab pre-selecting this artist.
@@ -55,7 +55,7 @@ export function TikTokLiveModule({ artistId, artistName, artistSlug, colors, isO
           <SiTiktok className="w-4 h-4 text-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white truncate">TikTok Live Hub</p>
+          <p className="text-sm font-semibold text-white truncate">TikTok Live Tools</p>
           <p className="text-[11px] text-white/50 truncate">
             {connected ? `Connected as @${handle}` : "TikTok account not connected"}
           </p>

@@ -1,6 +1,6 @@
 /**
  * FashionImageModule — Artist Profile module that connects to the
- * Fashion Image Studio (/artist-image-advisor).
+ * AI Fashion Photos (/artist-image-advisor).
  *
  * Owner sees: editorial style highlights, recent generated fashion imagery,
  * and one-click CTAs into the studio (image generator pre-selected for this
@@ -75,7 +75,7 @@ export function FashionImageModule({ artistId, artistName, artistImage, colors, 
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-base font-bold text-white">Fashion Image Studio</h4>
+              <h4 className="text-base font-bold text-white">AI Fashion Photos</h4>
               <Badge variant="outline" className="text-[10px] border-fuchsia-500/40 text-fuchsia-300 bg-fuchsia-500/10">
                 FLUX KONTEXT · LIKENESS
               </Badge>

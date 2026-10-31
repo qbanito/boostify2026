@@ -28,6 +28,7 @@ import { collection, doc, setDoc, query, where, getDocs, deleteDoc } from "fireb
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { queryClient, apiRequest } from "../../lib/queryClient";
 import { ensureFirebaseAuth } from "../../lib/firebase-auth";
+import type { ProfileTextChanges } from '../../../../shared/artist-profile-copilot';
 
 interface Show {
   id: string;
@@ -92,9 +93,11 @@ interface EditProfileDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  copilotEdit?: { revision: number; changes: ProfileTextChanges; saved: boolean };
+  copilotActive?: boolean;
 }
 
-export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCreated, onProductsChanged, open: openProp, onOpenChange: onOpenChangeProp, hideTrigger }: EditProfileDialogProps) {
+export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCreated, onProductsChanged, open: openProp, onOpenChange: onOpenChangeProp, hideTrigger, copilotEdit, copilotActive }: EditProfileDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = typeof openProp === 'boolean';
   const isOpen = isControlled ? openProp! : internalOpen;
@@ -126,6 +129,7 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
   });
 
   const [formData, setFormData] = useState(currentData);
+  const [activeTab, setActiveTab] = useState<'profile' | 'media' | 'social' | 'shows' | 'tools'>('profile');
   const [shows, setShows] = useState<Show[]>([]);
   const [newShow, setNewShow] = useState({ venue: '', date: '', location: '', ticketUrl: '', price: '', capacity: '', refundPolicyType: 'flexible', refundPolicyCustom: '' });
   const [isAddingShow, setIsAddingShow] = useState(false);
@@ -158,6 +162,12 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
         .catch(error => logger.warn('Could not load saved artist Character Card:', error));
     }
   }, [isOpen, artistId]);
+
+  useEffect(() => {
+    if (!isOpen || !copilotEdit) return;
+    setActiveTab('profile');
+    setFormData((previous) => ({ ...previous, ...copilotEdit.changes }));
+  }, [isOpen, copilotEdit]);
 
   // Cargar shows al abrir el diálogo
   useEffect(() => {
@@ -1414,10 +1424,9 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'media' | 'social' | 'shows' | 'tools'>('profile');
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen} modal={!copilotActive}>
       {!hideTrigger && (
         <DialogTrigger asChild>
           <Button variant="outline" size="sm" className="rounded-full border-orange-500/30 text-orange-400 hover:bg-orange-500/10">
@@ -1426,7 +1435,10 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="!p-0 !gap-0 !top-auto !bottom-0 !translate-y-0 !h-[95dvh] !w-full !max-w-full !rounded-t-3xl !rounded-b-none border border-white/[0.08] bg-[#0d0d14] sm:!top-[50%] sm:!bottom-auto sm:!translate-y-[-50%] sm:!h-[90vh] sm:!max-w-2xl sm:!rounded-2xl overflow-hidden flex flex-col">
+      <DialogContent
+        data-profile-copilot-editor={hideTrigger ? artistId : undefined}
+        onInteractOutside={(event) => { if (copilotActive && event.target instanceof Element && event.target.closest('[data-profile-copilot-chat]')) event.preventDefault(); }}
+        className="!p-0 !gap-0 !top-auto !bottom-0 !translate-y-0 !h-[95dvh] !w-full !max-w-full !rounded-t-3xl !rounded-b-none border border-white/[0.08] bg-[#0d0d14] sm:!top-[50%] sm:!bottom-auto sm:!translate-y-[-50%] sm:!h-[90vh] sm:!max-w-2xl sm:!rounded-2xl overflow-hidden flex flex-col">
 
         {/* ── HEADER ──────────────────────────────────────────────── */}
         <div className="flex-shrink-0 px-5 pt-5 pb-4 border-b border-white/[0.06]">
@@ -1447,6 +1459,7 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                 {formData.displayName || 'Edit Artist Profile'}
               </h2>
               <p className="text-[11px] text-white/35 mt-0.5">Update your profile &amp; generate content with AI</p>
+              {copilotEdit && <p role="status" className="mt-1 text-xs text-violet-300">{copilotEdit.saved ? 'Saved by Artist Copilot' : 'Artist Copilot is editing your profile...'}</p>}
             </div>
             <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-semibold text-orange-400">
               <Sparkles className="w-2.5 h-2.5" />
@@ -1531,6 +1544,7 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                 <Label htmlFor="displayName" className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Artist Name *</Label>
                 <Input
                   id="displayName"
+                  data-copilot-profile-field="displayName"
                   value={formData.displayName}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="Your artist name"
@@ -1576,6 +1590,7 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
                 </div>
                 <Textarea
                   id="biography"
+                  data-copilot-profile-field="biography"
                   value={formData.biography}
                   onChange={(e) => handleChange("biography", e.target.value)}
                   placeholder="Tell your story as an artist..."
@@ -1587,12 +1602,12 @@ export function EditProfileDialog({ artistId, currentData, onUpdate, onGalleryCr
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="genre" className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Genre</Label>
-                  <Input id="genre" value={formData.genre} onChange={(e) => handleChange("genre", e.target.value)}
+                  <Input id="genre" data-copilot-profile-field="genre" value={formData.genre} onChange={(e) => handleChange("genre", e.target.value)}
                     placeholder="Pop, Rock, Hip-Hop..." className="bg-white/[0.05] border-white/[0.09] text-white placeholder:text-white/20 h-10 rounded-xl" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="location" className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Location</Label>
-                  <Input id="location" value={formData.location} onChange={(e) => handleChange("location", e.target.value)}
+                  <Input id="location" data-copilot-profile-field="location" value={formData.location} onChange={(e) => handleChange("location", e.target.value)}
                     placeholder="City, Country" className="bg-white/[0.05] border-white/[0.09] text-white placeholder:text-white/20 h-10 rounded-xl" />
                 </div>
               </div>

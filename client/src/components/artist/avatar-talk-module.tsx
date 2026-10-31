@@ -2,7 +2,7 @@
  * AvatarTalkModule — ElevenLabs + Flux + Avatar4 talking head generator
  *
  * Lets the artist generate professional AI talking-head videos from their
- * profile photo. Supports 4 scene presets, custom script, Talk To Me voice,
+ * profile photo. Supports 4 scene presets, custom script, Artist Chat voice,
  * talking style, and a video gallery.
  */
 import { useState, useRef } from 'react';
@@ -185,7 +185,7 @@ function VideoCard({
 
       {/* Info */}
       <div className="p-3 space-y-1">
-        <p className="text-white/90 text-xs font-semibold truncate">{video.title || 'Avatar Talk'}</p>
+        <p className="text-white/90 text-xs font-semibold truncate">{video.title || 'Talking Avatar'}</p>
         {video.prompt && (
           <p className="text-white/40 text-[10px] leading-snug line-clamp-2">{video.prompt}</p>
         )}
@@ -306,7 +306,7 @@ export function AvatarTalkModule({
 
       if (data?.success) {
         setGenerationStep(null);
-        toast({ title: '🎬 Video ready!', description: 'Your Avatar Talk video has been generated with the selected pipeline.' });
+        toast({ title: '🎬 Video ready!', description: 'Your Talking Avatar video has been generated with the selected pipeline.' });
         queryClient.invalidateQueries({ queryKey: ['avatar-talk-videos', artistId] });
         setPrompt('');
         setTitle('');
@@ -335,7 +335,7 @@ export function AvatarTalkModule({
           <MonitorPlay className="w-5 h-5" style={{ color: colors.hexAccent }} />
         </div>
         <div>
-          <h3 className="text-white font-semibold text-base">Avatar Talk</h3>
+          <h3 className="text-white font-semibold text-base">Talking Avatar</h3>
           <p className="text-white/40 text-xs">ElevenLabs voice + Flux avatar + FAL Avatar4</p>
         </div>
       </div>
@@ -389,7 +389,7 @@ export function AvatarTalkModule({
           <p className="text-white/25 text-sm">No videos yet</p>
           {isOwnProfile && (
             <p className="text-white/20 text-xs text-center max-w-xs">
-              Generate your first Avatar Talk video below
+              Generate your first Talking Avatar video below
             </p>
           )}
         </div>
@@ -412,7 +412,7 @@ export function AvatarTalkModule({
               <label className="text-white/40 text-xs uppercase tracking-wider mb-2 block">Voice Engine</label>
               <div className="grid grid-cols-2 gap-2">
                 {([
-                  { id: 'talk-to-me' as VoiceMode, label: 'Talk To Me' },
+                  { id: 'talk-to-me' as VoiceMode, label: 'Artist Chat' },
                   { id: 'heygen' as VoiceMode, label: 'HeyGen' },
                 ]).map(mode => (
                   <button
@@ -670,7 +670,7 @@ export function AvatarTalkModule({
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Avatar Talk
+                Generate Talking Avatar
               </>
             )}
           </motion.button>

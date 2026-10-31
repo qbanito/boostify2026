@@ -101,19 +101,19 @@ const MODULE_DEFS: Record<string, ModuleDef> = {
   'songs':              { name: 'Music',               category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: false },
   'videos':             { name: 'Videos',              category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: false },
   'karaoke':            { name: 'Karaoke',             category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: false },
-  'lyrics-video':       { name: 'Lyrics Video',        category: 'MUSIC',      color: '#7c3aed', isOwnerOnly: true  },
-  'avatar-talk':        { name: 'Avatar Talk',         category: 'MUSIC',      color: '#a855f7', isOwnerOnly: false },
-  'promo-clips':        { name: 'Promo Clips',         category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: true  },
+  'lyrics-video':       { name: 'Lyric Videos',        category: 'MUSIC',      color: '#7c3aed', isOwnerOnly: true  },
+  'avatar-talk':        { name: 'Talking Avatar',         category: 'MUSIC',      color: '#a855f7', isOwnerOnly: false },
+  'promo-clips':        { name: 'Promo Video Clips',         category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: true  },
   'ai-video-studio':    { name: 'AI Video Studio',     category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: true  },
   'galleries':          { name: 'Image Galleries',     category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: false },
   'downloads':          { name: 'Downloads',           category: 'MUSIC',      color: '#3b82f6', isOwnerOnly: false },
 
   // ── SOCIAL ─────────────────────────────────────────────────────────
   'fanclub':            { name: 'Fan Club',            category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
-  'social-hub':         { name: 'Broadcast Studio',    category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
+  'social-hub':         { name: 'Social Media Hub',    category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
   'social-posts':       { name: 'Social Posts',        category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
   'news':               { name: 'News',                category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
-  'explicit-content':   { name: 'Inner Circle',        category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
+  'explicit-content':   { name: 'Paid Fan Content',        category: 'SOCIAL',     color: '#22d3ee', isOwnerOnly: false },
 
   // ── COMMERCE ───────────────────────────────────────────────────────
   'merchandise':        { name: 'Merchandise',         category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
@@ -121,10 +121,10 @@ const MODULE_DEFS: Record<string, ModuleDef> = {
   'smart-merch':        { name: 'Smart Merch',         category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
   'art-gallery':        { name: 'Art Gallery',         category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
   'vinyl-records':      { name: 'Vinyl Records',       category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
-  'vinyl-editions':     { name: 'Vinyl Tokens',        category: 'COMMERCE',   color: '#f97316', isOwnerOnly: true  },
+  'vinyl-editions':     { name: 'Digital Vinyl Collectibles',        category: 'COMMERCE',   color: '#f97316', isOwnerOnly: true  },
   'amazon-picks':       { name: 'Amazon Picks',        category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
-  'tokenization':       { name: 'Token Assets',        category: 'COMMERCE',   color: '#f97316', isOwnerOnly: true  },
-  'monetize-cta':       { name: 'Monetize Talent',     category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
+  'tokenization':       { name: 'Music Tokens',        category: 'COMMERCE',   color: '#f97316', isOwnerOnly: true  },
+  'monetize-cta':       { name: 'Hire This Artist',    category: 'COMMERCE',   color: '#f97316', isOwnerOnly: false },
 
   // ── MONETIZE ───────────────────────────────────────────────────────
   'earnings':           { name: 'Earnings',            category: 'MONETIZE',   color: '#10b981', isOwnerOnly: true  },
@@ -133,34 +133,34 @@ const MODULE_DEFS: Record<string, ModuleDef> = {
   'venueBooking':       { name: 'Venue Booking',       category: 'MONETIZE',   color: '#10b981', isOwnerOnly: true  },
 
   // ── GROWTH ─────────────────────────────────────────────────────────
-  'analytics':          { name: 'Observatory',         category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
-  'aas-engine':         { name: 'Genesis Engine',      category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
-  'audience-engine':    { name: 'Signal Pulse',        category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
-  'influencer-module':  { name: 'Amplify Network',     category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
-  'viral-products':     { name: 'Ecosystem Drops',     category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
-  'ads-campaigns':      { name: 'Ads Campaign Manager', category: 'GROWTH',    color: '#a78bfa', isOwnerOnly: true  },
+  'analytics':          { name: 'Artist Analytics',         category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
+  'aas-engine':         { name: 'Music Release Growth',      category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
+  'audience-engine':    { name: 'Audience Growth',        category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
+  'influencer-module':  { name: 'AI Influencer Studio',     category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
+  'viral-products':     { name: 'Viral Product Promos',     category: 'GROWTH',     color: '#a78bfa', isOwnerOnly: true  },
+  'ads-campaigns':      { name: 'Ad Campaigns', category: 'GROWTH',    color: '#a78bfa', isOwnerOnly: true  },
 
   // ── BUSINESS ───────────────────────────────────────────────────────
-  'business-plan':      { name: 'Commerce Blueprint',  category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: false },
-  'career-suite':       { name: 'The Atelier',         category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
-  'artist-blueprint':   { name: 'Superstar Blueprint',        category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: false },
-  'brand-collabs':      { name: 'The Forge',           category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
-  'observation-engine': { name: 'Observation Engine',  category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
-  'deep-brief':         { name: 'Deep Brief',          category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
+  'business-plan':      { name: 'Artist Business Plan',  category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: false },
+  'career-suite':       { name: 'Artist Career Support',         category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
+  'artist-blueprint':   { name: 'Artist Growth Plan',        category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: false },
+  'brand-collabs':      { name: 'Brand Partnerships',           category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
+  'observation-engine': { name: 'Music Market Research',  category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
+  'deep-brief':         { name: 'Project Brief',          category: 'BUSINESS',   color: '#f59e0b', isOwnerOnly: true  },
 
   // ── IDENTITY ───────────────────────────────────────────────────────
-  'electronic-press-kit': { name: 'Press Room',        category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: false },
-  'agent-gateway':      { name: 'The Gateway',         category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: false },
-  'hermes-agent':       { name: 'The Codex',           category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: true  },
-  'artist-domain':      { name: 'My Domain',           category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: true  },
+  'electronic-press-kit': { name: 'Press Kit',        category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: false },
+  'agent-gateway':      { name: 'AI Agent Profile',         category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: false },
+  'hermes-agent':       { name: 'Artist AI Assistant',           category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: true  },
+  'artist-domain':      { name: 'Artist Website',           category: 'IDENTITY',   color: '#ec4899', isOwnerOnly: true  },
 
   // ── CREATIVE ───────────────────────────────────────────────────────
-  'renaissance-studio': { name: 'Renaissance Studio',  category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
-  'hologram':           { name: 'HoloStage Live',      category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
-  'talk-to-me':         { name: 'Talk To Me',          category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
-  'emotional-studio':   { name: 'Emotional Studio',    category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: true  },
-  'gamma-presentations': { name: 'Gamma Presentations', category: 'CREATIVE',  color: '#8b5cf6', isOwnerOnly: true  },
-  'my-universe':        { name: 'My Universe',         category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
+  'renaissance-studio': { name: 'Release Growth Roadmap',  category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
+  'hologram':           { name: 'Hologram Shows',      category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
+  'talk-to-me':         { name: 'Artist Chat',          category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
+  'emotional-studio':   { name: 'Creative Story Studio',    category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: true  },
+  'gamma-presentations': { name: 'Presentations', category: 'CREATIVE',  color: '#8b5cf6', isOwnerOnly: true  },
+  'my-universe':        { name: 'Artist Universe Page',         category: 'CREATIVE',   color: '#8b5cf6', isOwnerOnly: false },
 
   // ── RIGHT-COLUMN WIDGETS ─────────────────────────────────────────────────
   'qr-card':            { name: 'Artist QR Card',      category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
@@ -172,7 +172,7 @@ const MODULE_DEFS: Record<string, ModuleDef> = {
   'spotify':            { name: 'Spotify',             category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
   'premium-tools':      { name: 'Premium Tools',       category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: true  },
   'upcoming-shows':     { name: 'Upcoming Shows',      category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
-  'economic-engine':    { name: 'Revenue Engine',      category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
+  'economic-engine':    { name: 'Earnings Overview',      category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
   'crypto-community':   { name: 'Crypto Community',    category: 'WIDGET',     color: '#06b6d4', isOwnerOnly: false },
 };
 

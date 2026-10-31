@@ -65,7 +65,7 @@ function stripContentType(headers: Record<string, any>): Record<string, any> {
   return out;
 }
 
-async function getAuthHeaders(): Promise<HeadersInit> {
+export async function getAuthHeaders(): Promise<HeadersInit> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
   };

@@ -70,6 +70,7 @@ interface HermesAgentPanelProps {
   cardStyles: string;
   cardStyleInline: React.CSSProperties;
   artistName: string;
+  onOpenCopilot?: () => void;
 }
 
 interface HermesGoal {
@@ -129,7 +130,7 @@ const GUIDE_ITEMS = [
     icon: Shield,
     color: '#06b6d4',
     title: 'Privacy and control',
-    body: 'Only the authenticated owner can use this private chat. Hermes can draft and advise, but it cannot publish content, message fans, or change your account.',
+    body: 'Only the authenticated owner can use Artist Copilot. It edits profile text, prepares module fields and organizes your tools. Review generation and publishing in the selected module.',
   },
 ];
 
@@ -161,6 +162,7 @@ export function HermesAgentPanel({
   cardStyles,
   cardStyleInline,
   artistName,
+  onOpenCopilot,
 }: HermesAgentPanelProps) {
   const { toast } = useToast();
   const numericId = pgId || parseInt(artistId, 10);
@@ -418,7 +420,7 @@ export function HermesAgentPanel({
 
           <div className="min-w-0">
             <p className="text-white font-bold text-sm leading-tight flex items-center gap-1.5">
-              Hermes Agent
+              Artist AI Assistant
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${accent}20`, color: accent }}>AI</span>
             </p>
             <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -863,7 +865,7 @@ export function HermesAgentPanel({
               {/* Footer */}
               <div className="px-4 sm:px-6 py-4 border-t border-white/8">
                 <p className="text-[10px] text-gray-500 text-center">
-                  Private artist chat · OpenAI Agents SDK · GPT‑6 Astra
+                  Private artist workspace · OpenAI Agents SDK
                 </p>
               </div>
             </motion.div>
@@ -917,7 +919,14 @@ export function HermesAgentPanel({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.18 }}
               >
-                {activeTab === 'chat' && <HermesChat artistId={numericId} artistName={artistName} accent={accent} isOwner={isOwnProfile && Number.isFinite(numericId)} />}
+                {activeTab === 'chat' && (onOpenCopilot ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                    <Sparkles className="mb-3 h-6 w-6" style={{ color: accent }} />
+                    <h3 className="text-base font-semibold text-white">Work directly in your artist profile</h3>
+                    <p className="mt-2 max-w-lg text-sm leading-6 text-white/55">Improve your biography, write scripts and prompts, prepare module settings, and organize your tools. Artist Copilot navigates the profile and shows each action as it works.</p>
+                    <button type="button" onClick={onOpenCopilot} className="mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-black" style={{ background: accent }}><MessageSquare className="h-4 w-4" />Open Artist Copilot</button>
+                  </div>
+                ) : <HermesChat artistId={numericId} artistName={artistName} accent={accent} isOwner={isOwnProfile && Number.isFinite(numericId)} />)}
                 {activeTab === 'overview' && renderOverview()}
                 {activeTab === 'memory' && renderMemory()}
                 {activeTab === 'soul' && renderSoul()}
@@ -939,7 +948,7 @@ export function HermesAgentPanel({
                 >
                   <Sparkles className="h-3 w-3" style={{ color: accent }} />
                 </motion.div>
-                <span className="text-xs" style={{ color: accent }}>GPT‑6 Astra</span>
+                <span className="text-xs" style={{ color: accent }}>{statusData?.model || 'OpenAI'}</span>
               </div>
             </div>
           </motion.div>

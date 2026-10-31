@@ -332,7 +332,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
           ) : (
             <p className="text-[9px] text-slate-500 px-2 italic">No social accounts connected</p>
           )}
-          <ActionBtn href={`/artist/${slug}#social-hub`} color={color}>📡 Go to Broadcast Studio</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#social-hub`} color={color}>📡 Go to Social Media Hub</ActionBtn>
         </div>
       );
 
@@ -361,10 +361,10 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
     case 'explicit-content':
       return (
         <div className="space-y-1.5">
-          <KVRow label="Access tier" value="Inner Circle" color={color} />
+          <KVRow label="Access tier" value="Paid Fan Content" color={color} />
           <KVRow label="Auth method" value="Token gated" color="#4ade80" />
           <KVRow label="Content type" value="Exclusive" />
-          <ActionBtn href={`/artist/${slug}#explicit-content`} color={color}>💎 Manage Inner Circle</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#explicit-content`} color={color}>💎 Manage Paid Fan Content</ActionBtn>
         </div>
       );
 
@@ -470,7 +470,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
           <KVRow label="Tracking" value="Live" color="#4ade80" />
           <KVRow label="Play events" value={String(d.songCount ?? 0)} />
           <KVRow label="Dashboard" value="Real-time" color={color} />
-          <ActionBtn href={`/artist/${slug}#analytics`} color={color}>📡 Open Observatory</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#analytics`} color={color}>📡 Open Artist Analytics</ActionBtn>
         </div>
       );
 
@@ -480,7 +480,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
           <KVRow label="AI Engine" value="Genesis ⚡" color={color} />
           <KVRow label="Mode" value="Auto-pilot" color="#4ade80" />
           <KVRow label="Tasks/day" value="Unlimited" />
-          <ActionBtn href={`/artist/${slug}#aas-engine`} color={color}>⚡ Open Genesis Engine</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#aas-engine`} color={color}>⚡ Open Music Release Growth</ActionBtn>
         </div>
       );
 
@@ -489,7 +489,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="Network size" value="50K+ influencers" color={color} />
           <KVRow label="AI matching" value="Active" color="#4ade80" />
-          <ActionBtn href={`/artist/${slug}#influencer-module`} color={color}>📢 Amplify Network</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#influencer-module`} color={color}>📢 AI Influencer Studio</ActionBtn>
         </div>
       );
 
@@ -498,7 +498,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="AI drops" value="On-demand" color={color} />
           <KVRow label="Virality score" value="Computing…" />
-          <ActionBtn href={`/artist/${slug}#viral-products`} color={color}>🔥 Ecosystem Drops</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#viral-products`} color={color}>🔥 Viral Product Promos</ActionBtn>
         </div>
       );
 
@@ -519,7 +519,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
           <KVRow label="Status" value="AI Generated" color="#4ade80" />
           <KVRow label="Milestones" value="12 Active" color={color} />
           <KVRow label="Timeline" value="12 months" />
-          <ActionBtn href={`/artist/${slug}#artist-blueprint`} color={color}>🏆 View Superstar Blueprint</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#artist-blueprint`} color={color}>🏆 View Artist Growth Plan</ActionBtn>
         </div>
       );
 
@@ -528,7 +528,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="AI atelier" value="Active" color="#4ade80" />
           <KVRow label="Coaching model" value="GPT-4o" color={color} />
-          <ActionBtn href={`/artist/${slug}#career-suite`} color={color}>🧠 Open The Atelier</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#career-suite`} color={color}>🧠 Open Artist Career Support</ActionBtn>
         </div>
       );
 
@@ -537,7 +537,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="Monitoring" value="24/7 Active" color="#4ade80" />
           <KVRow label="Sources" value="Social · Charts · Press" />
-          <ActionBtn href={`/artist/${slug}#observation-engine`} color={color}>🔭 Open Observatory</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#observation-engine`} color={color}>🔭 Open Artist Analytics</ActionBtn>
         </div>
       );
 
@@ -576,7 +576,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="Codex status" value="Training" color={color} />
           <KVRow label="Memory" value="Artist-specific" />
-          <ActionBtn href={`/artist/${slug}#hermes-agent`} color={color}>📓 Open The Codex</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#hermes-agent`} color={color}>📓 Open Artist AI Assistant</ActionBtn>
         </div>
       );
 
@@ -615,7 +615,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="Mood engine" value="AI Sentiment" color={color} />
           <KVRow label="Palette" value="Dynamic" color="#4ade80" />
-          <ActionBtn href={`/artist/${slug}#emotional-studio`} color={color}>🎭 Open Emotional Studio</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#emotional-studio`} color={color}>🎭 Open Creative Story Studio</ActionBtn>
         </div>
       );
 
@@ -633,7 +633,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
         <div className="space-y-1.5">
           <KVRow label="AI matching" value="Active" color="#4ade80" />
           <KVRow label="Brands DB" value="10K+ brands" color={color} />
-          <ActionBtn href={`/artist/${slug}#brand-collabs`} color={color}>🤝 Open The Forge</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#brand-collabs`} color={color}>🤝 Open Brand Partnerships</ActionBtn>
         </div>
       );
 
@@ -643,7 +643,7 @@ function ModuleExpandedContent({ d, color }: { d: ProfileModuleData; color: stri
           <KVRow label="Powered by" value="ElevenLabs ConvAI" color={color} />
           <KVRow label="Mode" value="Live voice chat" color="#10b981" />
           <KVRow label="Personas" value="Fan · Radio · Deep Dive · Hype" />
-          <ActionBtn href={`/artist/${slug}#talk-to-me`} color="#10b981">📞 Open Talk To Me</ActionBtn>
+          <ActionBtn href={`/artist/${slug}#talk-to-me`} color="#10b981">📞 Open Artist Chat</ActionBtn>
         </div>
       );
 

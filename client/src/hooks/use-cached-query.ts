@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryOptions, type QueryKey } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * use-cached-query
@@ -142,8 +142,17 @@ export function useCachedQuery<T>(options: CachedQueryOptions<T>) {
   }
   const store = persist ? storeRef.current : null;
 
-  // Hydrate initial data from the persisted layer for an instant first paint.
-  const initial = store ? readPersisted<T>(queryKey, ttl, store) : undefined;
+  // Hydrate at most once per query key. Previously this parsed the full cached
+  // payload on every render, which was especially expensive for media lists.
+  const serializedKey = storageKey(queryKey);
+  const hydrationRef = useRef<{ key: string; value: Hydrated<T> | undefined } | undefined>(undefined);
+  if (hydrationRef.current?.key !== serializedKey) {
+    hydrationRef.current = {
+      key: serializedKey,
+      value: store ? readPersisted<T>(queryKey, ttl, store) : undefined,
+    };
+  }
+  const initial = hydrationRef.current.value;
 
   const result = useQuery<T, Error, T, QueryKey>({
     queryKey,
@@ -156,10 +165,16 @@ export function useCachedQuery<T>(options: CachedQueryOptions<T>) {
     ...rest,
   });
 
-  // Persist fresh successful results.
-  if (store && result.isSuccess && result.data !== undefined && !result.isFetching) {
+  // Keep storage writes out of render; large responses can otherwise block the
+  // main thread while React is reconciling the profile UI.
+  const lastWrittenRef = useRef("");
+  useEffect(() => {
+    if (!store || !result.isSuccess || result.data === undefined || result.isFetching) return;
+    const writeKey = `${serializedKey}:${result.dataUpdatedAt}`;
+    if (lastWrittenRef.current === writeKey) return;
+    lastWrittenRef.current = writeKey;
     writePersisted(queryKey, result.data, store);
-  }
+  }, [store, serializedKey, queryKey, result.data, result.dataUpdatedAt, result.isSuccess, result.isFetching]);
 
   return result;
 }

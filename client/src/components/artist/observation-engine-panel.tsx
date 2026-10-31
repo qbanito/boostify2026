@@ -1,5 +1,5 @@
 /**
- * Observation Engine Panel
+ * Music Market Research Panel
  * ─────────────────────────────────────────────────────────────────────────────
  * Pre-creation market intelligence module. Scans the market, audience, and
  * cultural landscape before the artist creates a new project. Phase 0 of the
@@ -376,7 +376,7 @@ export function ObservationEnginePanel({
             <Telescope className="h-4 w-4" />
           </motion.span>
           <div className="text-left">
-            <span className="text-sm font-bold text-white">Observation Engine</span>
+            <span className="text-sm font-bold text-white">Music Market Research</span>
             <p className="text-[10px] text-gray-500 leading-none mt-0.5">
               Pre-creation market intelligence · OBSERVE phase
             </p>
@@ -412,7 +412,7 @@ export function ObservationEnginePanel({
                   </span>
                 </div>
                 <p className="text-[10px] text-gray-400 leading-relaxed">
-                  The <span className="text-white font-semibold">Observation Engine</span> is your
+                  The <span className="text-white font-semibold">Music Market Research</span> is your
                   market intelligence step before creating any new project. It analyzes{' '}
                   <span className="text-indigo-300">{displayGenre}</span> market conditions,
                   identifies gaps your competitors are missing, maps your target audience, and gives

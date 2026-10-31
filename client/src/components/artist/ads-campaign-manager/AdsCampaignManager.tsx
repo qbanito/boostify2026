@@ -801,7 +801,7 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
               <Megaphone className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Ads Campaign Manager</h3>
+              <h3 className="font-bold text-base text-white">Ad Campaigns</h3>
               <p className="text-[11px] text-white/40">Facebook · Instagram · TikTok</p>
             </div>
           </div>
@@ -1034,7 +1034,7 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
                   ) : creatives.length === 0 ? (
                     <div className="text-center py-6">
                       <p className="text-white/30 text-xs">No images in your library yet.</p>
-                      <p className="text-white/20 text-[10px] mt-1">Generate images in Promo Clips or Character Pack first</p>
+                      <p className="text-white/20 text-[10px] mt-1">Generate images in Promo Video Clips or Character Pack first</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-4 gap-1.5 max-h-48 overflow-y-auto pr-1">
@@ -1191,7 +1191,7 @@ export function AdsCampaignManager({ artistId, artistName = 'Artist', artistGenr
                 {loadingCreatives ? (
                   <div className="flex items-center justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-white/30" /></div>
                 ) : creatives.length === 0 ? (
-                  <p className="text-white/30 text-xs text-center py-4">No images in your library. Generate some in Promo Clips or Character Pack.</p>
+                  <p className="text-white/30 text-xs text-center py-4">No images in your library. Generate some in Promo Video Clips or Character Pack.</p>
                 ) : (
                   <div className="grid grid-cols-4 gap-1.5 max-h-44 overflow-y-auto pr-1">
                     {creatives.map((c, i) => {

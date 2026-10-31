@@ -697,14 +697,21 @@ export default function HomePage() {
       </Helmet>
       {/* Hero Section - Modern and Eye-catching */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Background image with overlay */}
-        <img
-          src="/assets/home-smart-music-marketing.png"
-          alt=""
+        {/* Background video with overlay */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          disablePictureInPicture
+          disableRemotePlayback
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover"
-          loading="lazy"
-        />
+          poster="/assets/home-smart-music-marketing.png"
+        >
+          <source src="https://storage.googleapis.com/artist-boost.firebasestorage.app/app-assets/38c40758_boostify-2025-profile-v2.mp4" type="video/mp4" />
+        </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/70 to-black" />
         
         {/* Creative Animated Background Elements */}

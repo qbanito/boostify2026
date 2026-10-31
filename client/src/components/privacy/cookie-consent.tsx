@@ -103,7 +103,7 @@ export function CookieConsentProvider({ children }: { children: React.ReactNode 
     <ConsentContext.Provider value={value}>
       {children}
       {!stored && !isOpen && <CookieBanner isGpcEnabled={isGpcEnabled} onAccept={value.acceptAll} onReject={value.rejectOptional} onCustomize={() => { setDraft(choices); setIsOpen(true); }} />}
-      {stored && !isOpen && <button type="button" onClick={value.openPreferences} className="fixed bottom-4 right-4 z-[90] rounded-full border border-white/15 bg-[#101016]/90 px-4 py-2.5 text-xs font-medium text-white/80 shadow-lg backdrop-blur-xl transition hover:border-violet-300/40 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">Privacy choices</button>}
+      {stored && !isOpen && <button type="button" onClick={value.openPreferences} className="fixed bottom-3 right-3 z-[90] hidden min-h-10 items-center rounded-full border border-white/10 bg-[#101016]/80 px-3 text-[11px] text-white/60 backdrop-blur-md transition hover:border-white/25 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 md:inline-flex">Privacy choices</button>}
       {isOpen && <PreferencesDialog
         draft={draft}
         isGpcEnabled={isGpcEnabled}

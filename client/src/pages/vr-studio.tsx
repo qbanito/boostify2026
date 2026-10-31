@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -616,43 +616,14 @@ export default function VRStudioPage() {
   const [showStickyCTA, setShowStickyCTA] = useState(false);
   const [showEstimator, setShowEstimator] = useState(false);
 
-  // AI Image Showcase state
-  const [showcaseImages, setShowcaseImages] = useState<Record<string, string | null>>({});
-  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
-  const [showcaseStarted, setShowcaseStarted] = useState(false);
-  const showcaseSectionRef = useRef<HTMLElement>(null);
-
-  const AI_IMAGE_PROMPTS: Record<string, string> = {
-    vr: "futuristic VR concert stage with holographic visuals, artist performing in immersive virtual arena, purple and cyan neon lighting, cinematic sci-fi atmosphere",
-    mocap: "motion capture studio with glowing tracking markers on a performer, blue data streams visualizing body movement, dark professional environment",
-    character: "photorealistic 3D digital artist avatar, hyper-detailed face with subsurface skin, studio lighting, floating holographic interface panels",
-    "boostify-engine": "AI-powered virtual stage construction in real time, procedural digital architecture building itself, glowing purple neural network visuals",
-    xr: "mixed reality live performance, holographic overlay on real stage, LED wall with XR visuals, crowd watching artist in extended reality",
-    "ai-animation": "AI-generated animated music video scene, abstract digital art style, vibrant colors, cinematic frame with motion blur effects",
+  const showcaseImages: Record<string, { src: string; alt: string }> = {
+    vr: { src: "/assets/vr-studio/vr-concert.webp", alt: "Immersive virtual concert in a futuristic arena" },
+    mocap: { src: "/assets/vr-studio/motion-capture.webp", alt: "Performer wearing a motion capture suit in a studio" },
+    character: { src: "/assets/vr-studio/artist-character.webp", alt: "Photorealistic digital artist character in a creation studio" },
+    "boostify-engine": { src: "/assets/vr-studio/production-engine.webp", alt: "Virtual production stage with an immersive LED environment" },
+    xr: { src: "/assets/vr-studio/xr-live-show.webp", alt: "Extended reality live performance with a holographic stage" },
+    "ai-animation": { src: "/assets/vr-studio/ai-animation.webp", alt: "Cinematic AI-assisted animation concept for a music performance" },
   };
-
-  const generateShowcaseImages = useCallback(async () => {
-    if (showcaseStarted) return;
-    setShowcaseStarted(true);
-    const serviceIds = CORE_SERVICES.map(s => s.id);
-    for (let i = 0; i < serviceIds.length; i++) {
-      const id = serviceIds[i];
-      const prompt = AI_IMAGE_PROMPTS[id];
-      if (!prompt) continue;
-      setLoadingImages(prev => ({ ...prev, [id]: true }));
-      await new Promise(r => setTimeout(r, i * 400));
-      try {
-        const data = await apiRequest('POST', '/api/vr-studio/generate-preview', { prompt, serviceId: id });
-        if (data?.imageUrl) {
-          setShowcaseImages(prev => ({ ...prev, [id]: data.imageUrl }));
-        }
-      } catch {
-        // silently fail for showcase - just leave skeleton
-      } finally {
-        setLoadingImages(prev => ({ ...prev, [id]: false }));
-      }
-    }
-  }, [showcaseStarted]);
 
   // Scroll listener for sticky CTA
   useEffect(() => {
@@ -660,21 +631,6 @@ export default function VRStudioPage() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  // Auto-trigger AI showcase when section is in view
-  useEffect(() => {
-    if (showcaseStarted) return;
-    const el = showcaseSectionRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        generateShowcaseImages();
-        obs.disconnect();
-      }
-    }, { threshold: 0.15 });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [showcaseStarted, generateShowcaseImages]);
 
   const leadMutation = useMutation({
     mutationFn: (data: VRLeadFormData) =>
@@ -1094,110 +1050,70 @@ export default function VRStudioPage() {
         </div>
       </section>
 
-      {/* ─── AI IMAGE SHOWCASE ────────────────────────────────────────────── */}
-      <section ref={showcaseSectionRef} className="py-14 sm:py-24 px-4 sm:px-6 relative overflow-hidden" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      {/* ─── VR STUDIO PORTFOLIO ────────────────────────────────────────────── */}
+      <section className="py-16 sm:py-24 px-4 sm:px-6 relative overflow-hidden" style={{ background: 'rgba(0,0,0,0.4)' }}>
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(139,92,246,0.06) 0%, transparent 65%)' }} />
+          style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(139,92,246,0.10) 0%, transparent 65%)' }} />
         <div className="max-w-7xl mx-auto relative z-10">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={sectionVariants}>
             <SectionHeading
-              eyebrow="AI-Generated Previews"
-              title="Visualized by Boostify's AI"
-              subtitle="Every service, rendered in real time by our Flux Pro image generation engine. Click to generate unique AI previews of each experience."
+              eyebrow="The VR Studio Portfolio"
+              title="Big ideas, built for real stages"
+              subtitle="Explore the worlds, performances, and digital identities our immersive production pipeline can bring to life."
             />
           </motion.div>
 
-          {/* Loading indicator (auto-started) */}
-          {!showcaseStarted && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-center mb-10"
-            >
-              <div className="flex items-center gap-3 px-6 py-3 rounded-xl border border-purple-500/20"
-                style={{ background: 'rgba(139,92,246,0.06)' }}>
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#8B5CF6' }} />
-                <span className="text-sm text-gray-500">Loading AI previews...</span>
-              </div>
-            </motion.div>
-          )}
-
-          {showcaseStarted && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {CORE_SERVICES.map((svc, i) => {
-                const img = showcaseImages[svc.id];
-                const loading = loadingImages[svc.id] ?? true;
-                return (
-                  <motion.div
-                    key={svc.id}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: i * 0.08 }}
-                  >
-                    <div className="relative rounded-2xl overflow-hidden border border-white/10 group"
-                      style={{ boxShadow: `0 0 30px ${svc.color}18` }}>
-                      {/* Image area */}
-                      <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                        {loading && !img && (
-                          <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
-                            <motion.div
-                              className="absolute inset-0"
-                              style={{ background: `linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%)` }}
-                              animate={{ x: ['-100%', '100%'] }}
-                              transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
-                            />
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-                              style={{ background: `${svc.color}0a` }}>
-                              <motion.div
-                                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                                style={{ background: `${svc.color}20`, border: `1px solid ${svc.color}40` }}
-                                animate={{ scale: [1, 1.1, 1] }}
-                                transition={{ duration: 1.5, repeat: Infinity }}
-                              >
-                                <Sparkles className="w-6 h-6" style={{ color: svc.color }} />
-                              </motion.div>
-                              <span className="text-xs font-medium" style={{ color: `${svc.color}99` }}>Generating...</span>
-                            </div>
-                          </div>
-                        )}
-                        {img && (
-                          <motion.img
-                            src={img}
-                            alt={`${svc.title} AI preview`}
-                            className="absolute inset-0 w-full h-full object-cover"
-                            initial={{ opacity: 0, scale: 1.05 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8, ease: 'easeOut' }}
-                          />
-                        )}
-                        {/* Overlay gradient */}
-                        <div className="absolute inset-0 pointer-events-none"
-                          style={{ background: 'linear-gradient(to top, rgba(5,5,5,0.85) 0%, transparent 50%)' }} />
-                      </div>
-
-                      {/* Card info */}
-                      <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-6 h-6 rounded-lg flex items-center justify-center"
-                            style={{ background: `${svc.color}25`, border: `1px solid ${svc.color}40` }}>
-                            <svc.icon className="w-3.5 h-3.5" style={{ color: svc.color }} />
-                          </div>
-                          <span className="font-bold text-white text-sm">{svc.title}</span>
-                        </div>
-                        <p className="text-gray-400 text-xs leading-relaxed">{svc.tagline}</p>
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: svc.color }} />
-                          <span className="text-[10px] font-medium" style={{ color: svc.color }}>AI-Generated Preview</span>
-                        </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 auto-rows-[minmax(220px,1fr)] gap-4 sm:gap-5">
+            {CORE_SERVICES.map((svc, i) => {
+              const image = showcaseImages[svc.id];
+              const featured = i === 0;
+              return (
+                <motion.div
+                  key={svc.id}
+                  initial={{ opacity: 0, y: 22 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.15 }}
+                  transition={{ duration: 0.55, delay: i * 0.06 }}
+                  className={featured ? "sm:col-span-2 lg:row-span-2" : ""}
+                >
+                  <div className="relative h-full min-h-[230px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0910] group transition-all duration-500 hover:-translate-y-1 hover:border-white/20"
+                    style={{ boxShadow: '0 18px 60px ' + svc.color + '12' }}>
+                    <img
+                      src={image.src}
+                      alt={image.alt}
+                      loading="lazy"
+                      decoding="async"
+                      width="1600"
+                      height="900"
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#07070b] via-[#07070b]/25 to-transparent" />
+                    <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 sm:p-5">
+                      <span className="rounded-full border border-white/15 bg-black/35 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/80 backdrop-blur-md">
+                        {featured ? "Featured concept" : "0" + (i + 1) + " / Studio"}
+                      </span>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/30 backdrop-blur-md transition-transform duration-300 group-hover:rotate-45">
+                        <ArrowRight className="h-4 w-4 text-white" />
                       </div>
                     </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+                    <div className={"absolute inset-x-0 bottom-0 p-5 sm:p-6 " + (featured ? "sm:p-8" : "")}>
+                      <div className="mb-3 flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl"
+                          style={{ background: svc.color + '30', border: '1px solid ' + svc.color + '65', backdropFilter: 'blur(12px)' }}>
+                          <svc.icon className="h-4 w-4" style={{ color: svc.color }} />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: svc.color }}>Boostify XR / {String(i + 1).padStart(2, "0")}</span>
+                      </div>
+                      <h3 className={(featured ? "text-2xl sm:text-3xl" : "text-lg") + " font-bold leading-tight text-white"}>{svc.title}</h3>
+                      <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/65">{svc.tagline}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
 
-          {/* Process animation: generation pipeline */}
+          {/* Process overview */}
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -1206,14 +1122,14 @@ export default function VRStudioPage() {
             className="mt-14"
           >
             <div className="text-center mb-8">
-              <span className="text-xs font-bold uppercase tracking-widest text-gray-500">How Boostify generates your visuals</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-gray-500">From artist vision to immersive production</span>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-0">
               {[
                 { step: "01", label: "Your Brief", icon: Mic2, color: "#8B5CF6" },
                 { step: "02", label: "AI Prompt Build", icon: Cpu, color: "#00D4FF" },
-                { step: "03", label: "Flux Pro Engine", icon: Sparkles, color: "#FF7A00" },
-                { step: "04", label: "Image Delivery", icon: Film, color: "#8B5CF6" },
+                { step: "03", label: "Creative Direction", icon: Sparkles, color: "#FF7A00" },
+                { step: "04", label: "Studio Production", icon: Film, color: "#8B5CF6" },
                 { step: "05", label: "Production Ready", icon: Star, color: "#00D4FF" },
               ].map((item, i) => (
                 <React.Fragment key={item.step}>

@@ -247,6 +247,7 @@ function PodcastClipCreator({
               whileHover={{ y: -3 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setStyleId(style.id)}
+              data-copilot-option={`Podcast style: ${style.name}`}
               aria-pressed={selected}
               className={`group relative aspect-[1.3/1] overflow-hidden rounded-2xl border text-left transition-colors ${selected ? "border-white/65 ring-1 ring-white/60" : "border-white/[0.08] hover:border-white/25"}`}
               style={{ boxShadow: selected ? `0 0 0 3px ${style.accent}28, 0 12px 32px rgba(0,0,0,.3)` : undefined }}

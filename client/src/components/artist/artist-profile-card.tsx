@@ -1,6 +1,9 @@
 ﻿import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { logger } from "@/lib/logger";
 import { insertWorldTour } from '../../../../shared/world-tour';
+import { PROFILE_ASSISTANT_MODULE_MAP, PROFILE_ASSISTANT_MODULES, type ArtistProfileAgentAction } from '../../../../shared/artist-profile-agent';
+import type { CopilotUiCommand, CopilotUiResult, ProfileTextChanges } from '../../../../shared/artist-profile-copilot';
+import { fillCopilotFields, inspectCopilotFieldOptions, inspectCopilotInterface, selectCopilotView, spotlightCopilotTarget, waitForCopilotTarget } from '../../lib/profile-copilot-interface';
 import { FanCaptureModal } from "./FanCaptureModal";
 import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "framer-motion";
 import { Button } from "../ui/button";
@@ -43,6 +46,7 @@ import { useAuth } from "../../hooks/use-auth";
 import { useTierLimits } from "../../hooks/use-tier-limits";
 const CreditsWidget = lazy(() => import("../credits/CreditsWidget"));
 const StreamingRewardsWidget = lazy(() => import("../rewards/StreamingRewardsWidget"));
+const ArtistProfileAgentChat = lazy(() => import('./artist-profile-agent-chat'));
 import { PremiumGate, UploadLimitBanner, ModuleGuide } from "../ui/premium-gate";
 import { useTranslation } from "react-i18next";
 import {
@@ -165,6 +169,7 @@ import { MerchCollaborationContract } from "../merch/merch-collaboration-contrac
 import { SocialPostsDisplay } from "./social-posts-display";
 import { PromoteSongModal } from "../admin/promote-song-modal";
 import { VideoPlayerWithNotes } from "../video/video-player-with-notes";
+import { ArtistVideoActions } from './artist-video-actions';
 import { NewsArticleModal } from "./news-article-modal";
 import { PromoteModal } from "./promote-modal";
 import { queryClient, apiRequest } from "../../lib/queryClient";
@@ -2382,6 +2387,13 @@ function ParallaxOrbs({ hexPrimary, hexAccent }: { hexPrimary: string; hexAccent
 export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfileProps) {
   const { t } = useTranslation();
   const prefersReducedMotion = useReducedMotion();
+  const [heroVideoReady, setHeroVideoReady] = useState(false);
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const startHeroVideo = () => setHeroVideoReady(true);
+    const timer = window.setTimeout(startHeroVideo, 1200);
+    return () => window.clearTimeout(timer);
+  }, [prefersReducedMotion]);
   // Global audio queue (single shared <audio>; survives across sections)
   const audioPlayer = useAudioPlayer();
   const [playingSongId, setPlayingSongId] = useState<string | null>(null);
@@ -2530,6 +2542,16 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   // Discreet inline edit shortcut � opens the EditProfileDialog without
   // forcing a trip through /dashboard.
   const [quickEditOpen, setQuickEditOpen] = useState(false);
+  const [artistProfileAgentOpen, setArtistProfileAgentOpen] = useState(false);
+  const [copilotSpiderMode, setCopilotSpiderMode] = useState(false);
+  const [copilotTextEdit, setCopilotTextEdit] = useState<{ revision: number; changes: ProfileTextChanges; saved: boolean }>();
+  const copilotRevision = useRef(0);
+  useEffect(() => {
+    setArtistProfileAgentOpen(false);
+    setCopilotSpiderMode(false);
+    setQuickEditOpen(false);
+    setCopilotTextEdit(undefined);
+  }, [artistId]);
   
   // State for song metadata modal
   const [selectedSongForMetadata, setSelectedSongForMetadata] = useState<Song | null>(null);
@@ -2669,61 +2691,61 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'songs': { name: getSectionLabel(pageMode, 'songs', 'Music'), icon: Music, isOwnerOnly: false },
     'fanclub': { name: 'Fan Club', icon: Heart, isOwnerOnly: false },
     'live-stage': { name: 'Boostify Live Stage', icon: Radio, isOwnerOnly: false },
-    'live-map': { name: 'Live Services Map', icon: MapPin, isOwnerOnly: false },
-    'fashion-image-studio': { name: 'Fashion Image Studio', icon: Shirt, isOwnerOnly: true },
-    'tiktok-live': { name: 'TikTok Live Hub', icon: Radio, isOwnerOnly: true },
-    'youtube-channel': { name: 'YouTube Channel SEO', icon: VideoIcon, isOwnerOnly: true },
+    'live-map': { name: 'Artist Services Map', icon: MapPin, isOwnerOnly: false },
+    'fashion-image-studio': { name: 'AI Fashion Photos', icon: Shirt, isOwnerOnly: true },
+    'tiktok-live': { name: 'TikTok Live Tools', icon: Radio, isOwnerOnly: true },
+    'youtube-channel': { name: 'YouTube Growth', icon: VideoIcon, isOwnerOnly: true },
     'videos': { name: getSectionLabel(pageMode, 'videos', 'Videos'), icon: VideoIcon, isOwnerOnly: false },
     'news': { name: getSectionLabel(pageMode, 'news', 'News'), icon: Newspaper, isOwnerOnly: false },
     'social-posts': { name: getSectionLabel(pageMode, 'social-posts', 'Social Posts'), icon: Share2, isOwnerOnly: false },
-    'social-hub': { name: getSectionLabel(pageMode, 'social-hub', 'Broadcast Studio'), icon: Antenna, isOwnerOnly: false },
+    'social-hub': { name: 'Social Media Hub', icon: Antenna, isOwnerOnly: false },
     'merchandise': { name: getSectionLabel(pageMode, 'merchandise', 'Merchandise'), icon: Package, isOwnerOnly: false },
     'galleries': { name: getSectionLabel(pageMode, 'galleries', 'Image Galleries'), icon: Images, isOwnerOnly: false },
     'downloads': { name: getSectionLabel(pageMode, 'downloads', 'Downloads'), icon: Download, isOwnerOnly: false }, // label intentionally kept in sync with render ('Downloads')
-    'tokenization': { name: getSectionLabel(pageMode, 'tokenization', 'Token Assets'), icon: Coins, isOwnerOnly: true },
-    'monetize-cta': { name: getSectionLabel(pageMode, 'monetize-cta', 'Monetize Your Talent'), icon: Sparkles, isOwnerOnly: false },
-    'analytics': { name: getSectionLabel(pageMode, 'analytics', 'Observatory'), icon: Activity, isOwnerOnly: true },
+    'tokenization': { name: 'Music Tokens', icon: Coins, isOwnerOnly: true },
+    'monetize-cta': { name: 'Hire This Artist', icon: Sparkles, isOwnerOnly: false },
+    'analytics': { name: 'Artist Analytics', icon: Activity, isOwnerOnly: true },
     'earnings': { name: getSectionLabel(pageMode, 'earnings', 'Earnings'), icon: DollarSign, isOwnerOnly: true },
     'crowdfunding': { name: getSectionLabel(pageMode, 'crowdfunding', 'Crowdfunding'), icon: Target, isOwnerOnly: true },
     'sponsors': { name: getSectionLabel(pageMode, 'sponsors', 'Sponsor Acquisition'), icon: Handshake, isOwnerOnly: true },
     'venueBooking': { name: getSectionLabel(pageMode, 'venueBooking', 'Venue Booking'), icon: MapPin, isOwnerOnly: true },
-    'explicit-content': { name: getSectionLabel(pageMode, 'explicit-content', 'Inner Circle'), icon: Flame, isOwnerOnly: false },
-    'aas-engine': { name: 'Genesis Engine', icon: Zap, isOwnerOnly: true },
-    'audience-engine': { name: 'Signal Pulse', icon: Radar, isOwnerOnly: true },
-    'viral-products': { name: getSectionLabel(pageMode, 'viral-products', 'Ecosystem Drops'), icon: TrendingUp, isOwnerOnly: true },
-    'brand-collabs': { name: getSectionLabel(pageMode, 'brand-collabs', 'The Forge'), icon: Handshake, isOwnerOnly: true },
-    'business-plan': { name: 'Commerce Blueprint', icon: BarChart3, isOwnerOnly: false },
-    'influencer-module': { name: 'Amplify Network', icon: Network, isOwnerOnly: true },
-    'amazon-picks': { name: 'Amazon Cultural Picks', icon: ShoppingCart, isOwnerOnly: false },
-    'career-suite': { name: 'The Atelier', icon: Brain, isOwnerOnly: true },
-    'artist-blueprint': { name: 'Superstar Blueprint', icon: GraduationCap, isOwnerOnly: false },
-    'artist-domain': { name: 'My Domain', icon: Globe, isOwnerOnly: true },
-    'hermes-agent': { name: 'The Codex', icon: ScrollText, isOwnerOnly: true },
-    'electronic-press-kit': { name: 'The Press Room', icon: BookOpen, isOwnerOnly: false },
-    'agent-gateway': { name: 'The Gateway', icon: Shield, isOwnerOnly: false },
-    'hologram': { name: 'HoloStage Live', icon: Layers, isOwnerOnly: false },
-    'renaissance-studio': { name: 'Renaissance Studio', icon: Wand2, isOwnerOnly: false },
-    'observation-engine': { name: 'Observation Engine', icon: Eye, isOwnerOnly: true },
-    'deep-brief': { name: 'Deep Brief', icon: FileText, isOwnerOnly: true },
-    'emotional-studio': { name: 'Emotional Studio', icon: Heart, isOwnerOnly: true },
-    'promo-clips': { name: 'Promo Clips', icon: Clapperboard, isOwnerOnly: true },
+    'explicit-content': { name: 'Paid Fan Content', icon: Flame, isOwnerOnly: false },
+    'aas-engine': { name: 'Music Release Growth', icon: Zap, isOwnerOnly: true },
+    'audience-engine': { name: 'Audience Growth', icon: Radar, isOwnerOnly: true },
+    'viral-products': { name: 'Viral Product Promos', icon: TrendingUp, isOwnerOnly: true },
+    'brand-collabs': { name: 'Brand Partnerships', icon: Handshake, isOwnerOnly: true },
+    'business-plan': { name: 'Artist Business Plan', icon: BarChart3, isOwnerOnly: false },
+    'influencer-module': { name: 'AI Influencer Studio', icon: Network, isOwnerOnly: true },
+    'amazon-picks': { name: 'Amazon Picks', icon: ShoppingCart, isOwnerOnly: false },
+    'career-suite': { name: 'Artist Career Support', icon: Brain, isOwnerOnly: true },
+    'artist-blueprint': { name: 'Artist Growth Plan', icon: GraduationCap, isOwnerOnly: false },
+    'artist-domain': { name: 'Artist Website', icon: Globe, isOwnerOnly: true },
+    'hermes-agent': { name: 'Artist AI Assistant', icon: ScrollText, isOwnerOnly: true },
+    'electronic-press-kit': { name: 'Press Kit', icon: BookOpen, isOwnerOnly: false },
+    'agent-gateway': { name: 'AI Agent Profile', icon: Shield, isOwnerOnly: false },
+    'hologram': { name: 'Hologram Shows', icon: Layers, isOwnerOnly: false },
+    'renaissance-studio': { name: 'Release Growth Roadmap', icon: Wand2, isOwnerOnly: false },
+    'observation-engine': { name: 'Music Market Research', icon: Eye, isOwnerOnly: true },
+    'deep-brief': { name: 'Project Brief', icon: FileText, isOwnerOnly: true },
+    'emotional-studio': { name: 'Creative Story Studio', icon: Heart, isOwnerOnly: true },
+    'promo-clips': { name: 'Promo Video Clips', icon: Clapperboard, isOwnerOnly: true },
     'podcast-clips': { name: 'Podcast Studio', icon: Mic2, isOwnerOnly: false },
-    'world-tour': { name: 'World Tour Studio', icon: Globe, isOwnerOnly: false },
+    'world-tour': { name: 'Tour Videos', icon: Globe, isOwnerOnly: false },
     'ai-video-studio': { name: 'AI Video Studio', icon: Film, isOwnerOnly: true },
-    'ads-campaigns': { name: 'Ads Campaign Manager', icon: Megaphone, isOwnerOnly: true },
-    'gamma-presentations': { name: 'Gamma Presentations', icon: Monitor, isOwnerOnly: true },
+    'ads-campaigns': { name: 'Ad Campaigns', icon: Megaphone, isOwnerOnly: true },
+    'gamma-presentations': { name: 'Presentations', icon: Monitor, isOwnerOnly: true },
     'karaoke': { name: 'Karaoke', icon: Mic2, isOwnerOnly: false },
-    'lyrics-video': { name: 'Lyrics Video', icon: Clapperboard, isOwnerOnly: true },
-    'avatar-talk': { name: 'Avatar Talk', icon: Bot, isOwnerOnly: false },
-    'talk-to-me': { name: 'Talk To Me', icon: MessageCircle, isOwnerOnly: false },
-    'whatsapp-command-center': { name: 'WhatsApp Command Center', icon: MessageCircle, isOwnerOnly: true },
-    'telegram-command-center': { name: 'Telegram Command Center', icon: Send, isOwnerOnly: true },
-    'facebook-groups-command-center': { name: 'Facebook Groups Autopilot', icon: Megaphone, isOwnerOnly: true },
-    'reddit-intelligence-center': { name: 'Reddit Intelligence Center', icon: Flame, isOwnerOnly: true },
-    'discord-fan-nation': { name: 'Discord Fan Nation', icon: MessageCircle, isOwnerOnly: true },
-    'my-universe': { name: 'My Universe', icon: Globe, isOwnerOnly: false },
+    'lyrics-video': { name: 'Lyric Videos', icon: Clapperboard, isOwnerOnly: true },
+    'avatar-talk': { name: 'Talking Avatar', icon: Bot, isOwnerOnly: false },
+    'talk-to-me': { name: 'Artist Chat', icon: MessageCircle, isOwnerOnly: false },
+    'whatsapp-command-center': { name: 'WhatsApp Manager', icon: MessageCircle, isOwnerOnly: true },
+    'telegram-command-center': { name: 'Telegram Manager', icon: Send, isOwnerOnly: true },
+    'facebook-groups-command-center': { name: 'Facebook Group Manager', icon: Megaphone, isOwnerOnly: true },
+    'reddit-intelligence-center': { name: 'Reddit Insights', icon: Flame, isOwnerOnly: true },
+    'discord-fan-nation': { name: 'Discord Community', icon: MessageCircle, isOwnerOnly: true },
+    'my-universe': { name: 'Artist Universe Page', icon: Globe, isOwnerOnly: false },
     'vinyl-records': { name: 'Vinyl Records', icon: Disc3, isOwnerOnly: false },
-    'vinyl-editions': { name: 'Vinyl Tokens', icon: Disc3, isOwnerOnly: true },
+    'vinyl-editions': { name: 'Digital Vinyl Collectibles', icon: Disc3, isOwnerOnly: true },
     'fashion-store': { name: 'Fashion Store', icon: Shirt, isOwnerOnly: false },
     'art-gallery': { name: 'Art Gallery', icon: Palette, isOwnerOnly: false },
     'smart-merch': { name: 'Smart Merch', icon: QrCode, isOwnerOnly: false },
@@ -2758,7 +2780,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'spotify': { name: getWidgetLabel(pageMode, 'spotify', 'Spotify'), icon: Headphones },
     'premium-tools': { name: getWidgetLabel(pageMode, 'premium-tools', 'Premium Tools'), icon: Gem },
     'upcoming-shows': { name: getWidgetLabel(pageMode, 'upcoming-shows', 'Upcoming Shows'), icon: Calendar },
-    'economic-engine': { name: getWidgetLabel(pageMode, 'economic-engine', 'Revenue Engine'), icon: Wallet },
+    'economic-engine': { name: getWidgetLabel(pageMode, 'economic-engine', 'Earnings Overview'), icon: Wallet },
     'crypto-community': { name: getWidgetLabel(pageMode, 'crypto-community', 'Crypto Community'), icon: Users },
     'concert-hub': { name: getWidgetLabel(pageMode, 'concert-hub', 'Concert Center'), icon: Music },
   };
@@ -2766,7 +2788,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
   const defaultOrder = ['renaissance-studio', 'influencer-module', 'songs', 'fanclub', 'live-stage', 'live-map', 'fashion-image-studio', 'tiktok-live', 'youtube-channel', 'karaoke', 'lyrics-video', 'avatar-talk', 'talk-to-me', 'whatsapp-command-center', 'telegram-command-center', 'facebook-groups-command-center', 'reddit-intelligence-center', 'discord-fan-nation', 'videos', 'promo-clips', 'podcast-clips', 'world-tour', 'ai-video-studio', 'ads-campaigns', 'gamma-presentations', 'social-hub', 'news', 'social-posts', 'merchandise', 'fashion-store', 'smart-merch', 'art-gallery', 'vinyl-records', 'vinyl-editions', 'amazon-picks', 'galleries', 'downloads', 'tokenization', 'monetize-cta', 'analytics', 'earnings', 'crowdfunding', 'sponsors', 'venueBooking', 'explicit-content', 'aas-engine', 'audience-engine', 'viral-products', 'brand-collabs', 'career-suite', 'business-plan', 'artist-blueprint', 'emotional-studio', 'artist-domain', 'hermes-agent', 'agent-gateway', 'electronic-press-kit', 'hologram', 'observation-engine', 'deep-brief', 'my-universe'];
 
-  // Broadcast Studio layout presets � each defines a curated set of active modules
+  // Social Media Hub layout presets � each defines a curated set of active modules
   const STUDIO_PRESETS: Array<{ id: string; label: string; vis: Record<string, boolean> }> = [
     {
       id: 'musician', label: 'Musician',
@@ -2952,7 +2974,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   };
   const [rightVisibility, setRightVisibility] = useState<Record<string, boolean>>(defaultRightVisibility);
   const [isMerchandiseExpanded, setIsMerchandiseExpanded] = useState(true);
-  // Broadcast Studio drag-and-drop state
+  // Social Media Hub drag-and-drop state
   const [studioDragOverId, setStudioDragOverId] = useState<string | null>(null);
   const studioDraggedRef = useRef<{ id: string; side: 'left' | 'right' } | null>(null);
 
@@ -3627,7 +3649,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         // SIEMPRE hacer fetch fresco desde PostgreSQL (fuente de verdad)
         let postgresData = null;
         try {
-          const response = await fetch(`/api/profile/${artistId}`);
+          const response = await fetch(`/api/profile/${encodeURIComponent(String(artistId))}?includeMedia=none`);
           if (response.ok) {
             postgresData = await response.json();
           }
@@ -3706,7 +3728,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   // Query para canciones
   const { data: songs = [] as Song[], refetch: refetchSongs } = useCachedQuery<Song[]>({
     queryKey: ["songs", userProfile?.firestoreId || artistId],
-    ttl: CACHE_TTL.media, // persiste 10 min → evita re-leer Firestore en cada visita
+    ttl: CACHE_TTL.media,
+    persist: false, // Keep large catalogs in React Query memory; avoid localStorage JSON work.
     queryFn: async () => {
       try {
         // Buscar canciones por artistId (Firestore ID del artista)
@@ -3772,10 +3795,23 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         if (querySnapshot.length === 0) {
           logger.info('⚠️ No songs found in Firestore for this artist, checking PostgreSQL fallback...');
           
-          // ? FALLBACK POSTGRESQL: Usar canciones de PostgreSQL si existen
-          if (userProfile?.pgSongs && userProfile.pgSongs.length > 0) {
-            logger.info(`? Found ${userProfile.pgSongs.length} songs from PostgreSQL (fallback)`);
-            const pgSongsData = userProfile.pgSongs.map((song: any) => ({
+          // Fetch the PostgreSQL catalog only when the Firestore lookup is empty.
+          let pgSongsForFallback = userProfile?.pgSongs || [];
+          if (pgSongsForFallback.length === 0) {
+            try {
+              const response = await fetch(`/api/profile/${encodeURIComponent(String(artistId))}?includeMedia=songs`);
+              if (response.ok) {
+                const fallbackProfile = await response.json();
+                pgSongsForFallback = Array.isArray(fallbackProfile?.songs) ? fallbackProfile.songs : [];
+              }
+            } catch (fallbackError) {
+              logger.warn('Could not load PostgreSQL song fallback:', fallbackError);
+            }
+          }
+
+          if (pgSongsForFallback.length > 0) {
+            logger.info(`Found ${pgSongsForFallback.length} songs from PostgreSQL (fallback)`);
+            const pgSongsData = pgSongsForFallback.map((song: any) => ({
               id: String(song.id),
               name: song.title || song.name,
               title: song.title || song.name,
@@ -4177,7 +4213,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   // Query para videos
   const { data: videos = [] as Video[], refetch: refetchVideos } = useCachedQuery<Video[]>({
     queryKey: ["videos", userProfile?.pgId || userProfile?.uid || userProfile?.clerkId || artistId],
-    ttl: CACHE_TTL.media, // persiste 10 min → evita re-leer Firestore en cada visita
+    ttl: CACHE_TTL.media,
+    persist: false, // Large video metadata lists should not block renders via localStorage.
     queryFn: async () => {
       try {
         const pgId = userProfile?.pgId || artistId;
@@ -4282,9 +4319,21 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         if (querySnapshot.length === 0) {
           logger.info('No videos found in Firestore, checking PostgreSQL fallback...');
           
-          // FALLBACK POSTGRESQL: Usar videos de PostgreSQL si existen
-          if (userProfile?.pgVideos && userProfile.pgVideos.length > 0) {
-            const pgVideosData = userProfile.pgVideos.map((video: any) => ({
+          let pgVideosForFallback = userProfile?.pgVideos || [];
+          if (pgVideosForFallback.length === 0) {
+            try {
+              const response = await fetch(`/api/profile/${encodeURIComponent(String(artistId))}?includeMedia=videos`);
+              if (response.ok) {
+                const fallbackProfile = await response.json();
+                pgVideosForFallback = Array.isArray(fallbackProfile?.videos) ? fallbackProfile.videos : [];
+              }
+            } catch (fallbackError) {
+              logger.warn('Could not load PostgreSQL video fallback:', fallbackError);
+            }
+          }
+
+          if (pgVideosForFallback.length > 0) {
+            const pgVideosData = pgVideosForFallback.map((video: any) => ({
               id: String(video.id),
               title: video.title || 'Untitled',
               url: video.storagePath || video.storage_path || '',
@@ -4759,6 +4808,120 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     return false;
   })();
   const canEditProfile = isOwnProfile || isAdmin;
+
+  const copilotModulesRef = useRef<CopilotUiResult['modules']>([]);
+  copilotModulesRef.current = PROFILE_ASSISTANT_MODULES.map((module) => ({
+    id: module.id, name: module.name, surface: module.surface,
+    visible: module.surface === 'section' ? sectionVisibility[module.id] === true : rightVisibility[module.id] !== false,
+    expanded: module.surface === 'section' ? !!sectionExpanded[module.id] : rightExpanded[module.id] !== false,
+    column: sideOf(module.id),
+  }));
+
+  const applyArtistProfileAgentActions = (actions: ArtistProfileAgentAction[]) => {
+    if (!isOwnProfile) return;
+    const focusTargets: string[] = [];
+    for (const action of actions) {
+      if (action.type === 'open_module') {
+        const module = PROFILE_ASSISTANT_MODULE_MAP[`${action.surface}:${action.moduleId}`];
+        if (!module) continue;
+        if (action.surface === 'section') {
+          setSectionOrder((previous) => previous.includes(module.id) ? previous : [...previous, module.id]);
+          setSectionVisibility((previous) => ({ ...previous, [module.id]: true }));
+          setSectionExpanded((previous) => ({ ...previous, [module.id]: true }));
+          focusTargets.push(`section-${module.id}`);
+        } else {
+          setRightOrder((previous) => previous.includes(module.id) ? previous : [...previous, module.id]);
+          setRightVisibility((previous) => ({ ...previous, [module.id]: true }));
+          setRightExpanded((previous) => ({ ...previous, [module.id]: true }));
+          focusTargets.push(`widget-${module.id}`);
+        }
+      } else if (action.type === 'configure_layout') {
+        const enableSections = action.enableSections.filter((id) => PROFILE_ASSISTANT_MODULE_MAP[`section:${id}`]);
+        const disableSections = action.disableSections.filter((id) => PROFILE_ASSISTANT_MODULE_MAP[`section:${id}`]);
+        const enableWidgets = action.enableWidgets.filter((id) => PROFILE_ASSISTANT_MODULE_MAP[`widget:${id}`]);
+        const disableWidgets = action.disableWidgets.filter((id) => PROFILE_ASSISTANT_MODULE_MAP[`widget:${id}`]);
+        setSectionOrder((previous) => [...previous, ...enableSections.filter((id) => !previous.includes(id))]);
+        setRightOrder((previous) => [...previous, ...enableWidgets.filter((id) => !previous.includes(id))]);
+        setSectionVisibility((previous) => ({ ...previous, ...Object.fromEntries(enableSections.map((id) => [id, true])), ...Object.fromEntries(disableSections.map((id) => [id, false])) }));
+        setSectionExpanded((previous) => ({ ...previous, ...Object.fromEntries(enableSections.map((id) => [id, true])), ...Object.fromEntries(disableSections.map((id) => [id, false])) }));
+        setRightVisibility((previous) => ({ ...previous, ...Object.fromEntries(enableWidgets.map((id) => [id, true])), ...Object.fromEntries(disableWidgets.map((id) => [id, false])) }));
+        setRightExpanded((previous) => ({ ...previous, ...Object.fromEntries(enableWidgets.map((id) => [id, true])), ...Object.fromEntries(disableWidgets.map((id) => [id, false])) }));
+        action.moveSections.forEach(({ id, side }) => {
+          if (PROFILE_ASSISTANT_MODULE_MAP[`section:${id}`]) setModuleSide(id, side);
+        });
+        if (enableSections[0]) focusTargets.push(`section-${enableSections[0]}`);
+        else if (enableWidgets[0]) focusTargets.push(`widget-${enableWidgets[0]}`);
+      }
+    }
+    if (focusTargets.length) {
+      window.setTimeout(() => {
+        document.getElementById(focusTargets[0])?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 350);
+    }
+  };
+
+  const handleCopilotUiCommand = async (command: CopilotUiCommand, signal?: AbortSignal): Promise<CopilotUiResult> => {
+    if (!isOwnProfile) return { success: false, error: 'Only the owner can control this artist profile.' };
+    const pgId = Number(userProfile?.pgId || artistId);
+    const ensureTarget = async (moduleId: string) => {
+      if (signal?.aborted) throw new Error('Task stopped.');
+      if (moduleId === 'profile') {
+        setQuickEditOpen(true);
+        return waitForCopilotTarget(() => document.querySelector<HTMLElement>(`[data-profile-copilot-editor="${pgId}"]`), 12_000, signal);
+      }
+      const module = PROFILE_ASSISTANT_MODULE_MAP[`section:${moduleId}`] || PROFILE_ASSISTANT_MODULE_MAP[`widget:${moduleId}`];
+      if (!module) throw new Error('This module is not part of the artist profile.');
+      setQuickEditOpen(false);
+      applyArtistProfileAgentActions([{ type: 'open_module', moduleId, surface: module.surface }]);
+      const root = await waitForCopilotTarget(() => document.getElementById(`${module.surface}-${moduleId}`), 12_000, signal);
+      // A lazy module may mount its skeleton first. Wait for its loading marker
+      // to leave before exposing fields to the agent.
+      const deadline = Date.now() + 8000;
+      while (root.querySelector('[aria-busy="true"],.animate-spin') && Date.now() < deadline && !signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 150));
+      if (signal?.aborted) throw new Error('Task stopped.');
+      return root;
+    };
+    try {
+      if (signal?.aborted) return { success: false, error: 'Task stopped.' };
+      if (command.type === 'inspect_interface' && !command.moduleId) return { success: true, modules: copilotModulesRef.current };
+      if (command.type === 'preview_profile_text' || command.type === 'profile_text_saved') {
+        setCopilotTextEdit({ revision: ++copilotRevision.current, changes: command.changes, saved: command.type === 'profile_text_saved' });
+        const root = await ensureTarget('profile');
+        const retained = () => Object.entries(command.changes).every(([field, value]) => {
+          const input = Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-copilot-profile-field]')).find((element) => element.dataset.copilotProfileField === field);
+          return input?.value === value;
+        });
+        for (let attempt = 0; !retained() && attempt < 3 && !signal?.aborted; attempt++) await new Promise((resolve) => setTimeout(resolve, 100));
+        if (!retained() || signal?.aborted) return { success: false, error: 'The profile editor did not retain the text. No interface update was confirmed.' };
+        if (command.type === 'profile_text_saved') {
+          const patch = { ...command.changes, ...(command.changes.displayName ? { name: command.changes.displayName } : {}) };
+          queryClient.setQueryData(['userProfile', artistId], (previous: any) => previous ? { ...previous, ...patch } : previous);
+          void queryClient.invalidateQueries({ queryKey: ['userProfile', artistId], exact: true });
+        }
+        const firstField = Object.keys(command.changes)[0];
+        const element = Array.from(root.querySelectorAll<HTMLElement>('[data-copilot-profile-field]')).find((field) => field.dataset.copilotProfileField === firstField);
+        spotlightCopilotTarget(element || root);
+        return { ...inspectCopilotInterface(root, 'profile'), saved: command.type === 'profile_text_saved' };
+      }
+      if (command.type === 'configure_layout') {
+        applyArtistProfileAgentActions([command]);
+        const first = command.enableSections[0] || command.enableWidgets[0] || command.moveSections[0]?.id;
+        if (first) spotlightCopilotTarget(await ensureTarget(first));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return { success: true, modules: copilotModulesRef.current };
+      }
+      const moduleId = command.moduleId;
+      const root = await ensureTarget(moduleId);
+      spotlightCopilotTarget(root);
+      if (signal?.aborted) return { success: false, error: 'Task stopped.' };
+      if (command.type === 'fill_fields') return await fillCopilotFields(moduleId, command.fields, signal);
+      if (command.type === 'select_view') return await selectCopilotView(moduleId, command.controlId);
+      if (command.type === 'inspect_field_options') return await inspectCopilotFieldOptions(moduleId, command.fieldId, signal);
+      return { ...inspectCopilotInterface(root, moduleId), modules: copilotModulesRef.current };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'The profile could not apply this action.' };
+    }
+  };
   
   // Debug logging para verificar autenticaci�n
   useEffect(() => {
@@ -4954,14 +5117,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     id: userProfile?.pgId || artistId,
     pgId: userProfile?.pgId || artistId,
     slug: initialArtistData?.slug || (userProfile as any)?.slug || null,
-    name: initialArtistData?.displayName || initialArtistData?.name || userProfile?.displayName || userProfile?.name || "Artist Name",
-    genre: initialArtistData?.genre || userProfile?.genre || "Music Artist",
-    location: initialArtistData?.location || userProfile?.location || "",
+    name: userProfile?.displayName || userProfile?.name || initialArtistData?.displayName || initialArtistData?.name || "Artist Name",
+    genre: userProfile?.genre ?? initialArtistData?.genre ?? "Music Artist",
+    location: userProfile?.location ?? initialArtistData?.location ?? "",
     profileImage: initialArtistData?.profileImage || initialArtistData?.photoURL || userProfile?.photoURL || userProfile?.profileImage || '/assets/promos/default-profile.jpeg',
     bannerImage: initialArtistData?.bannerImage || userProfile?.bannerImage || null,
     loopVideoUrl: initialArtistData?.loopVideoUrl || userProfile?.loopVideoUrl || null,
     bannerPosition: initialArtistData?.bannerPosition ?? userProfile?.bannerPosition ?? "50",
-    biography: initialArtistData?.biography || userProfile?.biography || "Music artist profile",
+    biography: userProfile?.biography ?? initialArtistData?.biography ?? "Music artist profile",
     followers: userProfile?.followers || 0,
     // ?? Social/streaming widgets: once `userProfile` has loaded from the server
     // it's authoritative � the parent's `initialArtistData` prop is a static snapshot
@@ -6327,7 +6490,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   }, 0);
 
 
-  // --- Broadcast Studio helpers (component-scope) ------------------------------
+  // --- Social Media Hub helpers (component-scope) ------------------------------
   const handleModuleToggle = (mod: { id: string; side: 'left' | 'right' }, e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -6522,8 +6685,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               return (
                 <video
                   key={artist.loopVideoUrl}
-                  src={artist.loopVideoUrl}
-                  autoPlay={!prefersReducedMotion}
+                  src={heroVideoReady ? artist.loopVideoUrl : undefined}
+                  poster={artist.profileImage || '/assets/promos/default-profile.jpeg'}
+                  preload={heroVideoReady ? "auto" : "none"}
+                  autoPlay={heroVideoReady && !prefersReducedMotion}
                   muted
                   loop
                   playsInline
@@ -6547,8 +6712,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                 return (
                   <video
                     key={artist.bannerImage}
-                    src={artist.bannerImage}
-                    autoPlay={!prefersReducedMotion}
+                    src={heroVideoReady ? artist.bannerImage : undefined}
+                    poster={artist.profileImage || '/assets/promos/default-profile.jpeg'}
+                    preload={heroVideoReady ? "auto" : "none"}
+                    autoPlay={heroVideoReady && !prefersReducedMotion}
                     muted
                     loop
                     playsInline
@@ -6581,7 +6748,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
             return (
               <video
                 key={DEFAULT_HERO_VIDEO}
-                autoPlay={!prefersReducedMotion}
+                poster="/assets/promos/default-profile.jpeg"
+                preload={heroVideoReady ? "auto" : "none"}
+                autoPlay={heroVideoReady && !prefersReducedMotion}
                 muted
                 loop
                 playsInline
@@ -6589,7 +6758,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                 style={{ objectPosition: objectPositionStyle }}
                 onError={(e) => logger.error('Hero video error:', e)}
               >
-                <source src={DEFAULT_HERO_VIDEO} type="video/mp4" />
+                {heroVideoReady && <source src={DEFAULT_HERO_VIDEO} type="video/mp4" />}
               </video>
             );
           })()}
@@ -8341,7 +8510,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       if (sectionId === 'live-map') {
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, MapPin, 'Live Services Map')}
+                            {renderSectionHeader(sectionId, MapPin, 'Artist Services Map')}
                             {sectionExpanded[sectionId] && (
                               <div className="mt-3">
                                 <LiveMapServices
@@ -8360,7 +8529,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       if (sectionId === 'fashion-image-studio') {
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Shirt, 'Fashion Image Studio')}
+                            {renderSectionHeader(sectionId, Shirt, 'AI Fashion Photos')}
                             {sectionExpanded[sectionId] && (
                               <div className="mt-3">
                                 <FashionImageModule
@@ -8379,7 +8548,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       if (sectionId === 'tiktok-live') {
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Radio, 'TikTok Live Hub')}
+                            {renderSectionHeader(sectionId, Radio, 'TikTok Live Tools')}
                             {sectionExpanded[sectionId] && (
                               <div className="mt-3">
                                 <TikTokLiveModule
@@ -8398,7 +8567,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       if (sectionId === 'youtube-channel') {
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, VideoIcon, 'YouTube Channel SEO')}
+                            {renderSectionHeader(sectionId, VideoIcon, 'YouTube Growth')}
                             {sectionExpanded[sectionId] && (
                               <div className="mt-3">
                                 <YoutubeChannelModule
@@ -8742,7 +8911,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             <div className="rounded-lg border p-3 space-y-2" style={{ borderColor: colors.hexBorder, background: 'rgba(255,255,255,0.03)' }}>
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: colors.hexAccent }}>
-                                  ?? Style from Superstar Blueprint
+                                  ?? Style from Artist Growth Plan
                                 </span>
                                 <button
                                   type="button"
@@ -8784,7 +8953,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               <p className="text-xs text-gray-400">
                                 Genre: <span className="text-white">{artist?.genre || songs[0]?.genre || 'pop'}</span>. Generate your{' '}
                                 <span className="text-purple-400 cursor-pointer underline" onClick={() => setShowGenerateAISongDialog(false)}>
-                                  Superstar Blueprint
+                                  Artist Growth Plan
                                 </span>{' '}
                                 for a deeper style profile.
                               </p>
@@ -9854,9 +10023,11 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       style={{ borderColor: colors.hexBorder }}
                       data-testid={`card-video-${index}`}
                     >
-                      <div
+                      <button
+                        type="button"
                         onClick={() => setPlayingVideo(video)}
-                        className="block cursor-pointer relative group"
+                        aria-label={`Play ${video.title || 'music video'}`}
+                        className="block w-full cursor-pointer relative group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-400"
                       >
                         {/* Prefer a live video preview (muted/looped) over a static thumbnail
                             because a still frame at t=0 is often black. Fallback to the
@@ -9875,7 +10046,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               // Lazy preview: only start downloading + playing on hover,
                               // so the first paint never loads every gallery video at once.
                               const el = e.currentTarget;
-                              el.play().catch(() => {});
+                              if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) el.play().catch(() => {});
                             }}
                             onMouseLeave={(e) => {
                               const el = e.currentTarget;
@@ -9908,108 +10079,19 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             <Play className="h-7 w-7 sm:h-8 sm:w-8 text-white ml-1" fill="white" />
                           </div>
                         </div>
-                      </div>
+                      </button>
                       <div className="p-3">
                         <h3 className="font-medium text-white text-sm">{video.title || 'Music Video'}</h3>
                         <p className="text-xs text-gray-400 mt-1">
                           {video.type === 'uploaded' ? 'Video Local' : 'Powered by Boostify'}
                         </p>
                         
-                        <div className="space-y-2 mt-2">
-                          {/* Bot�n de descarga - visible para todos si es video subido */}
-                          {video.type === 'uploaded' && video.downloadPassword && (
-                            <button
-                              className="w-full py-2.5 sm:py-2 px-4 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 transform hover:scale-105 shadow-lg active:scale-95"
-                              style={{ 
-                                background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
-                                color: 'white'
-                              }}
-                              onClick={() => handleDownloadVideo(video)}
-                              data-testid={`button-download-video-${video.id}`}
-                            >
-                              <Download className="h-3.5 w-3.5 sm:h-3 sm:w-3 inline mr-1.5 sm:mr-1" />
-                              Descargar Video
-                            </button>
-                          )}
-
-                          {/* Bot�n Ver Gui�n PDF - visible para todos si tiene script */}
-                          {video.scriptPdfUrl && (
-                            <button
-                              className="w-full py-2.5 sm:py-2 px-4 rounded-full text-xs sm:text-sm font-bold transition-all duration-300 transform hover:scale-105 shadow-lg active:scale-95"
-                              style={{ 
-                                background: 'linear-gradient(135deg, #f97316, #ea580c)',
-                                color: 'white'
-                              }}
-                              onClick={() => setViewingPdf(video)}
-                              data-testid={`button-view-script-${video.id}`}
-                            >
-                              <FileText className="h-3.5 w-3.5 sm:h-3 sm:w-3 inline mr-1.5 sm:mr-1" />
-                              Ver Video Script
-                            </button>
-                          )}
-
-                          {isOwnProfile && (
-                            <>
-                              {/* Subir Script PDF independiente */}
-                              {!video.scriptPdfUrl && (
-                                <label className="block">
-                                  <input
-                                    type="file"
-                                    accept="application/pdf,.pdf"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) handleUploadPdfToVideo(video.id, file);
-                                      e.target.value = '';
-                                    }}
-                                  />
-                                  <span
-                                    className="w-full py-2 px-4 rounded-full text-xs font-bold transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
-                                    style={{ 
-                                      background: uploadingPdfForVideoId === video.id ? '#666' : 'linear-gradient(135deg, #f97316, #ea580c)',
-                                      color: 'white',
-                                      pointerEvents: uploadingPdfForVideoId === video.id ? 'none' : 'auto'
-                                    }}
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                    {uploadingPdfForVideoId === video.id ? 'Subiendo PDF...' : 'Subir Video Script (PDF)'}
-                                  </span>
-                                </label>
-                              )}
-
-                              {/* Bot�n promocional para YouTube Views */}
-                              <Link href="/youtube-views">
-                                <button
-                                  className="w-full py-2 px-4 rounded-full text-xs font-bold transition-all duration-300 transform hover:scale-105 shadow-lg"
-                                  style={{ 
-                                    background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
-                                    color: 'white'
-                                  }}
-                                  data-testid={`button-promote-video-${video.id}`}
-                                >
-                                  <Sparkles className="h-3 w-3 inline mr-1" />
-                                  Promocionar Video
-                                </button>
-                              </Link>
-                              
-                              {/* Bot�n de borrar */}
-                              <button
-                                className="w-full py-2 px-4 rounded-full text-xs font-medium transition duration-300 hover:bg-red-600"
-                                style={{ 
-                                  backgroundColor: 'transparent',
-                                  borderColor: '#EF4444',
-                                  borderWidth: '1px',
-                                  color: '#EF4444'
-                                }}
-                                onClick={() => handleDeleteVideo(video)}
-                                data-testid={`button-delete-video-${video.id}`}
-                              >
-                                <Trash2 className="h-3 w-3 inline mr-1" />
-                                Borrar Video
-                              </button>
-                            </>
-                          )}
-                        </div>
+                        <ArtistVideoActions videoId={video.id} isOwner={!!isOwnProfile}
+                          canDownload={video.type === 'uploaded' && !!video.downloadPassword}
+                          hasScript={!!video.scriptPdfUrl} uploading={uploadingPdfForVideoId === video.id}
+                          accentColor={colors.hexAccent} onDownload={() => handleDownloadVideo(video)}
+                          onViewScript={() => setViewingPdf(video)} onUploadScript={(file) => handleUploadPdfToVideo(video.id, file)}
+                          onDelete={() => handleDeleteVideo(video)} />
                       </div>
                     </div>
                   );
@@ -10046,7 +10128,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 loop
                                 playsInline
                                 preload="none"
-                                onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}); }}
+                                onMouseEnter={(e) => { if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) e.currentTarget.play().catch(() => {}); }}
                                 onMouseLeave={(e) => {
                                   const el = e.currentTarget;
                                   el.pause();
@@ -10081,11 +10163,11 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             </div>
                             {/* Play overlay */}
                             {project.finalVideoUrl && (
-                              <a
-                                href={project.finalVideoUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                              <button
+                                type="button"
+                                aria-label={`Play ${project.songName || 'AI music video'}`}
+                                onClick={() => setPlayingVideo({ id: `project-${project.id}`, title: project.songName || 'Music Video', url: project.finalVideoUrl!, thumbnailUrl: project.thumbnail, userId: String(artist.id) })}
+                                className="absolute inset-0 w-full bg-black/25 hover:bg-black/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-400 transition-colors flex items-center justify-center"
                               >
                                 <div 
                                   className="w-16 h-16 rounded-full flex items-center justify-center"
@@ -10093,7 +10175,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 >
                                   <Play className="h-8 w-8 text-white ml-1" fill="white" />
                                 </div>
-                              </a>
+                              </button>
                             )}
                           </div>
                           <div className="p-3">
@@ -10223,7 +10305,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Antenna, 'Broadcast Studio')}
+                            {renderSectionHeader(sectionId, Antenna, 'Social Media Hub')}
                             {sectionExpanded[sectionId] && (
                               <div className="rounded-2xl overflow-hidden mx-auto w-[72%] sm:w-full" style={{ background: 'linear-gradient(180deg, #050505 0%, #000 100%)' }}>
                                 {/* Ambient glow bg */}
@@ -10681,7 +10763,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Activity, 'Observatory')}
+                            {renderSectionHeader(sectionId, Activity, 'Artist Analytics')}
                             {sectionExpanded[sectionId] && (
                               <div className="space-y-4 pt-1">
 
@@ -10862,7 +10944,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           />
                         ) : (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, BarChart3, 'Commerce Blueprint')}
+                            {renderSectionHeader(sectionId, BarChart3, 'Artist Business Plan')}
                             {sectionExpanded[sectionId] && (
                               <p className="text-center text-xs text-gray-600 py-6">Loading plan�</p>
                             )}
@@ -10952,7 +11034,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                         const amazonArtistId = userProfile?.pgId ? Number(userProfile.pgId) : 0;
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, ShoppingBag, 'Amazon Cultural Picks')}
+                            {renderSectionHeader(sectionId, ShoppingBag, 'Amazon Picks')}
                             {sectionExpanded[sectionId] && (
                               amazonArtistId > 0 ? (
                                 <AmazonCuratedPicksModule
@@ -10995,7 +11077,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               ease: 'easeInOut',
                             }}
                           >
-                            {renderSectionHeader(sectionId, Brain, 'The Atelier')}
+                            {renderSectionHeader(sectionId, Brain, 'Artist Career Support')}
                             {sectionExpanded[sectionId] && (
                               <motion.div
                                 style={{ padding: 4 }}
@@ -11032,7 +11114,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               ease: 'easeInOut',
                             }}
                           >
-                            {renderSectionHeader(sectionId, GraduationCap, 'Superstar Blueprint')}
+                            {renderSectionHeader(sectionId, GraduationCap, 'Artist Growth Plan')}
                             {sectionExpanded[sectionId] && (
                               <motion.div
                                 style={{ padding: 4 }}
@@ -11052,7 +11134,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       } else if (sectionId === 'artist-domain' && isOwnProfile) {
                         sectionElement = (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Globe, 'My Domain')}
+                            {renderSectionHeader(sectionId, Globe, 'Artist Website')}
                             <div style={{ padding: 4 }}>
                               <ArtistDomainManager
                                 artistId={Number(userProfile?.pgId) || parseInt(artistId, 10) || 0}
@@ -11063,6 +11145,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       } else if (sectionId === 'hermes-agent' && isOwnProfile) {
                         sectionElement = (
                           <HermesAgentPanel
+                            onOpenCopilot={() => setArtistProfileAgentOpen(true)}
                             artistId={String(artistId)}
                             pgId={userProfile?.pgId ? Number(userProfile.pgId) : undefined}
                             isOwnProfile={isOwnProfile}
@@ -11071,7 +11154,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             colors={colors as any}
                             cardStyles={cardStyles}
                             cardStyleInline={cardStyleInline}
-                            artistName={userProfile?.artistName || userProfile?.username || 'Artist'}
+                            artistName={artist.name}
                           />
                         );
                       } else if (sectionId === 'electronic-press-kit') {
@@ -11080,7 +11163,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                             className={cardStyles}
                             style={cardStyleInline}
                           >
-                            {renderSectionHeader(sectionId, BookOpen, 'The Press Room')}
+                            {renderSectionHeader(sectionId, BookOpen, 'Press Kit')}
                             {sectionExpanded[sectionId] && (
                             <div style={{ padding: 4 }}>
                               <EpkSection
@@ -11105,7 +11188,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           />
                         ) : (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Shield, 'The Gateway')}
+                            {renderSectionHeader(sectionId, Shield, 'AI Agent Profile')}
                             {sectionExpanded[sectionId] && (
                               <p className="text-center text-xs text-gray-600 py-6">Loading agent gateway�</p>
                             )}
@@ -11349,7 +11432,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 <Clapperboard className="w-5 h-5" style={{ color: colors.hexAccent }} />
                               </div>
                               <div>
-                                <h2 className="text-base font-black text-white uppercase tracking-[0.12em]">Lyrics Video Studio</h2>
+                                <h2 className="text-base font-black text-white uppercase tracking-[0.12em]">Lyric Videos Studio</h2>
                                 <p className="text-[11px] text-zinc-500 mt-0.5">AI Transcription · Karaoke 1920×1080 · YouTube Ready</p>
                               </div>
                             </div>
@@ -11378,7 +11461,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                         const ownerPgId = userProfile?.pgId ? Number(userProfile.pgId) : 0;
                         sectionElement = ownerPgId > 0 ? (
                           <div className={cardStyles} style={cardStyleInline}>
-                            {renderSectionHeader(sectionId, Globe, 'My Universe')}
+                            {renderSectionHeader(sectionId, Globe, 'Artist Universe Page')}
                             {sectionExpanded[sectionId] && (
                               <div style={{ padding: 4 }}>
                                 <MyUniverseModule ownerPgId={ownerPgId} isOwnProfile={!!isOwnProfile} />
@@ -11594,6 +11677,21 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       {sectionElement}
                       <ModuleGuide moduleId={sectionId} accentColor={colors.hexAccent} />
                     </>
+                  );
+                }
+
+                // These creator studios render their own rich headers, so give
+                // them the same profile-level collapse/close header as every
+                // other section, while keeping their studio UI intact below.
+                if (sectionId === 'podcast-clips' || sectionId === 'world-tour') {
+                  const moduleTitle = sectionId === 'podcast-clips' ? 'Podcast Studio' : 'Tour Videos';
+                  const ModuleIcon = sectionId === 'podcast-clips' ? Mic2 : Globe;
+                  const isExpanded = !!sectionExpanded[sectionId];
+                  sectionElement = (
+                    <div className={cardStyles} style={cardStyleInline}>
+                      {renderSectionHeader(sectionId, ModuleIcon, moduleTitle)}
+                      {isExpanded && <div id={`profile-module-content-${sectionId}`}>{sectionElement}</div>}
+                    </div>
                   );
                 }
 
@@ -13193,8 +13291,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       {isOwnProfile && (
         <EditProfileDialog
           hideTrigger
+          copilotEdit={copilotTextEdit}
+          copilotActive={artistProfileAgentOpen}
           open={quickEditOpen}
-          onOpenChange={setQuickEditOpen}
+          onOpenChange={(next) => { setQuickEditOpen(next); if (!next) setCopilotTextEdit(undefined); }}
           artistId={String(userProfile?.pgId || artistId)}
           currentData={{
             displayName: userProfile?.displayName || userProfile?.name || "",
@@ -13234,6 +13334,40 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         primaryColor={colors.hexPrimary}
         accentColor={colors.hexAccent}
       />
+    )}
+    {isOwnProfile && Number(userProfile?.pgId || (artist as any)?.pgId || artistId) > 0 && (
+      <>
+        {createPortal(<div className="fixed bottom-20 left-4 z-[10001] flex items-center gap-2"><button
+          type="button"
+          onClick={() => setArtistProfileAgentOpen((open) => !open)}
+          aria-label={artistProfileAgentOpen ? 'Close Artist Profile Copilot' : 'Open Artist Profile Copilot'}
+          aria-expanded={artistProfileAgentOpen}
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white shadow-[0_12px_40px_rgba(0,0,0,.45)] transition hover:scale-105 hover:brightness-110"
+          style={{ background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})` }}
+          data-testid="button-artist-profile-copilot"
+          title="Artist Profile Copilot"
+        >
+          <Sparkles className="h-4 w-4" />
+        </button><button type="button" onClick={() => { setArtistProfileAgentOpen(true); setCopilotSpiderMode(true); }} aria-label="Open Spider Mode" title="Spider Mode" className="grid h-10 w-10 place-items-center rounded-full border border-orange-200/25 bg-[#17111c] text-orange-200 shadow-[0_12px_40px_rgba(0,0,0,.45)] transition hover:scale-105 hover:bg-[#2d1a22]">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="3.5" /><circle cx="12" cy="8.5" r="2" /><path d="M9 12 5 9 2.5 10M8.5 14H4L2 16M9 16l-3 3-1 3M10 17l-1 4M15 12l4-3 2.5 1M15.5 14H20l2 2M15 16l3 3 1 3M14 17l1 4" /></svg>
+        </button></div>, document.body)}
+        {artistProfileAgentOpen && (
+          <Suspense fallback={null}>
+            <ArtistProfileAgentChat
+              key={Number(userProfile?.pgId || (artist as any)?.pgId || artistId)}
+              artistId={Number(userProfile?.pgId || (artist as any)?.pgId || artistId)}
+              artistName={userProfile?.artistName || userProfile?.displayName || artist?.name || 'Artist'}
+              accent={colors.hexAccent}
+              open={artistProfileAgentOpen}
+              onClose={() => { setArtistProfileAgentOpen(false); setCopilotSpiderMode(false); }}
+              onActions={applyArtistProfileAgentActions}
+              onUiCommand={handleCopilotUiCommand}
+              spiderMode={copilotSpiderMode}
+              onSpiderModeChange={setCopilotSpiderMode}
+            />
+          </Suspense>
+        )}
+      </>
     )}
     {buyConcertEvent && (
       <TicketCheckoutModal

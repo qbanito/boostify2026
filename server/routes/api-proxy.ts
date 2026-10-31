@@ -11,7 +11,6 @@ import express, { Router, Request, Response } from 'express';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { log } from '../vite';
-import { generateImageWithNanoBanana } from '../services/fal-service';
 import { UploadedFile } from 'express-fileupload';
 import path from 'path';
 import fs from 'fs';
@@ -3469,28 +3468,6 @@ router.get('/proxy/firebase-file', async (req: Request, res: Response) => {
   }
 });
 
-// ─── VR Studio AI Preview Generator ──────────────────────────────────────────
-router.post('/vr-studio/generate-preview', async (req: Request, res: Response) => {
-  try {
-    const { prompt, serviceId } = req.body;
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'prompt is required' });
-    }
-    if (!FAL_API_KEY) {
-      return res.status(500).json({ error: 'FAL_API_KEY not configured' });
-    }
-    const result = await generateImageWithNanoBanana(prompt, { aspectRatio: '16:9' });
-    if (result.success && result.imageUrl) {
-      return res.json({ imageUrl: result.imageUrl, serviceId });
-    }
-    return res.status(500).json({ error: result.error || 'Image generation failed' });
-  } catch (err: any) {
-    console.error('[vr-studio/generate-preview] error:', err.message);
-    return res.status(500).json({ error: err.message || 'Unexpected error' });
-  }
-});
-
-// ─── VR Studio Lead Capture ───────────────────────────────────────────────────
 router.post('/vr-studio/leads', async (req: Request, res: Response) => {
   const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
   const BREVO_API_KEY = process.env.BREVO_API_KEY || '';

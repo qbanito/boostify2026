@@ -933,7 +933,7 @@ export default function ArtistDomainManager({ artistId }: Props) {
                   </div>
                   <div>
                     <p className="text-[11px] font-black tracking-widest uppercase text-indigo-400">Guía</p>
-                    <h3 className="text-base font-bold text-white leading-tight">My Domain — Como funciona</h3>
+                    <h3 className="text-base font-bold text-white leading-tight">Artist Website — Como funciona</h3>
                   </div>
                 </div>
                 <button onClick={() => setShowGuide(false)}
@@ -985,7 +985,7 @@ export default function ArtistDomainManager({ artistId }: Props) {
                 <Globe className="w-[18px] h-[18px] text-indigo-400" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-sm">My Domain</h3>
+                <h3 className="font-bold text-white text-sm">Artist Website</h3>
                 <p className="text-xs text-white/35 mt-0.5">Gestiona tu dominio profesional de artista</p>
               </div>
             </div>

@@ -204,7 +204,7 @@ export function AgentGatewayPanel({
               <Shield className="w-5 h-5" style={{ color: colors.hexPrimary }} />
             </div>
             <div>
-              <h3 className="text-white font-bold text-sm">Agent Gateway</h3>
+              <h3 className="text-white font-bold text-sm">AI Agent Profile</h3>
               <p className="text-white/40 text-xs">Official communication channel</p>
             </div>
           </div>

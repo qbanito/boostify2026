@@ -1910,7 +1910,7 @@ export default function ArtistPromoClipsModule({ artistId, songs = [], colors, i
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <h2 className="text-lg font-black tracking-tight leading-none">Promo Clips</h2>
+              <h2 className="text-lg font-black tracking-tight leading-none">Promo Video Clips</h2>
               <span
                 className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide flex-shrink-0"
                 style={{ background: `${accent}1a`, color: accent, border: `1px solid ${accent}40` }}

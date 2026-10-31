@@ -1,5 +1,5 @@
 /**
- * Renaissance Studio: a practical release-to-growth roadmap for an artist.
+ * Release Growth Roadmap: a practical release-to-growth roadmap for an artist.
  * The selected focus is a planning aid; progress is never inferred from catalog size.
  */
 
@@ -52,7 +52,7 @@ const PHASES = [
     description: 'Find the audience, cultural moment, and angle that make this release matter.',
     outcome: 'A clear audience and positioning brief.',
     firstMove: 'Compare three artists in your lane. Note what their audience responds to, then choose one distinct angle for your next release.',
-    tools: [{ id: 'observation-engine', label: 'Observation Engine' }, { id: 'analytics', label: 'Observatory' }, { id: 'audience-engine', label: 'Signal Pulse' }],
+    tools: [{ id: 'observation-engine', label: 'Music Market Research' }, { id: 'analytics', label: 'Artist Analytics' }, { id: 'audience-engine', label: 'Audience Growth' }],
   },
   {
     id: 'imagine',
@@ -62,7 +62,7 @@ const PHASES = [
     description: 'Turn the strongest idea into a recognizable story and creative direction.',
     outcome: 'A release concept your collaborators can act on.',
     firstMove: 'Write the one-sentence story behind the song, the feeling fans should leave with, and the visual world that carries it.',
-    tools: [{ id: 'deep-brief', label: 'Deep Brief' }, { id: 'career-suite', label: 'The Atelier' }],
+    tools: [{ id: 'deep-brief', label: 'Project Brief' }, { id: 'career-suite', label: 'Artist Career Support' }],
   },
   {
     id: 'build',
@@ -72,7 +72,7 @@ const PHASES = [
     description: 'Shape the song, visuals, and rollout into one cohesive release system.',
     outcome: 'A usable set of release assets and a rollout sequence.',
     firstMove: 'Choose one lead visual, prepare short-form moments, and map each asset to a channel and date.',
-    tools: [{ id: 'ai-video-studio', label: 'AI Video Studio' }, { id: 'social-posts', label: 'Social Posts' }, { id: 'promo-clips', label: 'Promo Clips' }],
+    tools: [{ id: 'ai-video-studio', label: 'AI Video Studio' }, { id: 'social-posts', label: 'Social Posts' }, { id: 'promo-clips', label: 'Promo Video Clips' }],
   },
   {
     id: 'perform',
@@ -82,7 +82,7 @@ const PHASES = [
     description: 'Bring the release to people through live moments, stories, and conversation.',
     outcome: 'A repeatable way for fans to experience and share the release.',
     firstMove: 'Pick one live or spoken format that fits the song, then make it easy for fans to join in and pass along.',
-    tools: [{ id: 'world-tour', label: 'World Tour Studio' }, { id: 'podcast-clips', label: 'Podcast Studio' }, { id: 'hologram', label: 'HoloStage Live' }],
+    tools: [{ id: 'world-tour', label: 'Tour Videos' }, { id: 'podcast-clips', label: 'Podcast Studio' }, { id: 'hologram', label: 'Hologram Shows' }],
   },
   {
     id: 'learn',
@@ -92,7 +92,7 @@ const PHASES = [
     description: 'Use real audience response to decide what deserves another iteration.',
     outcome: 'One evidence-based adjustment for the next cycle.',
     firstMove: 'Review saves, shares, comments, and watch-through together. Keep the strongest signal and change one weak point.',
-    tools: [{ id: 'analytics', label: 'Observatory' }, { id: 'social-hub', label: 'Social Hub' }],
+    tools: [{ id: 'analytics', label: 'Artist Analytics' }, { id: 'social-hub', label: 'Social Hub' }],
   },
   {
     id: 'monetize',
@@ -102,7 +102,7 @@ const PHASES = [
     description: 'Build sustainable income around the music and the community it creates.',
     outcome: 'A fan offer that feels connected to the artist, not bolted on.',
     firstMove: 'Choose one valuable fan experience or product that extends the release, then make its next step simple.',
-    tools: [{ id: 'merchandise', label: 'Merchandise' }, { id: 'earnings', label: 'Earnings' }, { id: 'business-plan', label: 'Commerce Blueprint' }],
+    tools: [{ id: 'merchandise', label: 'Merchandise' }, { id: 'earnings', label: 'Earnings' }, { id: 'business-plan', label: 'Artist Business Plan' }],
   },
 ] as const;
 
@@ -149,7 +149,7 @@ export function RenaissanceStudioSection({
         borderColor: `${accent}50`,
         backgroundImage: `linear-gradient(135deg, ${accent}12 0%, rgba(8,8,14,0.97) 48%, rgba(129,140,248,0.07) 100%)`,
       }}
-      aria-label="Renaissance Studio"
+      aria-label="Release Growth Roadmap"
     >
       <button
         type="button"
@@ -162,7 +162,7 @@ export function RenaissanceStudioSection({
             <Compass className="h-[18px] w-[18px]" />
           </span>
           <span>
-            <span className="block text-sm font-bold tracking-wide text-white">Renaissance Studio</span>
+            <span className="block text-sm font-bold tracking-wide text-white">Release Growth Roadmap</span>
             <span className="mt-0.5 block text-[11px] text-white/50">A release-to-growth roadmap for {artistName}</span>
           </span>
         </span>

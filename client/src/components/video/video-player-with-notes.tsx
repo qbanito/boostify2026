@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Pause, Trash2, Edit3, X, MessageSquarePlus, Lock, Check, Play, Maximize, Minimize } from 'lucide-react';
 import {
   useVideoNotes,
@@ -32,7 +33,7 @@ function getYouTubeVideoId(url: string): string | null {
     const parsed = new URL(url);
     const host = parsed.hostname.replace(/^www\./, '');
     if (host === 'youtu.be') return parsed.pathname.split('/').filter(Boolean)[0] || null;
-    if (host.endsWith('youtube.com')) {
+    if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtube-nocookie.com' || host.endsWith('.youtube-nocookie.com')) {
       const watchId = parsed.searchParams.get('v');
       if (watchId) return watchId;
       const parts = parsed.pathname.split('/').filter(Boolean);
@@ -79,6 +80,7 @@ export function VideoPlayerWithNotes({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const videoWrapRef = useRef<HTMLDivElement | null>(null);
+  const playerDialogRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const youtubeEmbedUrl = useMemo(() => getYouTubeEmbedUrl(videoUrl, autoPlayOnOpen), [videoUrl, autoPlayOnOpen]);
   const isYouTube = !!youtubeEmbedUrl;
@@ -90,6 +92,8 @@ export function VideoPlayerWithNotes({
   // Drives a lightweight spinner overlay so the user knows the network is
   // catching up instead of perceiving the player as "frozen".
   const [isBuffering, setIsBuffering] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [iframeSlow, setIframeSlow] = useState(false);
   // On mobile portrait the panel is hidden by default so the vertical
   // video isn't covered. The user opens it via a small floating icon.
   // On desktop (md+) the side panel is visible from the start.
@@ -142,8 +146,25 @@ export function VideoPlayerWithNotes({
     setCurrentMs(0);
     setDurationMs(0);
     setIsPlaying(false);
+    setPlaybackError(null);
+    setIframeSlow(false);
     setIsBuffering(!isYouTube && autoPlayOnOpen);
   }, [videoUrl, isYouTube, autoPlayOnOpen]);
+
+  useEffect(() => {
+    if (!isBuffering || isYouTube) return;
+    const timeout = window.setTimeout(() => {
+      setIsBuffering(false);
+      setPlaybackError('The video is taking longer than expected to load.');
+    }, 15000);
+    return () => window.clearTimeout(timeout);
+  }, [isBuffering, isYouTube]);
+
+  useEffect(() => {
+    if (!isYouTube || iframeLoaded) return;
+    const timeout = window.setTimeout(() => setIframeSlow(true), 12000);
+    return () => window.clearTimeout(timeout);
+  }, [isYouTube, iframeLoaded, videoUrl]);
 
   // ---- Video element lifecycle ---------------------------------------
   useEffect(() => {
@@ -154,16 +175,17 @@ export function VideoPlayerWithNotes({
     const onDuration = () => {
       if (isFinite(vid.duration)) setDurationMs(Math.round(vid.duration * 1000));
     };
-    const onPlay = () => { setIsPlaying(true); setIsBuffering(false); };
-    const onPause = () => setIsPlaying(false);
+    const onPlay = () => { setIsPlaying(true); setIsBuffering(false); setPlaybackError(null); };
+    const onPause = () => { setIsPlaying(false); setIsBuffering(false); };
     const onEndedHandler = () => {
       setIsPlaying(false);
       try { onEnded?.(); } catch { /* ignore */ }
     };
-    const onWaiting = () => setIsBuffering(true);
-    const onPlaying = () => setIsBuffering(false);
-    const onCanPlay = () => setIsBuffering(false);
-    const onStalled = () => setIsBuffering(true);
+    const onWaiting = () => { if (!vid.paused) setIsBuffering(true); };
+    const onPlaying = () => { setIsBuffering(false); setPlaybackError(null); };
+    const onCanPlay = () => { setIsBuffering(false); setPlaybackError(null); };
+    const onStalled = () => { if (!vid.paused) setIsBuffering(true); };
+    const onError = () => { setIsBuffering(false); setIsPlaying(false); setPlaybackError('This video could not be loaded.'); };
 
     vid.addEventListener('timeupdate', onTime);
     vid.addEventListener('loadedmetadata', onDuration);
@@ -175,6 +197,7 @@ export function VideoPlayerWithNotes({
     vid.addEventListener('playing', onPlaying);
     vid.addEventListener('canplay', onCanPlay);
     vid.addEventListener('stalled', onStalled);
+    vid.addEventListener('error', onError);
 
     return () => {
       vid.removeEventListener('timeupdate', onTime);
@@ -187,8 +210,9 @@ export function VideoPlayerWithNotes({
       vid.removeEventListener('playing', onPlaying);
       vid.removeEventListener('canplay', onCanPlay);
       vid.removeEventListener('stalled', onStalled);
+      vid.removeEventListener('error', onError);
     };
-  }, [onEnded]);
+  }, [onEnded, videoUrl, isYouTube]);
 
   useEffect(() => {
     const vid = videoRef.current;
@@ -209,12 +233,28 @@ export function VideoPlayerWithNotes({
 
   // ---- Hide floating widgets (support chat, etc.) while player is open --
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
     document.body.dataset.videoPlayerOpen = 'true';
     document.body.style.overflow = 'hidden';
     return () => {
       delete document.body.dataset.videoPlayerOpen;
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
     };
+  }, []);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    playerDialogRef.current?.querySelector<HTMLButtonElement>('button[aria-label="Close"]')?.focus();
+    const keepFocusInside = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !playerDialogRef.current) return;
+      const controls = Array.from(playerDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])')).filter((element) => element.getClientRects().length > 0);
+      if (!controls.length) { event.preventDefault(); playerDialogRef.current.focus(); return; }
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !playerDialogRef.current.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !playerDialogRef.current.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', keepFocusInside);
+    return () => { window.removeEventListener('keydown', keepFocusInside); previousFocus?.focus(); };
   }, []);
 
   // ---- Auto fullscreen on mobile landscape orientation ----------------
@@ -341,34 +381,21 @@ export function VideoPlayerWithNotes({
         vid.removeEventListener('webkitendfullscreen', onChange);
       }
     };
-  }, []);
-
-  // Auto-fullscreen when the user rotates to landscape on a phone.
-  // Only triggers once per rotation (not on every re-render) and only if
-  // the video is actually playing / visible.
-  useEffect(() => {
-    if (!isLandscape) return;
-    // iOS Safari blocks programmatic fullscreen without a user gesture, but
-    // orientationchange counts as one on most devices. We try silently and
-    // ignore failures — the manual button is always available.
-    const id = window.setTimeout(() => { enterFullscreen(); }, 150);
-    return () => window.clearTimeout(id);
-  }, [isLandscape, enterFullscreen]);
+  }, [isYouTube, videoUrl]);
 
   // ---- Keyboard shortcuts (desktop) ----------------------------------
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && onClose) { e.preventDefault(); onClose(); return; }
       // Ignore when typing in input/textarea
       const target = e.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (target && (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'A'].includes(target.tagName) || target.isContentEditable)) return;
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         openComposer();
       } else if (e.key === ' ') {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === 'Escape' && onClose) {
-        onClose();
       }
     }
     window.addEventListener('keydown', onKey);
@@ -386,8 +413,17 @@ export function VideoPlayerWithNotes({
   const togglePlay = useCallback(() => {
     const vid = videoRef.current;
     if (!vid) return;
-    if (vid.paused) vid.play().catch(() => {});
+    if (vid.paused) vid.play().catch(() => { setIsBuffering(false); setIsPlaying(false); });
     else vid.pause();
+  }, []);
+
+  const retryPlayback = useCallback(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    setPlaybackError(null);
+    setIsBuffering(true);
+    vid.load();
+    void vid.play().catch(() => { setIsBuffering(false); setIsPlaying(false); });
   }, []);
 
   const openComposer = useCallback(() => {
@@ -461,9 +497,15 @@ export function VideoPlayerWithNotes({
 
   // ---- Render --------------------------------------------------------
 
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal((
     <div
-      className="fixed inset-0 z-[80] bg-black/95 flex flex-col md:flex-row"
+      ref={playerDialogRef}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title ? `Video player: ${title}` : 'Video player'}
+      className="fixed inset-0 z-[10050] bg-black/95 flex flex-col md:flex-row"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
         paddingTop: 'env(safe-area-inset-top)',
@@ -476,9 +518,9 @@ export function VideoPlayerWithNotes({
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/70 hover:bg-black/90 backdrop-blur flex items-center justify-center text-white shadow-lg ring-1 ring-white/15 transition-colors"
+            className="absolute z-30 w-11 h-11 rounded-full bg-black/70 hover:bg-black/90 backdrop-blur flex items-center justify-center text-white shadow-lg ring-1 ring-white/15 transition-colors"
             style={{
-              top: 'calc(env(safe-area-inset-top) + 12px)',
+              top: '12px',
               right: 'calc(env(safe-area-inset-right) + 12px)',
             }}
             aria-label="Close"
@@ -509,19 +551,26 @@ export function VideoPlayerWithNotes({
               autoPlay={autoPlayOnOpen}
               playsInline
               controls={false}
+              onClick={togglePlay}
               preload={preloadStrategy}
-              disableRemotePlayback
               {...({ 'webkit-playsinline': 'true', 'x-webkit-airplay': 'allow' } as any)}
             />
           )}
 
-          {isYouTube && !iframeLoaded && (
+          {isYouTube && !iframeLoaded && !iframeSlow && (
             <div
               className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-neutral-950 bg-cover bg-center"
               style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
             >
               <div className="absolute inset-0 bg-black/45" />
               <div className="relative w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+            </div>
+          )}
+
+          {isYouTube && !iframeLoaded && iframeSlow && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-neutral-950/95 px-6 text-center text-sm text-white/80" role="status">
+              <p>Video is taking longer to load.</p>
+              <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white px-5 py-3 font-semibold text-black">Open on YouTube</a>
             </div>
           )}
 
@@ -535,7 +584,17 @@ export function VideoPlayerWithNotes({
             </div>
           )}
 
-          {!isYouTube && !isPlaying && !isBuffering && (
+          {!isYouTube && playbackError && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center text-sm text-white/85" role="alert">
+              <p>{playbackError}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button type="button" onClick={retryPlayback} className="min-h-11 rounded-full bg-white px-5 font-semibold text-black">Try again</button>
+                {videoUrl && <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-full border border-white/25 px-5 font-semibold text-white">Open video</a>}
+              </div>
+            </div>
+          )}
+
+          {!isYouTube && !isPlaying && !isBuffering && !playbackError && (
             <button
               type="button"
               onClick={togglePlay}
@@ -562,16 +621,17 @@ export function VideoPlayerWithNotes({
         {!isYouTube && (
           <div className="bg-black/80 backdrop-blur p-3 sm:p-4 select-none">
             {/* Timeline with note markers */}
-            <div className="relative h-2 mb-3">
+            <div className="relative h-11 mb-1 flex items-center">
+              <div className="pointer-events-none absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
               <input
                 type="range"
                 min={0}
                 max={durationMs || 0}
                 value={currentMs}
                 onChange={(e) => seekTo(parseInt(e.target.value, 10))}
-                className="absolute inset-0 w-full h-2 appearance-none bg-white/10 rounded-full cursor-pointer"
+                className="absolute inset-0 w-full h-full cursor-pointer bg-transparent"
                 style={{
-                  touchAction: 'none',
+                  touchAction: 'pan-y',
                   accentColor,
                 }}
                 aria-label="Seek"
@@ -583,16 +643,13 @@ export function VideoPlayerWithNotes({
                     key={m.id}
                     type="button"
                     onClick={() => seekTo(m.note.timecodeMs)}
-                    className="pointer-events-auto absolute -top-1 -translate-x-1/2 w-3 h-4 rounded-sm shadow-lg transition-transform hover:scale-125 focus:scale-125"
+                    className="pointer-events-auto absolute top-0 -translate-x-1/2 h-11 w-9 flex items-center justify-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     style={{
-                      left: `${m.pct}%`,
-                      background: m.note.color || accentColor,
-                      // Larger invisible hit area (≥44px) for mobile
-                      boxShadow: `0 0 0 18px rgba(0,0,0,0)`,
+                      left: `clamp(18px, ${m.pct}%, calc(100% - 18px))`,
                     }}
                     aria-label={`Jump to note at ${formatTimecode(m.note.timecodeMs)}`}
                     title={m.note.text.slice(0, 60)}
-                  />
+                  ><span className="h-4 w-1 rounded-sm shadow-lg" style={{ background: m.note.color || accentColor }} /></button>
                 ))}
               </div>
             </div>
@@ -663,9 +720,9 @@ export function VideoPlayerWithNotes({
         <button
           type="button"
           onClick={() => setPanelOpen(true)}
-          className="md:hidden fixed bottom-4 right-4 z-[90] w-12 h-12 rounded-full bg-black/80 hover:bg-black/90 backdrop-blur border border-white/15 shadow-lg flex items-center justify-center text-white"
+          className="md:hidden fixed top-3 left-3 z-[90] w-11 h-11 rounded-full bg-black/80 hover:bg-black/90 backdrop-blur border border-white/15 shadow-lg flex items-center justify-center text-white"
           aria-label="Open notes"
-          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          style={{ marginTop: 'env(safe-area-inset-top)', marginLeft: 'env(safe-area-inset-left)' }}
         >
           <MessageSquarePlus className="h-5 w-5" style={{ color: accentColor }} />
           {notes.length > 0 && (
@@ -834,7 +891,7 @@ export function VideoPlayerWithNotes({
         )}
       </aside>
     </div>
-  );
+  ), document.body);
 }
 
 // ─── Single note row ──────────────────────────────────────────────────

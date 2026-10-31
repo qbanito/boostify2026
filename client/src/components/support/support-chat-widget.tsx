@@ -3,6 +3,7 @@ import { MessageSquare, X, Send, Loader2, Bot, ChevronDown, Mic, MicOff, Sparkle
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiRequest } from '@/lib/queryClient';
 import { useCommandContext, looksLikeCommand } from '@/lib/command-context';
+import { useAuth } from '@/hooks/use-auth';
 
 interface CommandAsset {
   label: string;
@@ -19,6 +20,7 @@ interface ChatMessage {
 }
 
 export function SupportChatWidget() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -37,6 +39,8 @@ export function SupportChatWidget() {
   // set, module-creation commands run through the Artist Command Engine.
   const cmdContext = useCommandContext();
 
+  // The floating support chat is the guest/fan entry point. Logged-in artists
+  // use the Artist Profile Copilot instead, so do not render both controls.
   // Hide the widget whenever a fullscreen video player (or similar) is open.
   useEffect(() => {
     const check = () => setHidden(document.body.dataset.videoPlayerOpen === 'true');
@@ -52,6 +56,14 @@ export function SupportChatWidget() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setIsOpen(false);
+      setMessages([]);
+      setInput('');
+    }
+  }, [isAuthenticated]);
 
   // Focus input when opening
   useEffect(() => {
@@ -263,7 +275,7 @@ export function SupportChatWidget() {
 
   return (
     <>
-      {hidden ? null : (
+      {authLoading || isAuthenticated || hidden ? null : (
       <>
       {/* Floating Action Button */}
       <AnimatePresence>

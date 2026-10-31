@@ -1,5 +1,5 @@
 /**
- * Emotional Studio Panel
+ * Creative Story Studio Panel
  *
  * A 10-block emotional intelligence workspace for artists.
  * Helps artists discover and articulate their core identity,
@@ -246,7 +246,7 @@ export function EmotionalStudioPanel({ artistId, artistName, genre, isOwnProfile
       <div className="flex items-center gap-3">
         <Film className="h-6 w-6 text-violet-400" />
         <div>
-          <h2 className="text-lg font-black tracking-tight text-white">Emotional Studio</h2>
+          <h2 className="text-lg font-black tracking-tight text-white">Creative Story Studio</h2>
           <p className="text-xs text-white/50">Identity depth, pain transformation, and human validation tools</p>
         </div>
         <button

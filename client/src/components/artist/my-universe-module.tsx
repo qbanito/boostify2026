@@ -1,5 +1,5 @@
 /**
- * My Universe Module
+ * Artist Universe Page Module
  *
  * Panel shown on an artist's own profile page that lets them:
  *  - Toggle which of their artists are visible in the public landing page
@@ -94,7 +94,7 @@ function UniverseDiscWheel({ ownerPgId, onOpen }: { ownerPgId: number; onOpen: (
       <motion.button
         type="button"
         onClick={onOpen}
-        aria-label="Open My Universe"
+        aria-label="Open Artist Universe Page"
         className="relative block cursor-pointer"
         style={{ width: SIZE, height: SIZE }}
         whileHover={{ scale: 1.03 }}
@@ -303,7 +303,7 @@ export function MyUniverseModule({ ownerPgId, isOwnProfile = false }: MyUniverse
             <Globe className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-white text-sm">My Universe</p>
+            <p className="font-bold text-white text-sm">Artist Universe Page</p>
             <p className="text-[11px] text-zinc-500 truncate">Artist&apos;s full discography landing page</p>
           </div>
           <button
@@ -336,7 +336,7 @@ export function MyUniverseModule({ ownerPgId, isOwnProfile = false }: MyUniverse
 
         <div className="text-left flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-white text-sm">My Universe</span>
+            <span className="font-bold text-white text-sm">Artist Universe Page</span>
             <Badge className="bg-fuchsia-600/20 text-fuchsia-300 border-fuchsia-500/30 text-[9px]">
               {isPublic ? "PUBLIC" : "PRIVATE"}
             </Badge>

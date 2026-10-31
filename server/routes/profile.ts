@@ -230,11 +230,21 @@ router.get('/:slugOrId', async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Artist not found' });
     }
     
-    // Get all published content for this user
+    // Preserve the legacy full response by default. Artist Profile can request
+    // only profile fields and load a media collection from PostgreSQL on demand
+    // when Firestore has no matching records.
+    const requestedMedia = req.query.includeMedia === undefined
+      ? 'all'
+      : String(req.query.includeMedia).toLowerCase();
+    const includeAllMedia = requestedMedia === 'all';
+    const includeSongs = includeAllMedia || requestedMedia === 'songs';
+    const includeMerch = includeAllMedia || requestedMedia === 'merchandise';
+    const includeVideos = includeAllMedia || requestedMedia === 'videos';
+
     const [userSongs, userMerch, userVideos] = await Promise.all([
-      db.select().from(songs).where(eq(songs.userId, user.id)),
-      db.select().from(merchandise).where(eq(merchandise.userId, user.id)),
-      db.select().from(artistMedia).where(eq(artistMedia.userId, user.id))
+      includeSongs ? db.select().from(songs).where(eq(songs.userId, user.id)) : Promise.resolve([]),
+      includeMerch ? db.select().from(merchandise).where(eq(merchandise.userId, user.id)) : Promise.resolve([]),
+      includeVideos ? db.select().from(artistMedia).where(eq(artistMedia.userId, user.id)) : Promise.resolve([])
     ]);
     
     // Return profile data without sensitive information
