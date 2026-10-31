@@ -14,7 +14,7 @@
 
 import { db } from '../../db';
 import {
-  aasConfig, users,
+  aasConfig, users, songs, aasDailyActionLog,
   musicIndustryContacts, sponsorContacts, venueContacts, marketingContacts,
   aasDealPipeline,
   youtubeExtensionConnections, youtubeChannelSnapshots,
@@ -23,6 +23,7 @@ import {
 import { eq, and, sql, desc, isNotNull } from 'drizzle-orm';
 import { calculateSurvivalScore, getFinancialSnapshot, getTopInsights } from '../../services/aas/survival-score';
 import type { DailyPlan, PriorityMode, PlannedAction, FinancialSnapshot } from '../../services/aas/types';
+import { chooseAASPlan } from '../../services/aas/ai-planner';
 
 /** Contacts available for outreach (not yet contacted) */
 interface ContactInventory {
@@ -82,18 +83,28 @@ export async function createDailyPlan(artistId: number): Promise<DailyPlan> {
   // 7. Determine priority mode with full context
   const priorityMode = determinePriorityMode(score.total, financial, score.status, contacts, extensions, dealStats?.activeDeals || 0);
 
-  // 8. Generate rich tactical plan
-  const actions = generateActions(priorityMode, score, financial, config, contacts, extensions);
-
-  const maxBudget = parseFloat(config.maxDailyBudget || '50');
-
-  return {
-    objectives: generateObjectives(priorityMode, score, contacts, extensions),
-    priorityMode,
-    actions,
-    maxBudget,
-    reasoning: `Score: ${score.total} (${score.status}). Runway: ${financial.runwayDays}d. Mode: ${priorityMode}. Contacts available: ${contacts.totalUntouched}. YT: ${extensions.youtubeConnected ? 'connected' : 'off'}. IG: ${extensions.instagramConnected ? 'connected' : 'off'}. Revenue/wk: $${Object.values(financial.revenueByChannel).reduce((a, b) => a + b, 0).toFixed(2)}`,
-  };
+  // The model chooses from the existing executor's exact, server-defined actions.
+  // It cannot construct new action strings or override budgets or guardrails.
+  const modes: PriorityMode[] = ['sell', 'grow', 'close_deal', 'launch', 'content', 'recover_leads', 'cut_costs', 'outreach', 'content_blitz', 'radio_push', 'blockchain_ops'];
+  const seen = new Set<string>();
+  const actions = modes.flatMap(mode => generateActions(mode, score, financial, config, contacts, extensions)).filter(action => {
+    const key = `${action.agent}|${action.action}|${action.channel}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (config.blockedActions?.includes(action.action)) return false;
+    if (config.allowedChannels?.length && !config.allowedChannels.includes(action.channel)) return false;
+    if (action.channel === 'instagram' && !extensions.instagramConnected) return false;
+    if (action.channel === 'youtube' && !extensions.youtubeConnected) return false;
+    return true;
+  });
+  const maxBudget = Number(config.maxDailyBudget ?? '50');
+  const [catalog, recentCycles] = await Promise.all([
+    db.select({ title: songs.title, genre: songs.genre, mood: songs.mood, releaseDate: songs.releaseDate, isSingle: songs.isSingle, plays: songs.plays })
+      .from(songs).where(eq(songs.userId, artistId)).orderBy(desc(songs.isSingle), desc(songs.createdAt)).limit(12),
+    db.select({ cycleDate: aasDailyActionLog.cycleDate, plannedActions: aasDailyActionLog.plannedActions, lessonsLearned: aasDailyActionLog.lessonsLearned })
+      .from(aasDailyActionLog).where(eq(aasDailyActionLog.artistId, artistId)).orderBy(desc(aasDailyActionLog.cycleDate)).limit(3),
+  ]);
+  return chooseAASPlan({ artist, catalog, score, financial, insights, contacts, extensions, activeDeals: Number(dealStats?.activeDeals || 0), suggestedMode: priorityMode, identity: { lore: config.lore?.slice(0, 1500), voiceTone: config.voiceTone, aestheticStyle: config.aestheticStyle, brandValues: config.brandValues, moralLimits: config.moralLimits, targetMarket: config.targetMarket, quarterlyGoals: config.quarterlyGoals, primaryLanguage: config.primaryLanguage }, recentCycles }, actions, maxBudget);
 }
 
 /** Count untouched contacts across all 4 databases */
@@ -107,10 +118,10 @@ async function getContactInventory(): Promise<ContactInventory> {
   const [marketing] = await db.select({ c: sql<number>`COUNT(*)` })
     .from(marketingContacts).where(eq(marketingContacts.status, 'active'));
 
-  const industryNew = industry?.c || 0;
-  const sponsorsNew = sponsors?.c || 0;
-  const venuesNew = venues?.c || 0;
-  const marketingActive = marketing?.c || 0;
+  const industryNew = Number(industry?.c || 0);
+  const sponsorsNew = Number(sponsors?.c || 0);
+  const venuesNew = Number(venues?.c || 0);
+  const marketingActive = Number(marketing?.c || 0);
 
   // Radio contacts
   const [radio] = await db.select({ c: sql<number>`COUNT(*)` })
@@ -119,8 +130,8 @@ async function getContactInventory(): Promise<ContactInventory> {
   const [labels] = await db.select({ c: sql<number>`COUNT(*)` })
     .from(musicIndustryContacts).where(and(eq(musicIndustryContacts.category, 'record_label'), eq(musicIndustryContacts.status, 'new')));
 
-  const radioNew = radio?.c || 0;
-  const labelsNew = labels?.c || 0;
+  const radioNew = Number(radio?.c || 0);
+  const labelsNew = Number(labels?.c || 0);
 
   return {
     industryNew,

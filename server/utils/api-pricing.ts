@@ -15,6 +15,10 @@ export interface ModelPricing {
 
 export const API_PRICING: Record<string, Record<string, ModelPricing>> = {
   openai: {
+    'gpt-6-astra': {
+      inputCost: 0.01,
+      outputCost: 0.05
+    },
     'gpt-4': {
       inputCost: 0.03,
       outputCost: 0.06

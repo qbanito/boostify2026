@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Html, Line, OrbitControls } from '@react-three/drei';
+import { Html, Line, OrbitControls, useTexture } from '@react-three/drei';
 import { ArrowUpRight, Loader2, Send, Sparkles, X } from 'lucide-react';
 import * as THREE from 'three';
 
@@ -29,41 +29,24 @@ function useReducedMotion() {
   return reduced;
 }
 
-function Limb({ from, to, radius = 0.035 }: { from: Point; to: Point; radius?: number }) {
-  const a = useMemo(() => new THREE.Vector3(...from), [from[0], from[1], from[2]]);
-  const b = useMemo(() => new THREE.Vector3(...to), [to[0], to[1], to[2]]);
-  const direction = useMemo(() => b.clone().sub(a), [a, b]);
-  const rotation = useMemo(() => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize()), [direction]);
-  return <mesh position={a.clone().add(b).multiplyScalar(0.5)} quaternion={rotation}><cylinderGeometry args={[radius * 0.65, radius, direction.length(), 8]} /><meshStandardMaterial color="#192b41" emissive="#084f70" emissiveIntensity={0.8} metalness={0.85} roughness={0.18} /></mesh>;
-}
-
 function Weaver({ target, moving, reduced }: { target: Point; moving: boolean; reduced: boolean }) {
   const body = useRef<THREE.Group>(null);
-  const legs = useRef<Array<THREE.Group | null>>([]);
+  const texture = useTexture('/assets/spider-mode/chrome-spider.webp');
   const destination = useMemo(() => new THREE.Vector3(...target), [target[0], target[1], target[2]]);
   useFrame(({ clock }, delta) => {
     if (!body.current) return;
     const desired = destination.clone();
-    if (!reduced) { desired.x += Math.sin(clock.elapsedTime * (moving ? 1.1 : 0.35)) * (moving ? 0.24 : 0.08); desired.y += Math.cos(clock.elapsedTime * (moving ? 1.4 : 0.4)) * 0.08; }
-    body.current.position.lerp(desired, reduced ? 1 : 1 - Math.exp(-delta * 2.5));
-    body.current.rotation.z = reduced ? 0 : Math.sin(clock.elapsedTime * 2) * (moving ? 0.08 : 0.025);
-    legs.current.forEach((leg, index) => { if (leg) leg.rotation.z = reduced ? 0 : Math.sin(clock.elapsedTime * 8 + index * 1.7) * (moving ? 0.12 : 0.025); });
+    if (!reduced) {
+      desired.x += Math.sin(clock.elapsedTime * (moving ? 1.3 : 0.45)) * (moving ? 0.24 : 0.07);
+      desired.y += Math.cos(clock.elapsedTime * (moving ? 1.5 : 0.5)) * 0.08;
+    }
+    body.current.position.lerp(desired, reduced ? 1 : 1 - Math.exp(-delta * 2));
+    body.current.rotation.z = reduced ? 0 : Math.sin(clock.elapsedTime * 1.8) * (moving ? 0.07 : 0.025);
   });
-  return (
-    <group ref={body} position={target} scale={1.45}>
-      <mesh position={[0, -0.22, 0.13]} scale={[0.38, 0.48, 0.3]}><icosahedronGeometry args={[1, 2]} /><meshStandardMaterial color="#152c45" emissive="#073d69" emissiveIntensity={0.6} metalness={0.9} roughness={0.18} /></mesh>
-      <mesh position={[0, 0.27, 0.16]} scale={[0.27, 0.27, 0.23]}><icosahedronGeometry args={[1, 2]} /><meshStandardMaterial color="#304a66" emissive="#093a59" emissiveIntensity={0.5} metalness={0.85} roughness={0.18} /></mesh>
-      <mesh position={[0, -0.24, 0.4]} scale={[0.16, 0.23, 0.035]}><icosahedronGeometry args={[1, 1]} /><meshStandardMaterial color="#7be8ff" emissive="#00bfff" emissiveIntensity={1.5} metalness={0.5} /></mesh>
-      {[-1, 1].map((side) => Array.from({ length: 4 }, (_, index) => (
-        <group key={`${side}-${index}`} ref={(element) => { legs.current[(side === -1 ? 0 : 4) + index] = element; }}>
-          <Limb from={[side * 0.18, 0.25 - index * 0.16, 0.02]} to={[side * (0.52 + index * 0.03), 0.52 - index * 0.18, 0.25]} radius={0.045} />
-          <Limb from={[side * (0.52 + index * 0.03), 0.52 - index * 0.18, 0.25]} to={[side * (0.95 - index * 0.04), 0.62 - index * 0.25, -0.08]} radius={0.03} />
-          <mesh position={[side * (0.52 + index * 0.03), 0.52 - index * 0.18, 0.25]}><sphereGeometry args={[0.055, 12, 8]} /><meshBasicMaterial color="#38d8ff" /></mesh>
-        </group>
-      )))}
-      {[-1, 1].map((side) => <mesh key={side} position={[side * 0.11, 0.37, 0.35]}><sphereGeometry args={[0.045, 10, 8]} /><meshBasicMaterial color="#ff9b42" /></mesh>)}
-    </group>
-  );
+  return <group ref={body} position={target}>
+    <mesh position={[0, 0, -0.08]} scale={[1.15, 1.15, 1]}><circleGeometry args={[1, 48]} /><meshBasicMaterial color="#2acbff" transparent opacity={0.08} depthWrite={false} /></mesh>
+    <mesh><planeGeometry args={[1.9, 1.9]} /><meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} /></mesh>
+  </group>;
 }
 
 function WeavingThread({ from, to, color, reduced }: { from: Point; to: Point; color: string; reduced: boolean }) {
@@ -89,40 +72,86 @@ function WeavingThread({ from, to, color, reduced }: { from: Point; to: Point; c
   return <><primitive object={line} /><mesh ref={spark} position={from}><sphereGeometry args={[0.055, 12, 8]} /><meshBasicMaterial color="#dcffff" /></mesh></>;
 }
 
+function SignalLights({ reduced }: { reduced: boolean }) {
+  const group = useRef<THREE.Group>(null);
+  const points = useMemo(() => Array.from({ length: 28 }, (_, i) => {
+    const angle = i * 2.39996;
+    const radius = 0.6 + (i % 7) * 0.52;
+    return [Math.cos(angle) * radius, Math.sin(angle) * radius * 0.65, -0.4 + (i % 5) * 0.2] as Point;
+  }), []);
+  useFrame(({ clock }) => { if (group.current && !reduced) group.current.rotation.z = Math.sin(clock.elapsedTime * 0.13) * 0.04; });
+  return <group ref={group}>{points.map((point, i) => <group key={i} position={point}><mesh><sphereGeometry args={[0.025 + (i % 3) * 0.008, 8, 8]} /><meshBasicMaterial color={i % 3 === 0 ? '#b7a4ff' : '#9ffaff'} /></mesh><mesh><sphereGeometry args={[0.08, 8, 8]} /><meshBasicMaterial color={i % 3 === 0 ? '#9268ff' : '#3fdcff'} transparent opacity={0.16} depthWrite={false} /></mesh></group>)}</group>;
+}
+
+function NeonWeb({ scaffold, reduced }: { scaffold: Point[]; reduced: boolean }) {
+  const web = useRef<THREE.Group>(null);
+  const rings = useMemo(() => [0.18, 0.31, 0.44, 0.57, 0.70, 0.84, 1].map((scale) => {
+    const points: Point[] = [];
+    for (let i = 0; i < scaffold.length; i++) {
+      const a = scaffold[i];
+      const b = scaffold[(i + 1) % scaffold.length];
+      for (let step = 0; step < 6; step++) {
+        const t = step / 6;
+        const dip = 1 - 0.055 * Math.sin(Math.PI * t);
+        points.push([(a[0] * (1 - t) + b[0] * t) * scale * dip, (a[1] * (1 - t) + b[1] * t) * scale * dip, (a[2] * (1 - t) + b[2] * t) * scale - Math.sin(Math.PI * t) * 0.08]);
+      }
+    }
+    return [...points, points[0]];
+  }), [scaffold]);
+  useFrame(({ clock }) => {
+    if (!web.current || reduced) return;
+    web.current.children.forEach((child, index) => {
+      const material = (child as THREE.Line).material as THREE.Material | undefined;
+      if (material) material.opacity = (index % 2 ? 0.025 : 0.18) + (index % 2 ? 0.035 : 0.14) * (0.5 + 0.5 * Math.sin(clock.elapsedTime * 0.65 + index * 0.55));
+    });
+  });
+  const center: Point = [0, 0, 0];
+  return <group ref={web}>
+    {rings.flatMap((points, index) => {
+      return [<Line key={`${index}-core`} points={points} color="#9bc5ff" transparent opacity={0.25} lineWidth={0.75} />, <Line key={`${index}-glow`} points={points} color="#517bd5" transparent opacity={0.04} lineWidth={3} blending={THREE.AdditiveBlending} depthWrite={false} />];
+    })}
+    {scaffold.flatMap((point, index) => [<Line key={`${index}-core`} points={[center, point]} color={index % 2 ? '#a596db' : '#8fbfff'} transparent opacity={0.25} lineWidth={0.75} />, <Line key={`${index}-glow`} points={[center, point]} color={index % 2 ? '#7254ac' : '#4f80bf'} transparent opacity={0.04} lineWidth={3} blending={THREE.AdditiveBlending} depthWrite={false} />])}
+  </group>;
+}
+
 function WebScene({ nodes, edges, onOpen, reduced, busy }: { nodes: SpiderNode[]; edges: SpiderEdge[]; onOpen: (node: SpiderNode) => void; reduced: boolean; busy: boolean }) {
-  const positions = useMemo(() => new Map(nodes.map((node, index) => {
-    const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
-    return [node.id, [Math.cos(angle) * 3.35, Math.sin(angle) * 2.25, Math.sin(angle * 2) * 0.8] as Point];
-  })), [nodes]);
+  const displayed = useMemo(() => {
+    const active = nodes.filter((node) => node.status !== 'visible');
+    return [...active, ...nodes.filter((node) => node.status === 'visible')].slice(0, 8);
+  }, [nodes]);
+  const positions = useMemo(() => new Map(displayed.map((node, index) => {
+    const angle = (index / Math.max(displayed.length, 1)) * Math.PI * 2 - Math.PI / 2;
+    return [node.id, [Math.cos(angle) * 2.9, Math.sin(angle) * 1.85, Math.sin(angle * 2) * 0.45] as Point];
+  })), [displayed]);
   const points = Array.from(positions.values());
-  const scaffold = useMemo(() => Array.from({ length: 12 }, (_, index) => {
-    const angle = (index / 12) * Math.PI * 2;
+  const scaffold = useMemo(() => Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
     return [Math.cos(angle) * 3.35, Math.sin(angle) * 2.25, Math.sin(angle * 3) * 0.5 - 0.45] as Point;
   }), []);
-  const active = [...nodes].reverse().find((node) => node.status === 'working') || [...nodes].reverse().find((node) => node.status === 'done');
-  const activePoint = active ? positions.get(active.id) : undefined;
-  const target: Point = activePoint ? [activePoint[0] * 0.28, activePoint[1] * 0.28, activePoint[2] + 0.5] : [0, 0, 0.5];
   const center: Point = [0, 0, 0];
+  const active = [...displayed].reverse().find((node) => node.status === 'working');
+  const activePoint = active ? positions.get(active.id) : undefined;
+  const target: Point = activePoint ? [activePoint[0] * 0.55, activePoint[1] * 0.55, 0.6] : [0, 0, 0.6];
   return (
     <>
       <ambientLight intensity={0.8} /><pointLight position={[1, 3, 5]} intensity={45} color="#9eefff" /><pointLight position={[-4, -2, 2]} intensity={25} color="#895cff" /><pointLight position={[3, -2, 3]} intensity={16} color="#ff8b38" />
-      {[0.25, 0.5, 0.75, 1].map((scale) => <Line key={scale} points={[...scaffold, scaffold[0]].map(([x, y, z]) => [x * scale, y * scale, z * scale] as Point)} color="#4fdcff" transparent opacity={0.6} lineWidth={1.5} />)}
-      {scaffold.map((point, index) => <Line key={`scaffold-${index}`} points={[center, point]} color={index % 2 ? '#8c65ff' : '#40dfff'} transparent opacity={0.48} lineWidth={1.2} />)}
-      {points.map((point, index) => <Line key={`base-${nodes[index].id}`} points={[center, point]} color="#568bff" transparent opacity={0.38} lineWidth={1} />)}
+      <NeonWeb scaffold={scaffold} reduced={reduced} />
+      {points.map((point, index) => <Line key={`base-${displayed[index].id}`} points={[center, point]} color="#568bff" transparent opacity={0.3} lineWidth={1} />)}
       {edges.map((edge, index) => { const from = edge.from === 'goal' ? center : positions.get(edge.from); const to = positions.get(edge.to); return from && to ? <WeavingThread key={`${edge.from}-${edge.to}-${index}`} from={from} to={to} color="#7cffff" reduced={reduced} /> : null; })}
       <mesh position={[0, 0, -0.15]}><sphereGeometry args={[0.13, 16, 16]} /><meshBasicMaterial color="#6af4ff" /></mesh>
-      {nodes.map((node) => {
+      {displayed.map((node) => {
         const point = positions.get(node.id)!;
         const color = node.status === 'error' ? '#f87171' : node.status === 'working' ? '#fff1d0' : node.status === 'done' ? '#ffae69' : '#72deff';
         return <group key={node.id} position={point}>
-          <mesh><sphereGeometry args={[node.status === 'working' ? 0.13 : 0.09, 16, 16]} /><meshBasicMaterial color={color} /></mesh>
-          <mesh><sphereGeometry args={[0.19, 16, 16]} /><meshBasicMaterial color={color} transparent opacity={0.14} depthWrite={false} /></mesh>
-          <Html position={[0, 0.28, 0]} center distanceFactor={10}>
-            <button type="button" disabled={busy} onClick={() => onOpen(node)} className={`max-w-[135px] rounded-lg border px-2 py-1 text-center text-[10px] font-medium leading-tight shadow-lg backdrop-blur disabled:cursor-wait ${node.status === 'working' ? 'border-orange-300/60 bg-orange-300/20 text-orange-100' : node.status === 'error' ? 'border-red-400/50 bg-red-950/80 text-red-200' : 'border-white/15 bg-[#17111e]/90 text-white/85 hover:border-orange-300/50'}`} title={`Open ${node.name}`}>{node.name}</button>
+          <mesh><sphereGeometry args={[node.status === 'working' ? 0.16 : 0.12, 20, 16]} /><meshBasicMaterial color={color} /></mesh>
+          <mesh><sphereGeometry args={[0.26, 20, 16]} /><meshBasicMaterial color={color} transparent opacity={0.2} depthWrite={false} /></mesh>
+          <Html position={[0, 0.34, 0]} center distanceFactor={6}>
+            <button type="button" disabled={busy} onClick={() => onOpen(node)} className={`min-w-[105px] max-w-[155px] rounded-xl border px-3 py-2 text-center text-[12px] font-semibold leading-tight shadow-[0_0_20px_rgba(59,188,255,0.18)] backdrop-blur-md disabled:cursor-wait ${node.status === 'working' ? 'border-orange-300/70 bg-[#422215]/95 text-orange-100' : node.status === 'error' ? 'border-red-400/60 bg-red-950/95 text-red-100' : 'border-cyan-200/40 bg-[#071322]/95 text-white hover:border-cyan-200/80'}`} title={`Open ${node.name}`}>{node.name}</button>
           </Html>
         </group>;
       })}
-      <Weaver target={target} moving={nodes.some((node) => node.status === 'working')} reduced={reduced} />
+      <SignalLights reduced={reduced} />
+      <Weaver target={target} moving={Boolean(active)} reduced={reduced} />
       <OrbitControls enablePan={false} enableDamping={!reduced} minDistance={6} maxDistance={12} minPolarAngle={Math.PI / 3} maxPolarAngle={Math.PI * 2 / 3} />
     </>
   );
@@ -165,7 +194,11 @@ export default function ArtistCopilotSpiderMode({ artistName, nodes, edges, goal
           <button ref={closeRef} type="button" onClick={onClose} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 px-3 text-xs text-white/70 hover:bg-white/10"><span className="hidden sm:inline">View profile</span><X className="h-4 w-4" /><span className="sr-only">Close Spider Mode</span></button>
         </header>
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(210px,52%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
-          <section className="relative isolate min-h-0 overflow-hidden border-b border-white/10 bg-[radial-gradient(ellipse_at_50%_45%,#12314b_0%,#10142b_42%,#060b15_78%)] lg:border-b-0 lg:border-r" aria-label="Live module web">
+          <section className="relative isolate min-h-0 overflow-hidden border-b border-white/10 bg-[#050b17] lg:border-b-0 lg:border-r" aria-label="Live module web">
+            <style>{`@keyframes spider-scene-drift { 0%,100% { transform: scale(1.06) translate3d(0,0,0); } 50% { transform: scale(1.11) translate3d(-1%,0.6%,0); } } @keyframes spider-scene-glow { 0%,100% { opacity:.25; } 50% { opacity:.48; } }`}</style>
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover bg-center motion-safe:animate-[spider-scene-drift_24s_ease-in-out_infinite]" style={{ backgroundImage: "url('/assets/spider-mode/neon-web-background.webp')" }} />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#040914]/65 via-transparent to-[#040914]/80" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_65%,rgba(45,179,255,.32),transparent_55%)] motion-safe:animate-[spider-scene-glow_5s_ease-in-out_infinite]" />
             <div className="pointer-events-none absolute left-4 top-3 z-10 sm:left-5 sm:top-5"><p className="text-[10px] font-semibold uppercase tracking-[.25em] text-orange-200/55">Live workspace</p><p className="mt-1 max-w-[240px] truncate text-sm text-white/75">{goal || 'Your artist profile'}</p></div>
             <div className="absolute inset-x-2 bottom-9 top-12 sm:bottom-12 sm:top-14"><SceneBoundary><Canvas camera={{ position: [0, 0, 8], fov: 38 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }} frameloop={reduced ? 'demand' : 'always'} fallback={<div className="grid h-full place-items-center px-8 text-center text-sm text-white/50">3D is unavailable. Use the module list to navigate.</div>}><WebScene nodes={nodes} edges={edges} onOpen={onOpenNode} reduced={reduced} busy={busy} /></Canvas></SceneBoundary></div>
             <div className="pointer-events-none absolute bottom-2 left-4 right-4 z-10 flex items-end justify-between gap-4"><p className="max-w-[210px] text-[10px] leading-4 text-white/65 sm:max-w-[300px] sm:text-[11px]"><span className="sm:hidden">Drag to explore. Select a module.</span><span className="hidden sm:inline">Drag to orbit, scroll to zoom. Threads follow real Copilot actions.</span></p><span className="whitespace-nowrap rounded-full border border-cyan-300/20 bg-black/30 px-2 py-1 text-[10px] text-cyan-100/70">{nodes.length} modules</span></div>

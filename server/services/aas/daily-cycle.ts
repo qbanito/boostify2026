@@ -214,6 +214,7 @@ export async function runDailyCycle(artistId: number): Promise<CycleSummary> {
     totalEarned,
     netResult: totalEarned - totalSpent,
     objectives: plan.objectives,
+    reasoning: plan.reasoning,
     lessons,
   };
 
@@ -331,5 +332,6 @@ export interface CycleSummary {
   totalEarned?: number;
   netResult?: number;
   objectives?: string[];
+  reasoning?: string;
   lessons?: string[];
 }
