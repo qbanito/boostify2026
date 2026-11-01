@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { motion, AnimatePresence, useScroll, useTransform, useSpring } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, Music, ExternalLink, Globe, Crown,
   ChevronDown, Sparkles, Star, Disc3, Instagram,
@@ -58,6 +58,7 @@ function artistName(a: ArtistEntry) {
 
 function formatDuration(s?: string | null) {
   if (!s) return "";
+  if (s.includes(":")) return s;
   const n = parseFloat(s);
   if (isNaN(n)) return s;
   const m = Math.floor(n / 60);
@@ -67,76 +68,11 @@ function formatDuration(s?: string | null) {
 
 // ─── Background layers ────────────────────────────────────────────────────────
 
-function FloatingParticles() {
-  const particles = Array.from({ length: 24 }, (_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: 1 + Math.random() * 2.5,
-    duration: 8 + Math.random() * 16,
-    delay: Math.random() * 8,
-    opacity: 0.15 + Math.random() * 0.4,
-  }));
+function CosmicBackground({ coverImages: _coverImages }: { coverImages: string[] }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          className="absolute rounded-full bg-fuchsia-400"
-          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, opacity: p.opacity }}
-          animate={{ y: [0, -40, 0], x: [0, 15 * (p.id % 2 === 0 ? 1 : -1), 0], opacity: [p.opacity, p.opacity * 1.6, p.opacity] }}
-          transition={{ duration: p.duration, repeat: Infinity, delay: p.delay, ease: "easeInOut" }}
-        />
-      ))}
-    </div>
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0" style={{ background: "radial-gradient(ellipse at 80% 0%, rgba(85, 49, 130, 0.18), transparent 45%), linear-gradient(180deg, #100c15 0%, #09080d 65%, #07070a 100%)" }} />
   );
 }
-
-function CosmicBackground({ coverImages }: { coverImages: string[] }) {
-  return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {coverImages.slice(0, 3).map((img, i) => (
-        <motion.div
-          key={i}
-          className="absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.10 }}
-          transition={{ delay: i * 0.4, duration: 1.2 }}
-          style={{
-            backgroundImage: `url(${img})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(90px) saturate(1.6)",
-            transform: `scale(1.4) rotate(${i * 8}deg)`,
-          }}
-        />
-      ))}
-      {/* Deep space gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#03010a] via-[#08030f]/95 to-[#03010a]" />
-      {/* Animated orbs */}
-      <motion.div
-        className="absolute top-[-15%] left-[-10%] w-[900px] h-[900px] rounded-full bg-violet-700/[0.08] blur-[200px]"
-        animate={{ scale: [1, 1.1, 1], x: [0, 30, 0] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="absolute bottom-[-20%] right-[-10%] w-[1100px] h-[1100px] rounded-full bg-fuchsia-700/[0.06] blur-[220px]"
-        animate={{ scale: [1, 1.08, 1], y: [0, -40, 0] }}
-        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <div className="absolute top-[40%] left-[40%] w-[600px] h-[600px] rounded-full bg-rose-600/[0.04] blur-[160px]" />
-      {/* Star field */}
-      <div
-        className="absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage: "radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.6) 0%, transparent 100%), radial-gradient(1px 1px at 30% 45%, rgba(255,255,255,0.4) 0%, transparent 100%), radial-gradient(1.5px 1.5px at 55% 20%, rgba(255,255,255,0.5) 0%, transparent 100%), radial-gradient(1px 1px at 75% 70%, rgba(255,255,255,0.3) 0%, transparent 100%), radial-gradient(1px 1px at 90% 35%, rgba(255,255,255,0.5) 0%, transparent 100%)",
-        }}
-      />
-    </div>
-  );
-}
-
-// ─── Audio player atom ────────────────────────────────────────────────────────
 
 function MiniPlayer({ song, isPlaying, onToggle }: { song: SongEntry; isPlaying: boolean; onToggle: () => void }) {
   return (
@@ -158,7 +94,8 @@ function MiniPlayer({ song, isPlaying, onToggle }: { song: SongEntry; isPlaying:
       </div>
       <button
         onClick={onToggle}
-        className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-fuchsia-500/20 hover:scale-105 transition-transform shrink-0"
+        aria-label={`${isPlaying ? "Pause" : "Play"} ${song.title}`}
+        className="w-11 h-11 rounded-full border border-white/25 bg-white/5 flex items-center justify-center hover:bg-violet-500 transition-colors shrink-0"
       >
         {isPlaying ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
       </button>
@@ -266,210 +203,42 @@ function SessionCard({ song }: { song: SongEntry }) {
 
 // ─── Artist card ─────────────────────────────────────────────────────────────
 
-function ArtistCard({
-  artist,
-  songs,
-  onSongPlay,
-  playingId,
-  index,
-}: {
-  artist: ArtistEntry;
-  songs: SongEntry[];
-  onSongPlay: (song: SongEntry) => void;
-  playingId: number | null;
-  index: number;
+function ArtistCard({ artist, songs, onSongPlay, playingId, index }: {
+  artist: ArtistEntry; songs: SongEntry[]; onSongPlay: (song: SongEntry) => void; playingId: number | null; index: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<"discography" | "sessions">("discography");
   const visible = expanded ? songs : songs.slice(0, 4);
-
-  const sessionableSongs = songs.filter((s) => s.description || s.lyrics);
-
+  const stories = songs.filter(song => song.description || song.lyrics);
+  const cover = artist.coverImage || artist.profileImage;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.7, delay: index * 0.1 }}
-      className="rounded-3xl border border-white/8 bg-white/[0.025] overflow-hidden backdrop-blur-sm"
-    >
-      {/* Cover hero */}
-      <div className="relative h-48 sm:h-64 overflow-hidden bg-black">
-        {artist.coverImage || artist.profileImage ? (
-          <>
-            {/* Blurred backdrop so vertical/portrait images don't leave empty bars */}
-            <div
-              className="absolute inset-0 scale-110"
-              style={{
-                backgroundImage: `url(${artist.coverImage || artist.profileImage})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center top',
-                filter: 'blur(22px) brightness(0.55) saturate(1.2)',
-              }}
-            />
-            <motion.img
-              src={artist.coverImage || artist.profileImage!}
-              alt={artistName(artist)}
-              className="relative z-10 w-full h-full object-contain"
-              whileHover={{ scale: 1.04 }}
-              transition={{ duration: 0.6 }}
-            />
-          </>
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-violet-800 via-fuchsia-900 to-pink-900" />
-        )}
-        <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
-
-        {/* Profile bubble */}
-        <div className="absolute bottom-4 left-5 z-30 flex items-end gap-3">
-          {artist.profileImage ? (
-            <img src={artist.profileImage} alt={artistName(artist)} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/20 shadow-xl" />
-          ) : (
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-pink-600 flex items-center justify-center ring-2 ring-white/20">
-              <Crown className="w-7 h-7 text-white" />
-            </div>
-          )}
-          <div>
-            <h3 className="text-xl font-black text-white tracking-tight drop-shadow-lg">{artistName(artist)}</h3>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              {artist.genres?.slice(0, 2).map((g) => (
-                <Badge key={g} className="bg-white/10 text-white/70 border-white/10 text-[10px] backdrop-blur">{g}</Badge>
-              ))}
-              {artist.country && (
-                <span className="text-[11px] text-white/50">{artist.country}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Social links */}
-        <div className="absolute top-3 right-3 z-30 flex gap-1.5">
-          {artist.spotifyUrl && (
-            <a href={artist.spotifyUrl} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-black/40 backdrop-blur flex items-center justify-center hover:bg-black/60 transition-colors">
-              <Music className="w-3.5 h-3.5 text-white" />
-            </a>
-          )}
-          {artist.slug && (
-            <a href={`/artist/${artist.slug}`} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-black/40 backdrop-blur flex items-center justify-center hover:bg-black/60 transition-colors">
-              <ExternalLink className="w-3.5 h-3.5 text-white" />
-            </a>
-          )}
+    <motion.article initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.2) }} className="grid gap-5 border-b border-white/10 py-7 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[190px_minmax(0,1fr)_minmax(280px,0.95fr)] lg:gap-7 lg:py-9">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-[#181522] sm:aspect-[4/5] lg:aspect-square">{cover ? <img src={cover} alt={artistName(artist)} loading="lazy" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center bg-gradient-to-br from-violet-950 to-[#17111e]"><Music className="h-9 w-9 text-white/35" /></div>}</div>
+      <div className="min-w-0 sm:pr-2">
+        <h3 className="font-serif text-3xl tracking-tight text-white sm:text-4xl">{artistName(artist)}</h3>
+        {(artist.genres?.length || artist.country) ? <p className="mt-2 text-sm text-zinc-400">{[...(artist.genres || []).slice(0, 2), artist.country].filter(Boolean).join(' ? ')}</p> : null}
+        {artist.biography && <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-400">{artist.biography}</p>}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          {artist.slug && <a href={`/artist/${artist.slug}`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/25 px-4 text-sm font-medium text-white transition hover:border-violet-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400">Visit profile <ChevronRight className="h-4 w-4" /></a>}
+          {artist.spotifyUrl && <a href={artist.spotifyUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 text-sm text-zinc-400 hover:text-white">Spotify <ExternalLink className="h-3.5 w-3.5" /></a>}
         </div>
       </div>
-
-      <div className="p-5 space-y-4">
-        {/* Biography */}
-        {artist.biography && (
-          <p className="text-sm text-zinc-400 leading-relaxed line-clamp-3">{artist.biography}</p>
-        )}
-
-        {/* Tab switcher */}
-        {songs.length > 0 && (
-          <div className="border-b border-white/8 flex gap-0">
-            {[
-              { key: "discography", label: "Discography", icon: Disc3, count: songs.length },
-              { key: "sessions", label: "Sessions", icon: BookOpen, count: sessionableSongs.length },
-            ].map(({ key, label, icon: Icon, count }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key as any)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold border-b-2 transition-all -mb-px ${
-                  tab === key
-                    ? "border-fuchsia-500 text-fuchsia-400"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                <Icon className="w-3 h-3" />
-                {label}
-                <span className={`text-[9px] rounded-full px-1 py-0.5 ${tab === key ? "bg-fuchsia-600/20 text-fuchsia-400" : "bg-white/8 text-zinc-600"}`}>
-                  {count}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Tab content */}
-        <AnimatePresence mode="wait">
-          {tab === "discography" && songs.length > 0 && (
-            <motion.div
-              key="discography"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25 }}
-            >
-              <div className="space-y-2">
-                {visible.map((song, i) => (
-                  <motion.div
-                    key={song.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    whileHover={{ scale: 1.015, boxShadow: "0 0 18px rgba(168,85,247,0.15)" }}
-                    className={`rounded-xl p-2.5 transition-colors cursor-pointer ${
-                      playingId === song.id
-                        ? "bg-fuchsia-600/15 ring-1 ring-fuchsia-500/40"
-                        : "hover:bg-white/5"
-                    }`}
-                    onClick={() => onSongPlay(song)}
-                  >
-                    <MiniPlayer
-                      song={song}
-                      isPlaying={playingId === song.id}
-                      onToggle={() => onSongPlay(song)}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-              {songs.length > 4 && (
-                <button
-                  onClick={() => setExpanded((v) => !v)}
-                  className="mt-2 text-xs text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1 transition-colors"
-                >
-                  {expanded ? "Show less" : `Show ${songs.length - 4} more`}
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                </button>
-              )}
-            </motion.div>
-          )}
-
-          {tab === "sessions" && (
-            <motion.div
-              key="sessions"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25 }}
-              className="space-y-2.5"
-            >
-              {songs.length === 0 ? (
-                <p className="text-xs text-zinc-600 text-center py-4">No tracks yet</p>
-              ) : (
-                <>
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium pb-1">
-                    What each track is about
-                  </p>
-                  {songs.map((song) => (
-                    <SessionCard key={song.id} song={song} />
-                  ))}
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+        {songs.length > 0 ? <>
+          <div role="tablist" aria-label={`${artistName(artist)} music`} className="flex rounded-xl border border-white/10 bg-white/[0.035] p-1">{([{ key: 'discography', label: 'Discography', count: songs.length }, { key: 'sessions', label: 'Sessions', count: stories.length }] as const).map(item => <button key={item.key} role="tab" aria-selected={tab === item.key} onClick={() => setTab(item.key)} className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition ${tab === item.key ? 'bg-violet-500 text-white' : 'text-zinc-400 hover:text-white'}`}>{item.label} <span className="ml-1 opacity-70">{item.count}</span></button>)}</div>
+          {tab === 'discography' ? <div className="mt-2">{visible.map(song => <div key={song.id} className={`border-b border-white/[0.06] px-1 py-2.5 ${playingId === song.id ? 'bg-violet-500/10' : ''}`}><MiniPlayer song={song} isPlaying={playingId === song.id} onToggle={() => onSongPlay(song)} /></div>)}{songs.length > 4 && <button onClick={() => setExpanded(v => !v)} className="mt-3 min-h-10 text-xs font-semibold text-violet-300 hover:text-white">{expanded ? 'Show less' : `Show ${songs.length - 4} more tracks`}</button>}</div> : <div className="mt-3 space-y-2">{stories.length ? stories.map(song => <SessionCard key={song.id} song={song} />) : <p className="py-6 text-sm text-zinc-500">No track stories available yet.</p>}</div>}
+        </> : <p className="py-4 text-sm text-zinc-500">No tracks available yet.</p>}
       </div>
-    </motion.div>
+    </motion.article>
   );
 }
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MyUniversePage() {
   const { userId } = useParams<{ userId: string }>();
   const [, setLocation] = useLocation();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
+  const [playbackError, setPlaybackError] = useState("");
   const [copied, setCopied] = useState(false);
   const [activeArtist, setActiveArtist] = useState<number | null>(null);
 
@@ -483,9 +252,6 @@ export default function MyUniversePage() {
   const [editableBio, setEditableBio] = useState<string>('');
   const [bioCopied, setBioCopied] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollY } = useScroll();
-  const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
-  const heroScale = useTransform(scrollY, [0, 400], [1, 1.08]);
 
   const { data, isLoading, error } = useQuery<UniverseData>({
     queryKey: [`/api/my-universe/public/${userId}`],
@@ -503,11 +269,19 @@ export default function MyUniversePage() {
     if (audioRef.current) {
       audioRef.current.pause();
     }
+    setPlaybackError("");
+    if (!song.audioUrl) {
+      setPlayingId(null);
+      setPlaybackError("This track is currently unavailable.");
+      return;
+    }
     const audio = new Audio(song.audioUrl);
-    audio.play().catch(() => {});
-    audio.onended = () => setPlayingId(null);
     audioRef.current = audio;
-    setPlayingId(song.id);
+    audio.onended = () => { if (audioRef.current === audio) setPlayingId(null); };
+    audio.onerror = () => { if (audioRef.current === audio) { setPlayingId(null); setPlaybackError("This track could not be played. Please try again."); } };
+    audio.play().then(() => { if (audioRef.current === audio) setPlayingId(song.id); }).catch(() => {
+      if (audioRef.current === audio) { setPlayingId(null); setPlaybackError("This track could not be played. Please try again."); }
+    });
   };
 
   useEffect(() => {
@@ -614,9 +388,9 @@ export default function MyUniversePage() {
   const totalArtists = artists.length;
 
   return (
-    <div className="min-h-screen bg-[#03010a] text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#0a0b0d] text-white overflow-x-hidden">
       <CosmicBackground coverImages={coverImages} />
-      <FloatingParticles />
+
 
       {/* Floating nav bar */}
       <div className="fixed top-0 left-0 right-0 z-50">
@@ -639,257 +413,26 @@ export default function MyUniversePage() {
         </div>
       </div>
 
-      {/* Hero section */}
-      <div ref={heroRef} className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 pt-20 pb-16">
-        {/* Primary artist cover as cinematic backdrop */}
-        {(() => {
-          const heroImg = artists[0]?.coverImage || artists[0]?.profileImage;
-          if (!heroImg) return null;
-          return (
-            <motion.div
-              className="pointer-events-none absolute inset-0 overflow-hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.8 }}
-            >
-              <div
-                className="absolute inset-0 scale-110"
-                style={{
-                  backgroundImage: `url(${heroImg})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center top",
-                  filter: "blur(40px) saturate(1.4) brightness(0.25)",
-                }}
-              />
-              {/* vignette */}
-              <div className="absolute inset-0 bg-gradient-to-b from-[#03010a]/60 via-transparent to-[#03010a]/80" />
-            </motion.div>
-          );
-        })()}
-
-        <motion.div
-          style={{ opacity: heroOpacity, scale: heroScale }}
-          className="text-center max-w-4xl mx-auto"
-        >
-          {/* ── Cinematic Constellation Hero ─────────────────────────────── */}
-          {(() => {
-            const primaryArtist = artists[0];
-            const heroImg = primaryArtist?.coverImage || primaryArtist?.profileImage;
-            const orbitArtists = artists.slice(0, 8);
-            const ORBIT_DURATION = 30; // seconds
-
-            return (
-              <div className="relative mx-auto mb-10" style={{ width: 320, height: 320 }}>
-                {/* Outer radial glow */}
-                <div
-                  className="absolute inset-0 rounded-full pointer-events-none"
-                  style={{
-                    background:
-                      "radial-gradient(circle, rgba(168,85,247,0.30) 0%, rgba(217,70,239,0.14) 45%, transparent 72%)",
-                    filter: "blur(8px)",
-                  }}
-                />
-
-                {/* Orbit track (dashed ring) */}
-                <div
-                  className="absolute rounded-full border border-dashed border-fuchsia-500/20 pointer-events-none"
-                  style={{ inset: 10 }}
-                />
-
-                {/* Orbiting artist avatars + counter-rotation to stay upright */}
-                <motion.div
-                  className="absolute inset-0"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: ORBIT_DURATION, repeat: Infinity, ease: "linear" }}
-                >
-                  {orbitArtists.map((a, i) => {
-                    const angle = (i / orbitArtists.length) * 2 * Math.PI;
-                    const r = 140; // orbit radius
-                    const cx = 160 + r * Math.cos(angle);
-                    const cy = 160 + r * Math.sin(angle);
-                    const img = a.coverImage || a.profileImage;
-                    return (
-                      <div
-                        key={a.id}
-                        className="absolute"
-                        style={{ left: cx - 18, top: cy - 18, width: 36, height: 36 }}
-                      >
-                        <motion.div
-                          className="w-full h-full rounded-full overflow-hidden ring-2 ring-fuchsia-500/70 shadow-lg shadow-fuchsia-900/60"
-                          animate={{ rotate: -360 }}
-                          transition={{ duration: ORBIT_DURATION, repeat: Infinity, ease: "linear" }}
-                        >
-                          {img ? (
-                            <img
-                              src={img}
-                              alt={a.artistName || a.name || ""}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-violet-700 to-fuchsia-700 flex items-center justify-center">
-                              <Music className="w-4 h-4 text-white/70" />
-                            </div>
-                          )}
-                        </motion.div>
-                      </div>
-                    );
-                  })}
-                </motion.div>
-
-                {/* Inner counter-rotating arc dots */}
-                <motion.div
-                  className="absolute"
-                  style={{ inset: 26 }}
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-                >
-                  {[0, 60, 120, 180, 240, 300].map((deg, i) => (
-                    <div
-                      key={i}
-                      className="absolute w-1.5 h-1.5 rounded-full bg-violet-400/40"
-                      style={{
-                        top: `${50 + 48 * Math.sin((deg * Math.PI) / 180)}%`,
-                        left: `${50 + 48 * Math.cos((deg * Math.PI) / 180)}%`,
-                        transform: "translate(-50%, -50%)",
-                      }}
-                    />
-                  ))}
-                </motion.div>
-
-                {/* Spinning conic gradient border */}
-                <motion.div
-                  className="absolute rounded-full pointer-events-none"
-                  style={{
-                    inset: 34,
-                    background:
-                      "conic-gradient(from 0deg, #7c3aed 0%, #c026d3 30%, #ec4899 60%, #a855f7 80%, #7c3aed 100%)",
-                    padding: 3,
-                  }}
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                >
-                  <div className="w-full h-full rounded-full bg-[#03010a]" />
-                </motion.div>
-
-                {/* Center image */}
-                <div
-                  className="absolute rounded-full overflow-hidden shadow-2xl shadow-fuchsia-900/60"
-                  style={{ inset: 40 }}
-                >
-                  {heroImg ? (
-                    <img
-                      src={heroImg}
-                      alt={primaryArtist?.artistName || primaryArtist?.name || "Artist"}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-violet-700 via-fuchsia-700 to-pink-700 flex items-center justify-center">
-                      <Crown className="w-14 h-14 text-white/80" />
-                    </div>
-                  )}
-                  {/* Soft inner glow */}
-                  <div
-                    className="absolute inset-0 rounded-full pointer-events-none"
-                    style={{ boxShadow: "inset 0 0 32px rgba(192,96,252,0.35)" }}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Featured artist name badge */}
-          {(() => {
-            const pa = artists[0];
-            const paName = pa?.artistName || pa?.name;
-            if (!paName) return null;
-            return (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, duration: 0.6 }}
-                className="flex items-center justify-center gap-2 mb-4"
-              >
-                <span className="text-[11px] uppercase tracking-[0.22em] text-fuchsia-400/70 font-semibold">
-                  Featured Artist
-                </span>
-                <span className="w-1 h-1 rounded-full bg-fuchsia-500/50" />
-                <span className="text-sm font-bold text-white/90">{paName}</span>
-              </motion.div>
-            );
-          })()}
-
-          {/* Title */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-            className="text-5xl sm:text-7xl font-black tracking-tighter mb-4"
-            style={{
-              background: "linear-gradient(135deg, #fff 20%, #c084fc 50%, #f472b6 80%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            {pageTitle}
-          </motion.h1>
-
-          {settings.bio && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed"
-            >
-              {settings.bio}
-            </motion.p>
-          )}
-
-          {/* Stats pills */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="flex items-center justify-center gap-3 mt-6 flex-wrap"
-          >
-            <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-4 py-1.5 text-sm">
-              <Crown className="w-3.5 h-3.5 text-fuchsia-400" />
-              <span className="text-zinc-300 font-medium">{totalArtists} Artist{totalArtists !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-4 py-1.5 text-sm">
-              <Music className="w-3.5 h-3.5 text-violet-400" />
-              <span className="text-zinc-300 font-medium">{totalSongs} Track{totalSongs !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-4 py-1.5 text-sm">
-              <Star className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-zinc-300 font-medium">Powered by Boostify</span>
-            </div>
-          </motion.div>
-
-          {/* Scroll cue */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.2 }}
-            className="mt-16 flex flex-col items-center gap-2"
-          >
-            <span className="text-xs text-zinc-600 uppercase tracking-widest">Explore</span>
-            <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ repeat: Infinity, duration: 1.8 }}
-            >
-              <ChevronDown className="w-5 h-5 text-zinc-600" />
-            </motion.div>
-          </motion.div>
-        </motion.div>
-      </div>
+      <section ref={heroRef} className="relative z-10 mx-auto grid max-w-6xl gap-8 px-5 pb-10 pt-28 sm:px-8 sm:pb-14 sm:pt-32 lg:min-h-[460px] lg:grid-cols-2 lg:items-center lg:gap-14">
+        <div className="relative z-10 max-w-xl">
+          <h1 className="font-serif text-5xl leading-[1.02] tracking-tight text-white sm:text-6xl lg:text-7xl">{pageTitle}</h1>
+          {settings.bio && <p className="mt-5 max-w-lg text-base leading-7 text-zinc-400">{settings.bio}</p>}
+          <div className="mt-7 flex items-center gap-7 text-sm text-zinc-400"><span><strong className="mr-1 font-serif text-2xl font-normal text-white">{totalArtists}</strong> Artist{totalArtists !== 1 ? 's' : ''}</span><span className="h-8 w-px bg-white/15" /><span><strong className="mr-1 font-serif text-2xl font-normal text-white">{totalSongs}</strong> Track{totalSongs !== 1 ? 's' : ''}</span></div>
+          {artists.length > 0 && <a href="#universe-artists" className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-500 px-5 text-sm font-semibold text-white transition hover:bg-violet-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">Explore artists <ChevronRight className="h-4 w-4" /></a>}
+        </div>
+        <div className="relative h-56 overflow-hidden rounded-2xl bg-[#17131e] sm:h-72 lg:h-96">
+          {artists[0]?.coverImage || artists[0]?.profileImage ? <img src={artists[0].coverImage || artists[0].profileImage || ''} alt={artistName(artists[0])} className="h-full w-full object-cover object-center" /> : <div className="grid h-full place-items-center bg-gradient-to-br from-violet-950 to-[#17111e]"><Music className="h-12 w-12 text-white/25" /></div>}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        </div>
+      </section>
 
       {/* Artist filter tabs */}
       {artists.length > 1 && (
-        <div className="relative z-10 sticky top-[68px] bg-[#03010a]/80 backdrop-blur-xl border-b border-white/5 py-3">
-          <div className="max-w-5xl mx-auto px-4 flex gap-2 overflow-x-auto scrollbar-none">
+        <div className="relative z-10 sticky top-[68px] bg-[#0a0b0d]/90 backdrop-blur-xl border-y border-white/10 py-3">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 flex gap-2 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveArtist(null)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all shrink-0 ${
+              className={`flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all shrink-0 ${
                 activeArtist === null
                   ? "bg-fuchsia-600/20 border-fuchsia-500/50 text-fuchsia-300"
                   : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
@@ -902,14 +445,14 @@ export default function MyUniversePage() {
               <button
                 key={a.id}
                 onClick={() => setActiveArtist(a.id === activeArtist ? null : a.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all shrink-0 ${
+                className={`flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all shrink-0 ${
                   activeArtist === a.id
                     ? "bg-fuchsia-600/20 border-fuchsia-500/50 text-fuchsia-300"
                     : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
                 }`}
               >
                 {a.profileImage && (
-                  <img src={a.profileImage} alt={artistName(a)} className="w-4 h-4 rounded-full object-cover" />
+                  <img src={a.profileImage} alt="" className="w-4 h-4 rounded-full object-cover" />
                 )}
                 {artistName(a)}
               </button>
@@ -919,14 +462,15 @@ export default function MyUniversePage() {
       )}
 
       {/* Artists grid */}
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-12">
+      <div id="universe-artists" className="relative z-10 mx-auto max-w-6xl scroll-mt-32 px-5 pb-16 sm:px-8">
+        {playbackError && <p role="alert" className="mt-5 rounded-xl border border-red-400/25 bg-red-950/40 px-4 py-3 text-sm text-red-100">{playbackError}</p>}
         {artists.length === 0 ? (
           <div className="text-center py-24">
             <Crown className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-zinc-500 text-lg font-medium">No artists in this universe yet</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
             {artists
               .filter((a) => activeArtist === null || a.id === activeArtist)
               .map((artist, index) => (
@@ -1018,7 +562,7 @@ export default function MyUniversePage() {
                         <button
                           key={a.id}
                           onClick={() => setBioArtistId(a.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          className={`flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                             (bioArtistId ?? owner?.id) === a.id
                               ? "bg-fuchsia-600/20 border-fuchsia-500/50 text-fuchsia-300"
                               : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"

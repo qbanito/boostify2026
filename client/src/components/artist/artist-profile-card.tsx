@@ -22,6 +22,7 @@ import {
 } from "./custom-blocks";
 import { formatLocation } from "../../lib/formatLocation";
 import { ArtistDownloads } from "./artist-downloads";
+import { ProfileStyleSelector, profileVisualStyle, type ProfileVisualStyle } from "./profile-style-selector";
 // Heavy Artist Profile modules are code-split via React.lazy in ./lazy-modules.
 // They keep the same names + props API but download their JS chunk on demand,
 // only when their section becomes visible. See ./lazy-modules for details.
@@ -2444,6 +2445,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
   // --- Manual Font Selection -----------------------------------------
   const [selectedFont, setSelectedFont] = useState<string>('default');
+  const [visualStyle, setVisualStyle] = useState<ProfileVisualStyle>('classic');
 
   // Inject Google Font link when selectedFont changes
   useEffect(() => {
@@ -3044,6 +3046,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     rightVisibility: {} as Record<string, boolean>,
     rightExpanded: {} as Record<string, boolean>,
     selectedTheme: '' as string,
+    visualStyle: 'classic' as ProfileVisualStyle,
     customBlocks: {} as Record<string, CustomBlock>,
     mobileColumnFirst: 'left' as 'left' | 'right',
     sideOverride: {} as Record<string, 'left' | 'right'>,
@@ -3190,6 +3193,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
           rightExpanded: s.rightExpanded,
           rightVisibility: s.rightVisibility,
           colorTheme: theme ?? s.selectedTheme,
+          visualStyle: s.visualStyle,
           customBlocks: s.customBlocks,
           mobileColumnFirst: s.mobileColumnFirst,
           sideOverride: s.sideOverride || {},
@@ -3206,8 +3210,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         if (!res.ok) {
           logger.error('Auto-save layout failed: HTTP', res.status, await res.text().catch(() => ''));
         } else {
+          const saved = await res.json();
           queryClient.setQueryData(['userProfile', artistId], (current: any) =>
-            current ? { ...current, profileLayout: body } : current,
+            current ? { ...current, profileLayout: saved.layout || body } : current,
           );
         }
       } catch (e) {
@@ -3426,6 +3431,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         rightExpanded,
         rightVisibility,
         colorTheme: selectedTheme,
+        visualStyle,
         fontKey: selectedFont,
         mobileColumnFirst,
         customBlocks,
@@ -3439,8 +3445,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       });
 
       if (!response.ok) throw new Error('Failed to save layout');
+      const saved = await response.json();
       queryClient.setQueryData(['userProfile', artistId], (current: any) =>
-        current ? { ...current, profileLayout: layout } : current,
+        current ? { ...current, profileLayout: saved.layout || layout } : current,
       );
 
       toast({
@@ -5516,6 +5523,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         setSelectedFont(savedFontKey);
       }
 
+      setVisualStyle(profileVisualStyle((artist.profileLayout as any).visualStyle));
       setLayoutPresets(normalizeLayoutPresets((artist.profileLayout as any).presets));
 
       // Load saved custom blocks
@@ -5531,6 +5539,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         shouldGenerateAutoBlocks = true;
       }
     } else if (pageMode && pageMode !== 'artist') {
+      setVisualStyle('classic');
       // No saved layout � apply mode-specific defaults
       layoutSourceRef.current = 'default';
       setSectionOrder(modeConfig.defaultSectionOrder);
@@ -5541,6 +5550,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     } else {
       // No saved layout, no special page mode → fresh profile
       layoutSourceRef.current = 'default';
+      setVisualStyle('classic');
       setLayoutPresets([]);
     }
     // Mark hydration complete on the next tick so the auto-save effect below
@@ -5569,6 +5579,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       rightVisibility,
       rightExpanded,
       selectedTheme: selectedTheme as string,
+      visualStyle,
       customBlocks,
       mobileColumnFirst,
       selectedFont,
@@ -5578,7 +5589,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     if (!hasHydratedLayoutRef.current) return;
     if (!isOwnProfile) return;
     autoSaveLayout(sectionOrder, rightOrder);
-  }, [sectionOrder, sectionVisibility, sectionExpanded, rightOrder, rightVisibility, rightExpanded, selectedTheme, customBlocks, mobileColumnFirst, selectedFont, sideOverride, layoutPresets]);
+  }, [sectionOrder, sectionVisibility, sectionExpanded, rightOrder, rightVisibility, rightExpanded, selectedTheme, customBlocks, mobileColumnFirst, selectedFont, sideOverride, layoutPresets, visualStyle]);
 
   // After mount / whenever placement changes, force one re-render so the portal
   // target slots (refs attached during commit) are read and relocated modules
@@ -6655,7 +6666,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     />
     <DragDropContext onDragEnd={handleDragEnd}>
     <div
-      className={`min-h-screen text-white transition-colors duration-500 overflow-x-hidden ${colors.bgGradient}${selectedFont !== 'default' && !isPhotoHarmony ? ' artist-profile-font-scope' : ''}`}
+      className={`min-h-screen text-white transition-colors duration-500 overflow-x-hidden profile-visual-${visualStyle} ${colors.bgGradient}${selectedFont !== 'default' && !isPhotoHarmony ? ' artist-profile-font-scope' : ''}`}
       style={{ margin: 0, padding: 0 }}
       onClick={(e) => {
         // Tap on empty area toggles chrome; ignore clicks on interactive elements.
@@ -6666,12 +6677,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       }}
     >
       {/* ── Animated background orbs ── theme-aware aurora with scroll parallax */}
+      {visualStyle === 'editorial' && <style>{`.profile-visual-editorial .profile-hero h1 { font-family: Georgia, serif; letter-spacing: -0.035em; } .profile-visual-editorial .profile-hero > div:first-child img, .profile-visual-editorial .profile-hero > div:first-child video { filter: grayscale(1) brightness(.65) contrast(1.05); }`}</style>}
+      {visualStyle === 'spotlight' && <style>{`.profile-visual-spotlight .profile-hero h1 { letter-spacing: -0.035em; text-shadow: 0 3px 35px rgba(0,0,0,.7); }`}</style>}
       <ParallaxOrbs hexPrimary={colors.hexPrimary} hexAccent={colors.hexAccent} />
 
       <audio ref={audioRef} onEnded={() => setPlayingSongId(null)} />
       
       {/* Hero Header - Dise�o Ultra Premium 2025 */}
-      <header className="relative h-[88svh] min-h-[620px] max-h-[900px] w-full overflow-hidden md:h-[90svh]" style={{ margin: 0, padding: 0, top: 0, left: 0 }}>
+      <header className={`profile-hero relative w-full overflow-hidden ${visualStyle === 'editorial' ? 'h-[68svh] min-h-[620px] max-h-[760px] md:h-[72svh]' : visualStyle === 'spotlight' ? 'h-[78svh] min-h-[620px] max-h-[840px] md:h-[82svh]' : 'h-[88svh] min-h-[620px] max-h-[900px] md:h-[90svh]'}`} style={{ margin: 0, padding: 0, top: 0, left: 0 }}>
         {/* Background con efecto cinematogr�fico */}
         <div className="absolute inset-0">
           {(() => {
@@ -7743,6 +7756,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                     Reorder sections and enable/disable the ones you want to show
                   </DialogDescription>
                 </DialogHeader>
+
+                <ProfileStyleSelector value={visualStyle} onApply={setVisualStyle} artistName={artist.name || 'Artist'} image={artist.profileImage} />
 
                 {/* Control Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">

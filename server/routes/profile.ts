@@ -735,6 +735,8 @@ router.post('/profile/:artistId/layout', authenticate, async (req: Request, res:
       rightVisibility: z.record(z.boolean()).optional(),
       rightExpanded: z.record(z.boolean()).optional(),
       colorTheme: z.string().optional(),
+      visualStyle: z.enum(['classic', 'spotlight', 'editorial']).optional(),
+      presets: z.array(z.unknown()).max(12).optional(),
       mobileColumnFirst: z.enum(['left', 'right']).optional(),
       fontKey: z.string().optional(),
       sideOverride: z.record(z.enum(['left', 'right'])).optional(),
@@ -747,7 +749,11 @@ router.post('/profile/:artistId/layout', authenticate, async (req: Request, res:
       }).passthrough()).optional(),
     });
     
-    const layout = layoutSchema.parse(req.body);
+    const parsedLayout = layoutSchema.parse(req.body);
+    // Retain existing fields not known to this version of the editor.
+    const existingLayout = artist.profileLayout && typeof artist.profileLayout === 'object' && !Array.isArray(artist.profileLayout)
+      ? artist.profileLayout : {};
+    const layout = { ...existingLayout, ...parsedLayout };
     
     await db
       .update(users)
