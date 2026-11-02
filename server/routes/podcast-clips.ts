@@ -9,6 +9,7 @@ import { db as firestore, FieldValue } from '../firebase';
 import { canManagePodcastArtist, toPublicPodcastClip } from '../services/podcast-clip-policy';
 import { randomUUID } from 'crypto';
 import { settleTourCredits } from '../services/world-tour-billing';
+import { isArtistStudioCreditExempt } from '../services/artist-studio-credit-policy';
 import { PODCAST_MODELS, PODCAST_TTS_MODEL, studioCreditsFromUsd, studioProviderCostUsd, studioModelById } from '../../shared/artist-studio-models';
 
 const router = Router();
@@ -61,8 +62,10 @@ router.get('/estimate', authenticate, async (req: Request, res: Response) => {
     const model = studioModelById(PODCAST_MODELS, req.query.model) || studioModelById(PODCAST_MODELS, DEFAULT_MODEL)!;
     const chars = Math.max(0, Math.min(1200, Number(req.query.characters) || 0));
     const providerCostUsd = studioProviderCostUsd(model, 30, chars);
-    const balance = await getUserBalance(String((req as any).user?.email || '').toLowerCase());
-    res.json({ success: true, model: model.id, duration: 30, resolution: '720p', credits: balance.isAdmin ? 0 : studioCreditsFromUsd(providerCostUsd), models: PODCAST_MODELS.map(({ id, name, note }) => ({ id, name, note })) });
+    const email = String((req as any).user?.email || '').trim().toLowerCase();
+    if (!email) return res.status(401).json({ success: false, error: 'Your account email could not be verified.' });
+    const creditExempt = isArtistStudioCreditExempt(email);
+    res.json({ success: true, model: model.id, duration: 30, resolution: '720p', creditExempt, credits: creditExempt ? 0 : studioCreditsFromUsd(providerCostUsd), models: PODCAST_MODELS.map(({ id, name, note }) => ({ id, name, note })) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Could not calculate the credit estimate.' });
   }
@@ -147,8 +150,9 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     const duration = 30;
     const providerCostUsd = studioProviderCostUsd(model, duration, script.length);
     const requiredCredits = studioCreditsFromUsd(providerCostUsd);
-    const balance = await getUserBalance(userEmail);
-    if (!balance.isAdmin && balance.credits < requiredCredits) return res.status(402).json({ success: false, error: 'This clip needs ' + requiredCredits + ' credits; your balance is ' + balance.credits + '.', requiredCredits, remainingCredits: balance.credits });
+    const creditExempt = isArtistStudioCreditExempt(userEmail);
+    const balance = creditExempt ? { credits: 999999 } : await getUserBalance(userEmail);
+    if (!creditExempt && balance.credits < requiredCredits) return res.status(402).json({ success: false, error: 'This clip needs ' + requiredCredits + ' credits; your balance is ' + balance.credits + '.', requiredCredits, remainingCredits: balance.credits });
     const artist = context.artist;
     const refs = [artist.profileImage, artist.coverImage].filter((url): url is string => typeof url === 'string' && url.startsWith('https://')).slice(0, 2);
     if (model.requiresSpeech && !refs[0]) return res.status(400).json({ success: false, error: 'Add an artist portrait to use this lip-sync model.' });
@@ -156,7 +160,7 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     const prompt = 'Create a realistic 30-second vertical artist podcast clip. Visual direction: ' + stylePrompt + '. Preserve the artist identity in the reference portrait. Natural direct-to-camera delivery, expressive believable face and gestures, clean editorial composition, no visible text or logos. Artist: ' + (artist.artistName || artist.username || 'musician') + '. Music identity: ' + ((artist.genres || []).join(', ') || artist.genre || 'use the artist profile') + (songsSummary ? '. Music catalog: ' + songsSummary : '') + '. Topic: ' + (topic || 'artist story and music') + '. Say this script in ' + language + ': “' + script + '”. Maintain one coherent visual setup.';
     const charge = await settleTourCredits(userEmail, chargeId, providerCostUsd, false, 'Podcast Studio');
     chargedCredits = charge.credits;
-    if (!balance.isAdmin && !chargedCredits) return res.status(402).json({ success: false, error: 'Your credit balance could not cover this clip.', requiredCredits, remainingCredits: balance.credits });
+    if (!creditExempt && !chargedCredits) return res.status(402).json({ success: false, error: 'Your credit balance could not cover this clip.', requiredCredits, remainingCredits: balance.credits });
     const videoInput: any = model.requiresSpeech
       ? model.id === 'minimax-lipsync' ? { image_url: refs[0], audio_url: '', resolution: '768P', enable_safety_checker: true }
         : model.id === 'sync-lipsync-v3' ? { image_url: refs[0], audio_url: '', enable_safety_checker: true }

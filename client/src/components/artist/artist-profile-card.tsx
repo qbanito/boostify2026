@@ -1,6 +1,7 @@
 ﻿import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { logger } from "@/lib/logger";
 import { insertWorldTour } from '../../../../shared/world-tour';
+import { MUSIC_STARTER_SECTIONS, musicStarterOrder, musicStarterVisibility, usesMusicStarter } from '../../../../shared/artist-layout-defaults';
 import { PROFILE_ASSISTANT_MODULE_MAP, PROFILE_ASSISTANT_MODULES, type ArtistProfileAgentAction } from '../../../../shared/artist-profile-agent';
 import type { CopilotUiCommand, CopilotUiResult, ProfileTextChanges } from '../../../../shared/artist-profile-copilot';
 import { fillCopilotFields, inspectCopilotFieldOptions, inspectCopilotInterface, selectCopilotView, spotlightCopilotTarget, waitForCopilotTarget } from '../../lib/profile-copilot-interface';
@@ -23,6 +24,9 @@ import {
 import { formatLocation } from "../../lib/formatLocation";
 import { ArtistDownloads } from "./artist-downloads";
 import { ProfileStyleSelector, profileVisualStyle, type ProfileVisualStyle } from "./profile-style-selector";
+import "./profile-visual-styles.css";
+import { ProfileStageArt } from "./profile-stage-art";
+const ProfileSculpture = lazy(() => import("./profile-sculpture"));
 // Heavy Artist Profile modules are code-split via React.lazy in ./lazy-modules.
 // They keep the same names + props API but download their JS chunk on demand,
 // only when their section becomes visible. See ./lazy-modules for details.
@@ -832,11 +836,11 @@ const PREDETERMINED_LAYOUT_PRESETS: PredeterminedLayoutPreset[] = [
   {
     key: 'music',
     label: 'Music',
-    description: 'Catalog, videos, lyrics and live stage up front.',
+    description: 'Music, videos and image galleries.',
     icon: Music,
     accent: '#8b5cf6',
-    sections: ['songs', 'live-stage', 'videos', 'lyrics-video', 'karaoke', 'galleries', 'social-hub'],
-    widgets: ['spotify', 'information', 'qr-card', 'social-media'],
+    sections: [...MUSIC_STARTER_SECTIONS],
+    widgets: [],
   },
   {
     key: 'store',
@@ -2907,6 +2911,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'fashion-store': true,
   };
   
+  // Fresh artist profiles start with only the Music preset. Saved layouts still
+  // hydrate against the legacy defaults below, so existing choices are retained.
+  const newArtistVisibility = musicStarterVisibility([...new Set([...defaultOrder, ...Object.keys(defaultVisibility)])]);
+  const newArtistOrder = musicStarterOrder(defaultOrder);
   const [sectionOrder, setSectionOrder] = useState<string[]>(defaultOrder);
   const [sectionVisibility, setSectionVisibility] = useState<Record<string, boolean>>(defaultVisibility);
   // All sections collapsed by default � user opens them as needed
@@ -2974,6 +2982,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     'tokenized-music': false, 'information': false, 'social-media': false,
     'spotify': false, 'premium-tools': false, 'upcoming-shows': false, 'concert-hub': false,
   };
+  const newArtistRightVisibility = Object.fromEntries(defaultRightOrder.map(id => [id, false]));
   const [rightVisibility, setRightVisibility] = useState<Record<string, boolean>>(defaultRightVisibility);
   const [isMerchandiseExpanded, setIsMerchandiseExpanded] = useState(true);
   // Social Media Hub drag-and-drop state
@@ -3209,6 +3218,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         });
         if (!res.ok) {
           logger.error('Auto-save layout failed: HTTP', res.status, await res.text().catch(() => ''));
+          toast({ title: 'Could not save profile settings', description: 'Your changes may not persist. Please try again.', variant: 'destructive' });
         } else {
           const saved = await res.json();
           queryClient.setQueryData(['userProfile', artistId], (current: any) =>
@@ -3217,9 +3227,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         }
       } catch (e) {
         logger.error('Auto-save layout failed:', e);
+        toast({ title: 'Could not save profile settings', description: 'Check your connection and try again.', variant: 'destructive' });
       }
     }, 800);
-  }, [artistId, queryClient]);
+  }, [artistId, queryClient, toast]);
 
   const saveCurrentPreset = useCallback(() => {
     const trimmedName = presetName.trim();
@@ -3692,6 +3703,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
             generatedBy: postgresData.generatedBy,
             slug: postgresData.slug,
             pgId: postgresData.id,
+            profileCreatedAt: postgresData.createdAt ?? null,
             clerkId: postgresData.clerkId,
             role: postgresData.role || firestoreData?.role || 'artist',
             biography: postgresData.biography || firestoreData?.biography,
@@ -5439,6 +5451,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     hasHydratedLayoutRef.current = false;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     let shouldGenerateAutoBlocks = false;
+    const isNewArtist = pageMode === 'artist' && usesMusicStarter(userProfile?.profileCreatedAt);
     if (artist?.profileLayout) {
       layoutSourceRef.current = 'db';
       // Ensure order is a valid array before setting
@@ -5551,18 +5564,26 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       // No saved layout, no special page mode → fresh profile
       layoutSourceRef.current = 'default';
       setVisualStyle('classic');
+      setSectionOrder(isNewArtist ? newArtistOrder : defaultOrder);
+      setSectionVisibility(isNewArtist ? newArtistVisibility : defaultVisibility);
+      setSectionExpanded(isNewArtist ? { ...defaultExpanded, songs: true, videos: true, galleries: true } : defaultExpanded);
+      setRightOrder(defaultRightOrder);
+      setRightVisibility(isNewArtist ? newArtistRightVisibility : defaultRightVisibility);
+      setRightExpanded(defaultRightExpanded);
+      setSideOverride({});
+      setCustomBlocks({});
       setLayoutPresets([]);
     }
     // Mark hydration complete on the next tick so the auto-save effect below
     // does not fire from the state-batched updates we just applied.
     const t = setTimeout(() => {
       hasHydratedLayoutRef.current = true;
-      if (isOwnProfile && shouldGenerateAutoBlocks) {
+      if (isOwnProfile && shouldGenerateAutoBlocks && !isNewArtist) {
         generateAutoNarrativeBlocks({ silent: true });
       }
     }, 0);
     return () => clearTimeout(t);
-  }, [artist?.profileLayout]);
+  }, [artist?.profileLayout, userProfile?.profileCreatedAt]);
 
   // Persist visibility / expanded toggles. Order changes already trigger
   // autoSaveLayout directly from the drag handlers; this effect catches
@@ -6397,7 +6418,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   const glowBorder = colors.cardBorder === 'glow'
     ? `0 0 12px ${colors.hexAccent}18, inset 0 0 12px ${colors.hexAccent}06`
     : '';
-  const cardStyles = `rounded-2xl p-5 shadow-lg ${colors.shadow} transition-all duration-300 overflow-hidden`;
+  const cardStyles = `profile-module-card rounded-2xl p-5 shadow-lg ${colors.shadow} transition-all duration-300 overflow-hidden`;
   const cardBgValue = String(colors.cardBg || '');
   const cardBgIsGradient = cardBgValue.includes('gradient(');
   const cardStyleInline: React.CSSProperties = {
@@ -6426,13 +6447,13 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     const isPinnedOpen = false;
     const isOpen = isPinnedOpen || !!sectionExpanded[sId];
     return (
-    <div className="flex items-center justify-between gap-3 mb-4">
+    <div className={sId === 'songs' ? 'mb-4 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-3' : 'flex items-center justify-between gap-3 mb-4'}>
       <button
         onClick={() => {
           if (isPinnedOpen) return;
           setSectionExpanded(prev => ({ ...prev, [sId]: !prev[sId] }));
         }}
-        className={`flex-1 text-left flex items-center gap-2.5 hover:opacity-90 transition-opacity min-w-0 ${isPinnedOpen ? 'cursor-default' : ''}`}
+        className={`flex-1 text-left flex items-center gap-2.5 hover:opacity-90 transition-opacity min-w-0 ${isPinnedOpen ? 'cursor-default' : ''} ${sId === 'songs' ? 'basis-full' : ''}`}
         data-testid={`button-toggle-section-${sId}`}
       >
         <div
@@ -6456,7 +6477,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
           </span>
         )}
       </button>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className={sId === 'songs' ? 'flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:flex-shrink-0' : 'flex items-center gap-2 flex-shrink-0'}>
         {isPinnedOpen && (
           <span
             className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full"
@@ -6666,7 +6687,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     />
     <DragDropContext onDragEnd={handleDragEnd}>
     <div
-      className={`min-h-screen text-white transition-colors duration-500 overflow-x-hidden profile-visual-${visualStyle} ${colors.bgGradient}${selectedFont !== 'default' && !isPhotoHarmony ? ' artist-profile-font-scope' : ''}`}
+      className={`min-h-screen text-white transition-colors duration-500 overflow-x-hidden profile-visual-${visualStyle} ${visualStyle !== 'classic' ? 'profile-visual-custom' : ''} ${colors.bgGradient}${selectedFont !== 'default' && !isPhotoHarmony ? ' artist-profile-font-scope' : ''}`}
       style={{ margin: 0, padding: 0 }}
       onClick={(e) => {
         // Tap on empty area toggles chrome; ignore clicks on interactive elements.
@@ -6680,13 +6701,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
       {visualStyle === 'editorial' && <style>{`.profile-visual-editorial .profile-hero h1 { font-family: Georgia, serif; letter-spacing: -0.035em; } .profile-visual-editorial .profile-hero > div:first-child img, .profile-visual-editorial .profile-hero > div:first-child video { filter: grayscale(1) brightness(.65) contrast(1.05); }`}</style>}
       {visualStyle === 'spotlight' && <style>{`.profile-visual-spotlight .profile-hero h1 { letter-spacing: -0.035em; text-shadow: 0 3px 35px rgba(0,0,0,.7); }`}</style>}
       <ParallaxOrbs hexPrimary={colors.hexPrimary} hexAccent={colors.hexAccent} />
+      {visualStyle !== 'classic' && <div className="profile-visual-rays" aria-hidden="true" />}
 
       <audio ref={audioRef} onEnded={() => setPlayingSongId(null)} />
       
       {/* Hero Header - Dise�o Ultra Premium 2025 */}
       <header className={`profile-hero relative w-full overflow-hidden ${visualStyle === 'editorial' ? 'h-[68svh] min-h-[620px] max-h-[760px] md:h-[72svh]' : visualStyle === 'spotlight' ? 'h-[78svh] min-h-[620px] max-h-[840px] md:h-[82svh]' : 'h-[88svh] min-h-[620px] max-h-[900px] md:h-[90svh]'}`} style={{ margin: 0, padding: 0, top: 0, left: 0 }}>
         {/* Background con efecto cinematogr�fico */}
-        <div className="absolute inset-0">
+        <div className="profile-hero-media absolute inset-0">
           {(() => {
             const DEFAULT_HERO_VIDEO = '/assets/promos/boostify-2025-profile-v2.mp4';
             const bannerPos = artist.bannerPosition || "50";
@@ -6757,6 +6779,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               );
             }
             
+            // Keep the artist's own identity in modern layouts when no banner is set.
+            if (visualStyle !== 'classic' && artist.profileImage && artist.profileImage !== '/assets/promos/default-profile.jpeg') {
+              return <img src={artist.profileImage} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: objectPositionStyle }} />;
+            }
             // Sin banner ni video - usar video por defecto
             return (
               <video
@@ -6778,7 +6804,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         </div>
 
         {/* Overlay gradiente cinematogr�fico */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20"></div>
+        <div className="profile-hero-legacy-overlay absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20"></div>
         <div 
           className="absolute inset-0 opacity-30"
           style={{
@@ -6818,9 +6844,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
           ))}
         </div>
         
+        {visualStyle !== 'classic' && <><div className="profile-visual-hero-effect" aria-hidden="true" /><Suspense fallback={null}><ProfileSculpture color={visualStyle === 'neon' ? '#55f3f0' : visualStyle === 'horizon' ? '#ffc28a' : visualStyle === 'editorial' || visualStyle === 'noir' ? '#e8d7bc' : '#a8a4ff'} /></Suspense></>}
         {/* Barra superior con glassmorphism */}
         <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-30" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px) + 0.5rem)' }}>
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="profile-hero-toolbar max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-2 md:gap-3 backdrop-blur-xl bg-black/30 px-4 py-2.5 rounded-2xl border border-white/10">
               <img 
                 src="/assets/boostify-logo.svg" 
@@ -6896,9 +6923,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         </div>
 
         {/* Contenido principal del hero - Layout centrado */}
-        <div className="absolute inset-0 flex items-center justify-center z-20">
+        {visualStyle !== 'classic' && artist.profileImage && <ProfileStageArt image={artist.profileImage} />}
+        <div className="profile-hero-inner absolute inset-0 flex items-center justify-center z-20">
           <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-            <div className="text-center space-y-4 md:space-y-6">
+            <div className="profile-hero-content text-center space-y-4 md:space-y-6">
               
               {/* Nombre del artista */}
               <div className="space-y-3">
@@ -6932,7 +6960,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                 )}
                 
                 {/* L�nea decorativa bajo el nombre */}
-                <div className="flex items-center justify-center gap-3">
+                <div className="profile-hero-divider flex items-center justify-center gap-3">
                   <div 
                     className="h-1 w-16 md:w-24 rounded-full"
                     style={{ 
@@ -7130,7 +7158,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
         {/* Selector de Paleta - Solo visible para el dueño del perfil */}
         {isOwnProfile && (
-          <div className={`mb-6 rounded-2xl bg-gray-900/80 backdrop-blur-sm transition-colors duration-500 overflow-hidden${isPhotoHarmony ? ' photo-harmony-scope' : (selectedFont !== 'default' ? ' artist-profile-font-scope' : '')}`}
+          <div id="profile-appearance" className={`mb-6 scroll-mt-4 rounded-2xl bg-gray-900/80 backdrop-blur-sm transition-colors duration-500 overflow-hidden${isPhotoHarmony ? ' photo-harmony-scope' : (selectedFont !== 'default' ? ' artist-profile-font-scope' : '')}`}
             style={cardStyleInline}>
             
             {/* Header � always visible */}
@@ -7152,7 +7180,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                     />
                   ))}
                 </div>
-                <span className="text-sm font-medium text-white">Customize Your Style</span>
+                <span className="text-sm font-medium text-white">Customize Your Style</span><span className="hidden rounded-full border border-white/15 px-2 py-0.5 text-[10px] capitalize text-white/60 sm:inline">{visualStyle}</span>
                 {isPhotoHarmony ? (
                   <span
                     className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold tracking-wide"
@@ -7172,7 +7200,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
             {/* Expanded panel */}
             {showThemeSelector && (
-              <div className="px-5 pb-5 pt-2">
+              <div className="px-3 pb-5 pt-2 sm:px-5">
+                <ProfileStyleSelector value={visualStyle} artistName={artist.name || 'Artist'} image={artist.profileImage} onApply={(style) => { setVisualStyle(style); setShowThemeSelector(false); window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' }); }} />
+                <div className="mb-4 border-t border-white/10 pt-4"><h3 className="text-sm font-semibold text-white">Colors &amp; typography</h3><p className="mt-1 text-xs text-gray-400">Fine-tune your palette and font below.</p></div>
 
                 {/* -- Smart Color Sync --------------------------------------- */}
                 {artist.profileImage && (
@@ -7746,8 +7776,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
             {/* Layout Configuration Modal */}
             <Dialog open={showLayoutConfig} onOpenChange={setShowLayoutConfig}>
-              <DialogContent className="w-[calc(100vw-1rem)] sm:w-[95vw] max-w-3xl max-h-[90dvh] sm:max-h-[88vh] overflow-y-auto overflow-x-hidden bg-zinc-900 border-zinc-800 p-3 sm:p-6">
-                <DialogHeader className="pr-8">
+              <DialogContent data-testid="profile-layout-dialog" className="flex w-[calc(100vw-1rem)] max-w-3xl max-h-[calc(100dvh-1rem)] sm:max-h-[min(90dvh,900px)] min-h-0 flex-col gap-0 overflow-hidden bg-zinc-900 border-zinc-800 p-0 [&>button]:right-2 [&>button]:top-2 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center [&>button]:text-zinc-300 [&>button]:hover:text-white">
+                <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-4 pr-12 text-left sm:px-6 sm:pr-12">
                   <DialogTitle className="text-base sm:text-2xl font-bold text-white flex items-center gap-2">
                     <Layout className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" style={{ color: colors.hexAccent }} />
                     <span className="truncate">Customize Profile Layout</span>
@@ -7757,7 +7787,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   </DialogDescription>
                 </DialogHeader>
 
-                <ProfileStyleSelector value={visualStyle} onApply={setVisualStyle} artistName={artist.name || 'Artist'} image={artist.profileImage} />
+                <div data-testid="profile-layout-scroll" className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 sm:px-6">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300"><span>For visual styles, colors and fonts, use Customize Your Style.</span><button type="button" className="min-h-10 rounded-lg border border-white/15 px-3 text-xs font-semibold text-white hover:bg-white/10" onClick={() => { setShowLayoutConfig(false); setShowThemeSelector(true); window.setTimeout(() => document.getElementById('profile-appearance')?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' }), 100); }}>Open style settings</button></div>
 
                 {/* Control Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
@@ -8065,14 +8096,14 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </div>
 
                                     {/* Action cluster — grouped & always visible (never clipped) */}
-                                    <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto rounded-lg bg-black/40 border border-white/5 p-0.5">
+                                    <div className="flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto rounded-lg bg-black/40 border border-white/5 p-1">
                                       {isCustom && isOwnProfile && (
                                         <>
                                           <Button
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => setEditingBlockId(sectionId)}
-                                            className="h-7 w-7 p-0 flex-shrink-0"
+                                            className="h-9 w-9 p-0 flex-shrink-0 hover:bg-white/10 hover:text-white"
                                             title="Edit block"
                                           >
                                             <Pencil className="h-3.5 w-3.5 text-gray-400" />
@@ -8083,7 +8114,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                             onClick={() => {
                                               if (window.confirm('Delete this custom block?')) deleteCustomBlock(sectionId);
                                             }}
-                                            className="h-7 w-7 p-0 flex-shrink-0"
+                                            className="h-9 w-9 p-0 flex-shrink-0 hover:bg-white/10 hover:text-white"
                                             title="Delete block"
                                           >
                                             <Trash2 className="h-3.5 w-3.5 text-red-400" />
@@ -8094,7 +8125,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                         size="sm"
                                         variant="ghost"
                                         onClick={() => setModuleSide(sectionId, sideOf(sectionId) === 'right' ? 'left' : 'right')}
-                                        className="h-7 w-7 p-0 flex-shrink-0"
+                                        className="h-9 w-9 p-0 flex-shrink-0 hover:bg-white/10 hover:text-white"
                                         title={sideOf(sectionId) === 'right' ? 'Move to left column' : 'Move to right column'}
                                         data-testid={`button-toggle-side-${sectionId}`}
                                       >
@@ -8113,7 +8144,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                             [sectionId]: !prev[sectionId]
                                           }));
                                         }}
-                                        className="h-7 w-7 p-0 flex-shrink-0"
+                                        className="h-9 w-9 p-0 flex-shrink-0 hover:bg-white/10 hover:text-white"
                                         data-testid={`button-toggle-expand-${sectionId}`}
                                       >
                                         {sectionExpanded[sectionId] ? (
@@ -8131,7 +8162,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                             [sectionId]: !prev[sectionId]
                                           }));
                                         }}
-                                        className="h-7 w-7 p-0 flex-shrink-0 rounded-md"
+                                        className="h-9 w-9 p-0 flex-shrink-0 rounded-md hover:bg-white/10 hover:text-white"
                                         style={{ backgroundColor: isVisible ? `${colors.hexAccent}22` : 'rgba(244,63,94,0.12)' }}
                                         title={isVisible ? 'Hide section' : 'Show section'}
                                         data-testid={`button-toggle-visible-${sectionId}`}
@@ -8244,12 +8275,12 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </div>
 
                                     {/* Action cluster — grouped & always visible (never clipped) */}
-                                    <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto rounded-lg bg-black/40 border border-white/5 p-0.5">
+                                    <div className="flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto rounded-lg bg-black/40 border border-white/5 p-1">
                                       <Button
                                         size="sm"
                                         variant="ghost"
                                         onClick={() => setModuleSide(widgetId, sideOf(widgetId) === 'left' ? 'right' : 'left')}
-                                        className="h-7 w-7 p-0 flex-shrink-0"
+                                        className="h-9 w-9 p-0 flex-shrink-0 hover:bg-white/10 hover:text-white"
                                         title={sideOf(widgetId) === 'left' ? 'Move to right column' : 'Move to left column'}
                                         data-testid={`button-toggle-side-${widgetId}`}
                                       >
@@ -8268,7 +8299,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                             [widgetId]: !prev[widgetId],
                                           }));
                                         }}
-                                        className="h-7 w-7 p-0 flex-shrink-0 rounded-md"
+                                        className="h-9 w-9 p-0 flex-shrink-0 rounded-md hover:bg-white/10 hover:text-white"
                                         style={{ backgroundColor: isVisible ? `${colors.hexAccent}22` : 'rgba(244,63,94,0.12)' }}
                                         title={isVisible ? 'Hide widget' : 'Show widget'}
                                         data-testid={`button-toggle-visible-${widgetId}`}
@@ -8331,17 +8362,18 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   </div>
                 </div>
 
-                <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 mt-2">
+                </div>
+                <DialogFooter className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/10 bg-zinc-900 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:space-x-0 sm:px-6">
                   <Button
                     variant="outline"
                     onClick={() => setShowLayoutConfig(false)}
-                    className="w-full sm:w-auto border-zinc-700 text-white hover:bg-zinc-800"
+                    className="min-h-11 w-full min-w-0 border-zinc-600 bg-zinc-950 text-white hover:bg-zinc-800"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={saveLayout}
-                    className="w-full sm:w-auto gap-2"
+                    className="min-h-11 w-full min-w-0 gap-2"
                     style={{
                       background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
                       color: 'white'
@@ -9209,7 +9241,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                       <button
                         type="button"
                         onClick={() => setUnlockModalOpen(true)}
-                        className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left transition-all hover:scale-[1.01] border"
+                        className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-all sm:hover:scale-[1.01]"
                         style={{
                           background: `linear-gradient(135deg, ${colors.hexPrimary}22, ${colors.hexAccent}22)`,
                           borderColor: `${colors.hexAccent}55`,
@@ -9406,7 +9438,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 </span>
                               </div>
                               <h3
-                                className="text-2xl sm:text-3xl font-bold text-white mt-2 truncate"
+                                className="mt-2 break-words text-2xl font-bold text-white sm:text-3xl"
                                 data-testid={`text-song-title-${heroSong.id}`}
                               >
                                 {heroSong.title || heroSong.name}
@@ -9416,10 +9448,10 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 {heroSong.duration ? ` · ${heroSong.duration}` : ''}
                               </div>
                               {/* Quick actions row */}
-                              <div className="mt-4 flex flex-wrap gap-2 justify-center sm:justify-start">
+                              <div className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-start">
                                 <button
                                   onClick={() => handlePlayPause(heroSong)}
-                                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-transform hover:scale-105"
+                                  className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-transform sm:hover:scale-105"
                                   style={{
                                     background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
                                     color: 'white',
@@ -9432,7 +9464,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                   <>
                                     <button
                                       onClick={() => handleToggleSingle(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         backgroundColor: heroSong.isSingle ? `${colors.hexAccent}20` : 'transparent',
                                         border: `1px solid ${colors.hexAccent}66`,
@@ -9445,7 +9477,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </button>
                                     <button
                                       onClick={() => setCoverDialogSong(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         border: `1px solid ${colors.hexAccent}40`,
                                         color: colors.hexAccent,
@@ -9459,7 +9491,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </button>
                                     <button
                                       onClick={() => setSelectedSongForMetadata(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         border: `1px solid ${colors.hexBorder}`,
                                         color: colors.hexAccent,
@@ -9473,7 +9505,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </button>
                                     <button
                                       onClick={() => openMiniStudioForSong(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         border: `1px solid ${colors.hexAccent}66`,
                                         color: colors.hexAccent,
@@ -9487,7 +9519,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </button>
                                     <button
                                       onClick={() => openPromoteForSong(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
                                         color: 'white',
@@ -9507,7 +9539,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                         const url = `/music-video-creator?artist=${encodeURIComponent(artist.name)}&artistId=${artist.pgId || artist.id}&song=${encodeURIComponent(heroSong.name)}&songId=${heroSong.id}${heroSong.audioUrl ? `&audioUrl=${encodeURIComponent(heroSong.audioUrl)}` : ''}${heroSong.coverArt ? `&coverArt=${encodeURIComponent(heroSong.coverArt)}` : ''}${artist.profileImage ? `&images=${encodeURIComponent(artist.profileImage)}` : ''}`;
                                         window.location.href = url;
                                       }}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         background: `linear-gradient(135deg, ${colors.hexPrimary}, ${colors.hexAccent})`,
                                         color: 'white',
@@ -9520,7 +9552,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </button>
                                     <button
                                       onClick={() => handleDeleteSong(heroSong)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                      className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                       style={{
                                         border: '1px solid #EF444466',
                                         color: '#EF4444',
@@ -9536,7 +9568,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 {/* Karaoke button � always visible */}
                                 <button
                                   onClick={() => setKaraokeSong(heroSong)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-transform hover:scale-105"
+                                  className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-transform sm:hover:scale-105"
                                   style={{
                                     background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(168,85,247,0.14))',
                                     border: '1px solid rgba(168,85,247,0.4)',
@@ -9582,7 +9614,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                           return (
                             <div
                               key={song.id}
-                              className="group flex items-center gap-3 p-2 rounded-xl border bg-white/[0.02] hover:bg-white/[0.05] transition-all"
+                              className="group flex min-w-0 flex-wrap items-center gap-2 rounded-xl border bg-white/[0.02] p-2 transition-all hover:bg-white/[0.05] sm:flex-nowrap sm:gap-3"
                               style={{
                                 borderColor: isThisPlaying ? `${colors.hexAccent}66` : `${colors.hexBorder}`,
                                 boxShadow: isThisPlaying ? `0 0 0 1px ${colors.hexAccent}55, 0 8px 22px -14px ${colors.hexAccent}80` : undefined,
@@ -9611,7 +9643,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                 <button
                                   type="button"
                                   onClick={() => handlePlayPause(song)}
-                                  className={`absolute inset-0 flex items-center justify-center rounded-lg transition-all ${isThisPlaying ? 'bg-black/40 opacity-100' : 'bg-black/40 opacity-0 group-hover:opacity-100'}`}
+                                  className={`absolute inset-0 flex items-center justify-center rounded-lg transition-all ${isThisPlaying ? 'bg-black/40 opacity-100' : 'bg-black/40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
                                   aria-label={isThisPlaying ? 'Pause' : 'Play'}
                                   data-testid={`button-play-${song.id}`}
                                 >
@@ -9642,7 +9674,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                     </span>
                                   )}
                                   <h3
-                                    className="font-semibold text-white text-sm truncate"
+                                    className="min-w-0 flex-1 truncate text-sm font-semibold text-white"
                                     data-testid={`text-song-title-${song.id}`}
                                   >
                                     {song.title || song.name}
@@ -9789,7 +9821,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                                         toast({ title: 'Link copied!', description: 'Share it on any platform.' });
                                       }
                                     }}
-                                    className="w-7 h-7 inline-flex items-center justify-center rounded-full transition-transform hover:scale-110 ml-1"
+                                    className="ml-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-transform sm:h-7 sm:w-7 sm:hover:scale-110"
                                     style={{
                                       border: `1px solid ${colors.hexAccent}66`,
                                       color: colors.hexAccent,
@@ -9805,7 +9837,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               {/* Karaoke button � visible to everyone */}
                               <button
                                 onClick={(e) => { e.stopPropagation(); setKaraokeSong(song); }}
-                                className="w-7 h-7 inline-flex items-center justify-center rounded-full transition-transform hover:scale-110 ml-1"
+                                className="ml-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-transform sm:h-7 sm:w-7 sm:hover:scale-110"
                                 style={{
                                   background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(168,85,247,0.14))',
                                   border: '1px solid rgba(168,85,247,0.4)',
@@ -9816,6 +9848,19 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                               >
                                 <Mic2 className="h-3 w-3" />
                               </button>
+                              {isOwnProfile && (
+                                <details className="basis-full rounded-lg border border-white/10 bg-black/20 p-1 sm:hidden">
+                                  <summary className="flex min-h-10 cursor-pointer items-center justify-between px-3 text-xs font-medium text-white/80">Song options <ChevronDown className="h-4 w-4" /></summary>
+                                  <div className="grid grid-cols-2 gap-2 p-2">
+                                    <button type="button" onClick={() => handleToggleSingle(song)} className="min-h-11 rounded-lg bg-white/5 px-2 text-xs text-white">{song.isSingle ? 'Remove single' : 'Set as single'}</button>
+                                    <button type="button" onClick={() => setCoverDialogSong(song)} className="min-h-11 rounded-lg bg-white/5 px-2 text-xs text-white">Cover</button>
+                                    <button type="button" onClick={() => setSelectedSongForMetadata(song)} className="min-h-11 rounded-lg bg-white/5 px-2 text-xs text-white">Metadata</button>
+                                    <button type="button" onClick={() => openMiniStudioForSong(song)} className="min-h-11 rounded-lg bg-white/5 px-2 text-xs text-white">Studio</button>
+                                    <button type="button" onClick={() => openPromoteForSong(song)} disabled={promoteResolving && promoteSongTarget?.id === song.id} className="min-h-11 rounded-lg bg-white/5 px-2 text-xs text-white disabled:opacity-50">Promote</button>
+                                    <button type="button" onClick={() => handleDeleteSong(song)} className="min-h-11 rounded-lg bg-red-500/10 px-2 text-xs text-red-300">Delete</button>
+                                  </div>
+                                </details>
+                              )}
                             </div>
                           );
                         })}
@@ -11660,7 +11705,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   // Render an inline placeholder where the section would be,
                   // and the overlay via portal so it covers the whole viewport.
                   return (
-                    <div key={sectionId} id={`section-${sectionId}`}>
+                    <div key={sectionId} id={`section-${sectionId}`} className="profile-section-surface">
                       <div
                         className="rounded-2xl border border-dashed p-6 text-center text-sm text-white/60"
                         style={{ borderColor: `${colors.hexAccent}40` }}
@@ -11713,9 +11758,9 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                 // Wrap with section ID for scroll targeting + return-to-CC button
                 const sectionLabel = allSections[sectionId as keyof typeof allSections]?.name || sectionId;
                 sectionElement = ['podcast-clips', 'world-tour'].includes(sectionId) && !isOwnProfile ? (
-                  <div id={`section-${sectionId}`}>{sectionElement}</div>
+                  <div id={`section-${sectionId}`} className="profile-section-surface">{sectionElement}</div>
                 ) : (
-                  <div id={`section-${sectionId}`} className="relative">
+                  <div id={`section-${sectionId}`} className="profile-section-surface relative">
                     {/* Universal Fullscreen toggle � top-left, shown on every module */}
                     <button
                       type="button"
@@ -12593,7 +12638,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
 
               // Wrap with widget ID for scroll targeting + return-to-CC button
               widgetElement = (
-                <div id={`widget-${widgetId}`} className="relative">
+                <div id={`widget-${widgetId}`} className="profile-section-surface relative">
                   {sectionVisibility['social-hub'] && (
                     <button
                       onClick={(e) => {

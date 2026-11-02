@@ -4,11 +4,12 @@ import { userCredits, creditTransactions } from '../../db/schema';
 import { getUserBalance } from './credit-engine';
 import { recordProviderSpend } from './treasury-engine';
 import { studioCreditsFromUsd } from '../../shared/artist-studio-models';
+import { isArtistStudioCreditExempt } from './artist-studio-credit-policy';
 
 /** Same platform pricing, balance and ledger; the stage key prevents duplicate charges/refunds. */
 export async function settleTourCredits(email: string, operationId: string, costUsd: number, refund = false, studio = 'World Tour') {
+  if (isArtistStudioCreditExempt(email)) return { credits: 0, remaining: 999999 };
   const balance = await getUserBalance(email);
-  if (balance.isAdmin) return { credits: 0, remaining: balance.credits };
   const cost = studioCreditsFromUsd(costUsd);
   const chargeDescription = `${studio} stage [${operationId}]`;
   const refundDescription = `${studio} refund [${operationId}]`;

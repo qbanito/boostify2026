@@ -6,6 +6,7 @@ import { users, songs } from '../../db/schema';
 import { db as firestore } from '../firebase';
 import { canManagePodcastArtist as canManageArtist } from './podcast-clip-policy';
 import { getUserBalance } from './credit-engine';
+import { isArtistStudioCreditExempt } from './artist-studio-credit-policy';
 import { settleTourCredits } from './world-tour-billing';
 import { downloadTourMedia, prepareTourAudio, finishTourVideo, saveTourAsset, prepareTourStoryboardSheet } from './world-tour-media';
 import { createTourFrames, createTourVideoPrompt, tourIdentity, tourBoardError, tourVideoInput } from './world-tour-prompts';
@@ -60,12 +61,12 @@ export async function artistTourSongs(artist: any): Promise<TourSong[]> {
 }
 
 export async function tourQuote(email: string) {
-  const admin = (await getUserBalance(email)).isAdmin;
-  const price = (usd: number) => admin ? 0 : studioCreditsFromUsd(usd);
+  const creditExempt = isArtistStudioCreditExempt(email);
+  const price = (usd: number) => creditExempt ? 0 : studioCreditsFromUsd(usd);
   const image = price(COST.image);
   const videoModels = WORLD_TOUR_MODELS.map((model) => ({ id: model.id, name: model.name, note: model.note,
     credits: price(worldTourProviderCostUsd(model, 15)), providerCostUsd: worldTourProviderCostUsd(model, 15) }));
-  return { image, storyboard: image * 9, remaining: image * 8, video: videoModels[0].credits,
+  return { creditExempt, image, storyboard: image * 9, remaining: image * 8, video: videoModels[0].credits,
     precisionVideo: price(worldTourProviderCostUsd(WORLD_TOUR_MODELS[0], 15) + COST.sync), duration: 15, imageModel: WORLD_TOUR_IMAGE_MODEL,
     videoModel: WORLD_TOUR_VIDEO_MODEL, videoModels };
 }
@@ -74,7 +75,7 @@ export async function tourContext(actor: any, artistId: number) {
   const artist = await requireTourArtist(actor, artistId);
   await ensureTourStore();
   const [catalog, refs, projects, quote] = await Promise.all([
-    artistTourSongs(artist), tourReferences(artistId), listTourProjects(artistId), tourQuote(String(actor.email || '').toLowerCase()),
+    artistTourSongs(artist), tourReferences(artistId), listTourProjects(artistId), tourQuote(String(actor.email || '').trim().toLowerCase()),
   ]);
   return { artistName: artist.artistName || artist.username || 'Artist', songs: catalog,
     faceImages: Array.from(new Set([artist.profileImage, artist.profileImageUrl, ...refs].filter((url): url is string => !!url && /^https:\/\//.test(url)))),
@@ -112,10 +113,12 @@ function requestKey(raw: unknown): string {
 
 async function budget(actor: any, usd: number, expectedCredits?: number) {
   if (!(falKey() || process.env.FAL_KEY_BACKUP)) throw new TourError('Concert generation is not configured on the server.', 503);
-  if (!actor.email) throw new TourError('Your account email could not be verified.', 401);
-  const balance = await getUserBalance(String(actor.email).toLowerCase());
+  const email = typeof actor.email === 'string' ? actor.email.trim().toLowerCase() : '';
+  if (!email) throw new TourError('Your account email could not be verified.', 401);
+  if (isArtistStudioCreditExempt(email)) return;
+  const balance = await getUserBalance(email);
   const credits = expectedCredits ?? studioCreditsFromUsd(usd);
-  if (!balance.isAdmin && balance.credits < credits) throw new TourError(`This generation needs ${credits} credits. Your balance is ${balance.credits}.`, 402);
+  if (balance.credits < credits) throw new TourError(`This generation needs ${credits} credits. Your balance is ${balance.credits}.`, 402);
 }
 
 export async function queueTourFrames(actor: any, projectId: string, input: any) {
@@ -143,7 +146,7 @@ export async function queueTourFrames(actor: any, projectId: string, input: any)
       const custom = input.prompts?.[String(index)];
       if (typeof custom === 'string' && custom.trim()) frame.prompt = custom.trim().slice(0, 6000);
       const refs = [project.faceUrl, ...(index !== HERO ? [project.frames[HERO].imageUrl!] : [])];
-      const op = { id, projectId, kind: 'image', index, email: String(actor.email).toLowerCase(), costUsd: COST.image,
+      const op = { id, projectId, kind: 'image', index, email: String(actor.email).trim().toLowerCase(), costUsd: COST.image,
         anchorOperationId: index === HERO ? id : project.frames[HERO].operationId,
         status: 'PREPARING', model: WORLD_TOUR_IMAGE_MODEL, createdAt: Date.now(),
         input: { prompt: `${tourIdentity(project)}\n${frame.prompt}`, image_urls: refs, num_images: 1, resolution: '1K', aspect_ratio: project.aspectRatio, output_format: 'jpeg', limit_generations: true } };
@@ -186,7 +189,7 @@ export async function queueTourRender(actor: any, projectId: string, input: any)
     if (boardError) throw new TourError(boardError);
     if (project.renders.some((render) => !['COMPLETED', 'FAILED'].includes(render.status))) throw new TourError('A concert render is already running.', 409);
     const renderInput = tourVideoInput(project, selectedModel.id, storyboardUrl);
-    const op = { id, projectId, kind: 'render', email: String(actor.email).toLowerCase(), costUsd, precisionSync,
+    const op = { id, projectId, kind: 'render', email: String(actor.email).trim().toLowerCase(), costUsd, precisionSync,
       status: 'PREPARING', phase: 'WAN', model: selectedModel.endpoint, modelId: selectedModel.id, createdAt: Date.now(),
       faceUrl: project.faceUrl, audioSource: project.song.audioUrl, clipStart: project.clipStart,
       input: renderInput, generationInput: renderInput };

@@ -195,7 +195,7 @@ export function SectionCard({
   return (
     <>
       <div
-        className={`rounded-2xl p-5 shadow-lg ${colors.shadow} transition-all duration-300 overflow-hidden ${className}`}
+        className={`profile-module-card rounded-2xl p-5 shadow-lg ${colors.shadow} transition-all duration-300 overflow-hidden ${className}`}
         style={cardStyle}
         data-section-id={sectionId}
       >

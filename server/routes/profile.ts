@@ -7,6 +7,7 @@ import fileUpload from 'express-fileupload';
 import path from 'path';
 import fs from 'fs/promises';
 import { z } from 'zod';
+import { PROFILE_VISUAL_STYLES } from '../../shared/profile-visual-styles';
 import { insertSongSchema, insertMerchandiseSchema } from '../../db/schema';
 import { 
   ensureArtistProfile, 
@@ -194,6 +195,7 @@ router.get('/:slugOrId/flow', async (req: Request, res: Response) => {
     res.json({
       id: user.id,
       pgId: user.id,
+      createdAt: user.createdAt,
       username: user.username,
       artistName: user.artistName || user.username,
       slug: user.slug,
@@ -735,7 +737,7 @@ router.post('/profile/:artistId/layout', authenticate, async (req: Request, res:
       rightVisibility: z.record(z.boolean()).optional(),
       rightExpanded: z.record(z.boolean()).optional(),
       colorTheme: z.string().optional(),
-      visualStyle: z.enum(['classic', 'spotlight', 'editorial']).optional(),
+      visualStyle: z.enum(PROFILE_VISUAL_STYLES).optional(),
       presets: z.array(z.unknown()).max(12).optional(),
       mobileColumnFirst: z.enum(['left', 'right']).optional(),
       fontKey: z.string().optional(),

@@ -27,6 +27,7 @@
 
 import { db } from '../db';
 import { users } from '../../db/schema';
+import { musicStarterOrder, musicStarterVisibility, usesMusicStarter } from '../../shared/artist-layout-defaults';
 import { eq } from 'drizzle-orm';
 import {
   editImageWithNanoBanana,
@@ -169,6 +170,15 @@ const STRATEGIC_DEFAULT_LAYOUT = {
 };
 
 // ── Image generation ──────────────────────────────────────────────
+const NEW_ARTIST_MUSIC_LAYOUT = {
+  ...STRATEGIC_DEFAULT_LAYOUT,
+  order: musicStarterOrder(STRATEGIC_DEFAULT_LAYOUT.order),
+  visibility: musicStarterVisibility([...Object.keys(STRATEGIC_DEFAULT_LAYOUT.visibility),
+    'fanclub', 'live-stage', 'live-map', 'fashion-image-studio', 'tiktok-live', 'youtube-channel', 'karaoke', 'fashion-store']),
+  expanded: { songs: true, videos: true, galleries: true },
+  rightVisibility: Object.fromEntries([...STRATEGIC_DEFAULT_LAYOUT.rightOrder, 'concert-hub'].map(id => [id, false])),
+};
+
 async function generateProfilePortrait(
   artistName: string,
   originalImageUrl: string | null,
@@ -403,6 +413,7 @@ export async function bootstrapArtistFromLead(
         coverImage: users.coverImage,
         biography: users.biography,
         profileLayout: users.profileLayout,
+        createdAt: users.createdAt,
         masterJson: users.masterJson,
       })
       .from(users)
@@ -443,7 +454,7 @@ export async function bootstrapArtistFromLead(
 
     // Apply strategic layout only if no layout was customized yet.
     if (!existing?.profileLayout) {
-      updates.profileLayout = STRATEGIC_DEFAULT_LAYOUT as any;
+      updates.profileLayout = (usesMusicStarter(existing?.createdAt) ? NEW_ARTIST_MUSIC_LAYOUT : STRATEGIC_DEFAULT_LAYOUT) as any;
       layoutApplied = true;
     }
 

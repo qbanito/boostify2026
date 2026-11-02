@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import './artist-copilot-spider-mode.css';
 import { Html, Line, OrbitControls, useTexture } from '@react-three/drei';
 import { ArrowUpRight, Loader2, Send, Sparkles, X } from 'lucide-react';
 import * as THREE from 'three';
@@ -115,19 +116,21 @@ function NeonWeb({ scaffold, reduced }: { scaffold: Point[]; reduced: boolean })
 }
 
 function WebScene({ nodes, edges, onOpen, reduced, busy }: { nodes: SpiderNode[]; edges: SpiderEdge[]; onOpen: (node: SpiderNode) => void; reduced: boolean; busy: boolean }) {
+  const { width, height } = useThree((state) => state.size);
+  const horizontalScale = Math.min(1, Math.max(0.52, (width / Math.max(height, 1)) * 0.85));
   const displayed = useMemo(() => {
     const active = nodes.filter((node) => node.status !== 'visible');
     return [...active, ...nodes.filter((node) => node.status === 'visible')].slice(0, 8);
   }, [nodes]);
   const positions = useMemo(() => new Map(displayed.map((node, index) => {
     const angle = (index / Math.max(displayed.length, 1)) * Math.PI * 2 - Math.PI / 2;
-    return [node.id, [Math.cos(angle) * 2.9, Math.sin(angle) * 1.85, Math.sin(angle * 2) * 0.45] as Point];
-  })), [displayed]);
+    return [node.id, [Math.cos(angle) * 2.9 * horizontalScale, Math.sin(angle) * 1.85, Math.sin(angle * 2) * 0.45] as Point];
+  })), [displayed, horizontalScale]);
   const points = Array.from(positions.values());
   const scaffold = useMemo(() => Array.from({ length: 16 }, (_, index) => {
     const angle = (index / 16) * Math.PI * 2;
-    return [Math.cos(angle) * 3.35, Math.sin(angle) * 2.25, Math.sin(angle * 3) * 0.5 - 0.45] as Point;
-  }), []);
+    return [Math.cos(angle) * 3.35 * horizontalScale, Math.sin(angle) * 2.25, Math.sin(angle * 3) * 0.5 - 0.45] as Point;
+  }), [horizontalScale]);
   const center: Point = [0, 0, 0];
   const active = [...displayed].reverse().find((node) => node.status === 'working');
   const activePoint = active ? positions.get(active.id) : undefined;
@@ -145,9 +148,9 @@ function WebScene({ nodes, edges, onOpen, reduced, busy }: { nodes: SpiderNode[]
         return <group key={node.id} position={point}>
           <mesh><sphereGeometry args={[node.status === 'working' ? 0.16 : 0.12, 20, 16]} /><meshBasicMaterial color={color} /></mesh>
           <mesh><sphereGeometry args={[0.26, 20, 16]} /><meshBasicMaterial color={color} transparent opacity={0.2} depthWrite={false} /></mesh>
-          <Html position={[0, 0.34, 0]} center distanceFactor={6}>
+          {width >= 480 && <Html position={[0, 0.34, 0]} center distanceFactor={6}>
             <button type="button" disabled={busy} onClick={() => onOpen(node)} className={`min-w-[105px] max-w-[155px] rounded-xl border px-3 py-2 text-center text-[12px] font-semibold leading-tight shadow-[0_0_20px_rgba(59,188,255,0.18)] backdrop-blur-md disabled:cursor-wait ${node.status === 'working' ? 'border-orange-300/70 bg-[#422215]/95 text-orange-100' : node.status === 'error' ? 'border-red-400/60 bg-red-950/95 text-red-100' : 'border-cyan-200/40 bg-[#071322]/95 text-white hover:border-cyan-200/80'}`} title={`Open ${node.name}`}>{node.name}</button>
-          </Html>
+          </Html>}
         </group>;
       })}
       <SignalLights reduced={reduced} />
@@ -186,33 +189,33 @@ export default function ArtistCopilotSpiderMode({ artistName, nodes, edges, goal
     if (conversationRef.current) conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
   }, [messages, activity, busy]);
   return (
-    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Artist Copilot Spider Mode" data-profile-copilot-chat className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/85 p-2 text-white backdrop-blur-md sm:p-6">
-      <div className="flex h-[min(900px,calc(100dvh-1rem))] w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl border border-orange-200/15 bg-[#0d0a11] shadow-[0_30px_120px_#000] sm:h-[min(900px,calc(100dvh-3rem))] sm:rounded-3xl">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Artist Copilot Spider Mode" data-profile-copilot-chat className="spider-dialog fixed inset-0 z-[10060] flex items-center justify-center bg-black/85 text-white backdrop-blur-md">
+      <div className="spider-window flex w-full max-w-[1480px] min-w-0 flex-col overflow-hidden border border-orange-200/15 bg-[#0d0a11] shadow-[0_30px_120px_#000]">
         <header className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3 sm:px-6">
           <span className="grid h-10 w-10 place-items-center rounded-xl border border-orange-300/25 bg-orange-400/10 text-orange-300"><Sparkles className="h-5 w-5" /></span>
           <div className="min-w-0 flex-1"><p className="truncate whitespace-nowrap text-[10px] font-semibold uppercase tracking-[.18em] text-orange-300/70">Boostify · Artist Copilot</p><h2 className="truncate text-lg font-semibold tracking-tight">Spider Mode <span className="font-normal text-white/40">/ {artistName}</span></h2></div>
           <button ref={closeRef} type="button" onClick={onClose} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 px-3 text-xs text-white/70 hover:bg-white/10"><span className="hidden sm:inline">View profile</span><X className="h-4 w-4" /><span className="sr-only">Close Spider Mode</span></button>
         </header>
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(210px,52%)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1">
+        <div className="spider-layout grid min-h-0 min-w-0 flex-1 overflow-hidden">
           <section className="relative isolate min-h-0 overflow-hidden border-b border-white/10 bg-[#050b17] lg:border-b-0 lg:border-r" aria-label="Live module web">
             <style>{`@keyframes spider-scene-drift { 0%,100% { transform: scale(1.06) translate3d(0,0,0); } 50% { transform: scale(1.11) translate3d(-1%,0.6%,0); } } @keyframes spider-scene-glow { 0%,100% { opacity:.25; } 50% { opacity:.48; } }`}</style>
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-cover bg-center motion-safe:animate-[spider-scene-drift_24s_ease-in-out_infinite]" style={{ backgroundImage: "url('/assets/spider-mode/neon-web-background.webp')" }} />
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#040914]/65 via-transparent to-[#040914]/80" />
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_65%,rgba(45,179,255,.32),transparent_55%)] motion-safe:animate-[spider-scene-glow_5s_ease-in-out_infinite]" />
             <div className="pointer-events-none absolute left-4 top-3 z-10 sm:left-5 sm:top-5"><p className="text-[10px] font-semibold uppercase tracking-[.25em] text-orange-200/55">Live workspace</p><p className="mt-1 max-w-[240px] truncate text-sm text-white/75">{goal || 'Your artist profile'}</p></div>
-            <div className="absolute inset-x-2 bottom-9 top-12 sm:bottom-12 sm:top-14"><SceneBoundary><Canvas camera={{ position: [0, 0, 8], fov: 38 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }} frameloop={reduced ? 'demand' : 'always'} fallback={<div className="grid h-full place-items-center px-8 text-center text-sm text-white/50">3D is unavailable. Use the module list to navigate.</div>}><WebScene nodes={nodes} edges={edges} onOpen={onOpenNode} reduced={reduced} busy={busy} /></Canvas></SceneBoundary></div>
-            <div className="pointer-events-none absolute bottom-2 left-4 right-4 z-10 flex items-end justify-between gap-4"><p className="max-w-[210px] text-[10px] leading-4 text-white/65 sm:max-w-[300px] sm:text-[11px]"><span className="sm:hidden">Drag to explore. Select a module.</span><span className="hidden sm:inline">Drag to orbit, scroll to zoom. Threads follow real Copilot actions.</span></p><span className="whitespace-nowrap rounded-full border border-cyan-300/20 bg-black/30 px-2 py-1 text-[10px] text-cyan-100/70">{nodes.length} modules</span></div>
+            <div className="spider-canvas absolute inset-x-2 bottom-9 top-12 sm:bottom-12 sm:top-14"><SceneBoundary><Canvas camera={{ position: [0, 0, 8], fov: 38 }} dpr={[1, 1.5]} gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }} frameloop={reduced ? 'demand' : 'always'} fallback={<div className="grid h-full place-items-center px-8 text-center text-sm text-white/50">3D is unavailable. Use the module list to navigate.</div>}><WebScene nodes={nodes} edges={edges} onOpen={onOpenNode} reduced={reduced} busy={busy} /></Canvas></SceneBoundary></div>
+            <div className="pointer-events-none absolute bottom-2 left-4 right-4 z-10 flex items-end justify-between gap-4"><p className="max-w-[210px] text-[10px] leading-4 text-white/65 sm:max-w-[300px] sm:text-[11px]"><span className="sm:hidden">Drag to explore. Select a module below.</span><span className="hidden sm:inline">Drag to orbit, scroll to zoom. Threads follow real Copilot actions.</span></p><span className="whitespace-nowrap rounded-full border border-cyan-300/20 bg-black/30 px-2 py-1 text-[10px] text-cyan-100/70">{nodes.length} modules</span></div>
           </section>
           <aside aria-label="Your working web and Copilot conversation" className="flex min-h-0 flex-col bg-[#0c1420]">
-            <div className="hidden shrink-0 border-b border-white/10 px-4 py-3 sm:block"><p className="text-xs font-semibold text-white/85">Your working web</p><p className="mt-1 text-[11px] text-white/40">Visible modules and the steps in this task</p></div>
-            <div className="shrink-0 overflow-x-auto border-b border-white/10 px-4 py-2"><div className="flex min-w-max gap-1.5">{nodes.length ? nodes.map((node) => <button key={node.id} type="button" disabled={busy} onClick={() => onOpenNode(node)} className={`min-h-11 rounded-xl border px-3 text-[10px] disabled:cursor-wait ${node.status === 'error' ? 'border-red-400/30 text-red-300' : node.status === 'working' ? 'border-orange-300/50 text-orange-200' : 'border-white/10 text-white/55 hover:text-white'}`}>{node.name}</button>) : <span className="py-2 text-xs text-white/35">Ask for a goal to begin.</span>}</div></div>
-            <div ref={conversationRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-2 sm:py-3" aria-live="polite">
+            <div className="hidden shrink-0 border-b border-white/10 px-4 py-3 lg:block"><p className="text-xs font-semibold text-white/85">Your working web</p><p className="mt-1 text-[11px] text-white/40">Visible modules and the steps in this task</p></div>
+            <div className="min-w-0 shrink-0 overflow-x-auto border-b border-white/10 px-3 py-2"><div className="flex min-w-max gap-1.5">{nodes.length ? nodes.map((node) => <button key={node.id} type="button" disabled={busy} onClick={() => onOpenNode(node)} className={`min-h-11 rounded-xl border px-3 text-[10px] disabled:cursor-wait ${node.status === 'error' ? 'border-red-400/30 text-red-300' : node.status === 'working' ? 'border-orange-300/50 text-orange-200' : 'border-white/10 text-white/55 hover:text-white'}`}>{node.name}</button>) : <span className="py-2 text-xs text-white/35">Ask for a goal to begin.</span>}</div></div>
+            <div ref={conversationRef} className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden break-words px-3 py-2 sm:py-3" aria-live="polite">
               {messages.slice(-4).map((message, index) => <div key={`${message.role}-${index}`} className={`rounded-xl px-3 py-2 text-xs leading-5 ${message.role === 'user' ? 'ml-6 bg-orange-300/10 text-orange-50/90' : 'mr-3 bg-white/[0.04] text-white/70'}`}>{message.content}</div>)}
               {activity.length > 0 && <div className="space-y-1 border-l border-orange-300/30 pl-3 text-[11px] leading-5 text-white/50">{activity.slice(-4).map((step, index) => <p key={`${index}-${step}`}>{step}</p>)}</div>}
               {error && <p role="alert" className="rounded-xl bg-red-400/10 p-3 text-xs text-red-200">{error}</p>}
             </div>
-            <form onSubmit={(event) => { event.preventDefault(); onSend(); }} className="shrink-0 border-t border-white/10 p-2 sm:p-3">
-              <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-black/30 p-2 focus-within:border-orange-300/40"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSend(); } }} maxLength={5000} rows={2} disabled={busy} placeholder="What would you like to achieve?" className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-1 text-sm text-white outline-none placeholder:text-white/25" /><button type="submit" disabled={busy || !draft.trim()} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-orange-300 text-black disabled:opacity-40" aria-label="Send to Copilot">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div>
+            <form onSubmit={(event) => { event.preventDefault(); onSend(); }} className="spider-composer min-w-0 shrink-0 border-t border-white/10 p-2 sm:p-3">
+              <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-black/30 p-2 focus-within:border-orange-300/40"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSend(); } }} maxLength={5000} rows={2} disabled={busy} placeholder="What would you like to achieve?" className="min-h-[44px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1 text-sm text-white outline-none placeholder:text-white/25" /><button type="submit" disabled={busy || !draft.trim()} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-orange-300 text-black disabled:opacity-40" aria-label="Send to Copilot">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div>
               <div className="mt-2 flex items-center justify-between text-[10px] text-white/35"><span>{busy ? 'Working on your request' : 'Ready for your next goal'}</span>{busy && <button type="button" onClick={onStop} className="flex min-h-8 items-center gap-1 text-white/55 hover:text-white">Stop task <ArrowUpRight className="h-3 w-3" /></button>}</div>
             </form>
           </aside>

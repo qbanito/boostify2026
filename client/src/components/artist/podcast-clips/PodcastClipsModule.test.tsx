@@ -10,13 +10,13 @@ const episode = {
   styleId: 'radio', duration: 30, createdAt: null,
 };
 
-function renderModule(isOwner?: boolean, clips = [episode]) {
+function renderModule(isOwner?: boolean, clips = [episode], creditExempt = false) {
   const client = new QueryClient({ defaultOptions: { queries: {
     retry: false, staleTime: Infinity,
     queryFn: async () => { throw new Error('Tests must use the supplied episode fixtures.'); },
   } } });
   client.setQueryData(['/api/podcast-clips/artists/42/clips'], { clips });
-  client.setQueryData(['/api/podcast-clips/estimate'], { credits: 750 });
+  client.setQueryData(['/api/podcast-clips/estimate?model=wan-3&characters=0'], { credits: creditExempt ? 0 : 750, creditExempt });
   const markup = renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <PodcastClipsModule artistId={42} artistName="Test Artist" isOwner={isOwner} />
@@ -48,4 +48,10 @@ test('the owner gets creation controls alongside the completed episodes', () => 
 
 test('a visitor sees no empty studio when the artist has no completed podcasts', () => {
   assert.equal(renderModule(false, []), '');
+});
+
+
+test('the owner sees no-credit admin access or the normal estimate from the server', () => {
+  assert.match(renderModule(true, [episode], true), /Admin access: no credits required/);
+  assert.match(renderModule(true, [episode], false), /Estimated 750 credits/);
 });

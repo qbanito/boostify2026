@@ -6,7 +6,7 @@ import {
   Mic2, Music2, Play, RotateCcw, Sparkles, WandSparkles,
 } from "lucide-react";
 import { useToast } from "../../../hooks/use-toast";
-import { PODCAST_MODELS, studioProviderCostUsd, studioCreditsFromUsd } from "../../../../../shared/artist-studio-models";
+import { PODCAST_MODELS } from "../../../../../shared/artist-studio-models";
 
 type PodcastStyle = {
   id: string;
@@ -132,8 +132,7 @@ function PodcastClipCreator({
   const [job, setJob] = useState<ClipJob | null>(null);
   const selectedStyle = useMemo(() => STYLES.find((style) => style.id === styleId) || STYLES[0], [styleId]);
   const selectedModel = PODCAST_MODELS.find((model) => model.id === modelId) || PODCAST_MODELS[0];
-  const estimatedCredits = studioCreditsFromUsd(studioProviderCostUsd(selectedModel, 30, script.length));
-  const { data: estimate } = useQuery<{ credits: number }>({
+  const { data: estimate } = useQuery<{ credits: number; creditExempt?: boolean }>({
     queryKey: ["/api/podcast-clips/estimate?model=" + modelId + "&characters=" + script.length],
     staleTime: 60_000,
   });
@@ -286,9 +285,8 @@ function PodcastClipCreator({
             <select id="podcast-clip-model" value={modelId} onChange={(event) => setModelId(event.target.value)} className="h-11 w-full rounded-xl border border-white/[0.09] bg-[#111116] px-3 text-xs text-white/80 outline-none focus:border-fuchsia-200/40">
               {PODCAST_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name} — {model.note}</option>)}
             </select>
-            <div className="mt-2 flex items-center gap-2 text-[11px] text-white/45"><CircleDollarSign className="h-3.5 w-3.5 text-amber-200/80" />{(estimate?.credits ?? estimatedCredits).toLocaleString("en-US")} credits · 30s · 3× provider cost</div>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-[11px] text-white/45"><CircleDollarSign className="h-3.5 w-3.5 text-amber-200/80" />Estimated {estimate?.credits?.toLocaleString("en-US") ?? "—"} credits · 30s · 720p</div>
+              <div className="flex items-center gap-2 text-[11px] text-white/45"><CircleDollarSign className="h-3.5 w-3.5 text-amber-200/80" />{estimate?.creditExempt ? 'Admin access: no credits required' : estimate ? `Estimated ${estimate.credits.toLocaleString("en-US")} credits - 30s - 720p` : 'Calculating credit estimate...'}</div>
               <button type="button" onClick={generateClip} disabled={!!busy || !script.trim()} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-white px-4 text-xs font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40">
                 {busy === "video" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
                 Generate 30-second clip
