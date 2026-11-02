@@ -65,7 +65,6 @@
 .profile-visual-custom .profile-hero > div:first-child img,
 .profile-visual-custom .profile-hero > div:first-child video { filter:brightness(.46) saturate(.9); }
 .profile-visual-custom .profile-visual-hero-effect { background:linear-gradient(90deg,var(--pv-bg) 4%,transparent 90%),radial-gradient(ellipse at 80% 45%,var(--pv-glow),transparent 60%); }
-.profile-visual-custom .profile-sculpture { position:absolute; z-index:2; right:-6%; top:10%; width:min(56vw,740px); height:72%; pointer-events:none; opacity:.8; }
 .profile-visual-custom .profile-hero-inner { align-items:center; }
 .profile-visual-custom .profile-hero-content { max-width:640px; }
 .profile-visual-custom .profile-hero h1 { font-size:clamp(3.4rem,7.5vw,7.5rem) !important; line-height:.94 !important; letter-spacing:-.055em !important; }
@@ -79,7 +78,6 @@
 .profile-visual-editorial .profile-module-card,.profile-visual-noir .profile-module-card { border-radius:0 !important; border-width:0 0 1px !important; box-shadow:none !important; }
 .profile-visual-editorial .profile-section-surface,.profile-visual-noir .profile-section-surface { outline:none; box-shadow:none; }
 .profile-visual-aurora .profile-hero,.profile-visual-prism .profile-hero { border-bottom:1px solid rgba(164,190,255,.3); }
-.profile-visual-aurora .profile-sculpture,.profile-visual-prism .profile-sculpture { opacity:.95; }
 .profile-visual-chrome .profile-stage-art::after { box-shadow:0 0 0 2px rgba(214,234,255,.4),12px 12px 0 rgba(177,203,230,.12),0 35px 80px #000; }
 .profile-visual-horizon .profile-stage-art::after { box-shadow:0 0 50px rgba(255,153,75,.25),0 40px 80px #000; }
 @media (max-width:1023px) {
@@ -90,7 +88,6 @@
  .profile-visual-custom .profile-hero-content > div { text-align:left; }
  .profile-visual-custom .profile-hero-content .justify-center { justify-content:flex-start; }
  .profile-visual-custom .profile-hero-content p { margin-left:0; padding-left:0; }
- .profile-visual-custom .profile-sculpture { right:-20%; top:4%; width:70%; height:38%; opacity:.65; }
  .profile-visual-custom .profile-visual-hero-effect { background:linear-gradient(0deg,var(--pv-bg) 0%,rgba(0,0,0,.15) 85%),radial-gradient(ellipse at 80% 25%,var(--pv-glow),transparent 55%); }
  .profile-visual-custom .profile-hero h1 { font-size:clamp(2.8rem,11vw,5rem) !important; }
 }
@@ -102,3 +99,33 @@
 @media (max-width:639px) { .profile-visual-custom .profile-hero-toolbar { gap:.5rem; } .profile-visual-custom .profile-hero-toolbar > div:last-child { min-width:0; max-width:calc(100% - 3.5rem); overflow-x:auto; scrollbar-width:none; } .profile-visual-custom .profile-hero-toolbar > div:last-child::-webkit-scrollbar { display:none; } .profile-visual-custom .profile-hero-toolbar > div:last-child > * { flex-shrink:0; } }
 .profile-visual-custom .profile-hero-media img,.profile-visual-custom .profile-hero-media video { filter:brightness(.72) saturate(.9); }
 .profile-visual-custom .profile-hero-legacy-overlay { background:linear-gradient(0deg,var(--pv-bg) 0%,rgba(0,0,0,.16) 85%) !important; }
+/* Appearance variants style the artist's content and real modules directly. */
+.profile-name-reveal { display:inline; }
+.profile-name-space { display:inline-block; width:.24em; }
+.profile-name-word { display:inline-block; overflow:hidden; vertical-align:top; padding-bottom:.08em; }
+.profile-name-word > span { display:inline-block; }
+.profile-visual-neon { --pv-font:'Arial Narrow','Trebuchet MS',sans-serif; --pv-body:'Trebuchet MS',system-ui,sans-serif; }
+.profile-visual-editorial { --pv-font:Georgia,'Times New Roman',serif; --pv-body:Georgia,serif; }
+.profile-visual-aurora { --pv-font:'Trebuchet MS',system-ui,sans-serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-spotlight { --pv-font:Georgia,serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-noir { --pv-font:Georgia,serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-chrome { --pv-font:'Arial Narrow',Arial,sans-serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-horizon { --pv-font:Georgia,serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-velvet { --pv-font:Georgia,serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-prism { --pv-font:'Trebuchet MS',system-ui,sans-serif; --pv-body:system-ui,sans-serif; }
+.profile-visual-custom .profile-section-surface { font-family:var(--pv-body); }
+.profile-visual-custom .profile-module-card h2,.profile-visual-custom .profile-module-card h3 { font-family:var(--pv-font); letter-spacing:-.025em; }
+.profile-visual-custom .profile-module-card [data-testid^="button-toggle-section-"] > span { font-family:var(--pv-font); letter-spacing:.02em; }
+.profile-visual-custom .profile-hero-content svg { color:var(--pv-accent) !important; }
+.profile-visual-custom .profile-hero-content img[data-testid="img-profile"] + div { background:var(--pv-accent) !important; box-shadow:0 4px 18px var(--pv-glow) !important; }
+.profile-visual-neon .profile-hero h1 { text-transform:uppercase !important; letter-spacing:-.045em !important; text-shadow:0 0 28px rgba(70,245,230,.32); }
+.profile-visual-neon .profile-section-surface { border-radius:10px; }
+.profile-visual-neon .profile-module-card { border-left:2px solid var(--pv-accent) !important; }
+.profile-visual-neon .profile-module-card [data-testid^="button-toggle-section-"] > span { text-transform:uppercase; letter-spacing:.10em; }
+.profile-visual-editorial .profile-hero h1,.profile-visual-noir .profile-hero h1 { letter-spacing:-.065em !important; }
+.profile-visual-editorial .profile-module-card [data-testid^="button-toggle-section-"] > span,.profile-visual-noir .profile-module-card [data-testid^="button-toggle-section-"] > span { font-size:1.18rem; font-weight:400; }
+.profile-visual-aurora .profile-hero h1,.profile-visual-prism .profile-hero h1 { text-transform:none !important; letter-spacing:-.055em !important; text-shadow:0 4px 32px var(--pv-glow); }
+.profile-visual-aurora .profile-module-card,.profile-visual-prism .profile-module-card { backdrop-filter:blur(20px); border-radius:24px !important; }
+.profile-visual-chrome .profile-module-card { border-radius:4px !important; }
+.profile-visual-velvet .profile-module-card h2,.profile-visual-velvet .profile-module-card h3 { font-weight:400; }
+@media (prefers-reduced-motion:reduce) { .profile-name-word > span { transform:none !important; transition:none !important; } }

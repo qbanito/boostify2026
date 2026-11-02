@@ -26,7 +26,7 @@ import { ArtistDownloads } from "./artist-downloads";
 import { ProfileStyleSelector, profileVisualStyle, type ProfileVisualStyle } from "./profile-style-selector";
 import "./profile-visual-styles.css";
 import { ProfileStageArt } from "./profile-stage-art";
-const ProfileSculpture = lazy(() => import("./profile-sculpture"));
+import { ProfileArtistName } from "./profile-artist-name";
 // Heavy Artist Profile modules are code-split via React.lazy in ./lazy-modules.
 // They keep the same names + props API but download their JS chunk on demand,
 // only when their section becomes visible. See ./lazy-modules for details.
@@ -6844,7 +6844,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
           ))}
         </div>
         
-        {visualStyle !== 'classic' && <><div className="profile-visual-hero-effect" aria-hidden="true" /><Suspense fallback={null}><ProfileSculpture color={visualStyle === 'neon' ? '#55f3f0' : visualStyle === 'horizon' ? '#ffc28a' : visualStyle === 'editorial' || visualStyle === 'noir' ? '#e8d7bc' : '#a8a4ff'} /></Suspense></>}
+        {visualStyle !== 'classic' && <div className="profile-visual-hero-effect" aria-hidden="true" />}
         {/* Barra superior con glassmorphism */}
         <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-30" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px) + 0.5rem)' }}>
           <div className="profile-hero-toolbar max-w-7xl mx-auto flex justify-between items-center">
@@ -6945,7 +6945,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
                   }}
                   data-testid="text-artist-name"
                 >
-                  {artist.name}
+                  {visualStyle === 'classic' ? artist.name : <ProfileArtistName key={visualStyle} name={artist.name} />}
                 </h1>
 
                 {/* MINT Badge for minted artists */}
