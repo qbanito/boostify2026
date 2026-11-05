@@ -59,10 +59,10 @@ export function ConceptSelectionModal({
         <DialogHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
           <DialogTitle className="text-xl sm:text-2xl md:text-3xl font-bold text-center flex items-center justify-center gap-2 sm:gap-3">
             <Sparkles className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-500" />
-            <span className="line-clamp-1">{directorName} - Three Concept Proposals</span>
+            <span className="line-clamp-1">{directorName} · Director's Storyboards</span>
           </DialogTitle>
           <p className="text-center text-xs sm:text-sm md:text-base text-muted-foreground mt-1 sm:mt-2">
-            Choose the concept that best captures your music's vision and creative direction
+            Explore three creative directions. Each storyboard combines performance, narrative and B-roll in nine cinematic frames.
           </p>
         </DialogHeader>
 
@@ -84,7 +84,7 @@ export function ConceptSelectionModal({
                   data-testid={`concept-${index}`}
                 >
                   {/* Cover Image - Cinematic Poster - ENHANCED */}
-                  <div className="relative w-full aspect-[2/3] overflow-hidden group bg-gradient-to-br from-gray-900 to-gray-800 border-b-4 border-orange-500/20">
+                  <div className="relative w-full aspect-[3/2] overflow-hidden group bg-gradient-to-br from-gray-900 to-gray-800 border-b-4 border-orange-500/20">
                     <AnimatePresence mode="wait">
                       {concept.isGenerating ? (
                         <motion.div
@@ -95,7 +95,7 @@ export function ConceptSelectionModal({
                           className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black"
                         >
                           <Loader2 className="h-12 w-12 text-orange-500 animate-spin mb-4" />
-                          <p className="text-white/70 text-sm font-medium">Generating Cinematic Poster...</p>
+                          <p className="text-white/70 text-sm font-medium">Creating 9-frame storyboard...</p>
                           <p className="text-white/50 text-xs mt-1">Concept #{index + 1} of 3</p>
                         </motion.div>
                       ) : concept.error ? (
@@ -121,16 +121,13 @@ export function ConceptSelectionModal({
                           <img 
                             src={concept.coverImage} 
                             alt={concept.title}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500"
+                            className="w-full h-full object-contain"
                             loading="lazy"
                           />
                           {/* Enhanced gradient overlays */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/20" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent pointer-events-none" />
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
-                            <p className="text-white font-bold text-lg md:text-xl mb-2 drop-shadow-lg line-clamp-1">{concept.title || 'Untitled'}</p>
-                            <p className="text-white/80 text-xs md:text-sm drop-shadow-lg line-clamp-1">{concept.visual_theme?.split('.')[0] || 'Cinematic vision'}</p>
-                          </div>
+                          <div className="absolute bottom-2 left-2 rounded-full bg-black/75 px-2.5 py-1 text-[10px] font-medium text-white">3 × 3 visual reference</div>
                           {selectedConcept === concept && (
                             <div className="absolute top-3 right-3">
                               <div className="bg-orange-500 text-white rounded-full p-2 shadow-lg">
@@ -160,6 +157,11 @@ export function ConceptSelectionModal({
 
                   {/* Content Section - Enhanced Styling */}
                   <div className="p-5 md:p-6 flex-1 flex flex-col bg-gradient-to-br from-background to-background/80">
+                    {concept.storyboardGridUrl && concept.referenceApplied === false && (
+                      <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                        Visual direction preview. The artist reference was not applied to this image.
+                      </p>
+                    )}
                     {/* Selection Header */}
                     <div className="flex items-center justify-between mb-4">
                       <div className={cn(
@@ -199,6 +201,21 @@ export function ConceptSelectionModal({
                           {concept.story_concept}
                         </p>
                       </div>
+                    )}
+
+                    {Array.isArray(concept.storyboard_shots) && concept.storyboard_shots.length > 0 && (
+                      <details className="mb-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
+                        <summary className="cursor-pointer font-semibold text-orange-400">View the nine-shot plan</summary>
+                        <ol className="mt-3 space-y-2 text-muted-foreground">
+                          {concept.storyboard_shots.slice(0, 9).map((shot: any, shotIndex: number) => (
+                            <li key={shotIndex}>
+                              <span className="font-semibold text-foreground">{shotIndex + 1}. {shot.type || 'Shot'}:</span>{' '}
+                              {shot.description || 'Cinematic shot'}
+                              {shot.camera ? <span className="block text-[11px] opacity-80">{shot.camera}</span> : null}
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
                     )}
 
                     <Separator className="my-3" />

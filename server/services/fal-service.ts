@@ -150,6 +150,7 @@ export interface FalImageResult {
   imageBase64?: string;
   error?: string;
   provider?: string;
+  usage?: Record<string, any>;
 }
 
 type FluxDevImageSize = 'portrait_4_3' | 'portrait_16_9' | 'square_hd' | 'landscape_4_3' | 'landscape_16_9';
@@ -554,6 +555,10 @@ async function uploadBase64ToStorage(
  */
 async function downloadImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
+    const inline = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/i.exec(imageUrl);
+    if (inline) {
+      return { mimeType: inline[1].toLowerCase(), base64: inline[2].replace(/\s/g, '') };
+    }
     const response = await axios.get(imageUrl, {
       responseType: 'arraybuffer',
       timeout: 30000
@@ -1000,6 +1005,75 @@ export async function generateImageWithGPTImage1(
 }
 
 /**
+ * Premium image generation for final music-video keyframes.
+ * Sunburst is kept separate from the legacy GPT Image helper so other modules
+ * can retain their current cost/latency profile.
+ */
+export async function generateImageWithGPTImage25Sunburst(
+  prompt: string,
+  options: {
+    size?: '1024x1024' | '1536x1024' | '1024x1536' | 'auto';
+    quality?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    outputFolder?: string;
+    safetyIdentifier?: string;
+    model?: 'gpt-image-2.5-sunburst' | 'gpt-image-2.6-sunburst';
+  } = {}
+): Promise<FalImageResult> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured' };
+
+  try {
+    logger.log('[OPENAI] Generating premium music-video frame with GPT Image 2.5 Sunburst...');
+    const response = await axios.post(
+      'https://api.openai.com/v1/images/generations',
+      {
+        model: options.model || 'gpt-image-2.5-sunburst',
+        prompt,
+        n: 1,
+        size: options.size || '1536x1024',
+        quality: options.quality || 'high',
+        output_format: 'jpeg',
+        output_compression: 92,
+        ...(options.safetyIdentifier ? { safety_identifier: options.safetyIdentifier } : {}),
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 180000,
+      },
+    );
+
+    const b64Data = response.data?.data?.[0]?.b64_json;
+    const directUrl = response.data?.data?.[0]?.url;
+    const folder = options.outputFolder || 'music-video-scenes';
+    if (b64Data) {
+      const permanentUrl = await uploadBase64ToStorage(b64Data, 'image/jpeg', folder);
+      return {
+        success: true,
+        imageUrl: permanentUrl,
+        imageBase64: `data:image/jpeg;base64,${b64Data}`,
+        provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}` as any,
+        usage: response.data?.usage,
+      };
+    }
+    if (directUrl) {
+      const downloaded = await downloadImageAsBase64(directUrl);
+      if (downloaded) {
+        const permanentUrl = await uploadBase64ToStorage(downloaded.base64, downloaded.mimeType, folder);
+        return { success: true, imageUrl: permanentUrl, imageBase64: downloaded.base64, provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}` as any, usage: response.data?.usage };
+      }
+      return { success: true, imageUrl: directUrl, provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}` as any, usage: response.data?.usage };
+    }
+    throw new Error('No image data in GPT Image 2.5 Sunburst response');
+  } catch (error: any) {
+    logger.warn('[OPENAI] GPT Image 2.5 Sunburst generation failed:', error.response?.data?.error?.message || error.message);
+    return { success: false, error: error.response?.data?.error?.message || error.message };
+  }
+}
+
+/**
  * ============================================================
  * EDICIÓN DE IMÁGENES - OpenAI GPT Image 2.5 Sunburst (image edit / referencia)
  * ============================================================
@@ -1016,6 +1090,7 @@ export async function editImageWithGPTImage1(
     size?: '1024x1024' | '1536x1024' | '1024x1536' | 'auto';
     quality?: 'low' | 'medium' | 'high' | 'auto';
     outputFolder?: string;
+    model?: 'gpt-image-2.5-sunburst' | 'gpt-image-2.6-sunburst';
   } = {}
 ): Promise<FalImageResult> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -1035,7 +1110,7 @@ export async function editImageWithGPTImage1(
 
     // Build a multipart/form-data request with the reference image(s).
     const form = new FormData();
-    form.append('model', 'gpt-image-2.5-sunburst');
+    form.append('model', options.model || 'gpt-image-2.5-sunburst');
     form.append('prompt', prompt);
     form.append('size', options.size || '1024x1024');
     form.append('quality', options.quality || 'high');
@@ -1072,16 +1147,17 @@ export async function editImageWithGPTImage1(
         success: true,
         imageUrl: permanentUrl,
         imageBase64: `data:image/png;base64,${b64Data}`,
-        provider: 'openai-gpt-image-2.5-sunburst-edit' as any,
+        provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}-edit` as any,
+        usage: response.data?.usage,
       };
     }
     if (directUrl) {
       const downloaded = await downloadImageAsBase64(directUrl);
       if (downloaded) {
         const permanentUrl = await uploadBase64ToStorage(downloaded.base64, downloaded.mimeType, folder);
-        return { success: true, imageUrl: permanentUrl, imageBase64: downloaded.base64, provider: 'openai-gpt-image-2.5-sunburst-edit' as any };
+        return { success: true, imageUrl: permanentUrl, imageBase64: downloaded.base64, provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}-edit` as any, usage: response.data?.usage };
       }
-      return { success: true, imageUrl: directUrl, provider: 'openai-gpt-image-2.5-sunburst-edit' as any };
+      return { success: true, imageUrl: directUrl, provider: `openai-${options.model || 'gpt-image-2.5-sunburst'}-edit` as any, usage: response.data?.usage };
     }
 
     throw new Error('No image data in GPT Image edit response');

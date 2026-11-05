@@ -192,6 +192,7 @@ interface TimelineEditorProps {
   projectContext?: ProjectContext;
   // 📤 Callback cuando el video se exporta exitosamente
   onExportComplete?: (videoUrl: string) => void;
+  billingProjectId?: number | null;
 }
 
 export const TimelineEditor: React.FC<TimelineEditorProps> = ({
@@ -209,6 +210,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   onAddImageToTimeline,
   projectContext,
   onExportComplete,
+  billingProjectId,
 }) => {
   const [clips, setClips] = useState<TimelineClip[]>(() => normalizeClips(initialClips));
   const [zoom, setZoom] = useState(initialZoom);
@@ -3322,13 +3324,16 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
             : projectContext?.artistReferenceImages)
         : undefined;
       
-      const endpoint = '/api/fal/wan-music-video/openai-image';
+      const endpoint = '/api/fal/music-video/generate-image';
       const requestBody = {
         prompt: enrichedPrompt,
         ...(shouldUseReference && referenceImages ? { referenceImages } : {}),
         aspectRatio,
         quality: 'high',
         numImages: 1,
+        projectId: billingProjectId || undefined,
+        sceneId: clip.id,
+        idempotencyKey: `timeline-image:${billingProjectId || 'draft'}:${clip.id}:${Date.now()}`,
       };
       
       logger.info(`?? [Timeline] Usando endpoint: ${endpoint}, con referencia: ${shouldUseReference}`);
@@ -3350,7 +3355,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
             imagePrompt: enrichedPrompt,
             regeneratedAt: new Date().toISOString(),
             isGeneratedImage: true,
-            generatedWith: 'openai/gpt-image-2.5/flare',
+            generatedWith: data.provider || 'openai/gpt-image-2.5/sunburst',
             usedProjectContext: true,
             usedArtistReference: shouldUseReference,
           },
@@ -3583,6 +3588,9 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
           duration: Math.max(2, Math.min(30, Math.round(clip.duration || 5))),
           resolution: '1080p',
           aspectRatio,
+          projectId: billingProjectId || undefined,
+          sceneId: clip.id,
+          idempotencyKey: `timeline-wan:${billingProjectId || 'draft'}:${clip.id}:${Date.now()}`,
         },
       });
       if (!submitted.requestId) throw new Error(submitted.error || 'Wan 3.0 no devolvió el ID de la tarea');
@@ -3613,7 +3621,7 @@ ${concept?.color_palette ? `Color Palette: ${concept.color_palette}` : ''}`.trim
       updateClip(clip.id, { metadata: { ...clip.metadata, videoGenerating: false, videoError: error instanceof Error ? error.message : 'Error generando con Wan 3.0' } });
       toast({ title: `Falló el clip ${clip.id}`, description: error instanceof Error ? error.message : 'Error de Wan 3.0', variant: 'destructive' });
     }
-  }, [updateClip, toast, projectContext?.artistReferenceImages, aspectRatio]);
+  }, [updateClip, toast, projectContext?.artistReferenceImages, aspectRatio, billingProjectId]);
 
   // 🎬 Generate individual clips through the shared Wan timeline workflow
   const handleGenerateVideo = useCallback((clip: TimelineClip) => {

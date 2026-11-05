@@ -10,10 +10,9 @@ import { MotionDNASection } from "../components/music-video/motion-dna-section";
 import { motion } from "framer-motion";
 import { Link, useSearch } from "wouter";
 import type { DirectorProfile } from "../data/directors";
-import { useAuth } from "../hooks/use-auth";
 import { apiRequest } from "../lib/queryClient";
 import { useToast } from "../hooks/use-toast";
-import { isAdminEmail } from "../../../shared/constants";
+import useModuleAccess from "../hooks/use-module-access";
 
 // Interface for pre-filled data from artist profile
 interface PreFilledData {
@@ -26,27 +25,13 @@ interface PreFilledData {
   images?: string[];
 }
 
-// Plan access check
-const PLAN_HIERARCHY: Record<string, number> = {
-  free: 0, artist: 1, creator: 2, professional: 3, enterprise: 4,
-};
-const LEGACY_MAP: Record<string, string> = {
-  basic: "creator", Basic: "creator", pro: "professional", Pro: "professional",
-  premium: "enterprise", Premium: "enterprise",
-};
-function resolvePlan(plan: string): string {
-  return LEGACY_MAP[plan] || (plan in PLAN_HIERARCHY ? plan : "free");
-}
-
 export default function MusicVideoCreator() {
   const [activeTab, setActiveTab] = useState<'directors' | 'ai' | 'editor'>('ai');
   const [selectedDirector, setSelectedDirector] = useState<DirectorProfile | null>(null);
-  const { user, userSubscription } = useAuth();
-  const isAdmin = user?.email ? isAdminEmail(user.email) : false;
+  const { isLoading: moduleAccessLoading, hasModuleAccess } = useModuleAccess();
   const searchString = useSearch();
   
-  const resolvedUser = resolvePlan(userSubscription || "free");
-  const hasAccess = isAdmin || PLAN_HIERARCHY[resolvedUser] >= PLAN_HIERARCHY["enterprise"];
+  const hasAccess = hasModuleAccess('music-video-creator');
 
   // Parse URL parameters for pre-filled data from artist profile
   const preFilledData = useMemo<PreFilledData>(() => {
@@ -70,6 +55,10 @@ export default function MusicVideoCreator() {
     setSelectedDirector(director);
     setActiveTab('ai');
   };
+
+  if (moduleAccessLoading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-orange-500" /></div>;
+  }
 
   if (!hasAccess) {
     return <MusicVideoLockedPage />;

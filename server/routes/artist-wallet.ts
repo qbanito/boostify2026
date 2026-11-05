@@ -166,7 +166,7 @@ router.get('/sales-stats', async (req: Request, res: Response) => {
         )
       );
 
-    const totalRevenue = sales.reduce((sum, s) => sum + parseFloat(s.amount || '0'), 0);
+    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.saleAmount || 0), 0);
 
     return res.json({
       success: true,

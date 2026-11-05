@@ -4,6 +4,7 @@ import { musicVideoProjects } from '../../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { logger } from '../utils/logger';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ const saveProjectSchema = z.object({
   scriptContent: z.string().optional(),
   timelineItems: z.array(z.any()).default([]),
   selectedDirector: z.any().optional(),
+  selectedConcept: z.any().optional(),
   videoStyle: z.any().optional(),
   artistReferenceImages: z.array(z.string()).default([]),
   selectedEditingStyle: z.any().optional(),
@@ -31,18 +33,17 @@ const saveProjectSchema = z.object({
     totalVideos: z.number()
   }).optional(),
   tags: z.array(z.string()).default([]),
-  // Payment fields
-  isPaid: z.boolean().optional(),
-  paidAt: z.string().datetime().optional(),
-  paidAmount: z.number().optional(),
-  stripePaymentId: z.string().optional()
 });
 
-router.post('/save', async (req, res) => {
+router.post('/save', authenticate, async (req, res) => {
   try {
     logger.log('📥 [SAVE PROJECT] Recibiendo proyecto para guardar...');
     
     const validatedData = saveProjectSchema.parse(req.body);
+    const authenticatedEmail = String(req.user?.email || '').trim().toLowerCase();
+    if (!authenticatedEmail || authenticatedEmail !== validatedData.userEmail.trim().toLowerCase()) {
+      return res.status(403).json({ success: false, error: 'Project owner does not match the authenticated account.' });
+    }
     logger.log('✅ [SAVE PROJECT] Datos validados:', {
       userEmail: validatedData.userEmail,
       projectName: validatedData.projectName,
@@ -77,15 +78,10 @@ router.post('/save', async (req, res) => {
     
     // Only include JSON objects if they exist
     if (validatedData.selectedDirector) dbData.selectedDirector = validatedData.selectedDirector;
+    if (validatedData.selectedConcept) dbData.selectedConcept = validatedData.selectedConcept;
     if (validatedData.videoStyle) dbData.videoStyle = validatedData.videoStyle;
     if (validatedData.selectedEditingStyle) dbData.selectedEditingStyle = validatedData.selectedEditingStyle;
     if (validatedData.progress) dbData.progress = validatedData.progress;
-    
-    // Payment fields
-    if (validatedData.isPaid !== undefined) dbData.isPaid = validatedData.isPaid;
-    if (validatedData.paidAt) dbData.paidAt = new Date(validatedData.paidAt);
-    if (validatedData.paidAmount !== undefined) dbData.paidAmount = String(validatedData.paidAmount);
-    if (validatedData.stripePaymentId) dbData.stripePaymentId = validatedData.stripePaymentId;
     
     const existingProject = await db
       .select()
@@ -443,7 +439,14 @@ router.post('/update-timeline', async (req, res) => {
  * POST /mark-paid
  * Mark a project as paid after successful Stripe payment
  */
-router.post('/mark-paid', async (req, res) => {
+router.post('/mark-paid', authenticate, async (req, res) => {
+  // Payment state is now derived from the server-side credit ledger. Keeping
+  // this legacy endpoint active would let a browser assert that it paid.
+  return res.status(410).json({
+    success: false,
+    error: 'Legacy project unlocks were retired. Music Video Creator is billed through verified credit reservations.',
+  });
+  /* c8 ignore next */
   try {
     const { projectId, userEmail, paidAmount, stripePaymentId } = req.body;
     

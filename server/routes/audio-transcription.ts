@@ -5,6 +5,12 @@ import { fal } from '@fal-ai/client';
 import fs from 'fs';
 import path from 'path';
 import { isAuthenticated } from '../middleware/clerk-auth';
+import { authenticate } from '../middleware/auth';
+import {
+  refundMusicVideoReservation,
+  reserveMusicVideoCredits,
+  settleMusicVideoReservation,
+} from '../services/music-video-billing';
 
 const router = Router();
 
@@ -132,7 +138,7 @@ router.get('/test-fal', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
+router.post('/transcribe', authenticate, async (req: Request, res: Response) => {
   // Aumentar el timeout de esta ruta a 15 minutos para archivos grandes
   req.setTimeout(900000); // 15 minutos en milisegundos
   res.setTimeout(900000);
@@ -194,6 +200,36 @@ router.post('/transcribe', requireAuth, async (req: Request, res: Response) => {
         error: 'El archivo de audio es demasiado grande. Máximo 100MB.'
       });
     }
+
+    let billingReservation: any;
+    try {
+      if (req.body?.billingContext === 'music-video') {
+      const billingEmail = String(req.user?.email || '').trim().toLowerCase();
+      if (!billingEmail) return res.status(401).json({ success: false, error: 'A verified account email is required.' });
+      billingReservation = await reserveMusicVideoCredits({
+        userEmail: billingEmail,
+        stage: 'transcription',
+        provider: HAS_FAL ? 'fal' : 'openai',
+        model: HAS_FAL ? 'fal-ai/wizper' : 'whisper',
+        estimatedCostUsd: 0.05,
+        idempotencyKey: String(req.headers['x-idempotency-key'] || `transcription:${audioFile.name}:${audioFile.size}:${Date.now()}`),
+        metadata: { fileName: audioFile.name, fileSize: audioFile.size },
+      });
+      }
+    } catch (billingError: any) {
+      return res.status(402).json({ success: false, error: billingError?.message || 'Insufficient credits for transcription.' });
+    }
+
+    let billingFinalized = false;
+    res.once('finish', () => {
+      if (billingFinalized || !billingReservation?.id) return;
+      billingFinalized = true;
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        void settleMusicVideoReservation(billingReservation.id, 0.05, { providerStatus: 'completed' });
+      } else {
+        void refundMusicVideoReservation(billingReservation.id, `Transcription request returned HTTP ${res.statusCode}`);
+      }
+    });
 
     console.log(`🎵 Transcribiendo audio: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(2)} MB)`);
     console.log(`📁 Archivo temporal en: ${audioFile.tempFilePath}`);

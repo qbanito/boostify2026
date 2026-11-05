@@ -78,6 +78,7 @@ import songDnaSavedRouter from './routes/song-dna-saved'; // Song DNA saved anal
 import serviceRequestsRouter from './routes/service-requests'; // Import service requests & bidding system
 import studioRouter from './routes/studio'; // Import studio projects & version control
 import musicVideoProjectsRouter from './routes/music-video-projects'; // Import the music video projects router
+import musicVideoBillingRouter from './routes/music-video-billing';
 import videoProjectsRouter from './routes/video-projects'; // Timeline export (Shotstack render) + project images
 import musicianClipsRouter from './routes/musician-clips'; // Import the musician clips router for timeline
 import cameraAnglesRouter from './routes/camera-angles'; // Import the camera angles router
@@ -161,7 +162,6 @@ import myUniverseRouter from './routes/my-universe'; // My Universe — artist d
 import financialImagesRouter from './routes/financial-images'; // Financial Enablement marketing images (OpenAI gpt-image-1)
 import hologauzeImagesRouter from './routes/hologauze-images'; // Hologauze Live Concert System — AI-generated marketing imagery (cached)
 import notificationsRouter from './routes/notifications'; // Import Notifications router for internal messaging
-import webhookStripeRouter from './routes/webhook-stripe'; // Import Stripe Webhook handler
 import musicCatalogWebhookRouter from './routes/music-catalog-webhook';
 import resendWebhooksRouter from './routes/resend-webhooks'; // Import Resend Email Webhooks handler (legacy)
 import brevoWebhooksRouter from './routes/brevo-webhooks'; // Import Brevo Email Webhooks handler
@@ -650,6 +650,7 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   // Registrar el router para proyectos de music video (guardado/carga)
   console.log('📢 Registrando router de proyectos de music video en /api/music-video-projects');
   app.use('/api/music-video-projects', musicVideoProjectsRouter);
+  app.use('/api/music-video-billing', musicVideoBillingRouter);
   app.use('/api/video-projects', videoProjectsRouter); // Timeline export → Shotstack render + status polling
   app.use('/api/music-video', musicVideoRouter);
   app.use('/api/video-qc', videoQcRouter); // Quality gate: ffprobe QC de renders
@@ -1947,8 +1948,8 @@ export async function registerRoutes(app: Express): Promise<HttpServer> {
   setupSocialNetworkRoutes(app);
   app.use('/api/stripe', stripeRouter);
   
-  // Stripe Webhook (debe estar antes de cualquier middleware de autenticación)
-  app.use('/api/stripe', webhookStripeRouter);
+  // stripeRouter owns the single canonical /api/stripe/webhook and delegates
+  // platform events internally, avoiding two handlers competing for one body.
   app.use('/api/music-catalog', musicCatalogWebhookRouter);
   
   // Resend Email Webhooks (legacy - keeping for backward compatibility)

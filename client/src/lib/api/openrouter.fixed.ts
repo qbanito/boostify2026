@@ -1,6 +1,6 @@
 import { env } from "../../env";
 import { logger } from "../logger";
-import { apiRequest } from "../queryClient";
+import { apiRequest, getAuthHeaders } from "../queryClient";
 import { 
   ShotType, 
   SceneRole, 
@@ -675,9 +675,8 @@ export async function generateVideoPromptWithRetry(params: VideoPromptParams): P
     // Call backend endpoint that uses Gemini
     const response = await fetch("/api/music-video/enhance-prompt", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: await getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify({
         basePrompt,
         shotType: params.shotType,
@@ -725,9 +724,8 @@ export async function generateThreeConceptProposals(
     // Llamar al endpoint del backend que usa Gemini
     const response = await fetch("/api/music-video/generate-concepts", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: await getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify({
         lyrics,
         directorName,
@@ -929,9 +927,8 @@ export async function generateMusicVideoScript(
     // Llamar al endpoint del backend que usa Gemini
     const response = await fetch("/api/music-video/generate-script", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: await getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify({
         lyrics,
         concept,

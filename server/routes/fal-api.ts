@@ -10,8 +10,34 @@ import { chargeCredits, chargeCreditsFromUsd } from '../services/credit-engine';
 import type { OperationType } from '../../shared/credit-pricing';
 import { authenticate } from '../middleware/auth';
 import { db as firebaseDb, FieldValue } from '../firebase';
+import { createHash } from 'node:crypto';
+import {
+  editImageWithGPTImage1,
+  generateImageWithGPTImage25Sunburst,
+} from '../services/fal-service';
+import {
+  bindMusicVideoProviderRequest,
+  calculateOpenAIImageCostFromUsage,
+  getKlingCost,
+  getMusicVideoImageEstimate,
+  getOwnedMusicVideoReservation,
+  getWanCostPerSecond,
+  refundMusicVideoReservation,
+  reserveMusicVideoCredits,
+  settleMusicVideoReservation,
+} from '../services/music-video-billing';
 
 const router = Router();
+
+function authenticatedBillingEmail(req: Request): string {
+  const email = String(req.user?.email || '').trim().toLowerCase();
+  if (!email) throw new Error('A verified account email is required for paid generation.');
+  return email;
+}
+
+function musicVideoIdempotency(req: Request, fallback: string) {
+  return String(req.body?.idempotencyKey || req.headers['x-idempotency-key'] || fallback).slice(0, 300);
+}
 
 const musicJobCollection = 'music_provider_jobs';
 function getAuthenticatedOwner(req: Request): string {
@@ -117,6 +143,182 @@ async function logFalUsage(model: string, imageCount: number = 1, error?: string
     metadata: { imageCount }
   });
 }
+
+const MUSIC_VIDEO_FLUX_TEXT_MODEL = 'fal-ai/flux-2-pro';
+const MUSIC_VIDEO_FLUX_EDIT_MODEL = 'blackforestlabs/flux-3/edit-image';
+
+/**
+ * Premium still-image cascade used only by Music Video Creator.
+ * Primary: OpenAI GPT Image 2.5 Sunburst.
+ * Fallback: FAL FLUX 3 Edit for reference scenes, FLUX 2 Pro for pure B-roll.
+ */
+router.post('/music-video/generate-image', authenticate, async (req: Request, res: Response) => {
+  const {
+    prompt,
+    referenceImages = [],
+    aspectRatio = '16:9',
+    quality = 'high',
+    sceneId,
+    shotCategory,
+    projectId,
+  } = req.body || {};
+
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ success: false, error: 'prompt is required' });
+  }
+
+  const refs = Array.isArray(referenceImages)
+    ? referenceImages.filter((value: unknown): value is string => typeof value === 'string' && /^(https?:|data:image\/)/.test(value)).slice(0, 10)
+    : [];
+  const finalPrompt = [
+    prompt.trim().slice(0, 30000),
+    'Photorealistic live-action music video frame. Preserve the established artist identity, wardrobe, color science, lighting logic, locations and recurring visual motifs. No text, captions, logos or watermark.',
+  ].join('\n\n');
+  const sizeMap: Record<string, '1024x1024' | '1536x1024' | '1024x1536'> = {
+    '1:1': '1024x1024',
+    '9:16': '1024x1536',
+    '3:4': '1024x1536',
+    '4:5': '1024x1536',
+    '16:9': '1536x1024',
+    '4:3': '1536x1024',
+  };
+  const requestedQuality = ['low', 'medium', 'high', 'xhigh', 'max'].includes(quality) ? quality : 'high';
+  const billingEmail = authenticatedBillingEmail(req);
+  const estimatedImageCost = getMusicVideoImageEstimate(
+    'openai/gpt-image-2.6/sunburst',
+    requestedQuality,
+    refs.length,
+  );
+  let billingReservation: any;
+  try {
+    billingReservation = await reserveMusicVideoCredits({
+      userEmail: billingEmail,
+      stage: 'image',
+      provider: 'openai',
+      model: 'openai/gpt-image-2.6/sunburst',
+      estimatedCostUsd: estimatedImageCost,
+      projectId: Number.isInteger(Number(projectId)) ? Number(projectId) : null,
+      idempotencyKey: musicVideoIdempotency(req, `image:${sceneId || createHash('sha256').update(finalPrompt).digest('hex')}:${Date.now()}`),
+      metadata: { sceneId, shotCategory, quality: requestedQuality, referenceCount: refs.length },
+    });
+  } catch (error: any) {
+    return res.status(402).json({ success: false, error: error?.message || 'Insufficient credits for image generation.' });
+  }
+  const safetyIdentifier = createHash('sha256')
+    .update(String(req.user?.id || req.user?.uid || req.user?.email || 'music-video-user'))
+    .digest('hex');
+
+  let primaryError = '';
+  try {
+    const primary = refs.length
+      ? await editImageWithGPTImage1(refs.slice(0, 4), finalPrompt, {
+          model: 'gpt-image-2.6-sunburst',
+          size: sizeMap[aspectRatio] || '1536x1024',
+          quality: requestedQuality === 'xhigh' || requestedQuality === 'max' ? 'high' : requestedQuality as 'low' | 'medium' | 'high',
+          outputFolder: 'music-video-scenes',
+        })
+      : await generateImageWithGPTImage25Sunburst(finalPrompt, {
+          model: 'gpt-image-2.6-sunburst',
+          size: sizeMap[aspectRatio] || '1536x1024',
+          quality: requestedQuality as 'low' | 'medium' | 'high' | 'xhigh' | 'max',
+          outputFolder: 'music-video-scenes',
+          safetyIdentifier,
+        });
+
+    if (primary.success && primary.imageUrl) {
+      const actualCost = calculateOpenAIImageCostFromUsage(primary.usage, estimatedImageCost);
+      const settled = await settleMusicVideoReservation(billingReservation.id, actualCost, {
+        resultUrl: primary.imageUrl,
+        provider: primary.provider,
+        usage: primary.usage || null,
+      });
+      return res.json({
+        success: true,
+        imageUrl: primary.imageUrl,
+        images: [{ url: primary.imageUrl }],
+        sceneId,
+        provider: refs.length ? 'openai/gpt-image-2.6/sunburst/edit' : 'openai/gpt-image-2.6/sunburst/text-to-image',
+        fallbackUsed: false,
+        billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
+      });
+    }
+    primaryError = primary.error || 'OpenAI returned no image';
+  } catch (error: any) {
+    primaryError = error?.message || 'OpenAI image generation failed';
+  }
+
+  if (!FAL_API_KEY) {
+    await refundMusicVideoReservation(billingReservation.id, primaryError || 'FAL fallback is not configured');
+    return res.status(502).json({ success: false, error: primaryError, fallbackError: 'FAL_KEY is not configured' });
+  }
+
+  try {
+    const ratioMap: Record<string, string> = {
+      '16:9': 'landscape_16_9', '9:16': 'portrait_16_9', '1:1': 'square',
+      '4:3': 'landscape_4_3', '3:4': 'portrait_4_3', '4:5': 'portrait_4_3',
+    };
+    const model = refs.length ? MUSIC_VIDEO_FLUX_EDIT_MODEL : MUSIC_VIDEO_FLUX_TEXT_MODEL;
+    const endpoint = `https://fal.run/${model}`;
+    const fallbackBody = refs.length
+      ? {
+          prompt: finalPrompt,
+          image_urls: refs,
+          aspect_ratio: aspectRatio,
+          resolution: '2k',
+          enable_prompt_expansion: false,
+          output_format: 'jpeg',
+        }
+      : {
+          prompt: finalPrompt,
+          image_size: ratioMap[aspectRatio] || 'landscape_16_9',
+          output_format: 'jpeg',
+        };
+    const fallbackResponse = await fetchWithFailover(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fallbackBody),
+    }, `Music Video ${model}`);
+    const fallbackData: any = await fallbackResponse.json().catch(() => ({}));
+    const imageUrl = fallbackData?.images?.[0]?.url || fallbackData?.image?.url || fallbackData?.image_url;
+    if (!fallbackResponse.ok || !imageUrl) {
+      const fallbackError = fallbackData?.detail || fallbackData?.error || `FAL ${fallbackResponse.status}`;
+      await logFalUsage(model, 0, String(fallbackError));
+      await refundMusicVideoReservation(billingReservation.id, `${primaryError}; ${String(fallbackError)}`);
+      return res.status(502).json({
+        success: false,
+        error: 'The premium image provider and its FAL fallback could not generate this scene.',
+        primaryError,
+        fallbackError,
+      });
+    }
+    await logFalUsage(model, 1);
+    const fallbackCost = getMusicVideoImageEstimate(model, requestedQuality, refs.length);
+    const settled = await settleMusicVideoReservation(billingReservation.id, fallbackCost, {
+      resultUrl: imageUrl,
+      provider: `fal:${model}`,
+      fallbackUsed: true,
+    });
+    return res.json({
+      success: true,
+      imageUrl,
+      images: fallbackData.images || [{ url: imageUrl }],
+      sceneId,
+      shotCategory,
+      provider: `fal:${model}`,
+      fallbackUsed: true,
+      primaryError,
+      billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
+    });
+  } catch (error: any) {
+    await refundMusicVideoReservation(billingReservation.id, error?.message || 'FAL fallback failed');
+    return res.status(502).json({
+      success: false,
+      error: 'The premium image provider and its FAL fallback could not generate this scene.',
+      primaryError,
+      fallbackError: error?.message || 'FAL fallback failed',
+    });
+  }
+});
 
 /**
  * GET /api/fal/debug-failover
@@ -1324,7 +1526,8 @@ function buildVideoMotionPrompt(
   return parts.join(', ');
 }
 
-router.post('/kling-video/generate', async (req: Request, res: Response) => {
+router.post('/kling-video/generate', authenticate, async (req: Request, res: Response) => {
+  let billingReservation: any;
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -1481,6 +1684,21 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
 
     const startTime = Date.now();
 
+    try {
+      billingReservation = await reserveMusicVideoCredits({
+        userEmail: authenticatedBillingEmail(req),
+        stage: 'video',
+        provider: 'fal',
+        model: `kling:${model}`,
+        estimatedCostUsd: getKlingCost(model, Number(duration) || 5),
+        projectId: Number.isInteger(Number(req.body.projectId)) ? Number(req.body.projectId) : null,
+        idempotencyKey: musicVideoIdempotency(req, `kling:${req.body.sceneId || createHash('sha256').update(enrichedPrompt).digest('hex')}:${Date.now()}`),
+        metadata: { sceneId: req.body.sceneId, duration: Number(duration) || 5, aspectRatio },
+      });
+    } catch (error: any) {
+      return res.status(402).json({ success: false, error: error?.message || 'Insufficient credits for video generation.' });
+    }
+
     // Submit job a FAL (queue mode para videos)
     const submitResponse = await fetchWithFailover(
       falEndpoint,
@@ -1498,6 +1716,7 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
       const errorData = await submitResponse.json().catch(() => ({}));
       console.error('❌ [FAL-BACKEND] Kling Video submit error:', errorData);
       await logFalUsage(`kling-video-${model}`, 0, JSON.stringify(errorData));
+      await refundMusicVideoReservation(billingReservation.id, errorData?.detail || errorData?.error || 'Kling submission failed');
       return res.status(500).json({
         success: false,
         error: `Error submitting video job: ${submitResponse.statusText}`,
@@ -1513,34 +1732,15 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
     // Si hay request_id, es asíncrono - retornar para polling
     if (requestId) {
       await logFalUsage(`kling-video-${model}`, 1);
-      
-      // 💳 Charge credits for video generation
-      const userEmail = req.body.userEmail;
-      if (userEmail) {
-        // Map model to operation type
-        const videoOpMap: Record<string, string> = {
-          'o3-i2v': 'video.kling_o3',
-          'o3-t2v': 'video.kling_o3',
-          'v2.5-turbo-pro-i2v': 'video.kling_25_turbo',
-          'v2.6-pro-i2v': 'video.kling_26_pro',
-          'o1-standard-ref2v': 'video.kling_o1_ref2v',
-          'o1-pro-i2v': 'video.kling_o1_ref2v',
-          'o1-standard-i2v': 'video.kling_o1_ref2v',
-          'v2.1-pro-i2v': 'video.kling_21_pro',
-          'v2.1-standard-i2v': 'video.kling_21_pro',
-        };
-        const opType = (videoOpMap[model] || 'video.kling_25_turbo') as OperationType;
-        await chargeCredits(userEmail, opType, {
-          description: `Video generation (${model})`,
-        });
-      }
+      await bindMusicVideoProviderRequest(billingReservation.id, requestId);
       
       return res.json({
         success: true,
         requestId,
         model,
         message: 'Video generation started',
-        estimatedTime: duration === '5' ? '60-120 seconds' : '120-180 seconds'
+        estimatedTime: duration === '5' ? '60-120 seconds' : '120-180 seconds',
+        billing: { reservationId: billingReservation.id, creditsReserved: billingReservation.reservedCredits },
       });
     }
 
@@ -1549,16 +1749,21 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
       const processingTime = (Date.now() - startTime) / 1000;
       console.log(`✅ [FAL-BACKEND] Kling Video completed in ${processingTime.toFixed(1)}s!`);
       await logFalUsage(`kling-video-${model}`, 1);
+      const settled = await settleMusicVideoReservation(billingReservation.id, getKlingCost(model, Number(duration) || 5), {
+        resultUrl: submitData.video.url,
+      });
       
       return res.json({
         success: true,
         videoUrl: submitData.video.url,
         processingTime,
-        model
+        model,
+        billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
       });
     }
 
     // Si llegamos aquí, algo salió mal
+    await refundMusicVideoReservation(billingReservation.id, 'Unexpected response from FAL');
     return res.status(500).json({
       success: false,
       error: 'Unexpected response from FAL',
@@ -1566,6 +1771,9 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
+    if (billingReservation?.id) {
+      await refundMusicVideoReservation(billingReservation.id, error instanceof Error ? error.message : 'Kling generation failed');
+    }
     console.error('❌ [FAL-BACKEND] Error in kling-video:', error);
     await logFalUsage('kling-video', 0, error instanceof Error ? error.message : 'Unknown error');
     return res.status(500).json({
@@ -1579,7 +1787,7 @@ router.post('/kling-video/generate', async (req: Request, res: Response) => {
  * GET /api/fal/kling-video/:requestId
  * Obtiene el estado/resultado de una generación de video
  */
-router.get('/kling-video/:requestId', async (req: Request, res: Response) => {
+router.get('/kling-video/:requestId', authenticate, async (req: Request, res: Response) => {
   try {
     if (!FAL_API_KEY) {
       return res.status(500).json({
@@ -1590,6 +1798,10 @@ router.get('/kling-video/:requestId', async (req: Request, res: Response) => {
 
     const { requestId } = req.params;
     const { model = 'o1-pro-i2v' } = req.query;
+    const billingReservation = await getOwnedMusicVideoReservation(authenticatedBillingEmail(req), requestId);
+    if (!billingReservation) {
+      return res.status(404).json({ success: false, error: 'Generation job not found for this account.' });
+    }
 
     // Determinar el endpoint base según el modelo
     let baseEndpoint: string;
@@ -1606,6 +1818,15 @@ router.get('/kling-video/:requestId', async (req: Request, res: Response) => {
         break;
       case 'v2.1-pro-i2v':
         baseEndpoint = 'fal-ai/kling-video/v2.1/pro/image-to-video';
+        break;
+      case 'o3-i2v':
+        baseEndpoint = 'fal-ai/kling-video/o3/image-to-video';
+        break;
+      case 'v2.5-turbo-pro-i2v':
+        baseEndpoint = 'fal-ai/kling-video/v2.5/turbo/pro/image-to-video';
+        break;
+      case 'v2.6-pro-i2v':
+        baseEndpoint = 'fal-ai/kling-video/v2.6/pro/image-to-video';
         break;
       default:
         baseEndpoint = 'fal-ai/kling-video/v2.1/standard/image-to-video';
@@ -1643,18 +1864,25 @@ router.get('/kling-video/:requestId', async (req: Request, res: Response) => {
 
       if (resultResponse.ok) {
         const resultData = await resultResponse.json();
+        const settled = await settleMusicVideoReservation(
+          billingReservation.id,
+          Number(billingReservation.estimatedCostUsd),
+          { resultUrl: resultData.video?.url, providerStatus: 'COMPLETED' },
+        );
         return res.json({
           success: true,
           status: 'completed',
           videoUrl: resultData.video?.url,
           duration: resultData.duration,
-          data: resultData
+          data: resultData,
+          billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
         });
       }
     }
 
     // If failed
     if (statusData.status === 'FAILED') {
+      await refundMusicVideoReservation(billingReservation.id, statusData.error || 'Kling generation failed');
       return res.json({
         success: false,
         status: 'failed',
@@ -2312,12 +2540,28 @@ router.post('/nano-banana/upscale', async (req: Request, res: Response) => {
  * Body: { imageUrl, prompt?, model?, duration?, aspectRatio? }
  * Response: { success, taskId, costCredits, model }
  */
-router.post('/pixverse-video/generate', async (req: Request, res: Response) => {
+router.post('/pixverse-video/generate', authenticate, async (req: Request, res: Response) => {
+  let billingReservation: any;
   try {
-    const { imageUrl, prompt, model = 'v6', duration = 5, aspectRatio = '9:16' } = req.body;
+    const { imageUrl, prompt, model = 'v6', duration = 5, aspectRatio = '9:16', projectId, sceneId } = req.body;
 
     if (!imageUrl) {
       return res.status(400).json({ success: false, error: 'imageUrl is required' });
+    }
+
+    try {
+      billingReservation = await reserveMusicVideoCredits({
+        userEmail: authenticatedBillingEmail(req),
+        stage: 'video',
+        provider: 'pixverse',
+        model: `pixverse:${model}`,
+        estimatedCostUsd: Math.max(1, Number(duration) || 5) * 0.12,
+        projectId: Number.isInteger(Number(projectId)) ? Number(projectId) : null,
+        idempotencyKey: musicVideoIdempotency(req, `pixverse:${sceneId || createHash('sha256').update(String(imageUrl)).digest('hex')}:${Date.now()}`),
+        metadata: { sceneId, duration: Number(duration) || 5, aspectRatio },
+      });
+    } catch (error: any) {
+      return res.status(402).json({ success: false, error: error?.message || 'Insufficient credits for video generation.' });
     }
 
     const { startPixVerseImageToVideo } = await import('../services/pixverse-video.js');
@@ -2330,8 +2574,16 @@ router.post('/pixverse-video/generate', async (req: Request, res: Response) => {
     });
 
     console.log(`✅ [PixVerse] Task started: ${result.taskId} (model: ${result.model})`);
-    return res.json({ success: true, taskId: result.taskId, costCredits: result.costCredits, model: result.model });
+    await bindMusicVideoProviderRequest(billingReservation.id, String(result.taskId));
+    return res.json({
+      success: true,
+      taskId: result.taskId,
+      providerCredits: result.costCredits,
+      model: result.model,
+      billing: { reservationId: billingReservation.id, creditsReserved: billingReservation.reservedCredits },
+    });
   } catch (err: any) {
+    if (billingReservation?.id) await refundMusicVideoReservation(billingReservation.id, err?.message || 'PixVerse generation failed');
     console.error('❌ [PixVerse] /generate error:', err.message);
     return res.status(500).json({ success: false, error: err.message || 'PixVerse generation failed' });
   }
@@ -2343,15 +2595,30 @@ router.post('/pixverse-video/generate', async (req: Request, res: Response) => {
  *
  * Response: { success, status: 'processing'|'completed'|'failed', videoUrl?, error? }
  */
-router.get('/pixverse-video/:taskId', async (req: Request, res: Response) => {
+router.get('/pixverse-video/:taskId', authenticate, async (req: Request, res: Response) => {
   try {
     const { taskId } = req.params;
     if (!taskId) {
       return res.status(400).json({ success: false, error: 'taskId is required' });
     }
 
+    const billingReservation = await getOwnedMusicVideoReservation(authenticatedBillingEmail(req), taskId);
+    if (!billingReservation) {
+      return res.status(404).json({ success: false, error: 'Generation job not found for this account.' });
+    }
+
     const { checkPixVerseTaskStatus } = await import('../services/pixverse-video.js');
     const result = await checkPixVerseTaskStatus(taskId);
+
+    if (result.status === 'failed') {
+      await refundMusicVideoReservation(billingReservation.id, result.error || 'PixVerse generation failed');
+    } else if (result.status === 'completed' && result.videoUrl) {
+      await settleMusicVideoReservation(
+        billingReservation.id,
+        Number(billingReservation.estimatedCostUsd),
+        { resultUrl: result.videoUrl, providerStatus: 'completed' },
+      );
+    }
 
     return res.json({
       success: true,
@@ -2379,8 +2646,9 @@ const WAN_REFERENCE_TO_VIDEO_ENDPOINT = 'alibaba/wan-3.0/reference-to-video';
  * is carried into the next scene. Without references it creates an anchor image.
  */
 router.post('/wan-music-video/openai-image', authenticate, async (req: Request, res: Response) => {
+  let billingReservation: any;
   try {
-    const { prompt, referenceImages = [], quality = 'high', aspectRatio = '16:9', numImages = 1, negativePrompt = '' } = req.body || {};
+    const { prompt, referenceImages = [], quality = 'high', aspectRatio = '16:9', numImages = 1, negativePrompt = '', projectId, sceneId } = req.body || {};
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ success: false, error: 'prompt is required' });
@@ -2396,6 +2664,20 @@ router.post('/wan-music-video/openai-image', authenticate, async (req: Request, 
     const safeQuality = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'].includes(quality) ? quality : 'high';
     const count = Math.max(1, Math.min(10, Math.round(Number(numImages) || 1)));
     const finalPrompt = [prompt.slice(0, 30000), typeof negativePrompt === 'string' && negativePrompt.trim() ? `Avoid: ${negativePrompt.trim().slice(0, 2000)}` : ''].filter(Boolean).join('\n\n');
+    try {
+      billingReservation = await reserveMusicVideoCredits({
+        userEmail: authenticatedBillingEmail(req),
+        stage: 'image',
+        provider: 'fal',
+        model: endpoint,
+        estimatedCostUsd: getMusicVideoImageEstimate(endpoint, safeQuality, refs.length) * count,
+        projectId: Number.isInteger(Number(projectId)) ? Number(projectId) : null,
+        idempotencyKey: musicVideoIdempotency(req, `anchor:${sceneId || createHash('sha256').update(finalPrompt).digest('hex')}:${Date.now()}`),
+        metadata: { sceneId, count, quality: safeQuality, referenceCount: refs.length },
+      });
+    } catch (error: any) {
+      return res.status(402).json({ success: false, error: error?.message || 'Insufficient credits for image generation.' });
+    }
     const falResponse = await fetchWithFailover(`https://fal.run/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2412,8 +2694,15 @@ router.post('/wan-music-video/openai-image', authenticate, async (req: Request, 
     const result = await falResponse.json().catch(() => ({}));
     const images = Array.isArray(result.images) ? result.images.filter((image: any) => typeof image?.url === 'string') : [];
     if (!falResponse.ok || images.length === 0) {
+      await refundMusicVideoReservation(billingReservation.id, result.detail || result.error || 'Image provider returned no images');
       return res.status(falResponse.status >= 400 ? falResponse.status : 502).json({ success: false, error: result.detail || result.error || 'GPT Image 2.5 returned no images' });
     }
+
+    const actualCost = getMusicVideoImageEstimate(endpoint, safeQuality, refs.length) * images.length;
+    const settled = await settleMusicVideoReservation(billingReservation.id, actualCost, {
+      resultUrls: images.map((image: any) => image.url),
+      provider: endpoint,
+    });
 
     return res.json({
       success: true,
@@ -2421,8 +2710,10 @@ router.post('/wan-music-video/openai-image', authenticate, async (req: Request, 
       images,
       provider: `openai/gpt-image-2.5/sunburst/${refs.length ? 'edit' : 'text-to-image'}`,
       usedReferences: refs.length,
+      billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
     });
   } catch (error: any) {
+    if (billingReservation?.id) await refundMusicVideoReservation(billingReservation.id, error?.message || 'Image generation failed');
     console.error('❌ [MUSIC VIDEO] OpenAI consistency image error:', error?.message || error);
     return res.status(500).json({ success: false, error: error?.message || 'OpenAI image generation failed' });
   }
@@ -2434,6 +2725,7 @@ router.post('/wan-music-video/openai-image', authenticate, async (req: Request, 
  * asynchronous because video generation can take several minutes.
  */
 router.post('/wan-music-video/generate', authenticate, async (req: Request, res: Response) => {
+  let billingReservation: any;
   try {
     if (!FAL_API_KEY) {
       return res.status(503).json({ success: false, error: 'FAL_KEY is not configured on the server' });
@@ -2446,6 +2738,8 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
       duration = 5,
       resolution = '1080p',
       aspectRatio = '16:9',
+      projectId,
+      sceneId,
     } = req.body || {};
 
     if (!prompt || typeof prompt !== 'string') {
@@ -2463,6 +2757,22 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
     const safeAspectRatio = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16'].includes(aspectRatio)
       ? aspectRatio
       : '16:9';
+
+    const billingEmail = authenticatedBillingEmail(req);
+    try {
+      billingReservation = await reserveMusicVideoCredits({
+        userEmail: billingEmail,
+        stage: 'video',
+        provider: 'fal',
+        model: WAN_REFERENCE_TO_VIDEO_ENDPOINT,
+        estimatedCostUsd: getWanCostPerSecond(safeResolution) * safeDuration,
+        projectId: Number.isInteger(Number(projectId)) ? Number(projectId) : null,
+        idempotencyKey: musicVideoIdempotency(req, `wan:${sceneId || createHash('sha256').update(prompt).digest('hex')}:${Date.now()}`),
+        metadata: { sceneId, duration: safeDuration, resolution: safeResolution, aspectRatio: safeAspectRatio },
+      });
+    } catch (error: any) {
+      return res.status(402).json({ success: false, error: error?.message || 'Insufficient credits for video generation.' });
+    }
 
     const response = await fetchWithFailover(
       `https://queue.fal.run/${WAN_REFERENCE_TO_VIDEO_ENDPOINT}`,
@@ -2489,6 +2799,7 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.request_id) {
       await logFalUsage(WAN_REFERENCE_TO_VIDEO_ENDPOINT, 0, JSON.stringify(data));
+      await refundMusicVideoReservation(billingReservation.id, data.detail || data.error || 'Wan submission failed');
       return res.status(response.status >= 400 ? response.status : 502).json({
         success: false,
         error: data.detail || data.error || `Wan 3.0 submission failed (${response.status})`,
@@ -2497,6 +2808,7 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
     }
 
     await logFalUsage(WAN_REFERENCE_TO_VIDEO_ENDPOINT, 1);
+    await bindMusicVideoProviderRequest(billingReservation.id, data.request_id);
     return res.json({
       success: true,
       requestId: data.request_id,
@@ -2505,8 +2817,12 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
       cancelUrl: data.cancel_url,
       endpoint: WAN_REFERENCE_TO_VIDEO_ENDPOINT,
       estimatedTime: '60-240 seconds',
+      billing: { reservationId: billingReservation.id, creditsReserved: billingReservation.reservedCredits },
     });
   } catch (error: any) {
+    if (billingReservation?.id) {
+      await refundMusicVideoReservation(billingReservation.id, error?.message || 'Wan submission failed');
+    }
     console.error('❌ [MUSIC VIDEO] Wan 3.0 submit error:', error?.message || error);
     return res.status(500).json({ success: false, error: error?.message || 'Wan 3.0 generation failed' });
   }
@@ -2517,12 +2833,18 @@ router.post('/wan-music-video/generate', authenticate, async (req: Request, res:
  * Polls one Wan 3.0 segment and returns its video URL when complete.
  */
 router.get('/wan-music-video/:requestId', authenticate, async (req: Request, res: Response) => {
+  let billingReservation: any;
   try {
     if (!FAL_API_KEY) {
       return res.status(503).json({ success: false, error: 'FAL_KEY is not configured on the server' });
     }
 
     const { requestId } = req.params;
+    const billingEmail = authenticatedBillingEmail(req);
+    billingReservation = await getOwnedMusicVideoReservation(billingEmail, requestId);
+    if (!billingReservation) {
+      return res.status(404).json({ success: false, error: 'Generation job not found for this account.' });
+    }
     const statusResponse = await fetchWithFailover(
       `https://queue.fal.run/${WAN_REFERENCE_TO_VIDEO_ENDPOINT}/requests/${encodeURIComponent(requestId)}/status`,
       { headers: {} },
@@ -2532,6 +2854,11 @@ router.get('/wan-music-video/:requestId', authenticate, async (req: Request, res
 
     if (!statusResponse.ok) {
       return res.status(statusResponse.status).json({ success: false, error: statusData.detail || 'Unable to read Wan 3.0 status' });
+    }
+
+    if (statusData.status === 'FAILED' || statusData.status === 'CANCELLED') {
+      await refundMusicVideoReservation(billingReservation.id, statusData.error || `Wan job ${statusData.status}`);
+      return res.json({ success: false, status: statusData.status, error: statusData.error || 'Video generation failed. Reserved credits were returned.' });
     }
 
     if (statusData.status !== 'COMPLETED') {
@@ -2547,8 +2874,15 @@ router.get('/wan-music-video/:requestId', authenticate, async (req: Request, res
     const videoUrl = resultData.video?.url || resultData.output?.video?.url || resultData.output_url || resultData.url;
 
     if (!resultResponse.ok || !videoUrl) {
+      await refundMusicVideoReservation(billingReservation.id, resultData.detail || 'Wan returned no video');
       return res.status(502).json({ success: false, status: 'FAILED', error: resultData.detail || 'Wan 3.0 returned no video', details: resultData });
     }
+
+    const settled = await settleMusicVideoReservation(
+      billingReservation.id,
+      Number(billingReservation.estimatedCostUsd),
+      { resultUrl: videoUrl, providerStatus: 'COMPLETED' },
+    );
 
     return res.json({
       success: true,
@@ -2556,6 +2890,7 @@ router.get('/wan-music-video/:requestId', authenticate, async (req: Request, res
       videoUrl,
       duration: resultData.duration ?? resultData.video?.duration ?? null,
       metadata: resultData,
+      billing: { reservationId: billingReservation.id, creditsCharged: settled?.settledCredits || 0 },
     });
   } catch (error: any) {
     console.error('❌ [MUSIC VIDEO] Wan 3.0 status error:', error?.message || error);

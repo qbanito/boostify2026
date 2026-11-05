@@ -3946,10 +3946,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
         return { hasAccess: false, unlimited: false, unlocked: false, previewSeconds: 30 };
       }
       try {
-        const q = !isAuthenticated && guestFanEmail
-          ? `?fanEmail=${encodeURIComponent(guestFanEmail.trim().toLowerCase())}`
-          : "";
-        return await apiRequest({ url: `/api/artist/${artistPgIdForAccess}/access${q}`, method: "GET" });
+        return await apiRequest({ url: `/api/artist/${artistPgIdForAccess}/access`, method: "GET" });
       } catch {
         return { hasAccess: false, unlimited: false, unlocked: false, previewSeconds: 30 };
       }
@@ -4037,22 +4034,32 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
     const params = new URLSearchParams(window.location.search);
     const unlock = params.get("unlock");
     if (!unlock) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (unlock === "success") {
-      const plan = params.get("plan");
-      refetchAccess?.();
       setUnlockModalOpen(false);
       toast({
-        title: plan === "monthly" ? "Monthly membership active!" : "Catalog unlocked!",
-        description:
-          plan === "monthly"
-            ? "You now have monthly full-catalog access for this artist."
-            : "Thanks for supporting this artist. You now have full lifetime access to all songs.",
+        title: "Checking your payment",
+        description: "Access will appear after Stripe confirms your payment. This can take a moment.",
       });
+      const checkAccess = async (attempt: number) => {
+        const result = await refetchAccess();
+        if (cancelled) return;
+        if (result.data?.unlocked || result.data?.unlimited) {
+          toast({ title: "Catalog unlocked", description: "Your payment is confirmed and your music access is active." });
+        } else if (attempt < 9) {
+          timer = setTimeout(() => { void checkAccess(attempt + 1); }, 3000);
+        } else {
+          toast({ title: "Payment confirmation pending", description: "Your access will appear once Stripe confirms your payment. Return to this profile to check again." });
+        }
+      };
+      void checkAccess(0);
     }
     params.delete("unlock");
     params.delete("plan");
     const rest = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -4060,15 +4067,8 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
   const handleUnlockCheckout = async () => {
     const emailForGuest = guestFanEmail.trim().toLowerCase();
     if (!isAuthenticated) {
-      const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForGuest);
-      if (!isEmailValid) {
-        toast({
-          title: "Enter a valid email",
-          description: "We need your email to create your fan access for this artist.",
-          variant: "destructive",
-        });
-        return;
-      }
+      toast({ title: "Sign in to unlock music", description: "Use an account with a verified email so your purchase can be restored securely.", variant: "destructive" });
+      return;
     }
     if (accessData?.monetizationEnabled === false) return;
     if (!artistPgIdForAccess) {
@@ -13165,23 +13165,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
           <div className="space-y-4 py-2">
             {!isAuthenticated && (
               <div className="space-y-2 rounded-xl border border-gray-700 bg-gray-900/60 p-3">
-                <p className="text-xs text-gray-300">
-                  This creates your fan account under this artist only (not a platform-wide account).
-                </p>
-                <input
-                  type="text"
-                  value={guestFanName}
-                  onChange={(e) => setGuestFanName(e.target.value)}
-                  placeholder="Your name (optional)"
-                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:border-orange-500 focus:outline-none"
-                />
-                <input
-                  type="email"
-                  value={guestFanEmail}
-                  onChange={(e) => setGuestFanEmail(e.target.value)}
-                  placeholder="Your email (required)"
-                  className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-white focus:border-orange-500 focus:outline-none"
-                />
+                <p className="text-xs text-gray-300">Sign in with a verified email to purchase and restore your music access securely.</p>
               </div>
             )}
 
@@ -13207,7 +13191,7 @@ export function ArtistProfileCard({ artistId, initialArtistData }: ArtistProfile
               )}
             </button>
             <p className="text-[11px] text-center text-gray-500">
-              Secure Stripe checkout · One-time lifetime access · 85% goes directly to the artist
+              Secure Stripe checkout · One-time lifetime access
             </p>
           </div>
         </DialogContent>

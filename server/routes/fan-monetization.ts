@@ -21,6 +21,8 @@ import { db } from '../db';
 import { artistAccessUnlocks, explicitSubscriptions, songs, users } from '../../db/schema';
 import { isAdminEmail, PRODUCTION_URL } from '../../shared/constants';
 import { authenticate } from '../middleware/auth';
+import { isAuthenticated } from '../middleware/clerk-auth';
+import { clerkClient } from '@clerk/express';
 
 const router = Router();
 
@@ -56,6 +58,17 @@ function normalizeEmail(value: unknown): string | null {
   const email = value.trim().toLowerCase();
   if (!email || !EMAIL_REGEX.test(email)) return null;
   return email;
+}
+
+/** Only an email verified by the identity provider can recover legacy guest purchases. */
+async function verifiedViewerEmail(user: any): Promise<string | null> {
+  const clerkId = user?.clerkUserId || user?.uid;
+  if (typeof clerkId !== 'string' || !clerkId.startsWith('user_')) return null;
+  try {
+    const account = await clerkClient.users.getUser(clerkId);
+    const primary = account.emailAddresses.find(item => item.id === account.primaryEmailAddressId);
+    return primary?.verification?.status === 'verified' ? normalizeEmail(primary.emailAddress) : null;
+  } catch { return null; }
 }
 
 function getBaseUrl(): string {
@@ -188,7 +201,7 @@ router.get('/:artistId/access', async (req: Request, res: Response) => {
 
     const user = (req as any).user;
     const pgUserId = resolvePgUserId(user);
-    const email = normalizeEmail(user?.email || req.query?.fanEmail) || null;
+    const email = user ? await verifiedViewerEmail(user) : null;
 
     let unlimited = false;
     if (user) {
@@ -280,16 +293,15 @@ router.put('/:artistId/monetization-settings', authenticate, async (req: Request
  * Creates a Stripe pay-what-you-want checkout session (logged-in OR guest).
  * Body: { returnPath?: string, fanEmail?: string }; price comes from artist settings.
  */
-router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) => {
+router.post('/:artistId/unlock-checkout', isAuthenticated, async (req: Request, res: Response) => {
   try {
     if (!stripe) {
       return res.status(500).json({ error: 'Stripe is not configured' });
     }
 
     const user = (req as any).user;
-    const fallbackEmail = normalizeEmail(req.body?.fanEmail);
-    const fanEmail = normalizeEmail(user?.email) || fallbackEmail;
-    if (!fanEmail) return res.status(400).json({ error: 'Valid fanEmail is required' });
+    const fanEmail = await verifiedViewerEmail(user);
+    if (!fanEmail) return res.status(400).json({ error: 'A verified account email is required to purchase music access.' });
 
     const artistId = parseInt(req.params.artistId, 10);
     if (isNaN(artistId)) return res.status(400).json({ error: 'Invalid artist id' });
@@ -304,6 +316,7 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
     if (!catalogSettings.enabled) return res.status(409).json({ error: 'This artist is currently sharing the full catalog for free' });
 
     const pgUserId = resolvePgUserId(user);
+    if (!pgUserId) return res.status(401).json({ error: 'A registered account is required.' });
 
     // Already has access? Don't charge again.
     if (await hasActiveUnlock(artistId, pgUserId, fanEmail)) {
@@ -326,7 +339,7 @@ router.post('/:artistId/unlock-checkout', async (req: Request, res: Response) =>
             currency: 'usd',
             product_data: {
               name: `Unlock ${artistName} — full catalog`,
-              description: 'Lifetime access to this artist\'s complete catalog. 85% goes directly to the artist.',
+              description: 'Lifetime access to this artist\'s complete catalog.',
             },
             unit_amount: catalogSettings.priceCents,
           },

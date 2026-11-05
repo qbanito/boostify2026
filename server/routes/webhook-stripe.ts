@@ -22,9 +22,9 @@ import { handleAgeStripeEvent } from './artist-growth-engine';
 const router = Router();
 
 // Inicializar Stripe
-const stripeKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripe = new Stripe(stripeKey!, {
-  apiVersion: '2025-01-27.acacia' as any,
+  apiVersion: '2026-09-30.endive' as any,
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -92,66 +92,57 @@ router.post('/webhook', async (req: Request, res: Response) => {
   
   console.log(`✅ Received webhook event: ${event.type}`);
   
-  // Manejar diferentes tipos de eventos
   try {
-    // AGE: intercepta primero si el evento tiene metadata.age='1'
-    try {
-      const handled = await handleAgeStripeEvent(event);
-      if (handled) {
-        console.log(`✅ AGE handled event: ${event.type}`);
-      }
-    } catch (ageErr) {
-      console.error('❌ AGE webhook handler error:', ageErr);
-    }
-
-    switch (event.type) {
-      case 'checkout.session.completed':
-      case 'checkout.session.async_payment_succeeded':
-        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
-        break;
-
-      case 'checkout.session.async_payment_failed':
-        console.warn('Checkout payment failed:', (event.data.object as Stripe.Checkout.Session).id);
-        break;
-        
-      case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
-        break;
-        
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
-        break;
-        
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
-        break;
-        
-      case 'invoice.payment_succeeded':
-        await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
-        break;
-        
-      case 'invoice.payment_failed':
-        await handlePaymentFailed(event.data.object as Stripe.Invoice);
-        break;
-        
-      case 'charge.refunded':
-        await handleConcertRefundOrDispute((event.data.object as Stripe.Charge).payment_intent);
-        break;
-
-      case 'charge.dispute.created':
-        await handleConcertRefundOrDispute((event.data.object as Stripe.Dispute).payment_intent);
-        break;
-
-      default:
-        console.log(`ℹ️ Unhandled event type: ${event.type}`);
-    }
-    
+    await processPlatformStripeEvent(event);
     res.json({ received: true });
   } catch (error) {
     console.error('❌ Error processing webhook:', error);
     res.status(500).send('Webhook processing error');
   }
 });
+
+/** Shared platform-event processor used by the single canonical webhook. */
+export async function processPlatformStripeEvent(event: Stripe.Event): Promise<void> {
+  try {
+    const handled = await handleAgeStripeEvent(event);
+    if (handled) console.log(`✅ AGE handled event: ${event.type}`);
+  } catch (ageErr) {
+    console.error('❌ AGE webhook handler error:', ageErr);
+  }
+
+  switch (event.type) {
+    case 'checkout.session.completed':
+    case 'checkout.session.async_payment_succeeded':
+      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      break;
+    case 'checkout.session.async_payment_failed':
+      console.warn('Checkout payment failed:', (event.data.object as Stripe.Checkout.Session).id);
+      break;
+    case 'customer.subscription.created':
+      await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+      break;
+    case 'customer.subscription.updated':
+      await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+      break;
+    case 'customer.subscription.deleted':
+      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+      break;
+    case 'invoice.payment_succeeded':
+      await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
+      break;
+    case 'invoice.payment_failed':
+      await handlePaymentFailed(event.data.object as Stripe.Invoice);
+      break;
+    case 'charge.refunded':
+      await handleConcertRefundOrDispute((event.data.object as Stripe.Charge).payment_intent);
+      break;
+    case 'charge.dispute.created':
+      await handleConcertRefundOrDispute((event.data.object as Stripe.Dispute).payment_intent);
+      break;
+    default:
+      console.log(`ℹ️ Unhandled event type: ${event.type}`);
+  }
+}
 
 /**
  * Mapear bundle tier a plan tier
@@ -191,6 +182,7 @@ async function handleArtistUnlock(session: Stripe.Checkout.Session) {
     fanEmail,
     amount,
     currency: session.currency || 'usd',
+    settlement: metadata.settlement === 'stripe_connect' ? 'stripe_connect' : 'wallet',
   });
 }
 

@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { processPlatformStripeEvent } from './webhook-stripe';
 import express from 'express';
 import Stripe from 'stripe';
 import { authenticate } from '../middleware/auth';
@@ -843,6 +844,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
   }
 
   try {
+    let handledLocally = false;
     switch (event.type) {
       // ─── Checkout completed (new subscription purchase) ──────
       case 'checkout.session.completed': {
@@ -853,25 +855,35 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
 
         if (session.metadata?.type === 'credit_purchase') {
           await handleCreditCheckout(session);
+          handledLocally = true;
         } else if (product === 'ig_boost_pro') {
           await handleIgBoostCheckout(session);
+          handledLocally = true;
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostCheckout(session);
+          handledLocally = true;
         } else if (product === 'individual_tool') {
           await handleIndividualToolCheckout(session);
+          handledLocally = true;
         }
         break;
       }
 
       case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
-        if (session.metadata?.type === 'credit_purchase') await handleCreditCheckout(session);
+        if (session.metadata?.type === 'credit_purchase') {
+          await handleCreditCheckout(session);
+          handledLocally = true;
+        }
         break;
       }
 
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        if (paymentIntent.metadata?.type === 'credit_purchase') await handleCreditPaymentIntent(paymentIntent);
+        if (paymentIntent.metadata?.type === 'credit_purchase') {
+          await handleCreditPaymentIntent(paymentIntent);
+          handledLocally = true;
+        }
         break;
       }
 
@@ -883,8 +895,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
 
         if (product === 'ig_boost_pro') {
           await handleIgBoostSubscriptionUpdate(subscription, event.type);
+          handledLocally = true;
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionUpdate(subscription, event.type);
+          handledLocally = true;
         }
         break;
       }
@@ -895,14 +909,19 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req: R
 
         if (product === 'ig_boost_pro') {
           await handleIgBoostSubscriptionCanceled(subscription);
+          handledLocally = true;
         } else if (product === 'spotify_boost_pro') {
           await handleSpotifyBoostSubscriptionCanceled(subscription);
+          handledLocally = true;
         }
         break;
       }
 
       default:
         break;
+    }
+    if (!handledLocally) {
+      await processPlatformStripeEvent(event);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown webhook handler error';

@@ -10,6 +10,7 @@
  */
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
+import { randomBytes } from 'node:crypto';
 import { isAdminEmail, PRODUCTION_URL } from '../../shared/constants';
 import {
   MODULE_CATALOG,
@@ -26,10 +27,10 @@ import { eq } from 'drizzle-orm';
 
 const router = Router();
 
-const stripeKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY || '';
+const stripeKey = process.env.STRIPE_SECRET_KEY || '';
 const stripe = stripeKey
   ? new Stripe(stripeKey, {
-      apiVersion: '2025-01-27.acacia' as any,
+      apiVersion: '2026-09-30.endive' as any,
     })
   : null;
 
@@ -144,8 +145,8 @@ router.post('/:moduleKey/unlock-checkout', async (req: Request, res: Response) =
     const baseUrl = getBaseUrl();
     const sep = returnPath.includes('?') ? '&' : '?';
 
+    const integrationSuffix = Array.from(randomBytes(8), (byte) => String.fromCharCode(97 + (byte % 26))).join('');
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
       customer_email: user.email,
       line_items: [
         {
@@ -169,7 +170,8 @@ router.post('/:moduleKey/unlock-checkout', async (req: Request, res: Response) =
         userId: String(pgUserId),
         userEmail: user.email,
       },
-    });
+      integration_identifier: `boostify_module_unlock_${integrationSuffix}`,
+    } as Stripe.Checkout.SessionCreateParams & { integration_identifier: string });
 
     res.json({ success: true, url: session.url });
   } catch (err: any) {

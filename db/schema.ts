@@ -517,7 +517,11 @@ export const moduleUnlocks = pgTable("module_unlocks", {
   stripePaymentId: text("stripe_payment_id"), // session.id de Stripe (idempotencia)
   status: text("status", { enum: ["active", "pending", "refunded"] }).default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull()
-});
+}, (table) => [
+  uniqueIndex("module_unlocks_stripe_payment_unique").on(table.stripePaymentId)
+    .where(sql`${table.stripePaymentId} IS NOT NULL`),
+  index("module_unlocks_user_status_idx").on(table.userId, table.status),
+]);
 
 // ============================================================
 // CONCERT COMMAND CENTER — unified concert organization, ticketing,
@@ -1411,6 +1415,42 @@ export const musicVideoProjects = pgTable("music_video_projects", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
+
+// Music Video Creator billing ledger. Credits are reserved before a paid
+// provider request is submitted, then settled on success or refunded on a
+// terminal provider failure. The idempotency key prevents duplicate charges
+// when the browser retries a request.
+export const musicVideoCreditReservations = pgTable("music_video_credit_reservations", {
+  id: serial("id").primaryKey(),
+  userEmail: text("user_email").notNull(),
+  projectId: integer("project_id").references(() => musicVideoProjects.id, { onDelete: "set null" }),
+  stage: text("stage").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  providerRequestId: text("provider_request_id"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  estimatedCostUsd: decimal("estimated_cost_usd", { precision: 14, scale: 6 }).notNull(),
+  actualCostUsd: decimal("actual_cost_usd", { precision: 14, scale: 6 }),
+  markupMultiplier: decimal("markup_multiplier", { precision: 8, scale: 3 }).default("3").notNull(),
+  effectiveCreditUsd: decimal("effective_credit_usd", { precision: 14, scale: 8 }).notNull(),
+  reservedCredits: integer("reserved_credits").notNull(),
+  settledCredits: integer("settled_credits").default(0).notNull(),
+  refundedCredits: integer("refunded_credits").default(0).notNull(),
+  status: text("status", {
+    enum: ["reserved", "settled", "refunded", "failed", "expired"]
+  }).default("reserved").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  errorMessage: text("error_message"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("music_video_reservation_idempotency_unique").on(table.idempotencyKey),
+  uniqueIndex("music_video_reservation_provider_request_unique").on(table.providerRequestId)
+    .where(sql`${table.providerRequestId} IS NOT NULL`),
+  index("music_video_reservation_user_created_idx").on(table.userEmail, table.createdAt),
+  index("music_video_reservation_project_idx").on(table.projectId),
+]);
 
 // 🎬 MUSIC VIDEO CONCEPTS — Stores all 3 director concepts with full details for reuse/modification
 export const musicVideoConcepts = pgTable("music_video_concepts", {

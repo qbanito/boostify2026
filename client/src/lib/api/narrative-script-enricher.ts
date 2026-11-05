@@ -102,14 +102,14 @@ export async function enrichScriptWithNarrative(
       // 🆕 Enriquecer con datos cinematográficos
       const enrichedScene: MusicVideoScene = {
         ...scene,
-        narrative_context: `${relevantArcPhase} - ${theme}`,
-        emotion: emotionalContext?.emotion || "cinematic",
+        narrative_context: scene.narrative_context || `${relevantArcPhase} - ${theme}`,
+        emotion: scene.emotion || emotionalContext?.emotion || "cinematic",
         emotion_intensity: emotionalContext?.intensity || 0.5,
         color_tone: emotionalContext?.colorTone || "neutral",
         connection_to_lyrics: extractLyricsForScene(lyrics, scene),
-        story_progression: relevantArcPhase,
+        story_progression: scene.story_progression || relevantArcPhase,
         artist_presence_description: artistGuidelines.presence,
-        wardrobe_suggestion: artistGuidelines.wardrobe[index % artistGuidelines.wardrobe.length],
+        wardrobe_suggestion: (scene as any).continuity?.wardrobe_state || (scene as any).wardrobe_notes || artistGuidelines.wardrobe[index % artistGuidelines.wardrobe.length],
         director_signature: `${directorName} style - ${concept?.story_concept || "cinematic narrative"}`,
       };
 

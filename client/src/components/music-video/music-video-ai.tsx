@@ -81,6 +81,7 @@ import { VideoModelSelector } from "./video-model-selector";
 import { getDirectorByName, getDirectorById, type DirectorProfile } from "../../data/directors";
 import { uploadImageFromUrl } from "../../lib/firebase-storage";
 import { QuickStartTemplates, type QuickStartTemplate } from "./quick-start-templates";
+import { MusicVideoCostSummary } from "./music-video-cost-summary";
 import { SmartSuggestionsPanel } from "./smart-suggestions-panel";
 import { 
   detectPerformanceClips, 
@@ -91,7 +92,6 @@ import {
   type SceneLipsyncConfig,
   batchProcessSceneLipsync
 } from "../../lib/api/lipsync-scene-processor";
-import { PaymentGateModal } from "./payment-gate-modal";
 import { CharacterGenerationModalEnhanced } from "./character-generation-modal-enhanced";
 import { analyzeFaceFeatures } from "../../lib/api/face-analyzer";
 import { generateMasterCharacterMultiAngle, type MasterCharacterMultiAngle } from "../../lib/api/master-character-generator";
@@ -150,6 +150,7 @@ async function transcribeAudio(file: File, authToken?: string | null) {
   try {
     const formData = new FormData();
     formData.append('audio', file);
+    formData.append('billingContext', 'music-video');
 
     logger.info('🌐 Fetching /api/audio/transcribe...');
     logger.info('🔐 Auth token present:', !!authToken);
@@ -617,6 +618,9 @@ export function MusicVideoAI({
   const audioSource = useRef<AudioBufferSourceNode | null>(null);
   // 🎭 FACE CONSISTENCY: Store Master Character promise so image generation can await it
   const masterCharacterPromiseRef = useRef<Promise<any> | null>(null);
+  // React state updates are asynchronous. Keep the director selected in this
+  // interaction available immediately to the transcription/script pipeline.
+  const selectedDirectorRef = useRef<DirectorProfile | null>(null);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [seed, setSeed] = useState<number>(Math.floor(Math.random() * 1000000));
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
@@ -767,10 +771,11 @@ export function MusicVideoAI({
   const [selectedClipIds, setSelectedClipIds] = useState<number[]>([]);
   const [isBatchRegenerating, setIsBatchRegenerating] = useState(false);
 
-  // Payment gate states
+  // Generation is metered per operation by the server-side credit ledger.
+  // The legacy fixed $199 project gate is intentionally retired.
   const [showPaymentGate, setShowPaymentGate] = useState(false);
   const [isGeneratingRemaining, setIsGeneratingRemaining] = useState(false);
-  const [hasUserPaid, setHasUserPaid] = useState(false);
+  const [hasUserPaid, setHasUserPaid] = useState(true);
   const [videoGenerationsCount, setVideoGenerationsCount] = useState(0);
 
   // Preview states
@@ -856,7 +861,7 @@ export function MusicVideoAI({
   };
 
   // Función auxiliar para ejecutar la generación del script automáticamente
-  const executeScriptGeneration = async (transcriptionText: string, buffer: AudioBuffer) => {
+  const executeScriptGeneration = async (transcriptionText: string, buffer: AudioBuffer, conceptOverride?: any) => {
     logger.info('🔵 [EXEC SCRIPT] Función executeScriptGeneration iniciada');
     logger.info('🔵 [EXEC SCRIPT] transcriptionText length:', transcriptionText.length);
     logger.info('🔵 [EXEC SCRIPT] buffer duration:', buffer.duration);
@@ -882,13 +887,14 @@ export function MusicVideoAI({
       
       // 🎬 OBTENER PERFIL COMPLETO DEL DIRECTOR desde JSON
       let directorProfile: DirectorProfile | undefined = undefined;
-      if (videoStyle.selectedDirector) {
-        directorProfile = getDirectorByName(videoStyle.selectedDirector.name);
+      const activeDirector = selectedDirectorRef.current || videoStyle.selectedDirector;
+      if (activeDirector) {
+        directorProfile = getDirectorByName(activeDirector.name);
         if (directorProfile) {
           logger.info(`🎬 [DIRECTOR] Perfil completo cargado: ${directorProfile.name}`);
           logger.info(`📋 [DIRECTOR] Estilo: ${directorProfile.visual_style.description}`);
         } else {
-          logger.info(`⚠️ [DIRECTOR] No se encontró perfil JSON para ${videoStyle.selectedDirector.name}, usando datos básicos`);
+          logger.info(`⚠️ [DIRECTOR] No se encontró perfil JSON para ${activeDirector.name}, usando datos básicos`);
         }
       }
       
@@ -896,7 +902,7 @@ export function MusicVideoAI({
       
       // 🆕 Usar el concepto seleccionado por el usuario
       logger.info('🎨 [CONCEPTO] Usando concepto seleccionado por el usuario...');
-      const concept = selectedConcept;
+      const concept = conceptOverride === undefined ? selectedConcept : conceptOverride;
       
       if (concept) {
         logger.info('✅ [CONCEPTO] Concepto seleccionado:', concept);
@@ -916,6 +922,7 @@ export function MusicVideoAI({
         concept,
         audioUrl // 🎵 Pass audioUrl for backend audio analysis enrichment
       );
+      let finalScriptResponse = scriptResponse;
       
       clearInterval(progressInterval);
       setProgressPercentage(100);
@@ -957,6 +964,7 @@ export function MusicVideoAI({
         }
         
         const enrichedScript = { ...parsed, scenes: scenesToUse };
+        finalScriptResponse = JSON.stringify(enrichedScript);
         setScriptContent(JSON.stringify(enrichedScript, null, 2));
       } catch (parseError) {
         setScriptContent(scriptResponse);
@@ -969,7 +977,7 @@ export function MusicVideoAI({
       // Continuar automáticamente con la sincronización y generación de imágenes
       logger.info('🚀 [FLUJO AUTOMÁTICO] Paso 3: Sincronización de timeline');
       logger.info('🎯 [SIGUIENTE] Llamando executeSyncAndImageGeneration...');
-      await executeSyncAndImageGeneration(scriptResponse, buffer);
+      await executeSyncAndImageGeneration(finalScriptResponse, buffer, concept);
       logger.info('✅ [FLUJO AUTOMÁTICO] executeSyncAndImageGeneration completado');
       
     } catch (error) {
@@ -987,7 +995,7 @@ export function MusicVideoAI({
   };
 
   // Función auxiliar para sincronizar timeline y generar imágenes automáticamente
-  const executeSyncAndImageGeneration = async (script: string, buffer: AudioBuffer) => {
+  const executeSyncAndImageGeneration = async (script: string, buffer: AudioBuffer, conceptOverride?: any) => {
     logger.info('🔵 [SYNC] Función executeSyncAndImageGeneration iniciada');
     
     try {
@@ -1055,7 +1063,7 @@ export function MusicVideoAI({
       });
       
       // 🔥 Lanzar generación en background (NO await)
-      executeImageGeneration(script).then(() => {
+      executeImageGeneration(script, 1, conceptOverride).then(() => {
         logger.info('✅ [FLUJO PROGRESIVO] Generación de imágenes completada en background');
       }).catch((err) => {
         logger.error('❌ [FLUJO PROGRESIVO] Error en generación background:', err);
@@ -1298,7 +1306,7 @@ export function MusicVideoAI({
   };
 
   // Función auxiliar para generar imágenes automáticamente
-  const executeImageGeneration = async (script?: string, startFrom: number = 1) => {
+  const executeImageGeneration = async (script?: string, startFrom: number = 1, conceptOverride?: any) => {
     logger.info(`🔵 [IMG] Función executeImageGeneration iniciada (startFrom: ${startFrom})`);
     
     try {
@@ -1332,7 +1340,8 @@ export function MusicVideoAI({
       // Extraer información global del script para contexto
       const narrativeSummaryText = parsedScript.narrative_summary || '';
       const directorName = videoStyle.selectedDirector?.name || 'Cinematic Director';
-      const conceptStory = selectedConcept?.story_concept || '';
+      const activeConcept = conceptOverride === undefined ? selectedConcept : conceptOverride;
+      const conceptStory = activeConcept?.story_concept || '';
       
       // Store narrative summary in state for TimelineEditor
       if (narrativeSummaryText) {
@@ -1400,7 +1409,7 @@ export function MusicVideoAI({
       
       // 🚀 GENERACIÓN PARALELA POR LOTES DE 4
       // 🎬 CRITICAL: Siempre usar FAL nano-banana con soporte de referencias faciales
-      const endpoint = '/api/fal/nano-banana/generate-with-face';
+      const endpoint = '/api/fal/music-video/generate-image';
       
       let generatedCount = 0;
       
@@ -1516,13 +1525,19 @@ export function MusicVideoAI({
               referenceToUse = artistReferenceImages.slice(0, 4); // Máximo 4 referencias
             }
           }
+
+          // The selected contact sheet is a visual continuity reference, not
+          // an image to reproduce. Keep portrait references first for identity.
+          if (activeConcept?.storyboardGridUrl) {
+            referenceToUse = [...referenceToUse.slice(0, 3), activeConcept.storyboardGridUrl];
+          }
           
           
           logger.info(`🎭 [SCENE ${sceneIndex}] Category: ${shotCategory}, Reference Usage: ${referenceUsage}, References: ${referenceToUse.length}`);
           logger.info(`📐 [SCENE ${sceneIndex}] Using aspect ratio: ${videoAspectRatio}`);
           
           const requestBody = { 
-            prompt: prompt,
+            prompt: `${prompt}\nDirector's selected storyboard and continuity: ${JSON.stringify({ story: conceptStory, continuity: activeConcept?.continuity_bible || {}, referenceShots: activeConcept?.storyboard_shots || [] }).slice(0, 6000)}. Create one full-frame shot, not a grid.`,
             sceneId: sceneIndex,
             referenceImages: referenceToUse,
             aspectRatio: videoAspectRatio, // Use the videoAspectRatio from state
@@ -2230,6 +2245,7 @@ export function MusicVideoAI({
     logger.info('🎬 Director seleccionado:', director.name, '| Estilo:', style);
     
     // Guardar director y estilo
+    selectedDirectorRef.current = director;
     setVideoStyle(prev => ({
       ...prev,
       selectedDirector: director as any // Type compatibility fix
@@ -2259,6 +2275,9 @@ export function MusicVideoAI({
         throttledSetProgress(estimatedProgress);
       }, 200);
       
+      let transcriptionText = '';
+      let workflowBuffer = audioBuffer;
+      let lyricsReady = false;
       try {
         // Obtener token de Clerk para autenticación
         const authToken = await getToken();
@@ -2267,7 +2286,6 @@ export function MusicVideoAI({
         // 🔁 RESILIENCIA: la transcripción puede fallar de forma transitoria
         // (FAL sin saldo momentáneo, hipo de red, Whisper ocupado). Reintentamos
         // automáticamente una vez antes de devolver al usuario al director.
-        let transcriptionText = '';
         let transcribeErr: any = null;
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
@@ -2296,6 +2314,18 @@ export function MusicVideoAI({
         await new Promise(resolve => setTimeout(resolve, 800));
         setTranscription(transcriptionText);
         setCurrentStep(1.5);
+        lyricsReady = true;
+
+        // The onboarding FileReader and transcription run concurrently. If a
+        // fast user chooses a director before React has stored audioBuffer,
+        // decode it here and pass it through explicitly instead of sending the
+        // workflow back to the director picker.
+        if (!workflowBuffer && selectedFile) {
+          const rawAudio = await selectedFile.arrayBuffer();
+          if (!audioContext.current) audioContext.current = new AudioContext();
+          workflowBuffer = await audioContext.current.decodeAudioData(rawAudio.slice(0));
+          setAudioBuffer(workflowBuffer);
+        }
         
         // 🎨 AUTO-PERFIL: Guardar canción automáticamente en perfil del artista
         try {
@@ -2340,7 +2370,7 @@ export function MusicVideoAI({
         setProgressMessage("🎬 Generating 3 creative proposals based on your lyrics...");
         
         // Generar conceptos en paralelo con Master Character (si hay imágenes)
-        const conceptsPromise = handleGenerateConcepts(transcriptionText, director);
+        const conceptsPromise = handleGenerateConcepts(transcriptionText, director, workflowBuffer || undefined);
         
         // 🎭 FACE CONSISTENCY: Store MC promise for awaiting before image generation
         // Concepts generate in parallel (fast), but images MUST wait for MC
@@ -2367,7 +2397,10 @@ export function MusicVideoAI({
         // transcripción (saldo FAL / límite OpenAI / conexión), no un fallo del
         // workflow. Conservamos el director ya elegido para que reintentar sea
         // un solo clic y no se sienta como "volver atrás".
-        toast({
+        toast(lyricsReady ? {
+          title: "Continuando con tu director",
+          description: "La letra ya fue analizada. Omitimos la propuesta que falló y continuamos con el guion.",
+        } : {
           title: "No se pudo analizar la letra",
           description: `${rawMsg}. Tu director quedó seleccionado — pulsa de nuevo para reintentar, o prueba con otro archivo de audio.`,
           variant: "destructive",
@@ -2376,14 +2409,32 @@ export function MusicVideoAI({
         setShowProgress(false);
         setProgressPercentage(0);
         setProgressMessage("");
-        // Reabrir el selector de director como punto de reintento (el director
-        // sigue guardado en videoStyle.selectedDirector).
-        setShowDirectorSelection(true);
+        if (lyricsReady && workflowBuffer) {
+          // Lyrics are already valid; a later concept/provider error must not
+          // discard the director step. Continue with the resilient script path.
+          setShowDirectorSelection(false);
+          try {
+            await executeScriptGeneration(transcriptionText, workflowBuffer);
+          } catch (scriptError) {
+            logger.error('Error continuing after concept generation failure:', scriptError);
+          }
+        } else {
+          // Only return to the picker when transcription itself never finished.
+          setShowDirectorSelection(true);
+        }
       }
     } else if (transcription) {
       // If transcription exists, generate Master Character FIRST, then WAIT for user to click Next
       logger.info('✅ [TRANSCRIPCIÓN] Ya existe - generando Character PRIMERO');
       
+      let existingBuffer = audioBuffer;
+      if (!existingBuffer && selectedFile) {
+        const rawAudio = await selectedFile.arrayBuffer();
+        if (!audioContext.current) audioContext.current = new AudioContext();
+        existingBuffer = await audioContext.current.decodeAudioData(rawAudio.slice(0));
+        setAudioBuffer(existingBuffer);
+      }
+
       // 🎭 PASO 1: GENERATE MASTER CHARACTER FIRST
       if (artistReferenceImages.length > 0) {
         logger.info('🎭 Generating Master Character FIRST (with artist + casting)...');
@@ -2391,8 +2442,17 @@ export function MusicVideoAI({
         setCharacterGenerationComplete(false);
         // Guardar datos para generar conceptos CUANDO usuario clickee Siguiente
         setPendingConceptGeneration({ transcription, director });
-        await handleGenerateMasterCharacter();
-        logger.info('✅ Master Character generated - waiting for user to click Next...');
+        const generatedCharacter = await handleGenerateMasterCharacter();
+        if (generatedCharacter) {
+          logger.info('✅ Master Character generated - waiting for user to click Next...');
+        } else {
+          setPendingConceptGeneration(null);
+          await handleGenerateConcepts(transcription, director, existingBuffer || undefined);
+        }
+      } else {
+        // No character setup is required. Advance directly instead of leaving
+        // the artist on the director screen with no visible next action.
+        await handleGenerateConcepts(transcription, director, existingBuffer || undefined);
       }
     }
   }, [transcription, artistReferenceImages, selectedFile, videoStyle, audioContext, audioUrl, toast, audioBuffer, projectName, selectedVisualStyle]);
@@ -2419,7 +2479,11 @@ export function MusicVideoAI({
 
 
 
-  const handleGenerateConcepts = useCallback(async (transcriptionText: string, director: DirectorProfile) => {
+  const handleGenerateConcepts = useCallback(async (
+    transcriptionText: string,
+    director: DirectorProfile,
+    resolvedAudioBuffer?: AudioBuffer,
+  ) => {
     logger.info('═'.repeat(60));
     logger.info('🎬 [CONCEPTOS] INICIANDO GENERACIÓN DE 3 CONCEPTOS');
     logger.info('═'.repeat(60));
@@ -2432,7 +2496,8 @@ export function MusicVideoAI({
     setProgressMessage("🎬 Generating 3 creative proposals based on your song's story...");
     
     try {
-      const audioDurationInSeconds = audioBuffer ? audioBuffer.duration : 180;
+      const activeAudioBuffer = resolvedAudioBuffer || audioBuffer;
+      const audioDurationInSeconds = activeAudioBuffer ? activeAudioBuffer.duration : 180;
       
       // 🎨 USAR IMÁGENES DEL MASTER CHARACTER GENERADO (ahora siempre existen)
       // El Master Character se genera ANTES de los conceptos, por eso siempre debe estar disponible
@@ -2535,7 +2600,7 @@ export function MusicVideoAI({
             
             const posterPrompt = `Cinematic movie poster for music video "${concept.title || `Concept ${index + 1}`}". ${concept.visual_theme || 'Professional cinematography'}. ${concept.story_concept?.substring(0, 200) || 'Dramatic visual story'}. Director: ${director.name}. 4K theatrical quality, dramatic lighting, award-worthy composition.`;
             
-            const response = await fetch('/api/fal/nano-banana/generate-with-face', {
+            const response = await fetch('/api/fal/music-video/generate-image', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
@@ -2592,7 +2657,7 @@ export function MusicVideoAI({
       // no respondió), NO regresamos al director — continuamos el workflow
       // generando el guión del video directamente (sin concepto). El generador
       // de guión tiene su propio fallback, así que la fase siempre avanza.
-      const buffer = audioBuffer;
+      const buffer = resolvedAudioBuffer || audioBuffer;
       if (buffer && transcriptionText) {
         logger.warn("⚠️ [CONCEPTOS] Fallaron — avanzando directamente a la generación del guión");
         toast({
@@ -2719,7 +2784,7 @@ export function MusicVideoAI({
         logger.info('📜 Generando script final basado en el concepto...');
         
         if (transcription && audioBuffer) {
-          await executeScriptGeneration(transcription, audioBuffer);
+          await executeScriptGeneration(transcription, audioBuffer, concept);
         } else {
           logger.error('❌ No hay transcripción o audioBuffer disponible');
           toast({
@@ -3771,7 +3836,7 @@ ${transcription}`;
       let result;
       if (referenceImages && referenceImages.length > 0) {
         // Usar endpoint FAL con referencias faciales
-        const response = await fetch('/api/fal/nano-banana/generate-with-face', {
+        const response = await fetch('/api/fal/music-video/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3789,7 +3854,7 @@ ${transcription}`;
         result = { success: !!result.imageUrl, imageUrl: result.imageUrl, error: result.error };
       } else {
         // Generar sin referencias (B-roll puro) usando FAL nano-banana
-        const response = await fetch('/api/fal/nano-banana/generate', {
+        const response = await fetch('/api/fal/music-video/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4126,9 +4191,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
       
       logger.info(`🔄 [REGENERATE ${sceneNumber}] Reference Usage: ${referenceUsage}, Using Reference: ${!!referenceToUse}`);
       
-      const endpoint = shouldUseReference
-        ? '/api/fal/nano-banana/generate-with-face'
-        : '/api/fal/nano-banana/generate';
+      const endpoint = '/api/fal/music-video/generate-image';
 
       const requestBody = shouldUseReference
         ? { 
@@ -4424,6 +4487,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
       setScriptContent(project.scriptContent || "");
       setTimelineItems(project.timelineItems);
       setArtistReferenceImages(project.artistReferenceImages || []);
+      if ((project as any).selectedConcept) setSelectedConcept((project as any).selectedConcept);
       
       // 🎵 RESTORE AUDIO BUFFER: Load audio for lipsync when restoring project
       if (project.audioUrl) {
@@ -4658,7 +4722,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
           
           const promptToUse = item.imagePrompt || item.description || `Scene ${clipId}`;
           
-          const response = await fetch('/api/fal/nano-banana/generate', {
+          const response = await fetch('/api/fal/music-video/generate-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -7006,17 +7070,10 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
         onSelectTemplate={handleTemplateSelection}
       />
 
-      {/* Payment Gate Modal - Shows after free preview generation */}
-      <PaymentGateModal
-        isOpen={showPaymentGate}
-        onClose={() => setShowPaymentGate(false)}
-        onPaymentSuccess={handlePaymentSuccess}
-        userEmail={user?.email || ''}
-        demoImagesCount={FREE_SCENES_LIMIT}
-        remainingImagesCount={Math.max(0, (scriptContent ? JSON.parse(scriptContent).scenes?.length || 40 : 40) - FREE_SCENES_LIMIT)}
-        totalScenes={scriptContent ? JSON.parse(scriptContent).scenes?.length || 40 : 40}
-        aspectRatio={videoAspectRatio}
-        songTitle={projectName || songTitle || 'Your Music Video'}
+      <MusicVideoCostSummary
+        sceneCount={timelineItems.length || 40}
+        projectId={currentProjectId ? Number(currentProjectId) : null}
+        resolution="1080p"
       />
 
       {/* Timeline Editor Completo - Con todas las herramientas */}
@@ -7059,6 +7116,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
           {typeof window !== 'undefined' && (
             <TimelineEditor
               initialClips={timelineItems}
+              billingProjectId={currentProjectId ? Number(currentProjectId) : null}
               duration={audioDuration || 180}
               audioPreviewUrl={audioUrl || undefined}
               audioBuffer={audioBuffer}
@@ -9012,6 +9070,7 @@ Professional music video frame, ${shotCategory === 'PERFORMANCE' ? 'featuring th
                   <div ref={timelineRef} className="w-full">
                     <TimelineEditor
                       initialClips={clips || []}
+                      billingProjectId={currentProjectId ? Number(currentProjectId) : null}
                       duration={totalDuration || 0}
                       audioPreviewUrl={audioUrl || undefined}
                       audioBuffer={audioBuffer}
